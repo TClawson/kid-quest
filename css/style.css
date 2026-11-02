@@ -298,3 +298,5 @@ label { color: var(--ink); }
 .item .price { display: inline-block; font-weight: 800; color: #8a5a00; background: #fff3bf; border: 2px solid #f0c040; border-radius: 4px; padding: 0 6px; }
 .item .price.can { background: #ffe066; border-color: var(--px-ink, #2a1838); }
 .item.locked:has(.price.can) .item-art { filter: none; opacity: 1; }
+
+.music-toggle { margin: 16px 0 4px 8px; vertical-align: top; font-size: 1.2rem; }
