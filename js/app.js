@@ -131,8 +131,13 @@ $modal.addEventListener('click', (e) => {
 function pinPad({ title, subtitle = '', mode = 'check', onSuccess }) {
   let entered = '';
   let first = null;
+  // Redraw only the card's contents after the first draw, so the open animation doesn't replay on every key.
   const draw = (msg = subtitle, shake = false) => {
-    openModal(`
+    const card = $modal.querySelector('.modal-card');
+    const show = card && !$modal.hidden && card.querySelector('.pin')
+      ? (html) => { card.innerHTML = html; }
+      : (html) => openModal(html);
+    show(`
       <div data-sticky class="pin ${shake ? 'shake' : ''}">
         <h2>${esc(title)}</h2>
         <p class="muted">${esc(msg)}</p>
