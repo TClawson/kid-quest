@@ -126,3 +126,9 @@ test('onSave reports changes, and replace() does not', () => {
   assert.deepEqual(calls, [['family']]);
   assert.equal(JSON.parse(storage.data[STORAGE_KEY]).settings.weeklyReward, 'Skating');
 });
+
+test('migrate moves worn items a kid owned to their current buddy', () => {
+  const s = migrate({ kids: [{ id: 'k', name: 'A', owned: ['hat-cap', 'bg-ocean'], buddy: { species: 'cat', outfit: { hat: 'hat-cap' } } }] });
+  assert.deepEqual(s.kids[0].owned, ['bg-ocean']);
+  assert.deepEqual(s.kids[0].buddyOwned, { cat: ['hat-cap'] });
+});

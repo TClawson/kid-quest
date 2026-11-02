@@ -8,7 +8,7 @@
 // which of those documents changed, so a cloud backend only writes those.
 
 import { emptyState } from './logic.js';
-import { defaultBuddy, speciesFromEmoji } from './items.js';
+import { defaultBuddy, speciesFromEmoji, moveWornToBuddy } from './items.js';
 
 export const STORAGE_KEY = 'kidquest.v1';
 
@@ -18,11 +18,15 @@ export const DEVICE_SETTINGS = ['sound', 'music', 'questView'];
 // Bring saved data from any older version up to the current shape.
 export function migrate(s) {
   const base = emptyState();
-  const kids = (s.kids || []).map((k) => ({
-    ...k,
-    buddy: k.buddy || defaultBuddy(speciesFromEmoji(k.avatar)),
-    seenUnlocks: k.seenUnlocks || [],
-  }));
+  const kids = (s.kids || []).map((k) => {
+    const kid = {
+      ...k,
+      buddy: k.buddy || defaultBuddy(speciesFromEmoji(k.avatar)),
+      seenUnlocks: k.seenUnlocks || [],
+    };
+    moveWornToBuddy(kid);
+    return kid;
+  });
   return { ...base, ...s, settings: { ...base.settings, ...(s.settings || {}) }, log: s.log || {}, kids, celebrations: s.celebrations || {} };
 }
 

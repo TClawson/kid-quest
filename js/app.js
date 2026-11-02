@@ -9,7 +9,7 @@ import { buddySvg, buddyLine } from './avatar.js';
 import { paintQuestMaps } from './maparts.js';
 import { startMusic, stopMusic } from './music.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood,
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, moveWornToBuddy, switchSpecies,
 } from './items.js';
 import { pickVisitors, visitorLines } from './visits.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
@@ -90,10 +90,11 @@ function progressFor(kid) {
     // first run with the shop: keep anything the kid had already reached by level, for free
     kid.owned = ITEMS.filter((i) => i.price && LEGACY_LEVEL(i) <= lv.level).map((i) => i.id);
     kid.spent = 0;
+    moveWornToBuddy(kid);
     save();
   }
   const coins = Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0));
-  return { ...info, level: lv.level, into: lv.into, piano: piano.streak, pianoBest: piano.best, pianoPerWeek: piano.perWeek, owned: kid.owned, coins };
+  return { ...info, level: lv.level, into: lv.into, piano: piano.streak, pianoBest: piano.best, pianoPerWeek: piano.perWeek, owned: ownedFor(kid), coins };
 }
 
 function missedYesterday(kid, info) {
@@ -912,7 +913,7 @@ function viewWardrobe() {
   }).join('')}
       </div>
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
-      <p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>
+      <p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>
     </div>`;
 }
 
@@ -1090,6 +1091,14 @@ function parentSettings() {
     ${familyCard()}`;
 }
 
+/** Switch buddies. Each buddy remembers what it was wearing; bought hats and such stay with the buddy they were bought for. */
+function changeSpecies(kid, species) {
+  const prog = progressFor(kid);
+  switchSpecies(kid, species, (item, sp) => isUnlocked(item, { ...prog, owned: ownedFor(kid, sp) }));
+}
+
+const speciesName = (id) => SPECIES.find((sp) => sp.id === id)?.name || 'buddy';
+
 function buyItem(kid, item, prog) {
   if (prog.coins < item.price) {
     sounds.error();
@@ -1100,8 +1109,9 @@ function buyItem(kid, item, prog) {
   openModal(`
     <div class="celebrate">
       <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
-      <h1>Buy ${esc(item.name)}?</h1>
+      <h1>Buy ${esc(item.name)}${isWorn(item) ? ` for your ${esc(speciesName(kid.buddy.species).toLowerCase())}` : ''}?</h1>
       <p>It costs <b>🪙 ${item.price}</b>. You'll have ${prog.coins - item.price} coins left.</p>
+      ${isWorn(item) ? '<p class="muted small">Only this buddy can wear it. Other buddies need their own.</p>' : ''}
       <div class="stack">
         <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
         <button class="btn ghost" data-action="modal-close">Keep saving</button>
@@ -1172,11 +1182,11 @@ const actions = {
   },
   'edit-kid': (el) => { ui.editKidId = el.dataset.id; render(); window.scrollTo(0, 0); },
   'edit-kid-done': () => { ui.editKidId = null; render(); },
-  'kid-species': (el) => { kidById(ui.editKidId).buddy.species = el.dataset.val; save(); render(); },
+  'kid-species': (el) => { changeSpecies(kidById(ui.editKidId), el.dataset.val); save(); render(); },
   wardrobe: () => { ui.view = 'wardrobe'; render(); window.scrollTo(0, 0); },
   'wardrobe-back': () => { ui.view = 'kid'; render(); },
   'wardrobe-slot': (el) => { ui.slot = el.dataset.slot; render(); },
-  'wardrobe-species': (el) => { kidById(ui.kidId).buddy.species = el.dataset.val; sounds.tap(); save(); render(); },
+  'wardrobe-species': (el) => { changeSpecies(kidById(ui.kidId), el.dataset.val); sounds.tap(); save(); render(); },
   'wardrobe-item': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
@@ -1202,8 +1212,8 @@ const actions = {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
     const prog = progressFor(kid);
-    if (!item?.price || prog.coins < item.price || kid.owned.includes(item.id)) { closeModal(); return; }
-    kid.owned = [...kid.owned, item.id];
+    if (!item?.price || prog.coins < item.price || prog.owned.includes(item.id)) { closeModal(); return; }
+    addOwned(kid, item);
     kid.spent = (kid.spent || 0) + item.price;
     kid.buddy.outfit[item.slot] = item.id;
     save();

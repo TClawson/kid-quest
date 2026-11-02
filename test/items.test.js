@@ -79,6 +79,57 @@ test('every color version draws in its own color', async () => {
   assert.equal(new Set(all).size, all.length, 'no two colors look the same');
 });
 
+test('bought hats, glasses and extras belong to one buddy; places and prizes are shared', async () => {
+  const { ownedFor, addOwned, isWorn } = await import('../js/items.js');
+  const kid = { owned: [], buddy: { species: 'fox', outfit: {} } };
+  addOwned(kid, itemById('hat-cap'));
+  addOwned(kid, itemById('bg-ocean'));
+  assert.deepEqual(kid.owned, ['bg-ocean']);
+  assert.deepEqual(kid.buddyOwned, { fox: ['hat-cap'] });
+  const asFox = { best: 30, owned: ownedFor(kid, 'fox') };
+  const asBear = { best: 30, owned: ownedFor(kid, 'bear') };
+  assert.equal(isUnlocked(itemById('hat-cap'), asFox), true);
+  assert.equal(isUnlocked(itemById('hat-cap'), asBear), false, 'the bear needs its own cap');
+  assert.equal(isUnlocked(itemById('bg-ocean'), asBear), true, 'places work with every buddy');
+  assert.equal(isUnlocked(itemById('hat-crown'), asBear), true, 'streak prizes work with every buddy');
+  assert.equal(isWorn(itemById('music-keyboard')), false);
+  assert.equal(isWorn(itemById('face-round-gold')), true);
+});
+
+test('worn items a kid already owned move to the buddy they use now', async () => {
+  const { moveWornToBuddy } = await import('../js/items.js');
+  const kid = { owned: ['hat-cap', 'hat-cap-blue', 'bg-ocean'], buddy: { species: 'panda', outfit: {} } };
+  assert.equal(moveWornToBuddy(kid), true);
+  assert.deepEqual(kid.owned, ['bg-ocean']);
+  assert.deepEqual(kid.buddyOwned, { panda: ['hat-cap', 'hat-cap-blue'] });
+  assert.equal(moveWornToBuddy(kid), false, 'running it again changes nothing');
+});
+
+test('switching buddies keeps each buddy’s outfit and the shared place', async () => {
+  const { switchSpecies, ownedFor } = await import('../js/items.js');
+  const kid = { owned: ['bg-ocean'], buddyOwned: { fox: ['hat-cap'] }, buddy: { species: 'fox', outfit: { background: 'bg-ocean', hat: 'hat-cap', face: 'face-sun', music: 'music-keyboard' } } };
+  const unlocked = (item, sp) => isUnlocked(item, { best: 7, pianoBest: 99, owned: ownedFor(kid, sp) });
+  switchSpecies(kid, 'bear', unlocked);
+  assert.deepEqual(kid.buddy.outfit, { background: 'bg-ocean', music: 'music-keyboard' });
+  kid.buddy.outfit.face = 'face-sun';
+  switchSpecies(kid, 'fox', unlocked);
+  assert.deepEqual(kid.buddy.outfit, { background: 'bg-ocean', music: 'music-keyboard', hat: 'hat-cap', face: 'face-sun' });
+  switchSpecies(kid, 'bear', unlocked);
+  assert.equal(kid.buddy.outfit.face, 'face-sun', 'the bear remembers its sunglasses');
+});
+
+test('puppy and turtle need their own accessories too', async () => {
+  const { switchSpecies, ownedFor, addOwned } = await import('../js/items.js');
+  const kid = { owned: [], buddyOwned: { fox: ['hat-cap'] }, buddy: { species: 'fox', outfit: { hat: 'hat-cap' } } };
+  const unlocked = (item, sp) => isUnlocked(item, { best: 0, owned: ownedFor(kid, sp) });
+  switchSpecies(kid, 'puppy', unlocked);
+  assert.deepEqual(kid.buddy.outfit, {});
+  addOwned(kid, itemById('hat-cap'));
+  switchSpecies(kid, 'turtle', unlocked);
+  assert.equal(unlocked(itemById('hat-cap'), 'turtle'), false);
+  assert.deepEqual(kid.buddyOwned, { fox: ['hat-cap'], puppy: ['hat-cap'] });
+});
+
 test('puppy and turtle are their own buddies and wear every item', async () => {
   const { buddySvg } = await import('../js/avatar.js');
   const { SPECIES } = await import('../js/items.js');
