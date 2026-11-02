@@ -71,6 +71,11 @@ async function joinWith(page, code) {
 
 try {
   const today = dateKey();
+  // ---- Only allowed Google accounts can start a family (set up in the console in real life)
+  await fetch('http://127.0.0.1:8180/v1/projects/demo-kid-quest/databases/(default)/documents/allowedParents?documentId=mom@example.com', {
+    method: 'POST', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' }, body: '{"fields":{}}',
+  }).then((r) => assert.ok(r.ok, `seeding allowedParents: ${r.status}`));
+
   // ---- Mom's phone: fresh install, choose PIN, start a family
   const mom = await device('mom', { email: 'mom@example.com' });
   await mom.page.click('[data-action="setup-pin"]');
@@ -181,6 +186,20 @@ try {
   await stranger.page.waitForSelector('text=Could not join', { timeout: 10000 });
   assert.equal(await stranger.page.evaluate(() => localStorage.getItem('kidquest.cloud')), null);
   log('✓ wrong code refused');
+
+  // ---- A Google account that isn't on the allowed list can't start a family
+  await stranger.page.click('[data-action="modal-close"]');
+  await stranger.page.click('[data-action="setup-pin"]');
+  await typePin(stranger.page, '5555');
+  await typePin(stranger.page, '5555');
+  await stranger.page.click('[data-action="tab"][data-tab="settings"]');
+  await stranger.page.click('[data-action="family-create"]');
+  await stranger.page.click('[data-action="modal-yes"]', { timeout: 10000 });
+  await stranger.page.waitForSelector('text=can’t start a family', { timeout: 10000 });
+  assert.equal(await stranger.page.evaluate(() => localStorage.getItem('kidquest.cloud')), null);
+  const refused = errors.findIndex((e) => e.startsWith('stranger:') && /permission/i.test(e));
+  if (refused >= 0) errors.splice(refused, 1);
+  log('✓ stranger cannot start a family');
 
   const real = errors.filter((e) => !/offline|network|unavailable/i.test(e));
   assert.deepEqual(real, [], 'no page errors');

@@ -16,7 +16,8 @@ before(async () => {
 after(() => env.cleanup());
 beforeEach(() => env.clearFirestore());
 
-const as = (uid) => env.authenticatedContext(uid).firestore();
+const as = (uid, email) => env.authenticatedContext(uid, email ? { email, email_verified: true } : {}).firestore();
+const allow = (email) => env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'allowedParents', email), {}));
 const anon = () => env.unauthenticatedContext().firestore();
 const soon = () => Timestamp.fromMillis(Date.now() + 10 * 60000);
 
@@ -33,13 +34,31 @@ async function seed() {
   });
 }
 
-test('a parent can create a family with themselves as first member', async () => {
-  const db = as('dad');
+function startFamily(db, uid) {
   const b = writeBatch(db);
-  b.set(doc(db, 'families', 'new'), { createdBy: 'dad', settings: {} });
-  b.set(doc(db, 'families', 'new', 'members', 'dad'), { role: 'parent' });
-  b.set(doc(db, 'users', 'dad'), { familyId: 'new' });
-  await assertSucceeds(b.commit());
+  b.set(doc(db, 'families', 'new'), { createdBy: uid, settings: {} });
+  b.set(doc(db, 'families', 'new', 'members', uid), { role: 'parent' });
+  b.set(doc(db, 'users', uid), { familyId: 'new' });
+  return b.commit();
+}
+
+test('an allowed parent can create a family with themselves as first member', async () => {
+  await allow('dad@example.com');
+  await assertSucceeds(startFamily(as('dad', 'Dad@Example.com'), 'dad'));
+});
+
+test('strangers cannot start a family, signed in or not', async () => {
+  await allow('dad@example.com');
+  await assertFails(startFamily(as('stranger', 'stranger@example.com'), 'stranger'));
+  await assertFails(startFamily(as('anon-device'), 'anon-device'));
+  await assertFails(startFamily(env.authenticatedContext('fake', { email: 'dad@example.com', email_verified: false }).firestore(), 'fake'));
+});
+
+test('nobody can read or change the allowed list from the app', async () => {
+  await allow('dad@example.com');
+  const db = as('dad', 'dad@example.com');
+  await assertFails(getDoc(doc(db, 'allowedParents', 'dad@example.com')));
+  await assertFails(setDoc(doc(as('x', 'x@example.com'), 'allowedParents', 'x@example.com'), {}));
 });
 
 test('nobody can add themselves to an existing family without a code', async () => {

@@ -40,6 +40,8 @@ Devices can share one family in Firebase (Firestore + Auth), so progress is safe
 
 Firebase setup (once): the project in `js/firebase-config.js` needs Google and Anonymous sign-in enabled, `tclawson.github.io` as an authorized domain, and the rules in `firestore.rules` published (Firestore › Rules, paste, Publish). Re-publish whenever `firestore.rules` changes.
 
+Only Google accounts on the allowed list can start a family, so strangers who find the site can't store data in the project. To allow an account, add a document to the `allowedParents` collection in Firestore › Data, with the lowercase email as its document ID and no fields. Other parents and kids' devices join with codes and don't need to be listed.
+
 ## Development
 
 No build step: plain HTML, CSS and JavaScript modules. The Firebase SDK is pre-bundled in `js/vendor/firebase.js` (`npm run build:firebase` rebuilds it).
