@@ -38,5 +38,6 @@ npm start        # serve locally at http://localhost:8080
 ```
 
 - `js/logic.js` holds the rules (schedules, streaks, freezes, XP) with no DOM code, tested in `test/`.
+- `js/store.js` is the storage layer: every save and load goes through it. It also splits the data into family, kid and day documents, ready for cloud sync.
 - `js/app.js` is the UI, `js/avatar.js` draws the 16-bit pixel buddies, outfits and backgrounds (letter grids rendered to SVG), `js/items.js` the unlock catalog, `js/fx.js` the sounds and confetti, `sw.js` the offline cache.
 - When you change a cached file, bump `CACHE` in `sw.js` so installed tablets pick up the update.
