@@ -1273,6 +1273,16 @@ function familyCard() {
     </div>`;
 }
 
+// A plain reason for a Firebase error, plus its code so a parent can pass it on.
+function cloudProblem(err, fallback) {
+  const code = err?.code || '';
+  const why = code === 'permission-denied' ? 'The family database turned this down. The Firestore security rules may not be published yet (Firebase console › Firestore › Rules).'
+    : code === 'unavailable' || !navigator.onLine ? 'Could not reach the cloud. Check the Wi-Fi and try again.'
+      : code.startsWith('auth/') ? 'Google sign-in did not finish. Check that Google sign-in is turned on and this site is an authorized domain in Firebase.'
+        : fallback;
+  return code ? `${why} (${code})` : why;
+}
+
 function busyModal(text) {
   openModal(`<div data-sticky class="celebrate"><h2>${esc(text)}</h2><p class="muted">Keep the app open.</p></div>`);
 }
@@ -1303,7 +1313,7 @@ async function familyCreate() {
     user = await mod.signInParent();
   } catch (err) {
     console.error(err);
-    errorModal('Sign-in did not finish', 'Try again. If no Google window appears, allow pop-ups for this site.');
+    errorModal('Sign-in did not finish', `Try again. If no Google window appears, allow pop-ups for this site.${err?.code ? ` (${err.code})` : ''}`);
     return;
   }
   try {
@@ -1332,14 +1342,14 @@ async function familyCreate() {
         } catch (err) {
           console.error(err);
           closeModal();
-          errorModal('That did not work', 'Nothing changed on this device. Check the connection and try again.');
+          errorModal('That did not work', `Nothing changed on this device. ${cloudProblem(err, 'Try again in a moment.')}`);
         }
       },
     });
   } catch (err) {
     console.error(err);
     closeModal();
-    errorModal('That did not work', 'Check the connection and try again.');
+    errorModal('That did not work', cloudProblem(err, 'Check the connection and try again.'));
   }
 }
 
@@ -1374,7 +1384,7 @@ async function familyJoinGo() {
     user = role === 'parent' ? await mod.signInParent() : await mod.signInDevice();
   } catch (err) {
     console.error(err);
-    errorModal('Sign-in did not finish', 'Try again. If no Google window appears, allow pop-ups for this site.');
+    errorModal('Sign-in did not finish', `Try again. If no Google window appears, allow pop-ups for this site.${err?.code ? ` (${err.code})` : ''}`);
     return;
   }
   if (role === 'kid' && state.kids.length) actions.export();
@@ -1388,7 +1398,7 @@ async function familyJoinGo() {
     const msg = err.code === 'bad-code' ? 'That code is wrong or has expired. Ask for a new one.'
       : err.code === 'which-kid' ? err.message
         : err.code === 'check-failed' ? 'The upload did not check out, so this device keeps using its own copy. Try again later.'
-          : 'Check the connection and try again. Nothing changed on this device.';
+          : `Nothing changed on this device. ${cloudProblem(err, 'Check the connection and try again.')}`;
     errorModal('Could not join', msg);
   }
 }
@@ -1430,7 +1440,7 @@ async function showCode(role, kidId) {
   } catch (err) {
     console.error(err);
     closeModal();
-    errorModal('Could not make a code', navigator.onLine ? 'Try again in a moment.' : 'You are offline. Connect to Wi-Fi and try again.');
+    errorModal('Could not make a code', cloudProblem(err, 'Try again in a moment.'));
   }
 }
 
