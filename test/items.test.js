@@ -117,3 +117,31 @@ test('switching buddies keeps each buddy’s outfit and the shared place', async
   switchSpecies(kid, 'bear', unlocked);
   assert.equal(kid.buddy.outfit.face, 'face-sun', 'the bear remembers its sunglasses');
 });
+
+test('puppy and turtle need their own accessories too', async () => {
+  const { switchSpecies, ownedFor, addOwned } = await import('../js/items.js');
+  const kid = { owned: [], buddyOwned: { fox: ['hat-cap'] }, buddy: { species: 'fox', outfit: { hat: 'hat-cap' } } };
+  const unlocked = (item, sp) => isUnlocked(item, { best: 0, owned: ownedFor(kid, sp) });
+  switchSpecies(kid, 'puppy', unlocked);
+  assert.deepEqual(kid.buddy.outfit, {});
+  addOwned(kid, itemById('hat-cap'));
+  switchSpecies(kid, 'turtle', unlocked);
+  assert.equal(unlocked(itemById('hat-cap'), 'turtle'), false);
+  assert.deepEqual(kid.buddyOwned, { fox: ['hat-cap'], puppy: ['hat-cap'] });
+});
+
+test('puppy and turtle are their own buddies and wear every item', async () => {
+  const { buddySvg } = await import('../js/avatar.js');
+  const { SPECIES } = await import('../js/items.js');
+  for (const id of ['puppy', 'turtle']) assert.ok(SPECIES.some((s) => s.id === id), `${id} can be picked`);
+  assert.equal(speciesFromEmoji('🐶'), 'puppy');
+  assert.equal(speciesFromEmoji('🐢'), 'turtle');
+  const draw = (species, outfit = {}) => buddySvg({ species, outfit }, 'happy', { background: false });
+  const looks = SPECIES.map((s) => draw(s.id));
+  assert.equal(new Set(looks).size, looks.length, 'every species looks different');
+  for (const species of ['puppy', 'turtle']) {
+    for (const item of ITEMS.filter((i) => ['hat', 'face', 'neck', 'music'].includes(i.slot))) {
+      assert.notEqual(draw(species, { [item.slot]: item.id }), draw(species), `${species} wears ${item.id}`);
+    }
+  }
+});

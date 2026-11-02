@@ -6,6 +6,8 @@ export const SPECIES = [
   { id: 'panda', name: 'Panda' },
   { id: 'cat', name: 'Cat' },
   { id: 'dino', name: 'Dino' },
+  { id: 'puppy', name: 'Puppy' },
+  { id: 'turtle', name: 'Turtle' },
 ];
 
 export const SLOTS = [
@@ -137,7 +139,7 @@ export function newUnlocks(kid, progress) {
 
 /** Map an old emoji avatar to a species, for kids created before buddies existed. */
 export function speciesFromEmoji(emoji) {
-  return { '🦊': 'fox', '🐼': 'panda', '🐱': 'cat', '🦖': 'dino', '🐲': 'dino', '🐻': 'bear', '🐨': 'bear' }[emoji] || 'bear';
+  return { '🦊': 'fox', '🐼': 'panda', '🐱': 'cat', '🦖': 'dino', '🐲': 'dino', '🐻': 'bear', '🐨': 'bear', '🐶': 'puppy', '🐕': 'puppy', '🐢': 'turtle' }[emoji] || 'bear';
 }
 
 /**
