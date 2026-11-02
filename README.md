@@ -11,6 +11,7 @@ v1 runs entirely on one Android tablet. There is no server and no account: every
 - **Parent PIN** to sign off tasks on the spot, or "ask a parent later", which puts the task in the parent's approval queue.
 - **Piano timer** that only counts while the app is open on screen and keeps the screen awake.
 - **Streaks**: a day counts when every scheduled task is done. 7 perfect days in a row earn a streak freeze (max 2), used automatically on a missed day. Parents can mark a day as excused, and approving tasks late repairs the streak.
+- **Quest map**: tasks are stops on a winding board-game path with the buddy standing on the next one and a treasure chest at the end (a list view is one tap away).
 - **Celebrations**: sound and XP for each task, confetti for a complete day, and a big celebration with the parent-chosen weekly reward every 7 days.
 - **Reminders** at set times (sound and banner while the app is open, a notification if it's in the background and notifications are allowed).
 - **Animated buddies**: each kid picks a fox, bear, panda, cat or dino. It is sleepy before the first task, cheers when a task is done, dances when the day is complete, and looks sad after a missed day.

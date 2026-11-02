@@ -537,6 +537,80 @@ function taskTile(kid, task, status) {
     </button>`;
 }
 
+// Board-game path: one stop per task, winding down the screen, ending at a treasure chest.
+const MAP_ROW = 124;
+const MAP_WAVE = [0, 22, 30, 18, -4, -24, -30, -16];
+
+function questMap(kid, s, entry, mood) {
+  const rows = [];
+  const add = (period, label) => {
+    const tasks = s.tasks.filter((x) => x.period === period);
+    if (!tasks.length) return;
+    rows.push({ type: 'sign', label });
+    for (const t of tasks) rows.push({ type: 'task', task: t, status: entry?.tasks?.[t.id]?.status });
+  };
+  add('morning', `🌅 Morning · by ${formatTime(state.settings.morningBy)}`);
+  add('afternoon', `☀️ After school · by ${formatTime(state.settings.bedtime)}`);
+  rows.push({ type: 'chest' });
+
+  // where the buddy stands: the first task not done or waiting; the chest when all are
+  let here = rows.findIndex((r) => r.type === 'task' && r.status !== 'done' && r.status !== 'pending');
+  if (here < 0) here = rows.length - 1;
+
+  const top = 70;
+  const pts = rows.map((r, i) => ({ x: 50 + (r.type === 'task' || r.type === 'chest' ? MAP_WAVE[i % MAP_WAVE.length] : 0), y: top + i * MAP_ROW }));
+  const height = top + rows.length * MAP_ROW;
+  const pathD = (upto) => pts.slice(0, upto + 1).map((p, i) => {
+    if (i === 0) return `M ${p.x} ${p.y}`;
+    const q = pts[i - 1];
+    const my = (q.y + p.y) / 2;
+    return `C ${q.x} ${my}, ${p.x} ${my}, ${p.x} ${p.y}`;
+  }).join(' ');
+
+  // keep labels inside the map: the space on the label's side, minus the node
+  const labelWidth = (x) => `max-width:min(240px, calc(${x > 50 ? x : 100 - x}% - 66px))`;
+  const nodes = rows.map((r, i) => {
+    const p = pts[i];
+    const pos = `left:${p.x}%;top:${p.y}px`;
+    if (r.type === 'sign') return `<div class="map-sign" style="${pos}">${esc(r.label)}</div>`;
+    if (r.type === 'chest') {
+      return `<button class="map-node chest ${s.complete ? 'open' : ''}" style="${pos}" data-action="chest" aria-label="Treasure">
+          <span class="node-icon">${s.complete ? '🏆' : '🎁'}</span></button>
+        <div class="map-label ${p.x > 50 ? 'left' : 'right'}" style="${pos};${labelWidth(p.x)}"><b>${s.complete ? 'Quest complete!' : 'Treasure!'}</b><small>${s.complete ? 'See you tomorrow' : 'Finish every task'}</small></div>`;
+    }
+    const t = r.task;
+    const st = r.status === 'done' ? 'done' : r.status === 'pending' ? 'pending' : i === here ? 'current' : 'todo';
+    let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'Parent checks' : 'Tap when done';
+    if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
+      const sec = entry?.tasks?.[t.id]?.seconds || 0;
+      const left = t.minutes * 60 - sec;
+      sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left` : `${t.minutes} minute timer`;
+    }
+    return `<button class="map-node ${st}" style="${pos}" data-action="task" data-id="${t.id}" aria-label="${esc(t.name)}">
+        <span class="node-icon">${esc(t.icon)}</span>
+        ${st === 'done' ? '<span class="node-badge">✓</span>' : st === 'pending' ? '<span class="node-badge wait">⏳</span>' : ''}
+      </button>
+      <div class="map-label ${p.x > 50 ? 'left' : 'right'}" style="${pos};${labelWidth(p.x)}"><b>${esc(t.name)}</b><small>${esc(sub)}</small></div>`;
+  }).join('');
+
+  const hp = pts[here];
+  const walker = `<div class="map-buddy ${mood === 'excited' ? 'hop' : ''}" style="left:${hp.x}%;top:${hp.y}px">
+      ${buddyHtml(kid, mood === 'sad' || mood === 'sleepy' ? mood : mood === 'proud' ? 'proud' : mood === 'excited' ? 'excited' : 'happy', 'mini', { background: false })}
+    </div>`;
+
+  return `
+    <section class="quest-map" style="height:${height}px">
+      <svg class="map-path" viewBox="0 0 100 ${height}" preserveAspectRatio="none" aria-hidden="true">
+        <path d="${pathD(rows.length - 1)}" class="road"/>
+        <path d="${pathD(here)}" class="road-done"/>
+        <path d="${pathD(rows.length - 1)}" class="road-dash"/>
+      </svg>
+      <div class="map-start" style="left:50%;top:0">🚩 Start</div>
+      ${nodes}
+      ${walker}
+    </section>`;
+}
+
 function viewKid() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
@@ -558,6 +632,7 @@ function viewKid() {
   };
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
   const mood = moodFor(kid);
+  const listMode = state.settings.questView === 'list';
   const newCount = (kid.newItems || []).length;
   return `
     <div class="screen kid" style="--kid:${kid.color}">
@@ -580,8 +655,12 @@ function viewKid() {
           <button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>
         </div>
       </div>
-      ${section('morning', '🌅 Morning', state.settings.morningBy)}
-      ${section('afternoon', '☀️ After school', state.settings.bedtime)}
+      <div class="view-toggle">
+        <button class="${listMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
+        <button class="${listMode ? 'on' : ''}" data-action="quest-mode" data-mode="list">📋 List</button>
+      </div>
+      ${listMode ? `${section('morning', '🌅 Morning', state.settings.morningBy)}
+      ${section('afternoon', '☀️ After school', state.settings.bedtime)}` : questMap(kid, s, entry, mood)}
       <section>
         <h2>This week</h2>
         ${weekDots(kid, info)}
@@ -867,6 +946,13 @@ const actions = {
     else outfit[item.slot] = item.id;
     kid.newItems = (kid.newItems || []).filter((id) => id !== item.id);
     sounds.task(); save(); render();
+  },
+  'quest-mode': (el) => { state.settings.questView = el.dataset.mode; save(); render(); },
+  chest: () => {
+    const kid = kidById(ui.kidId);
+    const t = today();
+    const s = dayStatus(state, kid, t, t);
+    if (s.complete) { sounds.day(); confetti(100, 2000); toast('You found the treasure! 🏆'); } else { sounds.tap(); toast(`${s.total - s.done} more to reach the treasure!`); }
   },
   'unlock-try': (el) => { closeModal(); ui.slot = el.dataset.slot; ui.view = 'wardrobe'; render(); window.scrollTo(0, 0); },
   'kid-color': (el) => { kidById(ui.editKidId).color = el.dataset.val; save(); render(); },
