@@ -13,6 +13,8 @@ v1 runs entirely on one Android tablet. There is no server and no account: every
 - **Streaks**: a day counts when every scheduled task is done. 7 perfect days in a row earn a streak freeze (max 2), used automatically on a missed day. Parents can mark a day as excused, and approving tasks late repairs the streak.
 - **Celebrations**: sound and XP for each task, confetti for a complete day, and a big celebration with the parent-chosen weekly reward every 7 days.
 - **Reminders** at set times (sound and banner while the app is open, a notification if it's in the background and notifications are allowed).
+- **Animated buddies**: each kid picks a fox, bear, panda, cat or dino. It is sleepy before the first task, cheers when a task is done, dances when the day is complete, and looks sad after a missed day.
+- **Wardrobe**: backgrounds, hats, glasses and extras unlock with best streak (kept even if a streak ends) and XP level. The ladder is in `js/items.js`.
 - **Backup and restore** to a JSON file.
 
 ## Putting it on the tablet
@@ -35,5 +37,5 @@ npm start        # serve locally at http://localhost:8080
 ```
 
 - `js/logic.js` holds the rules (schedules, streaks, freezes, XP) with no DOM code, tested in `test/`.
-- `js/app.js` is the UI, `js/fx.js` the sounds and confetti, `sw.js` the offline cache.
+- `js/app.js` is the UI, `js/avatar.js` draws the buddies (SVG), `js/items.js` the unlock catalog, `js/fx.js` the sounds and confetti, `sw.js` the offline cache.
 - When you change a cached file, bump `CACHE` in `sw.js` so installed tablets pick up the update.

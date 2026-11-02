@@ -4,9 +4,12 @@ import {
   pendingApprovals, fallbackHash,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
+import { buddySvg, buddyLine } from './avatar.js';
+import {
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, newUnlocks, speciesFromEmoji, defaultBuddy, restingMood,
+} from './items.js';
 
 const STORAGE_KEY = 'kidquest.v1';
-const AVATARS = ['🦊', '🐼', '🐯', '🦄', '🐸', '🐙', '🦖', '🐧', '🦁', '🐨', '🐶', '🐱', '🐵', '🐲', '🦉', '🐬'];
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
 
 // ---------- storage ----------
@@ -23,7 +26,12 @@ function load() {
 
 function migrate(s) {
   const base = emptyState();
-  return { ...base, ...s, settings: { ...base.settings, ...(s.settings || {}) }, log: s.log || {}, kids: s.kids || [], celebrations: s.celebrations || {} };
+  const kids = (s.kids || []).map((k) => ({
+    ...k,
+    buddy: k.buddy || defaultBuddy(speciesFromEmoji(k.avatar)),
+    seenUnlocks: k.seenUnlocks || [],
+  }));
+  return { ...base, ...s, settings: { ...base.settings, ...(s.settings || {}) }, log: s.log || {}, kids, celebrations: s.celebrations || {} };
 }
 
 function save() {
@@ -44,6 +52,8 @@ const ui = {
   tab: 'approvals',
   editKidId: null,
   historyDate: null,
+  slot: 'hat',
+  cheerUntil: 0,
 };
 
 // ---------- helpers ----------
@@ -53,6 +63,35 @@ const $modal = document.getElementById('modal');
 const today = () => dateKey();
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kidById = (id) => state.kids.find((k) => k.id === id);
+
+function progressFor(kid) {
+  const t = today();
+  const info = streakInfo(state, kid, t);
+  const lv = levelFor(totalXp(state, kid, t));
+  return { ...info, level: lv.level, into: lv.into };
+}
+
+function missedYesterday(kid, info) {
+  const t = today();
+  const y = addDays(t, -1);
+  if (kid.startDate && y < kid.startDate) return false;
+  const s = dayStatus(state, kid, y, t);
+  return !s.complete && !s.excused && !info.frozen.includes(y);
+}
+
+function moodFor(kid) {
+  if (ui.view === 'kid' && ui.cheerKid === kid.id && Date.now() < ui.cheerUntil) return 'excited';
+  const t = today();
+  const s = dayStatus(state, kid, t, t);
+  const info = streakInfo(state, kid, t);
+  return restingMood({ todayDone: s.done, todayComplete: s.complete, missedYesterday: missedYesterday(kid, info) });
+}
+
+/** Animated buddy. size: css class for sizing. */
+function buddyHtml(kid, mood, size = 'lg', opts = {}) {
+  return `<div class="buddy buddy-${size} mood-${mood}">${buddySvg(kid.buddy, mood, opts)}</div>`;
+}
+const buddyChip = (kid) => `<span class="avatar xs buddy-chip">${buddySvg(kid.buddy, 'happy', { background: false })}</span>`;
 const taskById = (kid, key, id) => tasksForDay(state, kid, key, today()).find((t) => t.id === id) || kid.tasks.find((t) => t.id === id);
 
 function friendlyDate(key) {
@@ -211,29 +250,58 @@ let modalYes = null;
 
 // ---------- celebrations ----------
 
-function celebrate({ emoji, title, text, sound, big = false }) {
+function celebrate({ kid, emoji, title, text, sound, big = false, onClose = null }) {
   sound();
   confetti(big ? 260 : 140, big ? 4000 : 2600);
   openModal(`
     <div class="celebrate ${big ? 'big' : ''}">
-      <div class="celebrate-emoji">${emoji}</div>
+      ${kid ? buddyHtml(kid, big ? 'proud' : 'excited', 'xl') : `<div class="celebrate-emoji">${emoji}</div>`}
+      ${big ? `<div class="celebrate-emoji small">${emoji}</div>` : ''}
       <h1>${esc(title)}</h1>
       <p>${esc(text)}</p>
       <button class="btn huge" data-action="modal-close">Awesome!</button>
+    </div>`, onClose);
+}
+
+/** Show any newly unlocked wardrobe items. Returns true if something was shown. */
+function showUnlocks(kid) {
+  if (!$modal.hidden) return false;
+  const ids = newUnlocks(kid, progressFor(kid));
+  if (!ids.length) return false;
+  kid.seenUnlocks = [...(kid.seenUnlocks || []), ...ids];
+  kid.newItems = [...(kid.newItems || []), ...ids];
+  save();
+  const items = ids.map(itemById);
+  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, [items[0].slot]: items[0].id } };
+  sounds.day();
+  confetti(120, 2400);
+  openModal(`
+    <div class="celebrate">
+      <div class="buddy buddy-xl mood-excited">${buddySvg(preview, 'excited')}</div>
+      <h1>New stuff unlocked!</h1>
+      <p>${items.map((i) => `<b>${esc(i.name)}</b>`).join(', ')}</p>
+      <div class="stack">
+        <button class="btn huge" data-action="unlock-try" data-slot="${items[0].slot}">Try it on!</button>
+        <button class="btn ghost" data-action="modal-close">Later</button>
+      </div>
     </div>`);
+  return true;
 }
 
 function celebrateIfDue(kid) {
   const t = today();
   const info = streakInfo(state, kid, t);
-  if (!info.todayComplete) return;
+  const after = () => setTimeout(() => showUnlocks(kid), 250);
+  if (!info.todayComplete) return showUnlocks(kid);
   const seen = state.celebrations[kid.id];
-  if (seen?.day === t) return;
+  if (seen?.day === t) return showUnlocks(kid);
   state.celebrations[kid.id] = { day: t, streak: info.streak };
   save();
   if (info.streak > 0 && info.streak % 7 === 0) {
     const weeks = info.streak / 7;
     celebrate({
+      kid,
+      onClose: after,
       emoji: '🏆',
       title: weeks === 1 ? 'A WHOLE WEEK!' : `${weeks} WEEKS IN A ROW!`,
       text: `${info.streak}-day streak! Your reward: ${state.settings.weeklyReward}. Show a parent!${info.freezes ? ' You also have a streak freeze ❄️ saved up.' : ''}`,
@@ -242,12 +310,15 @@ function celebrateIfDue(kid) {
     });
   } else {
     celebrate({
+      kid,
+      onClose: after,
       emoji: '🌟',
       title: 'Quest complete!',
       text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥`,
       sound: sounds.day,
     });
   }
+  return true;
 }
 
 // ---------- task actions ----------
@@ -263,8 +334,11 @@ function markDone(kid, task, by, anchor) {
   setTask(kid, today(), task, { status: 'done', at: Date.now(), by });
   sounds.task();
   floatText(`+${taskXp(task)} XP`, anchor);
+  ui.cheerUntil = Date.now() + 2600;
+  ui.cheerKid = kid.id;
   render();
-  setTimeout(() => celebrateIfDue(kid), 500);
+  setTimeout(() => celebrateIfDue(kid), 700);
+  setTimeout(() => { if (ui.view === 'kid' && Date.now() >= ui.cheerUntil) render(); }, 2700);
 }
 
 function askParentNowOrLater(kid, task, anchor) {
@@ -403,7 +477,7 @@ function viewHome() {
     const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
     return `
       <button class="kid-card" data-action="open-kid" data-id="${kid.id}" style="--kid:${kid.color}">
-        <div class="avatar">${esc(kid.avatar)}</div>
+        ${buddyHtml(kid, moodFor(kid), 'md')}
         <div class="kid-name">${esc(kid.name)}</div>
         <div class="streak ${info.streak ? '' : 'cold'}">🔥 ${info.streak}</div>
         <div class="bar"><span style="width:${pct}%"></span></div>
@@ -483,20 +557,28 @@ function viewKid() {
       </section>`;
   };
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
+  const mood = moodFor(kid);
+  const newCount = (kid.newItems || []).length;
   return `
     <div class="screen kid" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="home" aria-label="Back">←</button>
-        <div class="avatar sm">${esc(kid.avatar)}</div>
         <div class="kid-title"><b>${esc(kid.name)}</b><small>Level ${lv.level} · <span class="xpbar"><span style="width:${lv.into}%"></span></span></small></div>
         <div class="chips">
           <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak">🔥 ${info.streak}</span>
           <span class="chip ice" title="Streak freezes">❄️ ${info.freezes}</span>
         </div>
       </header>
-      <div class="quest-progress">
-        <div class="bar big"><span style="width:${pct}%"></span></div>
-        <div>${s.complete ? '<b>Quest complete! 🌟</b>' : `<b>${s.done} of ${s.total}</b> done${s.pending ? ` · ${s.pending} waiting for a parent` : ''}`}</div>
+      <div class="buddy-panel">
+        ${buddyHtml(kid, mood, 'lg')}
+        <div class="buddy-side">
+          <div class="bubble">${esc(buddyLine(mood, kid.name))}</div>
+          <div class="quest-progress">
+            <div class="bar big"><span style="width:${pct}%"></span></div>
+            <div>${s.complete ? '<b>Quest complete! 🌟</b>' : `<b>${s.done} of ${s.total}</b> done${s.pending ? ` · ${s.pending} waiting for a parent` : ''}`}</div>
+          </div>
+          <button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>
+        </div>
       </div>
       ${section('morning', '🌅 Morning', state.settings.morningBy)}
       ${section('afternoon', '☀️ After school', state.settings.bedtime)}
@@ -528,6 +610,43 @@ function viewTimer() {
       </div>
       <button class="btn huge" data-action="${timer.running ? 'timer-pause' : 'timer-start'}">${timer.running ? 'Pause' : done ? 'Keep going' : 'Start practice'}</button>
       <p class="muted small">Keep the tablet near the piano with this screen open. The timer pauses if you leave the app.</p>
+    </div>`;
+}
+
+function viewWardrobe() {
+  const kid = kidById(ui.kidId);
+  if (!kid) { ui.view = 'home'; return viewHome(); }
+  const prog = progressFor(kid);
+  const fresh = new Set(kid.newItems || []);
+  const items = ITEMS.filter((i) => i.slot === ui.slot);
+  const nextItem = ITEMS.filter((i) => !isUnlocked(i, prog)).sort((a, b) => (a.need.streak ? a.need.streak - prog.best : (a.need.level - prog.level) * 1.5) - (b.need.streak ? b.need.streak - prog.best : (b.need.level - prog.level) * 1.5))[0];
+  return `
+    <div class="screen wardrobe" style="--kid:${kid.color}">
+      <header class="kid-head">
+        <button class="btn ghost round" data-action="wardrobe-back" aria-label="Back">←</button>
+        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days · Level ${prog.level}</small></div>
+      </header>
+      <div class="wardrobe-top">
+        ${buddyHtml(kid, 'happy', 'lg')}
+        <div class="buddy-side">
+          <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
+          ${nextItem ? `<p class="muted">Next unlock: <b>${esc(nextItem.name)}</b> at ${esc(needLabel(nextItem))}</p>` : '<p class="muted">You unlocked everything! 🏆</p>'}
+        </div>
+      </div>
+      <nav class="tabs">${SLOTS.map((sl) => `<button class="${ui.slot === sl.id ? 'on' : ''}" data-action="wardrobe-slot" data-slot="${sl.id}">${sl.icon} ${sl.name}</button>`).join('')}</nav>
+      <div class="items">
+        ${items.map((item) => {
+    const open = isUnlocked(item, prog);
+    const on = kid.buddy.outfit[item.slot] === item.id;
+    const preview = { ...kid.buddy, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
+    return `<button class="item ${open ? '' : 'locked'} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
+            <span class="item-art">${buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
+            <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
+            <small>${open ? (on ? 'Wearing' : 'Tap to wear') : `🔒 ${esc(needLabel(item))}`}</small>
+          </button>`;
+  }).join('')}
+      </div>
+      <p class="muted small">Streak items stay yours even if a streak ends. Tap an item again to take it off.</p>
     </div>`;
 }
 
@@ -564,7 +683,7 @@ function parentApprovals(pending) {
     <div class="list">
       ${pending.map(({ key, kid, task }) => `
         <div class="list-row">
-          <span class="avatar xs">${esc(kid.avatar)}</span>
+          ${buddyChip(kid)}
           <div class="grow"><b>${esc(kid.name)}: ${esc(task.icon)} ${esc(task.name)}</b><small class="muted">${esc(friendlyDate(key))}${task.minutes ? ` · ${task.minutes} min timer finished` : ''}</small></div>
           <button class="btn ghost" data-action="send-back" data-kid="${kid.id}" data-key="${key}" data-task="${task.id}">Send back</button>
           <button class="btn" data-action="approve" data-kid="${kid.id}" data-key="${key}" data-task="${task.id}">Approve</button>
@@ -577,7 +696,7 @@ function parentKids() {
     <div class="list">
       ${state.kids.map((kid) => `
         <div class="list-row">
-          <span class="avatar xs" style="background:${kid.color}">${esc(kid.avatar)}</span>
+          ${buddyChip(kid)}
           <div class="grow"><b>${esc(kid.name)}</b><small class="muted">${kid.tasks.length} tasks</small></div>
           <button class="btn ghost" data-action="edit-kid" data-id="${kid.id}">Edit</button>
         </div>`).join('') || '<p class="muted">No kids yet.</p>'}
@@ -613,7 +732,7 @@ function parentEditKid() {
     <div class="row"><button class="btn ghost" data-action="edit-kid-done">← All kids</button></div>
     <div class="card">
       <label class="block">Name <input data-kidfield="name" value="${esc(kid.name)}"></label>
-      <div class="block">Avatar <div class="pick">${AVATARS.map((a) => `<button class="pick-item ${kid.avatar === a ? 'on' : ''}" data-action="kid-avatar" data-val="${a}">${a}</button>`).join('')}</div></div>
+      <div class="block">Buddy <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="kid-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div></div>
       <div class="block">Color <div class="pick">${COLORS.map((c) => `<button class="pick-item swatch ${kid.color === c ? 'on' : ''}" style="background:${c}" data-action="kid-color" data-val="${c}" aria-label="${c}"></button>`).join('')}</div></div>
     </div>
     <h2>🌅 Morning tasks</h2>
@@ -635,12 +754,12 @@ function parentHistory() {
       <label>Day <input type="date" data-action-change="history-date" value="${key}" max="${t}"></label>
     </div>
     ${state.kids.map((kid) => {
-    if (kid.startDate && key < kid.startDate) return `<div class="card"><b>${esc(kid.avatar)} ${esc(kid.name)}</b><p class="muted">Started using the app ${esc(friendlyDate(kid.startDate))}.</p></div>`;
+    if (kid.startDate && key < kid.startDate) return `<div class="card"><b>${esc(kid.name)}</b><p class="muted">Started using the app ${esc(friendlyDate(kid.startDate))}.</p></div>`;
     const s = dayStatus(state, kid, key, t);
     const entry = entryFor(state, kid.id, key);
     return `
       <div class="card">
-        <div class="row"><b class="grow">${esc(kid.avatar)} ${esc(kid.name)}</b><span class="muted">${s.done}/${s.total} done${s.complete ? ' ✓' : ''}</span></div>
+        <div class="row">${buddyChip(kid)}<b class="grow">${esc(kid.name)}</b><span class="muted">${s.done}/${s.total} done${s.complete ? ' ✓' : ''}</span></div>
         ${s.tasks.map((task) => {
     const st = entry?.tasks?.[task.id]?.status;
     return `<div class="list-row">
@@ -689,11 +808,11 @@ function parentSettings() {
     </div>`;
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent, wardrobe: viewWardrobe };
 
 function render() {
   const scrollY = window.scrollY;
-  const keepScroll = ui.view === 'parent';
+  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
   $app.innerHTML = (views[ui.view] || viewHome)();
   if (keepScroll) window.scrollTo(0, scrollY);
 }
@@ -726,13 +845,30 @@ const actions = {
     toast(`Sent back to ${kid.name}`); render();
   },
   'add-kid': () => {
-    const kid = { id: newId('kid'), name: `Kid ${state.kids.length + 1}`, avatar: AVATARS[state.kids.length % AVATARS.length], color: COLORS[(state.kids.length * 2) % COLORS.length], tasks: defaultTasks(), startDate: today() };
+    const n = state.kids.length;
+    const kid = { id: newId('kid'), name: `Kid ${n + 1}`, buddy: defaultBuddy(SPECIES[n % SPECIES.length].id), seenUnlocks: [], color: COLORS[(n * 2) % COLORS.length], tasks: defaultTasks(), startDate: today() };
     state.kids.push(kid); save();
     ui.editKidId = kid.id; render();
   },
   'edit-kid': (el) => { ui.editKidId = el.dataset.id; render(); window.scrollTo(0, 0); },
   'edit-kid-done': () => { ui.editKidId = null; render(); },
-  'kid-avatar': (el) => { kidById(ui.editKidId).avatar = el.dataset.val; save(); render(); },
+  'kid-species': (el) => { kidById(ui.editKidId).buddy.species = el.dataset.val; save(); render(); },
+  wardrobe: () => { ui.view = 'wardrobe'; render(); window.scrollTo(0, 0); },
+  'wardrobe-back': () => { ui.view = 'kid'; render(); },
+  'wardrobe-slot': (el) => { ui.slot = el.dataset.slot; render(); },
+  'wardrobe-species': (el) => { kidById(ui.kidId).buddy.species = el.dataset.val; sounds.tap(); save(); render(); },
+  'wardrobe-item': (el) => {
+    const kid = kidById(ui.kidId);
+    const item = itemById(el.dataset.id);
+    if (!item) return;
+    if (!isUnlocked(item, progressFor(kid))) { sounds.error(); toast(`Unlocks at ${needLabel(item)}`); return; }
+    const outfit = kid.buddy.outfit;
+    if (outfit[item.slot] === item.id && item.slot !== 'background') delete outfit[item.slot];
+    else outfit[item.slot] = item.id;
+    kid.newItems = (kid.newItems || []).filter((id) => id !== item.id);
+    sounds.task(); save(); render();
+  },
+  'unlock-try': (el) => { closeModal(); ui.slot = el.dataset.slot; ui.view = 'wardrobe'; render(); window.scrollTo(0, 0); },
   'kid-color': (el) => { kidById(ui.editKidId).color = el.dataset.val; save(); render(); },
   'toggle-day': (el) => {
     const task = kidById(ui.editKidId).tasks.find((t) => t.id === el.dataset.task);
