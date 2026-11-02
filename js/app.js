@@ -1109,7 +1109,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     reloading = true;
     window.location.reload();
   });
-  navigator.serviceWorker.register('sw.js').then((reg) => reg.update()).catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => reg.update()).catch(() => {});
 }
 navigator.storage?.persist?.().catch(() => {});
 
