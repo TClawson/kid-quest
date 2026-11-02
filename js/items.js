@@ -16,6 +16,12 @@ export const SLOTS = [
   { id: 'music', name: 'Music', icon: '🎹' },
 ];
 
+// Slots the buddy wears. Bought items in these slots belong to one buddy: switching
+// to a new buddy means buying them again for it. Everything else (places, pianos)
+// belongs to the kid and works with every buddy. Earned prizes work with every buddy.
+export const WORN_SLOTS = ['hat', 'face', 'neck'];
+export const isWorn = (item) => WORN_SLOTS.includes(item?.slot);
+
 // need: { streak: n } uses the kid's BEST streak ever, so a broken streak never takes items away.
 // price: n is a shop item: the kid buys it with coins (each task earns coins; parents can set how many) and keeps it.
 // Items with neither are free from the start.
@@ -132,6 +138,64 @@ export function newUnlocks(kid, progress) {
 /** Map an old emoji avatar to a species, for kids created before buddies existed. */
 export function speciesFromEmoji(emoji) {
   return { '🦊': 'fox', '🐼': 'panda', '🐱': 'cat', '🦖': 'dino', '🐲': 'dino', '🐻': 'bear', '🐨': 'bear' }[emoji] || 'bear';
+}
+
+/**
+ * What this kid owns for the buddy they use now: their shared items (places)
+ * plus what they bought for this buddy. kid.owned holds shared items;
+ * kid.buddyOwned[species] holds worn items bought for that buddy.
+ */
+export function ownedFor(kid, species = kid.buddy?.species) {
+  return [...(kid.owned || []), ...(kid.buddyOwned?.[species] || [])];
+}
+
+/** Record a bought item: worn items go to the current buddy, the rest to the kid. */
+export function addOwned(kid, item) {
+  if (isWorn(item)) {
+    const sp = kid.buddy.species;
+    kid.buddyOwned = { ...(kid.buddyOwned || {}), [sp]: [...(kid.buddyOwned?.[sp] || []), item.id] };
+  } else {
+    kid.owned = [...(kid.owned || []), item.id];
+  }
+}
+
+/**
+ * Before worn items were tied to a buddy, everything was in kid.owned. Move worn
+ * items from there to the buddy the kid uses now, so nobody loses anything.
+ * Safe to run again: it only moves what is still in kid.owned. Returns true if it changed the kid.
+ */
+export function moveWornToBuddy(kid) {
+  if (!Array.isArray(kid.owned) || !kid.buddy) return false;
+  const worn = kid.owned.filter((id) => isWorn(itemById(id)));
+  if (!worn.length) return false;
+  const sp = kid.buddy.species;
+  const mine = kid.buddyOwned?.[sp] || [];
+  kid.buddyOwned = { ...(kid.buddyOwned || {}), [sp]: [...mine, ...worn.filter((id) => !mine.includes(id))] };
+  kid.owned = kid.owned.filter((id) => !worn.includes(id));
+  return true;
+}
+
+/**
+ * Switch the kid to another buddy. The old buddy keeps what it was wearing for
+ * next time, and the new buddy puts back on what it wore last, as long as it is
+ * still unlocked for it. The place and piano stay as they are.
+ * unlocked(item, species) says whether the kid can use an item with that buddy.
+ */
+export function switchSpecies(kid, species, unlocked) {
+  const buddy = kid.buddy;
+  if (buddy.species === species) return;
+  const outfit = buddy.outfit || {};
+  const closet = { ...(buddy.closet || {}) };
+  const worn = {};
+  const shared = {};
+  for (const [slot, id] of Object.entries(outfit)) (WORN_SLOTS.includes(slot) ? worn : shared)[slot] = id;
+  closet[buddy.species] = worn;
+  const back = {};
+  for (const [slot, id] of Object.entries(closet[species] || {})) {
+    const item = itemById(id);
+    if (item && unlocked(item, species)) back[slot] = id;
+  }
+  kid.buddy = { ...buddy, species, outfit: { ...shared, ...back }, closet };
 }
 
 export function defaultBuddy(species = 'fox') {
