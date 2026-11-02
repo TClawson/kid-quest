@@ -13,10 +13,13 @@ export const SLOTS = [
   { id: 'hat', name: 'Hats', icon: '🎩' },
   { id: 'face', name: 'Glasses', icon: '🕶️' },
   { id: 'neck', name: 'Extras', icon: '🎀' },
+  { id: 'music', name: 'Music', icon: '🎹' },
 ];
 
 // need: { streak: n } uses the kid's BEST streak ever, so a broken streak never takes items away.
 // need: { level: n } uses the XP level. Items with no need are free from the start.
+// need: { pianoWeeks: n } uses the BEST piano streak: n weeks of piano days in a row
+// (n x the kid's piano days per week, so 10 piano days for 2 weeks of Mon–Fri).
 export const ITEMS = [
   { id: 'bg-meadow', slot: 'background', name: 'Sunny meadow' },
   { id: 'bg-sunset', slot: 'background', name: 'Sunset beach', need: { streak: 3 } },
@@ -47,6 +50,10 @@ export const ITEMS = [
   { id: 'neck-medal', slot: 'neck', name: 'Gold medal', need: { streak: 7 } },
   { id: 'neck-cape', slot: 'neck', name: 'Hero cape', need: { streak: 14 } },
   { id: 'neck-necklace', slot: 'neck', name: 'Gem necklace', need: { level: 20 } },
+
+  { id: 'music-keyboard', slot: 'music', name: 'Little keyboard', need: { pianoWeeks: 2 } },
+  { id: 'music-upright', slot: 'music', name: 'Upright piano', need: { pianoWeeks: 4 } },
+  { id: 'music-rock', slot: 'music', name: 'Rock star piano', need: { pianoWeeks: 6 } },
 ];
 
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
@@ -55,12 +62,27 @@ export function isUnlocked(item, progress) {
   if (!item.need) return true;
   if (item.need.streak) return progress.best >= item.need.streak;
   if (item.need.level) return progress.level >= item.need.level;
+  if (item.need.pianoWeeks) return pianoDaysNeeded(item, progress) <= (progress.pianoBest || 0);
   return false;
+}
+
+/** Piano days in a row an item needs, for this kid's piano schedule (Mon–Fri if none is set). */
+export function pianoDaysNeeded(item, progress) {
+  return item.need.pianoWeeks * (progress.pianoPerWeek || 5);
+}
+
+/** Roughly how far off an item is, to pick the next one to show. Streak days count most. */
+export function needGap(item, progress) {
+  if (!item.need) return 0;
+  if (item.need.streak) return item.need.streak - progress.best;
+  if (item.need.level) return (item.need.level - progress.level) * 1.5;
+  return pianoDaysNeeded(item, progress) - (progress.pianoBest || 0);
 }
 
 export function needLabel(item) {
   if (!item.need) return 'Free';
   if (item.need.streak) return `${item.need.streak}-day streak`;
+  if (item.need.pianoWeeks) return `${item.need.pianoWeeks}-week piano streak`;
   return `Level ${item.need.level}`;
 }
 

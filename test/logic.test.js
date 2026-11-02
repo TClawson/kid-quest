@@ -104,3 +104,27 @@ test('xp and pending approvals', () => {
   assert.equal(pending.length, 1);
   assert.equal(pending[0].task.name, 'Chore of the week');
 });
+
+test('piano streak skips non-piano days, keeps excused days, resets on a miss', async () => {
+  const L = await import('../js/logic.js');
+  const s = L.emptyState();
+  const kid = { id: 'k', name: 'A', tasks: L.defaultTasks(), startDate: '2026-10-05' }; // a Monday
+  s.kids.push(kid);
+  const piano = kid.tasks.find(L.isPianoTask);
+  const done = (k) => { s.log[k] = { k: { tasks: { [piano.id]: { status: 'done' } }, excused: false } }; };
+  // two full weeks Mon-Fri: 10 piano days, weekends in between don't break it
+  for (let k = '2026-10-05'; k <= '2026-10-16'; k = L.addDays(k, 1)) if (piano.days.includes(L.dayOfWeek(k))) done(k);
+  let info = L.pianoStreakInfo(s, kid, '2026-10-18');
+  assert.equal(info.streak, 10);
+  assert.equal(info.perWeek, 5);
+  // Monday excused, Tuesday done: 11
+  s.log['2026-10-19'] = { k: { tasks: {}, excused: true } };
+  done('2026-10-20');
+  assert.equal(L.pianoStreakInfo(s, kid, '2026-10-20').streak, 11);
+  // Wednesday missed: reset, best stays
+  info = L.pianoStreakInfo(s, kid, '2026-10-22');
+  assert.equal(info.streak, 0);
+  assert.equal(info.best, 11);
+  // today not done yet doesn't break it
+  assert.equal(L.pianoStreakInfo(s, kid, '2026-10-20').streak, 11);
+});

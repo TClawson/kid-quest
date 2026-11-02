@@ -33,3 +33,12 @@ test('resting mood', () => {
   assert.equal(speciesFromEmoji('🦊'), 'fox');
   assert.equal(speciesFromEmoji('🐸'), 'bear');
 });
+
+test('piano items need weeks of piano days in a row', () => {
+  const keys = itemById('music-keyboard');
+  const rock = itemById('music-rock');
+  assert.equal(isUnlocked(keys, { best: 0, level: 1, pianoBest: 9, pianoPerWeek: 5 }), false);
+  assert.equal(isUnlocked(keys, { best: 0, level: 1, pianoBest: 10, pianoPerWeek: 5 }), true);
+  assert.equal(isUnlocked(rock, { best: 99, level: 99, pianoBest: 29, pianoPerWeek: 5 }), false);
+  assert.equal(isUnlocked(rock, { best: 0, level: 1, pianoBest: 18, pianoPerWeek: 3 }), true);
+});
