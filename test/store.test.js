@@ -97,3 +97,32 @@ test('migrate fills in buddies for old saves', () => {
   assert.deepEqual(s.kids[0].seenUnlocks, []);
   assert.deepEqual(s.log, {});
 });
+
+test('diffFields finds changed, added and removed fields down to task level', async () => {
+  const { diffFields, DELETE } = await import('../js/store.js');
+  const before = { date: 'd', kidId: 'k', entry: { tasks: { a: { status: 'pending' }, b: { status: 'done' } }, excused: true } };
+  const after = { date: 'd', kidId: 'k', entry: { tasks: { a: { status: 'done', by: 'parent' }, c: { status: 'done' } } } };
+  const out = diffFields(before, after);
+  const byPath = Object.fromEntries(out.map(([p, v]) => [p.join('.'), v]));
+  assert.deepEqual(byPath, {
+    'entry.tasks.a': { status: 'done', by: 'parent' },
+    'entry.tasks.b': DELETE,
+    'entry.tasks.c': { status: 'done' },
+    'entry.excused': DELETE,
+  });
+});
+
+test('onSave reports changes, and replace() does not', () => {
+  const calls = [];
+  const storage = memoryStorage();
+  const store = createStore(localBackend(storage), { onSave: (changes) => calls.push(changes.changed) });
+  const state = store.load();
+  state.settings.weeklyReward = 'Bowling';
+  store.save(state);
+  const remote = JSON.parse(JSON.stringify(state));
+  remote.settings.weeklyReward = 'Skating';
+  store.replace(remote);
+  store.save(remote);
+  assert.deepEqual(calls, [['family']]);
+  assert.equal(JSON.parse(storage.data[STORAGE_KEY]).settings.weeklyReward, 'Skating');
+});

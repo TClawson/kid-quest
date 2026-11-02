@@ -4,6 +4,17 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.js",
-    "start": "npx --yes http-server@14.1.1 -c-1 -p 8080 ."
+    "start": "npx --yes http-server@14.1.1 -c-1 -p 8080 .",
+    "build:firebase": "node scripts/build-firebase.mjs",
+    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-kid-quest \"node --test test/rules/*.test.js\"",
+    "test:smoke": "node test/smoke/smoke.mjs",
+    "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-kid-quest \"node test/e2e/sync.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "esbuild": "0.28.2",
+    "firebase": "13.1.0",
+    "firebase-tools": "15.34.2",
+    "playwright": "1.63.0"
   }
 }
