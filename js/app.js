@@ -903,7 +903,7 @@ function viewWardrobe() {
     const open = isUnlocked(item, prog);
     const on = kid.buddy.outfit[item.slot] === item.id;
     const preview = { ...kid.buddy, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
-    return `<button class="item ${open ? '' : 'locked'} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
+    return `<button class="item ${open ? '' : 'locked'} ${item.price ? 'shop' : ''} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
             <span class="item-art">${buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
             <small>${open ? (on ? 'Wearing' : 'Tap to wear') : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : `🔒 ${esc(needLabel(item))}`}</small>

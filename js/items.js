@@ -21,7 +21,7 @@ export const SLOTS = [
 // Items with neither are free from the start.
 // need: { pianoWeeks: n } uses the BEST piano streak: n weeks of piano days in a row
 // (n x the kid's piano days per week, so 10 piano days for 2 weeks of Mon–Fri).
-export const ITEMS = [
+const BASE_ITEMS = [
   { id: 'bg-meadow', slot: 'background', name: 'Sunny meadow' },
   { id: 'bg-sunset', slot: 'background', name: 'Sunset beach', need: { streak: 3 } },
   { id: 'bg-ocean', slot: 'background', name: 'Under the sea', price: 100 },
@@ -57,6 +57,39 @@ export const ITEMS = [
   { id: 'music-rock', slot: 'music', name: 'Rock star piano', need: { pianoWeeks: 6 } },
 ];
 
+// Paint colors for color versions of the cheaper accessories. avatar.js has the pixel colors.
+export const COLORS = {
+  red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', teal: 'Teal',
+  blue: 'Blue', purple: 'Purple', pink: 'Pink', black: 'Black', gold: 'Gold',
+};
+
+// Extra colors of cheap accessories. Each is its own shop item, bought on its own,
+// and listed right after the item it recolors. The id is `${base}-${color}`.
+// The bow tie's first color is a streak prize; its other colors are cheap to buy.
+export const COLOR_VERSIONS = {
+  'neck-bowtie': { price: 30, colors: ['blue', 'green', 'purple', 'pink', 'black'] },
+  'hat-cap': { colors: ['blue', 'green', 'yellow', 'purple', 'black'] },
+  'face-round': { colors: ['red', 'blue', 'green', 'pink', 'gold'] },
+  'hat-beanie': { colors: ['red', 'green', 'teal', 'purple', 'pink'] },
+  'neck-scarf': { colors: ['red', 'yellow', 'green', 'blue', 'purple'] },
+};
+
+/** "Blue" + "Ball cap" -> "Blue ball cap" */
+const colorName = (color, name) => `${COLORS[color]} ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
+
+export const ITEMS = BASE_ITEMS.flatMap((item) => {
+  const cv = COLOR_VERSIONS[item.id];
+  if (!cv) return [item];
+  return [item, ...cv.colors.map((color) => ({
+    id: `${item.id}-${color}`,
+    slot: item.slot,
+    name: colorName(color, item.name),
+    price: cv.price || item.price,
+    base: item.id,
+    color,
+  }))];
+});
+
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
 
 export function isUnlocked(item, progress) {
@@ -68,7 +101,8 @@ export function isUnlocked(item, progress) {
 }
 
 /** Old level-based items a kid had already reached before the shop existed. They keep them free. */
-export const LEGACY_LEVEL = (item) => (item.price ? item.price / 20 : Infinity);
+// Color versions came later, so they were never level items.
+export const LEGACY_LEVEL = (item) => (item.price && !item.base ? item.price / 20 : Infinity);
 
 /** Piano days in a row an item needs, for this kid's piano schedule (Mon–Fri if none is set). */
 export function pianoDaysNeeded(item, progress) {
