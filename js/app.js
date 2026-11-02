@@ -1502,7 +1502,11 @@ async function familyCreate() {
         } catch (err) {
           console.error(err);
           closeModal();
-          errorModal('That did not work', `Nothing changed on this device. ${cloudProblem(err, 'Try again in a moment.')}`);
+          if (err?.code === 'permission-denied') {
+            errorModal('This account can’t start a family', `Only Google accounts on the family’s allowed list can start a family. If you are already in a family, ask a parent for a code instead. (${user.email})`);
+          } else {
+            errorModal('That did not work', `Nothing changed on this device. ${cloudProblem(err, 'Try again in a moment.')}`);
+          }
         }
       },
     });

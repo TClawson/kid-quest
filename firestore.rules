@@ -9,6 +9,14 @@ service cloud.firestore {
     function isMember(fid) { return signedIn() && exists(memberPath(fid, request.auth.uid)); }
     function isParent(fid) { return isMember(fid) && get(memberPath(fid, request.auth.uid)).data.role == 'parent'; }
 
+    // Only Google accounts listed in allowedParents can start a family, so a
+    // stranger who finds the site cannot store data here. Add a document in the
+    // Firebase console whose ID is the lowercase email (no fields needed).
+    function allowedToStart() {
+      return signedIn() && request.auth.token.email_verified == true
+        && exists(/databases/$(db)/documents/allowedParents/$(request.auth.token.email.lower()));
+    }
+
     // A join code a parent made for this family and role, not yet expired.
     function validCode(fid, data) {
       let path = /databases/$(db)/documents/joinCodes/$(data.code);
@@ -36,9 +44,14 @@ service cloud.firestore {
       allow delete: if isParent(resource.data.familyId);
     }
 
+    // Edited only in the Firebase console.
+    match /allowedParents/{email} {
+      allow read, write: if false;
+    }
+
     match /families/{fid} {
       // Created together with its first parent member, in one batch.
-      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid
+      allow create: if allowedToStart() && request.resource.data.createdBy == request.auth.uid
         && getAfter(memberPath(fid, request.auth.uid)).data.role == 'parent';
       allow read, update: if isMember(fid);
 
@@ -46,7 +59,7 @@ service cloud.firestore {
         allow read: if isMember(fid);
         allow create: if signedIn() && request.auth.uid == uid && (
           // the family's creator, in the batch that creates the family
-          (request.resource.data.role == 'parent'
+          (request.resource.data.role == 'parent' && allowedToStart()
             && !exists(/databases/$(db)/documents/families/$(fid))
             && getAfter(/databases/$(db)/documents/families/$(fid)).data.createdBy == uid)
           // anyone else, with a valid join code
