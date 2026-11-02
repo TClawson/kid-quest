@@ -17,7 +17,7 @@ export const SLOTS = [
 ];
 
 // need: { streak: n } uses the kid's BEST streak ever, so a broken streak never takes items away.
-// price: n is a shop item: the kid buys it with coins (1 coin per XP earned) and keeps it.
+// price: n is a shop item: the kid buys it with coins (each task earns coins; parents can set how many) and keeps it.
 // Items with neither are free from the start.
 // need: { pianoWeeks: n } uses the BEST piano streak: n weeks of piano days in a row
 // (n x the kid's piano days per week, so 10 piano days for 2 weeks of Mon–Fri).

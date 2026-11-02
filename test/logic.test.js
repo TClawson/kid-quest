@@ -128,3 +128,44 @@ test('piano streak skips non-piano days, keeps excused days, resets on a miss', 
   // today not done yet doesn't break it
   assert.equal(L.pianoStreakInfo(s, kid, '2026-10-20').streak, 11);
 });
+
+test('task rewards: defaults, parent amounts, and past days keep what they earned', async () => {
+  const { taskXp, taskCoins, totalCoins, parseReward } = await import('../js/logic.js');
+  const { state, kid } = setup();
+  const teeth = kid.tasks.find((t) => t.name === 'Brush teeth');
+  const piano = kid.tasks.find((t) => t.name === 'Piano practice');
+  assert.equal(taskXp(teeth), 10);
+  assert.equal(taskCoins(teeth), 10);
+  assert.equal(taskXp(piano), 30);
+  assert.equal(taskCoins(piano), 30);
+
+  // Monday: earn with the defaults, and snapshot the day like the app does.
+  snapshotToday(state, kid, MONDAY);
+  finishDay(state, kid, MONDAY, MONDAY);
+  const mondayXp = totalXp(state, kid, MONDAY);
+  assert.equal(mondayXp, 70);
+  assert.equal(totalCoins(state, kid, MONDAY), 70);
+
+  // Tuesday: a parent makes teeth worth 2 coins and 25 XP, and piano 0 coins.
+  teeth.coins = 2;
+  teeth.xp = 25;
+  piano.coins = 0;
+  const tue = addDays(MONDAY, 1);
+  assert.equal(taskCoins(teeth), 2);
+  assert.equal(taskXp(teeth), 25);
+  assert.equal(taskCoins(piano), 0);
+  assert.equal(taskXp(piano), 30, 'XP stays at the default when only coins change');
+  // Monday's earnings are unchanged.
+  assert.equal(totalXp(state, kid, tue), 70);
+  assert.equal(totalCoins(state, kid, tue), 70);
+  finishDay(state, kid, tue, tue);
+  // teeth 25 + bed 10 + floor 10 + piano 30 + chore 10 XP; coins 2 + 10 + 10 + 0 + 10
+  assert.equal(totalXp(state, kid, tue), 70 + 85);
+  assert.equal(totalCoins(state, kid, tue), 70 + 32);
+
+  assert.equal(parseReward(''), null);
+  assert.equal(parseReward('abc'), null);
+  assert.equal(parseReward('-5'), 0);
+  assert.equal(parseReward('12.6'), 13);
+  assert.equal(parseReward('99999'), 500);
+});
