@@ -601,6 +601,7 @@ function questMap(kid, s, entry, mood) {
   return `
     <section class="quest-map" style="height:${height}px">
       <svg class="map-path" viewBox="0 0 100 ${height}" preserveAspectRatio="none" aria-hidden="true">
+        <path d="${pathD(rows.length - 1)}" class="road-edge"/>
         <path d="${pathD(rows.length - 1)}" class="road"/>
         <path d="${pathD(here)}" class="road-done"/>
         <path d="${pathD(rows.length - 1)}" class="road-dash"/>

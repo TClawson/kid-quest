@@ -1,234 +1,410 @@
-// Draws a kid's buddy as an inline SVG string: background, species, mood face and outfit layers.
+// Draws a kid's buddy as 16-bit style pixel art in an inline SVG (a 24 x 24 pixel scene).
+// Every layer (background, species sprite, outfit items) is a small grid of palette letters.
 // Animation is done in CSS (see .buddy rules in style.css) using the classes set here.
 
-const INK = '#3a2e4f';
+const SIZE = 24;
+const OUT = '#2a1838'; // outline
+const SPRITE_X = 4;
+const SPRITE_Y = 7;
 
-const PALETTE = {
-  fox: { main: '#f08a3c', dark: '#c25e1c', light: '#fff4e6', inner: '#5a3420' },
-  bear: { main: '#b07443', dark: '#7a4a26', light: '#ecc9a2', inner: '#e8a77a' },
-  panda: { main: '#ffffff', dark: '#2f2a36', light: '#ffffff', inner: '#2f2a36' },
-  cat: { main: '#a6b1c6', dark: '#6f7b91', light: '#f3f5fa', inner: '#ffb3c6' },
-  dino: { main: '#6cc56f', dark: '#3f9446', light: '#dcf5c9', inner: '#f7b538' },
+// ---------- species ----------
+
+const EARS = {
+  pointed: [
+    '..KK........KK..',
+    '..KoK......KoK..',
+    '..KooK....KooK..',
+    '..KoOOKKKKOOoK..',
+  ],
+  round: [
+    '................',
+    '..KKK......KKK..',
+    '.KoooK....KoooK.',
+    '.KooOKKKKKKOooK.',
+  ],
+  spikes: [
+    '......K..K......',
+    '.....KsKKsK.....',
+    '....KKssssKK....',
+    '..KKOOOOOOOOKK..',
+  ],
 };
 
-let uidCounter = 0;
+const BODY = [
+  '.KOOOOOOOOOOOOK.', // 4
+  '.KOOOOOOOOOOOOK.', // 5
+  '.KOOEHOOOOEHOOK.', // 6
+  '.KOOEEOOOOEEOOK.', // 7
+  '.KPWWWWNNWWWWPK.', // 8
+  '..KWWWMWWMWWWK..', // 9
+  '...KWWWMMWWWK...', // 10
+  '....KKKKKKKK....', // 11
+  '...KOOWWWWOOK.KK', // 12
+  '..KOOOWWWWOOOKTK', // 13
+  '..KOOOWWWWOOOKtK', // 14
+  '..KKOOKKKKOOKKK.', // 15
+];
 
-const S = `stroke="${INK}" stroke-width="3" stroke-linejoin="round"`;
+// rows that change with mood (row index -> string)
+const MOOD_ROWS = {
+  happy: {},
+  excited: { 6: '.KOOOEOOOOEOOOK.', 7: '.KOOEOEOOEOEOOK.', 9: '..KWWMMMMMMWWK..', 10: '...KWWMPPMWWK...' },
+  proud: { 9: '..KWMWWWWWWMWK..', 10: '...KWMMMMMMWK...' },
+  sleepy: { 6: '.KOOOOOOOOOOOOK.', 7: '.KOEEOOOOOOEEOK.', 9: '..KWWWWWWWWWWK..', 10: '...KWWWMMWWWK...' },
+  sad: { 5: '.KOOOEOOOOEOOOK.', 8: '.KPBWWWNNWWWWPK.', 9: '..KWWWWMMWWWWK..', 10: '...KWWMWWMWWK...' },
+};
+
+const COMMON = { K: OUT, E: OUT, N: OUT, H: '#ffffff', P: '#ff8fa3', M: '#7a2e1c', B: '#4dabf7' };
+
+const SPECIES = {
+  fox: { ears: 'pointed', tail: true, pal: { O: '#f08a3c', W: '#fff3e0', o: '#7a2e1c', T: '#f08a3c', t: '#fff3e0' }, shade: { O: ['#ffb066', '#c25e1c'], W: ['#ffffff', '#e8cfb4'], T: ['#ffb066', '#c25e1c'] } },
+  bear: { ears: 'round', tail: false, pal: { O: '#b07443', W: '#ecc9a2', o: '#e8a77a' }, shade: { O: ['#d3955f', '#7f4f2a'], W: ['#f8e0c4', '#cfa77c'] } },
+  panda: { ears: 'round', tail: false, pal: { O: '#ffffff', W: '#ffffff', o: '#2f2a36', D: '#2f2a36' }, shade: { O: ['#ffffff', '#d4d6e2'], W: ['#ffffff', '#d4d6e2'], D: ['#4a4356', '#1d1924'] } },
+  cat: { ears: 'pointed', tail: true, whiskers: true, pal: { O: '#a6b1c6', W: '#f3f5fa', o: '#ffb3c6', T: '#a6b1c6', t: '#a6b1c6' }, shade: { O: ['#c8d0de', '#7d889e'], W: ['#ffffff', '#d5dae6'], T: ['#c8d0de', '#7d889e'] } },
+  dino: { ears: 'spikes', tail: true, pal: { O: '#6cc56f', W: '#dcf5c9', s: '#f7b538', T: '#6cc56f', t: '#6cc56f' }, shade: { O: ['#94dc94', '#3f9446'], W: ['#f0ffe4', '#b5dca0'], T: ['#94dc94', '#3f9446'], s: ['#ffd36b', '#d08c12'] } },
+};
+
+function speciesGrid(speciesId, mood) {
+  const sp = SPECIES[speciesId] || SPECIES.bear;
+  const rows = [...EARS[sp.ears], ...BODY];
+  const moodRows = MOOD_ROWS[mood] || {};
+  for (const [i, r] of Object.entries(moodRows)) rows[Number(i)] = r;
+  let g = rows.map((r) => r.split(''));
+  if (!sp.tail) {
+    for (const [y, x] of [[12, 14], [12, 15], [13, 13], [13, 14], [13, 15], [14, 13], [14, 14], [14, 15], [15, 14]]) g[y][x] = '.';
+    g[13][13] = 'K'; g[14][13] = 'K';
+    g[12][12] = 'K';
+  }
+  if (speciesId === 'panda') {
+    // black eye patches (eyes become white), black arms and legs
+    for (const y of [6, 7]) {
+      for (const x of [3, 4, 5, 10, 11, 12]) {
+        const c = g[y][x];
+        if (c === 'O') g[y][x] = 'D';
+        else if (c === 'E' || c === 'K') g[y][x] = 'H';
+      }
+    }
+    for (let y = 12; y < 16; y += 1) for (let x = 0; x < 16; x += 1) if (g[y][x] === 'O') g[y][x] = 'D';
+  }
+  if (sp.whiskers) {
+    g[8][0] = 'K'; g[9][0] = 'K'; g[8][15] = 'K'; g[9][15] = 'K';
+  }
+  g = g.map((r) => r.join(''));
+  return { grid: g, pal: { ...COMMON, ...sp.pal }, shade: sp.shade };
+}
+
+// ---------- outfit items: [originX, originY, grid, palette, shade?, behind?] ----------
+
+const SH = (base, light, dark) => [base, [light, dark]];
+
+const ITEM_ART = {
+  'hat-cap': [5, 5, [
+    '.....KKKK.....',
+    '...KKRRRRKK...',
+    '..KRRRWWRRRK..',
+    '.KRRRRRRRRRRK.',
+    '.KRRRRRRRRRRK.',
+    'KRRRRRRRRRRRRKKKK',
+    'KKKKKKKKKKKKKRRRK',
+    '.............KKK.',
+  ], { R: SH('#e03131', '#ff6b6b', '#a51d1d'), W: '#ffffff' }],
+  'hat-party': [8, 0, [
+    '....Y....',
+    '...YYY...',
+    '....K....',
+    '...KPK...',
+    '...KPK...',
+    '..KPYPK..',
+    '..KPPPK..',
+    '.KYPPPYK.',
+    '.KPPPPPK.',
+    'KPPYPYPPK',
+    'KKKKKKKKK',
+  ], { P: SH('#845ef7', '#b197fc', '#5f3dc4'), Y: '#ffd43b' }],
+  'hat-beanie': [5, 3, [
+    '......WW......',
+    '.....WWWW.....',
+    '....KKKKKK....',
+    '..KKBBBBBBKK..',
+    '.KBBBBBBBBBBK.',
+    '.KBBBBBBBBBBK.',
+    'KbbbbbbbbbbbbK',
+    'KbbbbbbbbbbbbK',
+    '.KKKKKKKKKKKK.',
+  ], { B: SH('#1c7ed6', '#4dabf7', '#1864ab'), b: SH('#1864ab', '#1c7ed6', '#0b4f8a'), W: '#ffffff' }],
+  'hat-headphones': [3, 7, [
+    '...KKKKKKKKKKKK...',
+    '..KGGGGGGGGGGGGK..',
+    '.KGK..........KGK.',
+    '.KG............GK.',
+    '.KG............GK.',
+    'KKKK..........KKKK',
+    'KMMK..........KMMK',
+    'KMMK..........KMMK',
+    'KMMK..........KMMK',
+    'KKKK..........KKKK',
+  ], { G: SH('#495057', '#868e96', '#343a40'), M: SH('#e64980', '#f783ac', '#a61e4d') }],
+  'hat-cowboy': [3, 4, [
+    '......KKKKKK......',
+    '.....KCCCCCCK.....',
+    '.....KCCCCCCK.....',
+    '.....KCCCCCCK.....',
+    '.....KYYYYYYK.....',
+    'KKKKKKKKKKKKKKKKKK',
+    'KCCCCCCCCCCCCCCCCK',
+    '.KKKKKKKKKKKKKKKK.',
+  ], { C: SH('#a0522d', '#c97a4a', '#6e3517'), Y: '#ffd43b' }],
+  'hat-wizard': [4, 0, [
+    '..........KK....',
+    '.........KUK....',
+    '........KUUK....',
+    '.......KUUK.....',
+    '......KUUYK.....',
+    '......KUUUK.....',
+    '.....KUYUUUK....',
+    '.....KUUUUUK....',
+    '....KUUUUYUUK...',
+    '...KUUUUUUUUUK..',
+    'KKKKKKKKKKKKKKKK',
+    'KVVVVVVVVVVVVVVK',
+    '.KKKKKKKKKKKKKK.',
+  ], { U: SH('#5f3dc4', '#845ef7', '#3b1f8f'), V: SH('#7048e8', '#9775fa', '#4c2bb5'), Y: '#ffd43b' }],
+  'hat-tophat': [6, 1, [
+    '..KKKKKKKK..',
+    '..KAAAAAAK..',
+    '..KAAAAAAK..',
+    '..KAAAAAAK..',
+    '..KAAAAAAK..',
+    '..KAAAAAAK..',
+    '..KRRRRRRK..',
+    '..KAAAAAAK..',
+    'KKKKKKKKKKKK',
+    'KAAAAAAAAAAK',
+    'KKKKKKKKKKKK',
+  ], { A: SH('#343a40', '#5c636a', '#1b1e21'), R: '#e03131' }],
+  'hat-crown': [5, 4, [
+    '.K....KK....K.',
+    'KYK..KYYK..KYK',
+    'KYYKKYYYYKKYYK',
+    'KYYYYYYYYYYYYK',
+    'KYGYYYRRYYYBYK',
+    'KYYYYYYYYYYYYK',
+    'KKKKKKKKKKKKKK',
+  ], { Y: SH('#fcc419', '#ffe066', '#e67700'), G: '#51cf66', R: '#e64980', B: '#4dabf7' }],
+
+  'face-round': [7, 12, [
+    'KKKK..KKKK',
+    'K..KKKK..K',
+    'K..K..K..K',
+    'KKKK..KKKK',
+  ], {}],
+  'face-sun': [7, 12, [
+    'KKKKKKKKKK',
+    'KLSK..KLSK',
+    'KSSK..KSSK',
+    '.KK....KK.',
+  ], { S: '#343a40', L: '#adb5bd' }],
+  'face-heart': [6, 12, [
+    'QQ.QQ..QQ.QQ',
+    'QQQQQKKQQQQQ',
+    '.QQQ....QQQ.',
+    '..Q......Q..',
+  ], { Q: '#f06595' }],
+  'face-star': [6, 11, [
+    '..Y......Y..',
+    '.YYY....YYY.',
+    'YYYYYKKYYYYY',
+    '.YYY....YYY.',
+    '.Y.Y....Y.Y.',
+  ], { Y: '#fcc419' }],
+  'face-pirate': [5, 10, [
+    'KK...........',
+    '..KK.........',
+    '....KK..KKKK.',
+    '......KKKKKK.',
+    '........KKKK.',
+    '.........KK..',
+  ], {}],
+
+  'neck-bowtie': [8, 18, [
+    'KRRKKRRK',
+    'KRRRRRRK',
+    'KRRKKRRK',
+  ], { R: SH('#e03131', '#ff6b6b', '#a51d1d') }],
+  'neck-scarf': [6, 18, [
+    'KOOOOOOOOOOK',
+    'KOWOWOWOWOOK',
+    '.KKKKKKOOKK.',
+    '.......KOOK.',
+    '.......KKKK.',
+  ], { O: SH('#f76707', '#ff922b', '#c2410c'), W: '#ffc078' }],
+  'neck-medal': [9, 18, [
+    'B....B',
+    '.B..B.',
+    '..KK..',
+    '.KYYK.',
+    '.KYYK.',
+    '..KK..',
+  ], { B: '#1c7ed6', Y: SH('#fcc419', '#ffe066', '#e67700') }],
+  'neck-cape': [4, 17, [
+    '..KKKKKKKKKKKK..',
+    '.KRRRRRRRRRRRRK.',
+    '.KRRRRRRRRRRRRK.',
+    'KRRRRRRRRRRRRRRK',
+    'KRRRRRRRRRRRRRRK',
+    'KRRRRRRRRRRRRRRK',
+    'KKKKKKKKKKKKKKKK',
+  ], { R: SH('#e03131', '#ff6b6b', '#a51d1d') }, true],
+  'neck-necklace': [7, 18, [
+    'Y........Y',
+    '.Y......Y.',
+    '..YY..YY..',
+    '....KK....',
+    '...KBBK...',
+    '....KK....',
+  ], { Y: '#fcc419', B: '#4dabf7' }],
+};
 
 // ---------- backgrounds ----------
 
-function background(id, u) {
-  const sky = (a, b) => `<defs><linearGradient id="${u}sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="200" height="200" fill="url(#${u}sky)"/>`;
-  const stars = (color, pts) => pts.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}"/>`).join('');
-  switch (id) {
-    case 'bg-sunset':
-      return `${sky('#845ef7', '#ff922b')}
-        <circle cx="100" cy="150" r="46" fill="#ffd43b" opacity="0.9"/>
-        <rect y="150" width="200" height="30" fill="#4dabf7"/>
-        <path d="M0 158 Q50 152 100 158 T200 158" stroke="#a5d8ff" stroke-width="3" fill="none"/>
-        <rect y="178" width="200" height="22" fill="#ffe8a3"/>`;
-    case 'bg-ocean':
-      return `${sky('#74c0fc', '#1864ab')}
-        ${stars('rgba(255,255,255,0.55)', [[30, 40, 6], [40, 70, 4], [170, 30, 5], [160, 60, 3], [24, 110, 3], [180, 100, 4]])}
-        <path d="M18 200 Q10 160 22 130 Q30 160 26 200Z" fill="#2f9e44"/>
-        <path d="M176 200 Q186 166 172 140 Q168 170 170 200Z" fill="#2f9e44"/>
-        <rect y="184" width="200" height="16" fill="#ffe8a3"/>`;
-    case 'bg-space':
-      return `${sky('#0b1026', '#2b2d6e')}
-        ${stars('#ffffff', [[20, 20, 1.6], [50, 46, 1.2], [80, 14, 1.8], [150, 22, 1.4], [178, 60, 1.8], [30, 90, 1.2], [170, 120, 1.4], [12, 150, 1.8], [120, 40, 1], [190, 170, 1.2]])}
-        <circle cx="165" cy="45" r="16" fill="#ff8787"/>
-        <ellipse cx="165" cy="45" rx="27" ry="6" fill="none" stroke="#ffd8a8" stroke-width="3"/>
-        <ellipse cx="100" cy="206" rx="140" ry="30" fill="#5c5f99"/>
-        <circle cx="60" cy="190" r="5" fill="#4c4f86"/><circle cx="150" cy="186" r="4" fill="#4c4f86"/>`;
-    case 'bg-castle':
-      return `${sky('#d0bfff', '#fff0f6')}
-        <g fill="#b197fc">
-          <rect x="10" y="120" width="40" height="80"/><rect x="150" y="120" width="40" height="80"/>
-          <rect x="40" y="140" width="120" height="60"/>
-          <path d="M6 122 L30 92 L54 122Z M146 122 L170 92 L194 122Z"/>
-        </g>
-        <path d="M30 92 V76 L42 81 L30 86 M170 92 V76 L182 81 L170 86" stroke="#7048e8" stroke-width="2" fill="#f783ac"/>
-        <rect y="190" width="200" height="10" fill="#8ce99a"/>`;
-    case 'bg-volcano':
-      return `${sky('#ffa94d', '#ffe8cc')}
-        <path d="M110 170 L150 60 L166 60 L200 170Z" fill="#7a4a26"/>
-        <path d="M150 60 Q158 50 166 60 L162 76 Q158 70 154 78Z" fill="#fa5252"/>
-        <circle cx="152" cy="40" r="7" fill="#adb5bd" opacity="0.8"/><circle cx="162" cy="26" r="9" fill="#ced4da" opacity="0.7"/>
-        <path d="M0 175 Q100 160 200 175 V200 H0Z" fill="#ffe066"/>
-        <path d="M30 180 Q28 140 36 120" stroke="#8d5524" stroke-width="5" fill="none"/>
-        <path d="M36 120 q-20 -4 -28 8 M36 120 q20 -6 26 6 M36 120 q-6 -18 -20 -18 M36 120 q8 -18 22 -14" stroke="#2f9e44" stroke-width="6" fill="none" stroke-linecap="round"/>`;
-    case 'bg-rainbow':
-      return `${sky('#d0ebff', '#fff9db')}
-        ${['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#4dabf7', '#9775fa'].map((c, i) => `<path d="M${10 + i * 9} 170 A${90 - i * 9} ${90 - i * 9} 0 0 1 ${190 - i * 9} 170" stroke="${c}" stroke-width="9" fill="none"/>`).join('')}
-        <g fill="#fff"><circle cx="22" cy="168" r="14"/><circle cx="38" cy="172" r="12"/><circle cx="178" cy="168" r="14"/><circle cx="162" cy="172" r="12"/></g>
-        <rect y="182" width="200" height="18" fill="#8ce99a"/>`;
-    case 'bg-galaxy':
-      return `${sky('#1a1033', '#5f3dc4')}
-        ${stars('#ffd43b', [[24, 30, 2.4], [60, 18, 1.6], [150, 20, 2.2], [182, 50, 1.6], [16, 90, 1.8], [186, 110, 2.4], [40, 140, 1.4], [168, 160, 1.8], [100, 12, 1.4]])}
-        <path d="M30 60 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3Z M170 80 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3Z" fill="#fff3bf"/>
-        <ellipse cx="100" cy="200" rx="120" ry="22" fill="#fcc419" opacity="0.5"/>`;
-    case 'bg-meadow':
-    default:
-      return `${sky('#a5d8ff', '#e7f5ff')}
-        <circle cx="166" cy="36" r="16" fill="#ffe066"/>
-        <g fill="#fff"><circle cx="34" cy="42" r="10"/><circle cx="46" cy="38" r="12"/><circle cx="58" cy="44" r="9"/></g>
-        <ellipse cx="100" cy="214" rx="170" ry="54" fill="#8ce99a"/>
-        <g><circle cx="24" cy="176" r="4" fill="#f783ac"/><circle cx="178" cy="182" r="4" fill="#ffd43b"/><circle cx="160" cy="170" r="3" fill="#ffffff"/><circle cx="40" cy="190" r="3" fill="#ffd43b"/></g>`;
+function bands(px, stops) {
+  // stops: [[fromY, color], ...] filled to the next stop
+  for (let i = 0; i < stops.length; i += 1) {
+    const [y0, c] = stops[i];
+    const y1 = i + 1 < stops.length ? stops[i + 1][0] : SIZE;
+    px.rect(0, y0, SIZE, y1 - y0, c);
   }
 }
 
-// ---------- species parts ----------
+const dots = (px, color, pts) => pts.forEach(([x, y]) => px.rect(x, y, 1, 1, color));
 
-function tail(species, p) {
-  switch (species) {
-    case 'fox':
-      return `<path d="M128 166 Q178 170 172 118 Q160 150 128 150Z" fill="${p.main}" ${S}/><path d="M168 128 Q174 120 172 118 Q170 140 158 148 Q166 138 168 128Z" fill="${p.light}"/>`;
-    case 'cat':
-      return `<path d="M130 170 Q172 170 160 128" stroke="${INK}" stroke-width="13" fill="none" stroke-linecap="round"/><path d="M130 170 Q172 170 160 128" stroke="${p.main}" stroke-width="8" fill="none" stroke-linecap="round"/>`;
-    case 'dino':
-      return `<path d="M128 150 L182 178 L126 176Z" fill="${p.main}" ${S}/>`;
-    default:
-      return `<circle cx="134" cy="168" r="9" fill="${species === 'panda' ? p.dark : p.main}" ${S}/>`;
+const BACKGROUNDS = {
+  'bg-meadow': (px) => {
+    bands(px, [[0, '#8fd3ff'], [7, '#a8ddff'], [13, '#c6ebff'], [20, '#74d474'], [21, '#5cc45c']]);
+    px.rect(18, 2, 3, 3, '#ffe066'); dots(px, '#fff3bf', [[19, 1], [17, 3], [21, 3], [19, 5]]);
+    px.rect(2, 4, 5, 1, '#ffffff'); px.rect(3, 3, 3, 1, '#ffffff');
+    dots(px, '#ff8fa3', [[2, 22], [15, 23]]); dots(px, '#ffd43b', [[21, 21], [8, 23]]); dots(px, '#4fa84f', [[5, 21], [11, 22], [18, 22]]);
+  },
+  'bg-sunset': (px) => {
+    bands(px, [[0, '#6741d9'], [5, '#9c36b5'], [9, '#e64980'], [13, '#ff922b'], [17, '#1c7ed6'], [21, '#ffe08a']]);
+    px.rect(10, 14, 4, 1, '#ffd43b'); px.rect(9, 15, 6, 2, '#ffd43b');
+    dots(px, '#74c0fc', [[3, 18], [4, 18], [16, 19], [17, 19], [10, 18], [11, 18], [12, 18]]);
+    dots(px, '#ffffff', [[4, 2], [15, 1], [20, 4]]);
+  },
+  'bg-ocean': (px) => {
+    bands(px, [[0, '#74c0fc'], [8, '#4dabf7'], [15, '#1c7ed6'], [21, '#ffe08a']]);
+    dots(px, '#d0ebff', [[4, 3], [5, 6], [19, 2], [18, 9], [3, 12], [20, 14]]);
+    px.rect(1, 15, 1, 6, '#2f9e44'); px.rect(2, 13, 1, 8, '#40c057'); px.rect(21, 14, 1, 7, '#2f9e44'); px.rect(22, 16, 1, 5, '#40c057');
+    dots(px, '#ff8787', [[17, 22], [18, 22], [17, 21]]);
+  },
+  'bg-space': (px) => {
+    bands(px, [[0, '#0b1026'], [12, '#1b1f4b'], [21, '#5c5f99']]);
+    dots(px, '#ffffff', [[2, 2], [7, 5], [12, 1], [4, 10], [21, 9], [14, 4], [1, 15], [22, 16], [9, 13]]);
+    px.rect(17, 2, 4, 4, '#ff8787'); px.rect(18, 2, 2, 1, '#ffa8a8'); px.rect(15, 4, 8, 1, '#ffd8a8');
+    dots(px, '#4c4f86', [[3, 22], [4, 22], [16, 23], [17, 23], [11, 22]]);
+  },
+  'bg-castle': (px) => {
+    bands(px, [[0, '#d0bfff'], [10, '#e5dbff'], [20, '#74d474'], [21, '#5cc45c']]);
+    px.rect(0, 10, 4, 10, '#9775fa'); px.rect(20, 10, 4, 10, '#9775fa'); px.rect(4, 14, 16, 6, '#b197fc');
+    dots(px, '#9775fa', [[4, 13], [6, 13], [8, 13], [15, 13], [17, 13], [19, 13], [0, 9], [2, 9], [21, 9], [23, 9]]);
+    px.rect(1, 6, 1, 3, OUT); px.rect(2, 6, 2, 1, '#f783ac'); px.rect(22, 6, 1, 3, OUT); px.rect(20, 6, 2, 1, '#f783ac');
+    px.rect(11, 16, 2, 4, '#5f3dc4');
+  },
+  'bg-volcano': (px) => {
+    bands(px, [[0, '#ffa94d'], [9, '#ffd8a8'], [20, '#ffe066']]);
+    for (let i = 0; i < 12; i += 1) px.rect(17 - Math.floor(i / 2), 8 + i, 7 + Math.floor(i / 2) * 2 - 6 + 6, 1, '#7a4a26');
+    px.rect(16, 7, 4, 2, '#fa5252'); dots(px, '#ff8787', [[17, 9], [18, 10]]);
+    px.rect(16, 3, 2, 2, '#ced4da'); px.rect(18, 1, 3, 2, '#e9ecef');
+    px.rect(3, 13, 1, 7, '#8d5524'); px.rect(1, 12, 5, 1, '#2f9e44'); dots(px, '#2f9e44', [[0, 13], [6, 13], [2, 11], [4, 11]]);
+  },
+  'bg-rainbow': (px) => {
+    bands(px, [[0, '#d0ebff'], [20, '#74d474'], [21, '#5cc45c']]);
+    const colors = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#4dabf7', '#9775fa'];
+    for (let y = 0; y < 20; y += 1) {
+      for (let x = 0; x < SIZE; x += 1) {
+        const d = Math.hypot(x + 0.5 - 12, y + 0.5 - 21);
+        const band = Math.floor(17 - d);
+        if (band >= 0 && band < colors.length) px.rect(x, y, 1, 1, colors[band]);
+      }
+    }
+    px.rect(0, 17, 5, 3, '#ffffff'); px.rect(1, 16, 3, 1, '#ffffff'); px.rect(19, 17, 5, 3, '#ffffff'); px.rect(20, 16, 3, 1, '#ffffff');
+  },
+  'bg-galaxy': (px) => {
+    bands(px, [[0, '#1a1033'], [10, '#3b1f73'], [17, '#5f3dc4']]);
+    dots(px, '#ffd43b', [[2, 3], [10, 1], [20, 2], [5, 9], [22, 11], [1, 17], [21, 20], [14, 6]]);
+    const star = (x, y) => { px.rect(x, y - 1, 1, 3, '#fff3bf'); px.rect(x - 1, y, 3, 1, '#fff3bf'); };
+    star(4, 5); star(19, 15); star(16, 3);
+    px.rect(0, 22, 24, 2, '#7950f2');
+  },
+};
+
+// ---------- rendering ----------
+
+class Pixels {
+  constructor() { this.cells = new Map(); }
+  rect(x, y, w, h, c) {
+    for (let yy = y; yy < y + h; yy += 1) for (let xx = x; xx < x + w; xx += 1) {
+      if (xx >= 0 && yy >= 0 && xx < SIZE && yy < SIZE) this.cells.set(`${xx},${yy}`, c);
+    }
+  }
+  /** Paint a letter grid. pal values are a color or [base, [light, dark]] for 16-bit shading. */
+  grid(x0, y0, rows, pal, shade = {}) {
+    rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x += 1) {
+        const ch = row[x];
+        if (ch === '.') continue;
+        let col = ch === 'K' ? OUT : pal[ch];
+        let sh = shade[ch];
+        if (Array.isArray(col)) { sh = col[1]; col = col[0]; }
+        if (!col) continue;
+        if (sh) {
+          // light from the top-left: highlight next to an outline above/left, darken next to one below/right
+          const at = (dx, dy) => (rows[y + dy] || '')[x + dx];
+          if (at(1, 0) === 'K' || at(0, 1) === 'K') col = sh[1];
+          else if (at(-1, 0) === 'K' || at(0, -1) === 'K') col = sh[0];
+        }
+        this.rect(x0 + x, y0 + y, 1, 1, col);
+      }
+    });
+  }
+  /** One <rect> per horizontal run of the same color. */
+  svg() {
+    let out = '';
+    for (let y = 0; y < SIZE; y += 1) {
+      let x = 0;
+      while (x < SIZE) {
+        const c = this.cells.get(`${x},${y}`);
+        if (!c) { x += 1; continue; }
+        let w = 1;
+        while (x + w < SIZE && this.cells.get(`${x + w},${y}`) === c) w += 1;
+        out += `<rect x="${x}" y="${y}" width="${w}" height="1" fill="${c}"/>`;
+        x += w;
+      }
+    }
+    return out;
   }
 }
 
-function ears(species, p) {
-  switch (species) {
-    case 'fox':
-      return `<path d="M60 66 L56 20 L94 46Z M140 66 L144 20 L106 46Z" fill="${p.main}" ${S}/><path d="M64 56 L62 32 L84 47Z M136 56 L138 32 L116 47Z" fill="${p.inner}"/>`;
-    case 'cat':
-      return `<path d="M60 66 L60 26 L92 46Z M140 66 L140 26 L108 46Z" fill="${p.main}" ${S}/><path d="M65 56 L65 36 L84 47Z M135 56 L135 36 L116 47Z" fill="${p.inner}"/>`;
-    case 'bear':
-      return `<circle cx="62" cy="52" r="17" fill="${p.main}" ${S}/><circle cx="138" cy="52" r="17" fill="${p.main}" ${S}/><circle cx="62" cy="53" r="8" fill="${p.inner}"/><circle cx="138" cy="53" r="8" fill="${p.inner}"/>`;
-    case 'panda':
-      return `<circle cx="62" cy="52" r="17" fill="${p.dark}" ${S}/><circle cx="138" cy="52" r="17" fill="${p.dark}" ${S}/>`;
-    case 'dino':
-      return `<path d="M72 50 L80 26 L90 46Z M90 44 L100 18 L110 44Z M110 46 L120 26 L128 50Z" fill="${p.inner}" ${S}/>`;
-    default:
-      return '';
-  }
-}
-
-function faceBase(species, p) {
-  let out = '';
-  if (species === 'fox') out += `<path d="M58 96 Q66 128 100 130 Q134 128 142 96 Q122 112 100 104 Q78 112 58 96Z" fill="${p.light}"/>`;
-  else if (species !== 'panda') out += `<ellipse cx="100" cy="110" rx="24" ry="17" fill="${p.light}"/>`;
-  if (species === 'panda') out += `<ellipse cx="80" cy="88" rx="13" ry="16" transform="rotate(-25 80 88)" fill="${p.dark}"/><ellipse cx="120" cy="88" rx="13" ry="16" transform="rotate(25 120 88)" fill="${p.dark}"/>`;
-  if (species === 'dino') out += `<circle cx="94" cy="102" r="2.2" fill="${INK}"/><circle cx="106" cy="102" r="2.2" fill="${INK}"/>`;
-  else out += `<ellipse cx="100" cy="101" rx="7" ry="5" fill="${INK}"/>`;
-  if (species === 'cat') out += `<path d="M70 106 L52 102 M70 112 L52 114 M130 106 L148 102 M130 112 L148 114" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>`;
-  return out;
-}
-
-function eyes(mood, species) {
-  const light = species === 'panda';
-  const dot = (x) => `<circle cx="${x}" cy="88" r="6.5" fill="${light ? '#fff' : INK}"/>${light ? `<circle cx="${x}" cy="88" r="4" fill="${INK}"/>` : ''}<circle cx="${x - 2}" cy="86" r="2.2" fill="#fff"/>`;
-  const arc = (x, up) => `<path d="M${x - 8} 90 Q${x} ${up ? 79 : 95} ${x + 8} 90" stroke="${light ? '#fff' : INK}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
-  switch (mood) {
-    case 'excited':
-      return arc(82, true) + arc(118, true);
-    case 'sleepy':
-      return arc(82, false) + arc(118, false);
-    case 'sad':
-      return `${dot(82)}${dot(118)}<path d="M72 76 L90 71 M128 76 L110 71" stroke="${INK}" stroke-width="3.5" stroke-linecap="round"/>
-        <path d="M78 98 Q74 106 78 109 Q82 106 78 98Z" fill="#74c0fc" class="tear"/>`;
-    case 'proud':
-      return `${dot(82)}${dot(118)}<path d="M86 82 l1.5 3 3 1.5 -3 1.5 -1.5 3 -1.5 -3 -3 -1.5 3 -1.5Z M122 82 l1.5 3 3 1.5 -3 1.5 -1.5 3 -1.5 -3 -3 -1.5 3 -1.5Z" fill="#fff"/>`;
-    default:
-      return dot(82) + dot(118);
-  }
-}
-
-function mouth(mood) {
-  switch (mood) {
-    case 'excited':
-      return `<path d="M86 110 Q100 134 114 110Z" fill="#8a2a3a" ${S}/><ellipse cx="100" cy="122" rx="7" ry="4" fill="#ff8fa3"/>`;
-    case 'proud':
-      return `<path d="M86 109 Q100 126 114 109" stroke="${INK}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
-    case 'sleepy':
-      return `<ellipse cx="100" cy="115" rx="4.5" ry="5.5" fill="#8a2a3a" stroke="${INK}" stroke-width="2"/>`;
-    case 'sad':
-      return `<path d="M90 119 Q100 109 110 119" stroke="${INK}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
-    default:
-      return `<path d="M90 110 Q100 120 110 110" stroke="${INK}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
-  }
-}
-
-// ---------- outfit ----------
-
-function hat(id) {
-  switch (id) {
-    case 'hat-cap':
-      return `<path d="M56 62 Q100 4 144 62Z" fill="#e03131" ${S}/><path d="M118 58 Q156 52 170 64 Q144 72 118 64Z" fill="#c92a2a" ${S}/><circle cx="100" cy="26" r="5" fill="#fff" ${S}/>`;
-    case 'hat-party':
-      return `<path d="M76 52 L100 -2 L124 52Z" fill="#845ef7" ${S}/><path d="M84 36 L114 30 M80 46 L120 40 M92 18 L108 14" stroke="#ffd43b" stroke-width="4"/><circle cx="100" cy="0" r="8" fill="#ffd43b" ${S}/>`;
-    case 'hat-beanie':
-      return `<path d="M56 60 Q100 -4 144 60Z" fill="#1c7ed6" ${S}/><rect x="52" y="50" width="96" height="16" rx="8" fill="#1864ab" ${S}/><circle cx="100" cy="10" r="10" fill="#fff" ${S}/>`;
-    case 'hat-headphones':
-      return `<path d="M52 86 Q52 24 100 24 Q148 24 148 86" stroke="${INK}" stroke-width="11" fill="none"/><path d="M52 86 Q52 24 100 24 Q148 24 148 86" stroke="#495057" stroke-width="6" fill="none"/><rect x="40" y="72" width="20" height="32" rx="8" fill="#e64980" ${S}/><rect x="140" y="72" width="20" height="32" rx="8" fill="#e64980" ${S}/>`;
-    case 'hat-cowboy':
-      return `<path d="M70 50 Q70 10 100 18 Q130 10 130 50Z" fill="#a0522d" ${S}/><path d="M36 50 Q100 70 164 50 Q160 62 100 66 Q40 62 36 50Z" fill="#8b4513" ${S}/><rect x="70" y="40" width="60" height="8" fill="#ffd43b"/>`;
-    case 'hat-wizard':
-      return `<path d="M66 56 Q90 30 96 -4 Q104 -10 112 0 Q112 30 134 56Z" fill="#5f3dc4" ${S}/><path d="M94 22 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2Z M112 38 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5Z" fill="#ffd43b"/><ellipse cx="100" cy="56" rx="50" ry="9" fill="#7048e8" ${S}/>`;
-    case 'hat-tophat':
-      return `<rect x="72" y="4" width="56" height="48" rx="4" fill="#212529" ${S}/><rect x="72" y="38" width="56" height="9" fill="#e03131"/><ellipse cx="100" cy="54" rx="44" ry="8" fill="#343a40" ${S}/>`;
-    case 'hat-crown':
-      return `<path d="M64 56 L62 20 L82 38 L100 10 L118 38 L138 20 L136 56Z" fill="#fcc419" stroke="#e67700" stroke-width="3" stroke-linejoin="round"/><circle cx="100" cy="42" r="6" fill="#e64980"/><circle cx="78" cy="46" r="4" fill="#4dabf7"/><circle cx="122" cy="46" r="4" fill="#51cf66"/>`;
-    default:
-      return '';
-  }
-}
-
-function faceItem(id) {
-  const heart = (x) => `<path d="M${x} 98 C${x - 22} 84 ${x - 12} 70 ${x} 80 C${x + 12} 70 ${x + 22} 84 ${x} 98Z" fill="#f06595" opacity="0.9" ${S}/>`;
-  const star = (x) => `<path d="M${x} 72 L${x + 5} 83 L${x + 16} 84 L${x + 8} 92 L${x + 10} 103 L${x} 97 L${x - 10} 103 L${x - 8} 92 L${x - 16} 84 L${x - 5} 83Z" fill="#fcc419" opacity="0.92" ${S}/>`;
-  switch (id) {
-    case 'face-round':
-      return `<circle cx="82" cy="88" r="14" fill="rgba(255,255,255,0.2)" stroke="${INK}" stroke-width="4"/><circle cx="118" cy="88" r="14" fill="rgba(255,255,255,0.2)" stroke="${INK}" stroke-width="4"/><path d="M96 88 Q100 84 104 88" stroke="${INK}" stroke-width="4" fill="none"/>`;
-    case 'face-sun':
-      return `<rect x="64" y="78" width="34" height="22" rx="9" fill="#212529"/><rect x="102" y="78" width="34" height="22" rx="9" fill="#212529"/><path d="M98 84 H102 M58 82 L64 84 M142 82 L136 84" stroke="#212529" stroke-width="4"/><path d="M70 84 L78 84 M108 84 L116 84" stroke="#868e96" stroke-width="3" stroke-linecap="round"/>`;
-    case 'face-heart':
-      return `${heart(82)}${heart(118)}<path d="M96 86 H104" stroke="${INK}" stroke-width="3"/>`;
-    case 'face-star':
-      return `${star(82)}${star(118)}`;
-    case 'face-pirate':
-      return `<path d="M60 70 L148 100" stroke="${INK}" stroke-width="3"/><ellipse cx="118" cy="89" rx="13" ry="12" fill="#212529"/>`;
-    default:
-      return '';
-  }
-}
-
-function neckBack(id) {
-  if (id === 'neck-cape') return `<path d="M68 128 Q46 170 54 194 L146 194 Q154 170 132 128Z" fill="#e03131" ${S}/>`;
-  return '';
-}
-
-function neckFront(id) {
-  switch (id) {
-    case 'neck-bowtie':
-      return `<path d="M100 132 L80 122 L80 142Z M100 132 L120 122 L120 142Z" fill="#e03131" ${S}/><circle cx="100" cy="132" r="5" fill="#c92a2a" ${S}/>`;
-    case 'neck-scarf':
-      return `<rect x="66" y="122" width="68" height="16" rx="8" fill="#f76707" ${S}/><rect x="106" y="130" width="15" height="34" rx="5" fill="#f76707" ${S} transform="rotate(-10 113 130)"/><path d="M76 124 V136 M88 124 V136 M100 124 V136 M112 124 V136" stroke="#ffc078" stroke-width="3"/>`;
-    case 'neck-medal':
-      return `<path d="M84 122 L100 150 L116 122" stroke="#1c7ed6" stroke-width="6" fill="none"/><circle cx="100" cy="154" r="11" fill="#fcc419" stroke="#e67700" stroke-width="3"/><path d="M100 147 l2 4.5 4.5.5 -3.5 3 1 4.5 -4 -2.5 -4 2.5 1 -4.5 -3.5 -3 4.5 -.5Z" fill="#fff3bf"/>`;
-    case 'neck-cape':
-      return `<path d="M70 126 Q100 140 130 126" stroke="#c92a2a" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="100" cy="134" r="5" fill="#fcc419" ${S}/>`;
-    case 'neck-necklace':
-      return `<path d="M72 124 Q100 146 128 124" stroke="#fcc419" stroke-width="3" fill="none"/>${[[80, 131], [90, 136], [110, 136], [120, 131]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3" fill="#fcc419"/>`).join('')}<path d="M100 134 L108 142 L100 152 L92 142Z" fill="#4dabf7" ${S}/>`;
-    default:
-      return '';
-  }
+function itemLayer(id) {
+  const art = ITEM_ART[id];
+  if (!art) return '';
+  const [x, y, rows, pal] = art;
+  const px = new Pixels();
+  px.grid(x, y, rows, pal);
+  return px.svg();
 }
 
 function extras(mood) {
+  const px = new Pixels();
   if (mood === 'sleepy') {
-    return `<g class="zzz" fill="${INK}" font-family="system-ui, sans-serif" font-weight="900"><text x="140" y="56" font-size="18">z</text><text x="152" y="40" font-size="14">z</text><text x="162" y="26" font-size="11">z</text></g>`;
+    px.grid(19, 2, ['KKK', '..K', '.K.', 'K..', 'KKK'], {});
+    px.grid(16, 5, ['KK', '.K', 'KK'], {});
   }
   if (mood === 'proud' || mood === 'excited') {
-    const sp = (x, y, s) => `<path d="M${x} ${y - s} L${x + s * 0.3} ${y - s * 0.3} L${x + s} ${y} L${x + s * 0.3} ${y + s * 0.3} L${x} ${y + s} L${x - s * 0.3} ${y + s * 0.3} L${x - s} ${y} L${x - s * 0.3} ${y - s * 0.3}Z" fill="#ffd43b" stroke="#f08c00" stroke-width="1.5"/>`;
-    return `<g class="sparkles">${sp(34, 60, 9)}${sp(168, 84, 11)}${sp(44, 140, 7)}${sp(160, 30, 6)}</g>`;
+    const sparkle = (x, y) => px.grid(x - 1, y - 1, ['.Y.', 'YWY', '.Y.'], { Y: '#ffd43b', W: '#fff9db' });
+    sparkle(2, 5); sparkle(21, 10); sparkle(3, 17);
   }
-  return '';
+  return px.svg();
 }
 
 /**
@@ -237,40 +413,36 @@ function extras(mood) {
  * opts.background: false to draw the character only (for small chips)
  */
 export function buddySvg(buddy, mood = 'happy', opts = {}) {
-  uidCounter += 1;
-  const u = `b${uidCounter}`;
-  const species = PALETTE[buddy?.species] ? buddy.species : 'bear';
-  const p = PALETTE[species];
+  const speciesId = SPECIES[buddy?.species] ? buddy.species : 'bear';
   const o = buddy?.outfit || {};
-  const bodyFill = species === 'panda' ? p.main : p.main;
-  const limb = species === 'panda' ? p.dark : p.main;
   const showBg = opts.background !== false;
-  return `<svg class="buddy-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${species} buddy, ${mood}">
-    ${showBg ? background(o.background, u) : ''}
-    <ellipse cx="100" cy="192" rx="44" ry="6" fill="#000" opacity="0.15" class="shadow"/>
+
+  let bg = '';
+  if (showBg) {
+    const px = new Pixels();
+    (BACKGROUNDS[o.background] || BACKGROUNDS['bg-meadow'])(px);
+    bg = px.svg();
+  }
+
+  const sp = speciesGrid(speciesId, mood);
+  const body = new Pixels();
+  body.grid(SPRITE_X, SPRITE_Y, sp.grid, sp.pal, sp.shade);
+
+  const shadow = `<rect class="shadow" x="7" y="23" width="10" height="1" fill="#000" opacity="0.18"/>`;
+  const capeBehind = ITEM_ART[o.neck]?.[4] ? itemLayer(o.neck) : '';
+  const neckFront = ITEM_ART[o.neck]?.[4] ? '<rect x="10" y="18" width="4" height="1" fill="#fcc419"/>' : itemLayer(o.neck);
+
+  return `<svg class="buddy-svg pixel" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="${speciesId} buddy, ${mood}">
+    ${showBg ? `<g class="bg">${bg}</g>` : ''}
+    ${showBg ? shadow : ''}
     <g class="char">
-      ${neckBack(o.neck)}
-      ${tail(species, p)}
-      <ellipse cx="80" cy="184" rx="15" ry="9" fill="${limb}" ${S}/>
-      <ellipse cx="120" cy="184" rx="15" ry="9" fill="${limb}" ${S}/>
-      <ellipse cx="100" cy="152" rx="40" ry="34" fill="${bodyFill}" ${S}/>
-      <ellipse cx="100" cy="158" rx="24" ry="22" fill="${species === 'panda' ? '#f1f3f5' : p.light}"/>
-      <g class="arm arm-l"><ellipse cx="62" cy="150" rx="10" ry="18" transform="rotate(20 62 150)" fill="${limb}" ${S}/></g>
-      <g class="arm arm-r"><ellipse cx="138" cy="150" rx="10" ry="18" transform="rotate(-20 138 150)" fill="${limb}" ${S}/></g>
-      ${neckFront(o.neck)}
-      <g class="head">
-        ${ears(species, p)}
-        <circle cx="100" cy="88" r="46" fill="${p.main}" ${S}/>
-        ${faceBase(species, p)}
-        <circle cx="68" cy="108" r="7" fill="#ff8fa3" opacity="${mood === 'sad' || mood === 'sleepy' ? 0.25 : 0.55}"/>
-        <circle cx="132" cy="108" r="7" fill="#ff8fa3" opacity="${mood === 'sad' || mood === 'sleepy' ? 0.25 : 0.55}"/>
-        <g class="eyes">${eyes(mood, species)}</g>
-        ${mouth(mood)}
-        ${faceItem(o.face)}
-        ${hat(o.hat)}
-      </g>
+      ${capeBehind}
+      ${body.svg()}
+      ${neckFront}
+      ${itemLayer(o.face)}
+      ${itemLayer(o.hat)}
     </g>
-    ${extras(mood)}
+    <g class="fx ${mood === 'sleepy' ? 'zzz' : 'sparkles'}">${extras(mood)}</g>
   </svg>`;
 }
 
@@ -279,7 +451,7 @@ export function buddyLine(mood, name) {
   const lines = {
     happy: [`Keep going, ${name}!`, "We're doing great!", 'What should we do next?'],
     excited: ['WOOHOO!', 'Yes! You did it!', 'High five! ✋'],
-    proud: ['Quest complete! I’m so proud of you!', 'Best day ever!', "We did it! See you tomorrow!"],
+    proud: ['Quest complete! I’m so proud of you!', 'Best day ever!', 'We did it! See you tomorrow!'],
     sleepy: ['Yawn... is it quest time?', "I'm bored... let's do a task!", 'Wake me up with a task!'],
     sad: ['I missed you yesterday...', "Let's get our streak going again!", "Today's a new day. Let's go!"],
   };

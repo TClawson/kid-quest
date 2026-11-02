@@ -1,4 +1,5 @@
 :root {
+  --px-ink: #2a1838;
   --bg: #f4f1ff;
   --card: #ffffff;
   --ink: #23204a;
@@ -172,7 +173,7 @@ label { color: var(--ink); }
 }
 
 /* ---------- buddies ---------- */
-.buddy { flex: none; border-radius: 24px; overflow: hidden; background: color-mix(in srgb, var(--kid) 18%, #fff); }
+.buddy { flex: none; border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--kid) 18%, #fff); }
 .buddy svg { display: block; width: 100%; height: 100%; }
 .buddy-md { width: 150px; height: 150px; }
 .buddy-lg { width: min(220px, 46vw); height: min(220px, 46vw); }
@@ -181,45 +182,24 @@ label { color: var(--ink); }
 .buddy-chip svg, .pick-item.species svg { width: 100%; height: 100%; display: block; }
 .pick-item.species { width: 64px; height: 64px; padding: 4px; }
 
-.buddy .char, .buddy .arm, .buddy .head, .buddy .shadow { transform-box: view-box; }
-.buddy .char { transform-origin: 100px 192px; }
-.buddy .head { transform-origin: 100px 130px; }
-.buddy .arm-l { transform-origin: 66px 138px; }
-.buddy .arm-r { transform-origin: 134px 138px; }
-.buddy .shadow { transform-origin: 100px 192px; }
+.buddy svg.pixel { image-rendering: pixelated; }
+.buddy .char, .buddy .fx, .buddy .shadow { transform-box: view-box; }
+/* 16-bit style: motion moves in whole pixels with stepped timing */
+.mood-happy .char { animation: px-bob 1s steps(1, end) infinite; }
+.mood-excited .char { animation: px-jump 0.5s steps(1, end) infinite; }
+.mood-excited .shadow { animation: px-shadow 0.5s steps(1, end) infinite; }
+.mood-proud .char { animation: px-dance 0.8s steps(1, end) infinite; }
+.mood-sleepy .char { animation: px-breathe 2.4s steps(1, end) infinite; }
+.mood-sad .char { transform: translateY(1px); }
+.buddy .zzz { animation: px-blink 1.2s steps(1, end) infinite; }
+.buddy .sparkles { animation: px-blink 0.6s steps(1, end) infinite; }
 
-.mood-happy .char { animation: buddy-bob 2.4s ease-in-out infinite; }
-.mood-happy .arm-r { animation: buddy-wave 2.4s ease-in-out infinite; }
-.mood-excited .char { animation: buddy-jump 0.55s ease-in-out infinite; }
-.mood-excited .shadow { animation: buddy-shadow 0.55s ease-in-out infinite; }
-.mood-excited .arm-l { transform: rotate(120deg); animation: buddy-flap-l 0.28s ease-in-out infinite alternate; }
-.mood-excited .arm-r { transform: rotate(-120deg); animation: buddy-flap-r 0.28s ease-in-out infinite alternate; }
-.mood-proud .char { animation: buddy-dance 1.2s ease-in-out infinite; }
-.mood-proud .arm-l { transform: rotate(110deg); }
-.mood-proud .arm-r { animation: buddy-wave 1.2s ease-in-out infinite; }
-.mood-sleepy .char { animation: buddy-breathe 3.6s ease-in-out infinite; }
-.mood-sleepy .head { animation: buddy-nod 3.6s ease-in-out infinite; }
-.mood-sad .char { animation: buddy-breathe 4.5s ease-in-out infinite; }
-.mood-sad .head { transform: rotate(-6deg) translateY(4px); }
-.buddy .zzz text { animation: buddy-zzz 2.4s ease-in-out infinite; }
-.buddy .zzz text:nth-child(2) { animation-delay: 0.4s; }
-.buddy .zzz text:nth-child(3) { animation-delay: 0.8s; }
-.buddy .sparkles path { transform-box: fill-box; transform-origin: center; animation: buddy-twinkle 1s ease-in-out infinite alternate; }
-.buddy .sparkles path:nth-child(even) { animation-delay: 0.5s; }
-.buddy .tear { animation: buddy-tear 2.2s ease-in infinite; }
-
-@keyframes buddy-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-@keyframes buddy-wave { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-70deg); } 80% { transform: rotate(-40deg); } 90% { transform: rotate(-70deg); } }
-@keyframes buddy-jump { 0%, 100% { transform: translateY(0) scale(1.04, 0.96); } 50% { transform: translateY(-26px) scale(0.97, 1.03); } }
-@keyframes buddy-shadow { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.6); } }
-@keyframes buddy-flap-l { from { transform: rotate(100deg); } to { transform: rotate(140deg); } }
-@keyframes buddy-flap-r { from { transform: rotate(-100deg); } to { transform: rotate(-140deg); } }
-@keyframes buddy-dance { 0%, 100% { transform: rotate(-6deg) translateY(0); } 25% { transform: rotate(0) translateY(-10px); } 50% { transform: rotate(6deg) translateY(0); } 75% { transform: rotate(0) translateY(-10px); } }
-@keyframes buddy-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.02, 0.98); } }
-@keyframes buddy-nod { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(8deg) translateY(4px); } }
-@keyframes buddy-zzz { 0% { opacity: 0; transform: translateY(6px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
-@keyframes buddy-twinkle { from { transform: scale(0.5) rotate(0); opacity: 0.6; } to { transform: scale(1.15) rotate(20deg); opacity: 1; } }
-@keyframes buddy-tear { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(14px); opacity: 0; } }
+@keyframes px-bob { 0% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+@keyframes px-jump { 0% { transform: translateY(0); } 25% { transform: translateY(-2px); } 50% { transform: translateY(-3px); } 75% { transform: translateY(-2px); } }
+@keyframes px-shadow { 0% { opacity: 0.18; } 50% { opacity: 0.08; } }
+@keyframes px-dance { 0% { transform: translate(-1px, 0); } 25% { transform: translate(0, -1px); } 50% { transform: translate(1px, 0); } 75% { transform: translate(0, -1px); } }
+@keyframes px-breathe { 0% { transform: translateY(0); } 50% { transform: translateY(1px); } }
+@keyframes px-blink { 0% { opacity: 1; } 50% { opacity: 0.25; } }
 
 .buddy-panel, .wardrobe-top { display: flex; gap: 16px; align-items: center; background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 4px; }
 .buddy-side { display: grid; gap: 12px; flex: 1; min-width: 0; }
@@ -291,3 +271,26 @@ label { color: var(--ink); }
 @keyframes node-pulse { 0% { box-shadow: 0 7px 0 color-mix(in srgb, var(--kid) 60%, #000), 0 0 0 0 color-mix(in srgb, var(--kid) 50%, transparent); } 100% { box-shadow: 0 7px 0 color-mix(in srgb, var(--kid) 60%, #000), 0 0 0 22px transparent; } }
 @keyframes chest-glow { from { box-shadow: 0 7px 0 #f08c00, 0 0 0 0 rgba(255, 212, 59, 0.6); } to { box-shadow: 0 7px 0 #f08c00, 0 0 30px 12px rgba(255, 212, 59, 0.8); } }
 @keyframes buddy-arrive { 0% { transform: translate(-50%, -100%) translateY(-120px) scale(0.8); } 60% { transform: translate(-50%, -100%) translateY(6px) scale(1.05, 0.95); } 100% { transform: translate(-50%, -100%); } }
+
+/* ---------- 16-bit look for the quest map ---------- */
+.quest-map { border-radius: 8px; border: 4px solid var(--px-ink); background-color: #4fb34f;
+  background-image:
+    linear-gradient(90deg, rgba(255,255,255,0.08) 50%, transparent 0),
+    linear-gradient(rgba(0,0,0,0.05) 50%, transparent 0);
+  background-size: 16px 16px, 16px 16px; }
+.map-path .road-edge { stroke: #b88a52; stroke-width: 38; stroke-linecap: square; }
+.map-path .road { stroke: #e8c08a; stroke-width: 30; stroke-linecap: square; }
+.map-path .road-done { stroke: color-mix(in srgb, var(--kid) 60%, #e8c08a); stroke-width: 30; stroke-linecap: square; }
+.map-path .road-dash { stroke: #fff3d6; stroke-width: 6; stroke-dasharray: 6 12; stroke-linecap: butt; opacity: 1; }
+.map-start, .map-sign { border-radius: 4px; border: 3px solid var(--px-ink); box-shadow: 3px 3px 0 var(--px-ink); }
+.map-sign { background: var(--px-ink); color: #fff3bf; }
+.map-node { border-radius: 10px; border: 4px solid var(--px-ink); box-shadow: 0 6px 0 var(--px-ink); }
+.map-node:active { box-shadow: 0 2px 0 var(--px-ink); }
+.map-node.current { box-shadow: 0 6px 0 var(--px-ink); animation: px-node 0.8s steps(1, end) infinite; }
+.map-node.done { box-shadow: 0 6px 0 var(--px-ink); background: linear-gradient(#ffe066 0 30%, #fcc419 30% 75%, #f59f00 75%); }
+.map-node.pending { box-shadow: 0 6px 0 var(--px-ink); }
+.map-node.chest, .map-node.chest.open { box-shadow: 0 6px 0 var(--px-ink); }
+.map-node.chest.open { animation: px-node 0.6s steps(1, end) infinite; }
+.node-badge { border-radius: 4px; box-shadow: 0 0 0 3px var(--px-ink); }
+.map-label { border-radius: 4px; border: 3px solid var(--px-ink); background: #fffdf5; box-shadow: 3px 3px 0 rgba(42, 24, 56, 0.35); }
+@keyframes px-node { 0% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
