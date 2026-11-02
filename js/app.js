@@ -6,7 +6,7 @@ import {
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine } from './avatar.js';
-import { paintQuestMaps } from './maparts.js';
+import { paintQuestMaps, mapTheme } from './maparts.js';
 import { startMusic, stopMusic } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, moveWornToBuddy, switchSpecies,
@@ -717,6 +717,8 @@ function visitorsHtml(kid, s) {
       </div>`).join('');
   return { html: `<div class="map-visitors" aria-label="Visiting buddies">${html}</div>`, room: VILLAGE };
 }
+/** The map theme follows the kid's Places background. */
+const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
 const MAP_WAVE = [0, 22, 30, 18, -4, -24, -30, -16];
 
 function questMap(kid, s, entry, mood) {
@@ -776,7 +778,7 @@ function questMap(kid, s, entry, mood) {
     </div>`;
 
   return `
-    <section class="quest-map" style="height:${height}px" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-seed="${esc(kid.id)}">
+    <section class="quest-map" style="height:${height}px;background:${mapTheme(kidTheme(kid)).ground[0]}" data-theme="${esc(kidTheme(kid))}" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-seed="${esc(kid.id)}">
       <canvas class="map-land" aria-hidden="true"></canvas>
       <div class="map-start" style="left:50%;top:0">🚩 Start</div>
       ${visit.html}
@@ -1136,7 +1138,7 @@ function render() {
 function syncMusic() {
   const onMap = ui.view === 'kid' && state.settings.questView !== 'list';
   const wanted = onMap && state.settings.sound && state.settings.music !== false && document.visibilityState === 'visible';
-  if (wanted) startMusic();
+  if (wanted) startMusic(kidTheme(kidById(ui.kidId) || {}));
   else stopMusic();
 }
 
