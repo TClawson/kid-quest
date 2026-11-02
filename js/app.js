@@ -7,7 +7,7 @@ import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine } from './avatar.js';
 import { paintQuestMaps } from './maparts.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, speciesFromEmoji, defaultBuddy, restingMood,
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, speciesFromEmoji, defaultBuddy, restingMood,
 } from './items.js';
 
 const STORAGE_KEY = 'kidquest.v1';
@@ -68,9 +68,17 @@ const kidById = (id) => state.kids.find((k) => k.id === id);
 function progressFor(kid) {
   const t = today();
   const info = streakInfo(state, kid, t);
-  const lv = levelFor(totalXp(state, kid, t));
+  const xp = totalXp(state, kid, t);
+  const lv = levelFor(xp);
   const piano = pianoStreakInfo(state, kid, t);
-  return { ...info, level: lv.level, into: lv.into, piano: piano.streak, pianoBest: piano.best, pianoPerWeek: piano.perWeek };
+  if (!Array.isArray(kid.owned)) {
+    // first run with the shop: keep anything the kid had already reached by level, for free
+    kid.owned = ITEMS.filter((i) => i.price && LEGACY_LEVEL(i) <= lv.level).map((i) => i.id);
+    kid.spent = 0;
+    save();
+  }
+  const coins = Math.max(0, xp - (kid.spent || 0));
+  return { ...info, level: lv.level, into: lv.into, piano: piano.streak, pianoBest: piano.best, pianoPerWeek: piano.perWeek, owned: kid.owned, coins };
 }
 
 function missedYesterday(kid, info) {
@@ -335,7 +343,7 @@ function setTask(kid, key, task, value) {
 function markDone(kid, task, by, anchor) {
   setTask(kid, today(), task, { status: 'done', at: Date.now(), by });
   sounds.task();
-  floatText(`+${taskXp(task)} XP`, anchor);
+  floatText(`+${taskXp(task)} XP · 🪙`, anchor);
   ui.cheerUntil = Date.now() + 2600;
   ui.cheerKid = kid.id;
   render();
@@ -638,6 +646,7 @@ function viewKid() {
         <div class="chips">
           <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak">🔥 ${info.streak}</span>
           <span class="chip ice" title="Streak freezes">❄️ ${info.freezes}</span>
+          <span class="chip coin" title="Coins">🪙 ${Math.max(0, xp - (kid.spent || 0))}</span>
         </div>
       </header>
       <div class="buddy-panel">
@@ -694,18 +703,19 @@ function viewWardrobe() {
   const prog = progressFor(kid);
   const fresh = new Set(kid.newItems || []);
   const items = ITEMS.filter((i) => i.slot === ui.slot);
-  const nextItem = ITEMS.filter((i) => !isUnlocked(i, prog)).sort((a, b) => needGap(a, prog) - needGap(b, prog))[0];
+  const nextItem = ITEMS.filter((i) => i.need && !isUnlocked(i, prog)).sort((a, b) => needGap(a, prog) - needGap(b, prog))[0];
   return `
     <div class="screen wardrobe" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="wardrobe-back" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days · Level ${prog.level}${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days` : ''}</small></div>
+        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days` : ''}</small></div>
       </header>
       <div class="wardrobe-top">
         ${buddyHtml(kid, 'happy', 'lg')}
         <div class="buddy-side">
           <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
-          ${nextItem ? `<p class="muted">Next unlock: <b>${esc(nextItem.name)}</b> at ${esc(needLabel(nextItem))}</p>` : '<p class="muted">You unlocked everything! 🏆</p>'}
+          <p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
+          ${nextItem ? `<p class="muted">Next streak prize: <b>${esc(nextItem.name)}</b> at ${esc(needLabel(nextItem))}</p>` : ''}
         </div>
       </div>
       <nav class="tabs">${SLOTS.map((sl) => `<button class="${ui.slot === sl.id ? 'on' : ''}" data-action="wardrobe-slot" data-slot="${sl.id}">${sl.icon} ${sl.name}</button>`).join('')}</nav>
@@ -717,13 +727,13 @@ function viewWardrobe() {
     return `<button class="item ${open ? '' : 'locked'} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
             <span class="item-art">${buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
-            <small>${open ? (on ? 'Wearing' : 'Tap to wear') : `🔒 ${esc(needLabel(item))}`}</small>
-            ${!open && item.need.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
+            <small>${open ? (on ? 'Wearing' : 'Tap to wear') : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : `🔒 ${esc(needLabel(item))}`}</small>
+            ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
           </button>`;
   }).join('')}
       </div>
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
-      <p class="muted small">Streak items stay yours even if a streak ends. Tap an item again to take it off.</p>
+      <p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>
     </div>`;
 }
 
@@ -885,6 +895,25 @@ function parentSettings() {
     </div>`;
 }
 
+function buyItem(kid, item, prog) {
+  if (prog.coins < item.price) {
+    sounds.error();
+    toast(`${item.price - prog.coins} more coins to go! Finish tasks to earn them.`);
+    return;
+  }
+  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, [item.slot]: item.id } };
+  openModal(`
+    <div class="celebrate">
+      <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
+      <h1>Buy ${esc(item.name)}?</h1>
+      <p>It costs <b>🪙 ${item.price}</b>. You'll have ${prog.coins - item.price} coins left.</p>
+      <div class="stack">
+        <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
+        <button class="btn ghost" data-action="modal-close">Keep saving</button>
+      </div>
+    </div>`);
+}
+
 const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent, wardrobe: viewWardrobe };
 
 function render() {
@@ -945,7 +974,9 @@ const actions = {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
     if (!item) return;
-    if (!isUnlocked(item, progressFor(kid))) { sounds.error(); toast(`Unlocks at ${needLabel(item)}`); return; }
+    const prog = progressFor(kid);
+    if (!isUnlocked(item, prog) && item.price) { buyItem(kid, item, prog); return; }
+    if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
     const outfit = kid.buddy.outfit;
     if (outfit[item.slot] === item.id && item.slot !== 'background') delete outfit[item.slot];
     else outfit[item.slot] = item.id;
@@ -958,6 +989,21 @@ const actions = {
     const t = today();
     const s = dayStatus(state, kid, t, t);
     if (s.complete) { sounds.day(); confetti(100, 2000); toast('You found the treasure! 🏆'); } else { sounds.tap(); toast(`${s.total - s.done} more to reach the treasure!`); }
+  },
+  'buy-confirm': (el) => {
+    const kid = kidById(ui.kidId);
+    const item = itemById(el.dataset.id);
+    const prog = progressFor(kid);
+    if (!item?.price || prog.coins < item.price || kid.owned.includes(item.id)) { closeModal(); return; }
+    kid.owned = [...kid.owned, item.id];
+    kid.spent = (kid.spent || 0) + item.price;
+    kid.buddy.outfit[item.slot] = item.id;
+    save();
+    closeModal();
+    sounds.day();
+    confetti(80, 1600);
+    toast(`${item.name} is yours!`);
+    render();
   },
   'unlock-try': (el) => { closeModal(); ui.slot = el.dataset.slot; ui.view = 'wardrobe'; render(); window.scrollTo(0, 0); },
   'kid-color': (el) => { kidById(ui.editKidId).color = el.dataset.val; save(); render(); },
