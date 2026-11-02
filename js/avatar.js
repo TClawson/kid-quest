@@ -2,6 +2,8 @@
 // Every layer (background, species sprite, outfit items) is a small grid of palette letters.
 // Animation is done in CSS (see .buddy rules in style.css) using the classes set here.
 
+import { ITEMS } from './items.js';
+
 const SIZE = 24;
 const OUT = '#2a1838'; // outline
 const SPRITE_X = 4;
@@ -473,6 +475,44 @@ class Pixels {
     }
     return out;
   }
+}
+
+// ---------- color versions (see COLOR_VERSIONS in items.js) ----------
+
+// [base, light, dark] for each paint color
+const PAINT = {
+  red: ['#e03131', '#ff6b6b', '#a51d1d'],
+  orange: ['#f76707', '#ff922b', '#c2410c'],
+  yellow: ['#fcc419', '#ffe066', '#e67700'],
+  green: ['#2f9e44', '#69db7c', '#1b6e2e'],
+  teal: ['#0ca678', '#38d9a9', '#087060'],
+  blue: ['#1c7ed6', '#4dabf7', '#1864ab'],
+  purple: ['#7048e8', '#9775fa', '#4c2bb5'],
+  pink: ['#e64980', '#f783ac', '#a61e4d'],
+  black: ['#343a40', '#5c636a', '#1b1e21'],
+  gold: ['#f59f00', '#ffd43b', '#b35c00'],
+};
+
+const mix = (a, b, t) => '#' + [1, 3, 5].map((i) => {
+  const v = Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t);
+  return v.toString(16).padStart(2, '0');
+}).join('');
+
+// How each base item takes a new color: which palette letters change.
+const RECOLOR = {
+  'hat-cap': ([c, l, d]) => ({ R: SH(c, l, d) }),
+  'neck-bowtie': ([c, l, d]) => ({ R: SH(c, l, d) }),
+  'hat-beanie': ([c, l, d]) => ({ B: SH(c, l, d), b: SH(d, c, mix(d, '#000000', 0.3)) }),
+  'neck-scarf': ([c, l, d]) => ({ O: SH(c, l, d), W: mix(l, '#ffffff', 0.45) }),
+  // glasses frames are drawn in outline color; color versions paint the frame instead
+  'face-round': ([c], rows) => ({ rows: rows.map((r) => r.replaceAll('K', 'F')), F: c }),
+};
+
+for (const item of ITEMS) {
+  if (!item.base || ITEM_ART[item.id] || !ITEM_ART[item.base] || !RECOLOR[item.base]) continue;
+  const [x, y, rows, pal, behind] = ITEM_ART[item.base];
+  const { rows: newRows, ...newPal } = RECOLOR[item.base](PAINT[item.color], rows);
+  ITEM_ART[item.id] = [x, y, newRows || rows, { ...pal, ...newPal }, behind];
 }
 
 function itemLayer(id) {
