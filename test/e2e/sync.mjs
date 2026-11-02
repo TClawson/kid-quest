@@ -12,6 +12,8 @@ const pinHash = (pin) => `sha256:${createHash('sha256').update(`kidquest:${pin}`
 const site = await serve('.');
 const browser = await chromium.launch();
 const errors = [];
+const T0 = Date.now();
+const log = (m) => console.log(`[${((Date.now() - T0) / 1000).toFixed(1)}s] ${m}`);
 
 async function device(name, { email, saved } = {}) {
   const ctx = await browser.newContext();
@@ -21,6 +23,8 @@ async function device(name, { email, saved } = {}) {
   }, [email || '']);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error' && /FirebaseError|Kid Quest/.test(m.text())) errors.push(`${name}: ${m.text().slice(0, 200)}`); });
+  page.on('console', (m) => { if (process.env.E2E_DEBUG) log(`${name} console.${m.type()}: ${m.text().slice(0, 300)}`); });
   await page.goto(site.url);
   if (saved) {
     await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
@@ -78,7 +82,7 @@ try {
   await Promise.all([mom.page.waitForEvent('load', { timeout: 20000 }), mom.page.click('[data-action="modal-yes"]')]);
   const momCfg = await mom.page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud')));
   assert.equal(momCfg.role, 'parent');
-  console.log('✓ family created');
+  log('✓ family created');
 
   // ---- Ava's tablet: has its own progress (two past days, a purchase) and its own PIN
   const saved = emptyState();
@@ -98,7 +102,7 @@ try {
   await joinWith(ava.page, kidCode);
   const avaCfg = await ava.page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud')));
   assert.deepEqual([avaCfg.role, avaCfg.kidId, avaCfg.familyId], ['kid', 'kid_ava', momCfg.familyId]);
-  console.log('✓ kid tablet joined with a code');
+  log('✓ kid tablet joined with a code');
 
   // Mom's phone gets Ava with all her history; Ava's tablet takes the family PIN
   // and keeps its own device settings.
@@ -112,14 +116,14 @@ try {
   assert.equal(avaView.kids.length, 1, 'kid tablet only holds its kid');
   const legacy = await ava.page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
   assert.equal(legacy.settings.pinHash, pinHash('1111'), 'original local copy untouched');
-  console.log('✓ progress uploaded, PIN shared, old copy kept');
+  log('✓ progress uploaded, PIN shared, old copy kept');
 
   // ---- Ava ticks a task; mom sees it
-  await ava.page.click('[data-action="home"]').catch(() => {});
+  if (await ava.page.locator('[data-action="parent-exit"]').count()) await ava.page.click('[data-action="parent-exit"]');
   await ava.page.click('[data-action="open-kid"]');
   await ava.page.click(`[data-action="task"][data-id="${teeth.id}"]`);
   await until('teeth on mom’s phone', async () => (await stateOf(mom.page)).log[today]?.kid_ava?.tasks[teeth.id]?.status === 'done');
-  console.log('✓ kid change reaches parent');
+  log('✓ kid change reaches parent');
 
   // ---- Ava offline ticks another task while mom excuses the same day: both survive
   await ava.ctx.setOffline(true);
@@ -138,7 +142,7 @@ try {
   };
   await until('merge on mom’s phone', () => merged(mom.page));
   await until('merge on Ava’s tablet', () => merged(ava.page));
-  console.log('✓ offline change syncs and merges with a parent change');
+  log('✓ offline change syncs and merges with a parent change');
 
   // ---- Dad joins from a fresh phone with a parent code
   const parentCode = await (async () => { await openSettings(mom.page, '1234'); return getCode(mom.page, 'parent'); })();
@@ -149,7 +153,7 @@ try {
     return s.kids.some((k) => k.id === 'kid_ava') && s.settings.pinHash === pinHash('1234');
   });
   await dad.page.waitForSelector('[data-action="open-kid"]', { timeout: 10000 });
-  console.log('✓ second parent joins and sees the family');
+  log('✓ second parent joins and sees the family');
 
   // ---- A bad code is refused
   const stranger = await device('stranger', { email: 'x@example.com' });
@@ -158,7 +162,7 @@ try {
   await stranger.page.click('[data-action="family-join-go"]');
   await stranger.page.waitForSelector('text=Could not join', { timeout: 10000 });
   assert.equal(await stranger.page.evaluate(() => localStorage.getItem('kidquest.cloud')), null);
-  console.log('✓ wrong code refused');
+  log('✓ wrong code refused');
 
   const real = errors.filter((e) => !/offline|network|unavailable/i.test(e));
   assert.deepEqual(real, [], 'no page errors');

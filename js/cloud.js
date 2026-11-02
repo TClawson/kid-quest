@@ -21,18 +21,22 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_MINUTES = 30;
 const BATCH_LIMIT = 400;
 
-export async function connect() {
-  if (db) return;
-  fb = await import('./vendor/firebase.js');
-  const config = EMULATOR ? { ...firebaseConfig, projectId: 'demo-kid-quest', apiKey: 'demo-key' } : firebaseConfig;
-  const app = fb.initializeApp(config);
-  auth = fb.initializeAuth(app, { persistence: fb.indexedDBLocalPersistence, popupRedirectResolver: fb.browserPopupRedirectResolver });
-  db = fb.initializeFirestore(app, { localCache: fb.persistentLocalCache({ tabManager: fb.persistentMultipleTabManager() }) });
-  if (EMULATOR) {
-    fb.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-    fb.connectFirestoreEmulator(db, '127.0.0.1', 8180);
-  }
-  await auth.authStateReady();
+// Safe to call from several places at once: they all share one connection.
+let connecting = null;
+export function connect() {
+  connecting ||= (async () => {
+    fb = await import('./vendor/firebase.js');
+    const config = EMULATOR ? { ...firebaseConfig, projectId: 'demo-kid-quest', apiKey: 'demo-key' } : firebaseConfig;
+    const app = fb.initializeApp(config);
+    auth = fb.initializeAuth(app, { persistence: fb.indexedDBLocalPersistence, popupRedirectResolver: fb.browserPopupRedirectResolver });
+    db = fb.initializeFirestore(app, { localCache: fb.persistentLocalCache({ tabManager: fb.persistentMultipleTabManager() }) });
+    if (EMULATOR) {
+      fb.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+      fb.connectFirestoreEmulator(db, '127.0.0.1', 8180);
+    }
+    await auth.authStateReady();
+  })().catch((err) => { connecting = null; throw err; });
+  return connecting;
 }
 
 export const currentUser = () => auth?.currentUser || null;

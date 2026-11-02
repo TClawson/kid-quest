@@ -1149,13 +1149,13 @@ function importFile(file) {
 
 let pendingRemote = null;
 
-async function loadCloud() {
-  if (!cloud.mod) {
-    const mod = await import('./cloud.js');
-    await mod.connect();
-    cloud.mod = mod;
-  }
-  return cloud.mod;
+// One shared load: the settings screen, a join and startup may all ask at once.
+let cloudLoading = null;
+function loadCloud() {
+  cloudLoading ||= import('./cloud.js')
+    .then(async (mod) => { await mod.connect(); cloud.mod = mod; return mod; })
+    .catch((err) => { cloudLoading = null; throw err; });
+  return cloudLoading;
 }
 
 function onCloudStatus({ pending, error }) {
