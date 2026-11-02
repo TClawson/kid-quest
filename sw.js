@@ -1,7 +1,7 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
-const CACHE = 'kid-quest-v9';
+const CACHE = 'kid-quest-v10';
 const SHELL = [
-  './', 'index.html', 'css/style.css', 'js/app.js', 'js/logic.js', 'js/fx.js', 'js/avatar.js', 'js/items.js', 'js/maparts.js',
+  './', 'index.html', 'css/style.css', 'js/app.js', 'js/logic.js', 'js/fx.js', 'js/avatar.js', 'js/items.js', 'js/maparts.js', 'js/music.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

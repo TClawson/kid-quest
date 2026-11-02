@@ -6,6 +6,7 @@ import {
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine } from './avatar.js';
 import { paintQuestMaps } from './maparts.js';
+import { startMusic, stopMusic } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, speciesFromEmoji, defaultBuddy, restingMood,
 } from './items.js';
@@ -456,6 +457,7 @@ function tickTimer() {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' && timer.running) stopTimer();
+  if (document.visibilityState !== 'visible') stopMusic();
   if (document.visibilityState === 'visible') render();
 });
 
@@ -664,6 +666,7 @@ function viewKid() {
         <button class="${listMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
         <button class="${listMode ? 'on' : ''}" data-action="quest-mode" data-mode="list">📋 List</button>
       </div>
+      ${listMode || !state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
       ${listMode ? `${section('morning', '🌅 Morning', state.settings.morningBy)}
       ${section('afternoon', '☀️ After school', state.settings.bedtime)}` : questMap(kid, s, entry, mood)}
       <section>
@@ -921,7 +924,16 @@ function render() {
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
   $app.innerHTML = (views[ui.view] || viewHome)();
   paintQuestMaps($app);
+  syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
+}
+
+/** Map music plays only on the quest map, with sound on and music not muted, while the app is visible. */
+function syncMusic() {
+  const onMap = ui.view === 'kid' && state.settings.questView !== 'list';
+  const wanted = onMap && state.settings.sound && state.settings.music !== false && document.visibilityState === 'visible';
+  if (wanted) startMusic();
+  else stopMusic();
 }
 
 let resizeTimer = 0;
@@ -983,6 +995,7 @@ const actions = {
     kid.newItems = (kid.newItems || []).filter((id) => id !== item.id);
     sounds.task(); save(); render();
   },
+  'music-toggle': () => { state.settings.music = state.settings.music === false; save(); render(); },
   'quest-mode': (el) => { state.settings.questView = el.dataset.mode; save(); render(); },
   chest: () => {
     const kid = kidById(ui.kidId);
