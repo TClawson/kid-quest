@@ -1,173 +1,247 @@
-// Background music for the quest map: an original 16-bar chiptune loop, synthesized live with
-// Web Audio (two square-wave pulses, a triangle bass and noise drums, like old consoles).
-// No audio files. A small look-ahead scheduler keeps the timing steady.
+// Background music for the quest map: one original 16-bar chiptune loop per map theme,
+// synthesized live with Web Audio (pulse waves, a triangle bass and noise drums, like old
+// consoles). No audio files. A small look-ahead scheduler keeps the timing steady.
+import { SONGS } from './songs.js';
 
-const BPM = 132;
-const EIGHTH = 60 / BPM / 2;
 const VOLUME = 0.07;
-
-// Melody, one bar per line, 8 eighth notes a bar. '-' holds the note, '.' is a rest.
-const LEAD = [
-  // A: C Am F G | C Em F G
-  'E5 - G5 - C6 - B5 A5',
-  'G5 - E5 C5 A4 - C5 E5',
-  'F5 - A5 - C6 - A5 F5',
-  'G5 - - - D5 E5 F5 D5',
-  'E5 - G5 - C6 - D6 E6',
-  'D6 - B5 - G5 - E5 G5',
-  'A5 G5 F5 A5 C6 - A5 -',
-  'B5 - D6 - G5 - . .',
-  // B: F G Em Am | F G C C
-  'A5 - . A5 C6 A5 F5 -',
-  'B5 - . B5 D6 B5 G5 -',
-  'G5 - B5 - E6 - D6 B5',
-  'C6 - - - A5 - E5 -',
-  'F5 A5 C6 A5 F5 A5 C6 F6',
-  'G5 B5 D6 B5 G5 B5 D6 G6',
-  'E6 - D6 - C6 - G5 -',
-  'C6 - - - . . . .',
-].map((bar) => bar.split(' '));
-
-// chord per bar: root note and chord tones (for bass and the arpeggio)
-const CHORDS = ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G', 'F', 'G', 'Em', 'Am', 'F', 'G', 'C', 'C'];
-const CHORD_TONES = {
-  C: ['C', 'E', 'G'], Am: ['A', 'C', 'E'], F: ['F', 'A', 'C'], G: ['G', 'B', 'D'], Em: ['E', 'G', 'B'],
-};
 const SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
-const freq = (name, octave) => 440 * 2 ** ((SEMI[name] + (octave + 1) * 12 - 69) / 12);
-const noteFreq = (n) => freq(n[0], Number(n.slice(1)));
+/** 'F#5' or 'Bb4' to a MIDI number. */
+function midi(name) {
+  const m = /^([A-G])([#b]?)(-?\d)$/.exec(name);
+  if (!m) throw new Error(`bad note ${name}`);
+  return SEMI[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + (Number(m[3]) + 1) * 12;
+}
+const hz = (n) => 440 * 2 ** ((n - 69) / 12);
 
-let ac = null;
-let master = null;
-let noise = null;
-let timer = 0;
-let step = 0; // eighth-note index in the loop
-let nextTime = 0;
-let playing = false;
+/** Chord name ('C', 'F#m', 'Bb', 'Bdim') to pitch classes [root, third, fifth]. */
+function chordTones(name) {
+  const m = /^([A-G][#b]?)(m|dim)?$/.exec(name);
+  if (!m) throw new Error(`bad chord ${name}`);
+  const root = (midi(`${m[1]}0`) - 12 + 120) % 12;
+  const third = m[2] ? 3 : 4;
+  const fifth = m[2] === 'dim' ? 6 : 7;
+  return [root, root + third, root + fifth];
+}
 
-function voice(type, f, t, dur, vol) {
+/** Compile a song once: bars of note tokens, chords to pitch classes. */
+const compiled = new Map();
+function compile(id) {
+  if (compiled.has(id)) return compiled.get(id);
+  const s = SONGS[id] || SONGS['bg-meadow'];
+  const song = {
+    ...s,
+    beat: s.beat || 8,
+    lead: s.lead.map((bar) => bar.split(' ')),
+    chords: s.chords.map(chordTones),
+  };
+  compiled.set(id, song);
+  return song;
+}
+
+// ---------- sound sources ----------
+
+function pulseWave(ac, duty) {
+  const n = 32;
+  const real = new Float32Array(n);
+  const imag = new Float32Array(n);
+  for (let k = 1; k < n; k += 1) {
+    real[k] = (2 / (k * Math.PI)) * Math.sin(2 * Math.PI * k * duty);
+    imag[k] = (2 / (k * Math.PI)) * (1 - Math.cos(2 * Math.PI * k * duty));
+  }
+  return ac.createPeriodicWave(real, imag);
+}
+
+/** Everything one song needs on one AudioContext: output, noise, pulse waves and an echo. */
+function rig(ac, out, song, seconds) {
+  const noise = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.25), ac.sampleRate);
+  const data = noise.getChannelData(0);
+  for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+  const r = { ac, out, noise, waves: { pulse12: pulseWave(ac, 0.125), pulse25: pulseWave(ac, 0.25) }, lead: out, seconds };
+  if (song.echo) {
+    // a soft repeat a dotted eighth later, for the dreamy maps
+    const d = ac.createDelay(1);
+    d.delayTime.value = seconds * 1.5;
+    const fb = ac.createGain();
+    fb.gain.value = song.echo;
+    const wet = ac.createGain();
+    wet.gain.value = 0.6;
+    const bus = ac.createGain();
+    bus.connect(out);
+    bus.connect(d);
+    d.connect(fb).connect(d);
+    d.connect(wet).connect(out);
+    r.lead = bus;
+  }
+  return r;
+}
+
+function voice(r, wave, f, t, dur, vol, env = 'hold', dest = r.out) {
+  const { ac } = r;
   const o = ac.createOscillator();
   const g = ac.createGain();
-  o.type = type;
+  if (r.waves[wave]) o.setPeriodicWave(r.waves[wave]);
+  else o.type = wave;
   o.frequency.setValueAtTime(f, t);
-  g.gain.setValueAtTime(vol, t);
-  g.gain.setValueAtTime(vol, t + dur * 0.8);
-  g.gain.linearRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(master);
+  if (env === 'pluck') {
+    // quick ring-out, like a steel drum or a bell
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(vol * 0.25, t + Math.min(dur, 0.35));
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+  } else {
+    g.gain.setValueAtTime(vol, t);
+    g.gain.setValueAtTime(vol, t + dur * 0.8);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+  }
+  o.connect(g).connect(dest);
   o.start(t);
   o.stop(t + dur + 0.02);
 }
 
-function drum(t, kind) {
-  if (kind === 'kick') {
+function drum(r, t, kind, vol = 1) {
+  const { ac, out } = r;
+  if (kind === 'k' || kind === 't') {
     const o = ac.createOscillator();
     const g = ac.createGain();
     o.type = 'triangle';
-    o.frequency.setValueAtTime(140, t);
-    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
-    g.gain.setValueAtTime(0.9, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-    o.connect(g).connect(master);
+    const [from, to, len] = kind === 'k' ? [140, 45, 0.15] : [220, 90, 0.2];
+    o.frequency.setValueAtTime(from, t);
+    o.frequency.exponentialRampToValueAtTime(to, t + len * 0.8);
+    g.gain.setValueAtTime(0.9 * vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g).connect(out);
     o.start(t);
-    o.stop(t + 0.16);
+    o.stop(t + len + 0.01);
     return;
   }
   const src = ac.createBufferSource();
-  src.buffer = noise;
+  src.buffer = r.noise;
   const g = ac.createGain();
-  const len = kind === 'snare' ? 0.12 : 0.03;
-  g.gain.setValueAtTime(kind === 'snare' ? 0.35 : 0.12, t);
+  const len = kind === 's' ? 0.12 : kind === 'o' ? 0.18 : 0.03;
+  g.gain.setValueAtTime((kind === 's' ? 0.35 : 0.12) * vol, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + len);
   const hp = ac.createBiquadFilter();
   hp.type = 'highpass';
-  hp.frequency.value = kind === 'snare' ? 1200 : 6000;
-  src.connect(hp).connect(g).connect(master);
+  hp.frequency.value = kind === 's' ? 1200 : 6000;
+  src.connect(hp).connect(g).connect(out);
   src.start(t);
   src.stop(t + len + 0.01);
 }
 
-/** How many eighths a lead note lasts (its own step plus any '-' after it). */
+/** How many steps a lead note lasts (its own step plus any '-' after it). */
 function holdLength(bar, i) {
   let n = 1;
   while (i + n < bar.length && bar[i + n] === '-') n += 1;
   return n;
 }
 
-function scheduleStep(s, t) {
-  const barIndex = Math.floor(s / 8) % LEAD.length;
-  const i = s % 8;
-  const bar = LEAD[barIndex];
-  const chord = CHORDS[barIndex];
-  const tones = CHORD_TONES[chord];
+/**
+ * Schedule one step (an eighth note) of a song at time t.
+ * Song fields (see songs.js): beat (steps a bar), lead, chords, leadWave, leadVol, leadEnv,
+ * arp { wave, from, octave, order, vol }, bass (one [chordToneIndex, octave] or null per step),
+ * drums (patterns of k kick, s snare, h hat, o open hat, t tom; split evenly over the 16 bars), swing.
+ */
+function scheduleStep(r, song, s, t) {
+  const { beat } = song;
+  const bars = song.lead.length;
+  const barIndex = Math.floor(s / beat) % bars;
+  const i = s % beat;
+  const step = r.seconds;
+  // swing pushes every second eighth a little later
+  const at = t + (i % 2 ? (song.swing || 0) * step : 0);
+  const bar = song.lead[barIndex];
+  const tones = song.chords[barIndex];
 
   // lead (pulse 1)
   const n = bar[i];
-  if (n !== '-' && n !== '.') voice('square', noteFreq(n), t, holdLength(bar, i) * EIGHTH * 0.95, 0.32);
+  if (n !== '-' && n !== '.') {
+    voice(r, song.leadWave || 'square', hz(midi(n)), at, holdLength(bar, i) * step * 0.95, song.leadVol ?? 0.32, song.leadEnv, r.lead);
+  }
 
-  // arpeggio (pulse 2), two sixteenths per eighth, only in the B section and the A repeat
-  if (barIndex >= 4) {
+  // arpeggio (pulse 2), two notes per step
+  const arp = song.arp;
+  if (arp && barIndex >= (arp.from || 0)) {
+    const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 1, 2];
     for (let k = 0; k < 2; k += 1) {
-      const tone = tones[(i * 2 + k) % 3];
-      voice('square', freq(tone, 4), t + k * (EIGHTH / 2), EIGHTH / 2 * 0.8, 0.07);
+      const tone = tones[order[(i * 2 + k) % order.length]];
+      voice(r, arp.wave || 'square', hz(tone + ((arp.octave ?? 4) + 1) * 12), at + k * (step / 2), (step / 2) * 0.8, arp.vol ?? 0.07, arp.env);
     }
   }
 
-  // bass (triangle): root, octave, fifth pattern
-  const root = tones[0];
-  const fifth = tones[2];
-  const pattern = [[root, 2], null, [root, 3], null, [fifth, 2], null, [root, 3], [fifth, 2]];
-  const b = pattern[i];
-  if (b) voice('triangle', freq(b[0], b[1]), t, EIGHTH * 0.9, 0.55);
+  // bass (triangle)
+  const b = song.bass[i];
+  if (b) voice(r, 'triangle', hz(tones[b[0]] + (b[1] + 1) * 12), at, step * (b[2] || 0.9), 0.55);
 
   // drums
-  if (i === 0 || i === 4) drum(t, 'kick');
-  if (i === 2 || i === 6) drum(t, 'snare');
-  drum(t, 'hat');
-}
-
-function tick() {
-  while (nextTime < ac.currentTime + 0.25) {
-    scheduleStep(step, nextTime);
-    step = (step + 1) % (LEAD.length * 8);
-    nextTime += EIGHTH;
+  const sets = song.drums;
+  const set = sets[Math.min(sets.length - 1, Math.floor((barIndex * sets.length) / bars))];
+  const fill = song.fill && barIndex === bars - 1 ? song.fill : null;
+  for (const line of fill || set) {
+    const ch = line[i];
+    if (ch && ch !== '.') drum(r, at, ch, song.drumVol ?? 1);
   }
 }
 
-export function startMusic() {
-  if (playing) return;
+// ---------- live playback ----------
+
+let ac = null;
+let live = null; // { r, song, id, master, timer, step, nextTime }
+
+function tick() {
+  const p = live;
+  while (p.nextTime < ac.currentTime + 0.25) {
+    scheduleStep(p.r, p.song, p.step, p.nextTime);
+    p.step = (p.step + 1) % (p.song.lead.length * p.song.beat);
+    p.nextTime += p.r.seconds;
+  }
+}
+
+/** Play the music for a map theme (a background id like 'bg-space'). Switches songs if another is playing. */
+export function startMusic(theme = 'bg-meadow') {
+  const id = SONGS[theme] ? theme : 'bg-meadow';
+  if (live?.id === id) return;
+  if (live) stopMusic();
   try {
     ac = ac || new (window.AudioContext || window.webkitAudioContext)();
   } catch {
     return;
   }
   if (ac.state === 'suspended') ac.resume().catch(() => {});
-  if (!noise) {
-    noise = ac.createBuffer(1, ac.sampleRate * 0.2, ac.sampleRate);
-    const data = noise.getChannelData(0);
-    for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
-  }
-  master = ac.createGain();
+  const song = compile(id);
+  const master = ac.createGain();
   master.gain.setValueAtTime(0.0001, ac.currentTime);
-  master.gain.linearRampToValueAtTime(VOLUME, ac.currentTime + 1.2);
+  master.gain.linearRampToValueAtTime(VOLUME * (song.gain || 1), ac.currentTime + 1.2);
   master.connect(ac.destination);
-  step = 0;
-  nextTime = ac.currentTime + 0.1;
-  playing = true;
+  live = { id, song, master, r: rig(ac, master, song, 60 / song.bpm / 2), step: 0, nextTime: ac.currentTime + 0.1, timer: 0 };
   tick();
-  timer = setInterval(tick, 100);
+  live.timer = setInterval(tick, 100);
 }
 
 export function stopMusic() {
-  if (!playing) return;
-  playing = false;
+  if (!live) return;
+  const { master, timer } = live;
+  live = null;
   clearInterval(timer);
-  const g = master;
   const t = ac.currentTime;
-  g.gain.cancelScheduledValues(t);
-  g.gain.setValueAtTime(g.gain.value, t);
-  g.gain.linearRampToValueAtTime(0.0001, t + 0.3);
-  setTimeout(() => g.disconnect(), 400);
+  master.gain.cancelScheduledValues(t);
+  master.gain.setValueAtTime(master.gain.value, t);
+  master.gain.linearRampToValueAtTime(0.0001, t + 0.3);
+  setTimeout(() => master.disconnect(), 1500);
 }
 
-export const isMusicPlaying = () => playing;
+export const isMusicPlaying = () => !!live;
+
+/** Render a song's loop to an AudioBuffer (used to make preview files). */
+export async function renderSong(theme, loops = 1, sampleRate = 44100) {
+  const song = compile(theme);
+  const step = 60 / song.bpm / 2;
+  const steps = song.lead.length * song.beat * loops;
+  const seconds = steps * step + 1.5;
+  const off = new OfflineAudioContext(1, Math.ceil(seconds * sampleRate), sampleRate);
+  const master = off.createGain();
+  master.gain.value = VOLUME * (song.gain || 1) * 4;
+  master.connect(off.destination);
+  const r = rig(off, master, song, step);
+  for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s % (song.lead.length * song.beat), 0.05 + s * step);
+  return off.startRendering();
+}
