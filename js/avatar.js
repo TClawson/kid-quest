@@ -30,6 +30,20 @@ const EARS = {
     '....KKssssKK....',
     '..KKOOOOOOOOKK..',
   ],
+  // floppy ears are painted down the sides of the head in speciesGrid
+  floppy: [
+    '................',
+    '....KKKKKKKK....',
+    '..KKOOOOOOOOKK..',
+    '.KOOOOOOOOOOOOK.',
+  ],
+  // a smooth round head, no ears
+  dome: [
+    '................',
+    '.....KKKKKK.....',
+    '...KKOOOOOOKK...',
+    '..KOOOOOOOOOOK..',
+  ],
 };
 
 const BODY = [
@@ -63,6 +77,8 @@ const SPECIES = {
   bear: { ears: 'round', tail: false, pal: { O: '#b07443', W: '#ecc9a2', o: '#e8a77a' }, shade: { O: ['#d3955f', '#7f4f2a'], W: ['#f8e0c4', '#cfa77c'] } },
   panda: { ears: 'round', tail: false, pal: { O: '#ffffff', W: '#ffffff', o: '#2f2a36', D: '#2f2a36' }, shade: { O: ['#ffffff', '#d4d6e2'], W: ['#ffffff', '#d4d6e2'], D: ['#4a4356', '#1d1924'] } },
   cat: { ears: 'pointed', tail: true, whiskers: true, pal: { O: '#a6b1c6', W: '#f3f5fa', o: '#ffb3c6', T: '#a6b1c6', t: '#a6b1c6' }, shade: { O: ['#c8d0de', '#7d889e'], W: ['#ffffff', '#d5dae6'], T: ['#c8d0de', '#7d889e'] } },
+  puppy: { ears: 'floppy', tail: true, floppy: true, pal: { O: '#e0a85e', W: '#fff4df', o: '#8a5530', T: '#e0a85e', t: '#8a5530' }, shade: { O: ['#f5c582', '#b47a3a'], W: ['#ffffff', '#e8d2ae'], o: ['#a8703f', '#5e3519'], T: ['#f5c582', '#b47a3a'] } },
+  turtle: { ears: 'dome', tail: false, shell: true, pal: { O: '#7ccf6a', W: '#dff5b8', S: '#4f8a3a', s: '#a6d86b', y: '#f2d27a', Y: '#c99a3f' }, shade: { O: ['#a3e38f', '#4f9e44'], W: ['#f2ffd8', '#b8d98a'], S: ['#6aa84f', '#2f5e22'], y: ['#ffe8a3', '#c99a3f'] } },
   dino: { ears: 'spikes', tail: true, pal: { O: '#6cc56f', W: '#dcf5c9', s: '#f7b538', T: '#6cc56f', t: '#6cc56f' }, shade: { O: ['#94dc94', '#3f9446'], W: ['#f0ffe4', '#b5dca0'], T: ['#94dc94', '#3f9446'], s: ['#ffd36b', '#d08c12'] } },
 };
 
@@ -87,6 +103,31 @@ function speciesGrid(speciesId, mood) {
       }
     }
     for (let y = 12; y < 16; y += 1) for (let x = 0; x < 16; x += 1) if (g[y][x] === 'O') g[y][x] = 'D';
+  }
+  if (sp.floppy) {
+    // ears hang down beside the cheeks
+    const left = ['Koo', 'Koo', 'KooK', 'KooK', '.KoK'];
+    left.forEach((r, i) => {
+      const y = 4 + i;
+      for (let x = 0; x < r.length; x += 1) {
+        if (r[x] === '.') continue;
+        g[y][x] = r[x];
+        g[y][15 - x] = r[x];
+      }
+    });
+    g[3][0] = '.'; g[3][15] = '.'; g[3][1] = 'K'; g[3][14] = 'K';
+    g[8][1] = '.'; g[8][14] = '.';
+  }
+  if (sp.shell) {
+    // shell at the sides with a light rim, a yellow belly plate in front, green arms and feet
+    const shell = {
+      11: '.KSKKKKKKKKKKSK.',
+      12: 'KSsKOOyyyyOOKsSK',
+      13: 'KSsKOOYYYYOOKsSK',
+      14: 'KSsKKKyyyyKKKsSK',
+      15: '.KKKOOKKKKOOKKK.',
+    };
+    for (const [y, r] of Object.entries(shell)) g[Number(y)] = r.split('');
   }
   if (sp.whiskers) {
     g[8][0] = 'K'; g[9][0] = 'K'; g[8][15] = 'K'; g[9][15] = 'K';

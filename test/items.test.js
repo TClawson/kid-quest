@@ -78,3 +78,19 @@ test('every color version draws in its own color', async () => {
   const all = ITEMS.filter((i) => i.base).map(draw);
   assert.equal(new Set(all).size, all.length, 'no two colors look the same');
 });
+
+test('puppy and turtle are their own buddies and wear every item', async () => {
+  const { buddySvg } = await import('../js/avatar.js');
+  const { SPECIES } = await import('../js/items.js');
+  for (const id of ['puppy', 'turtle']) assert.ok(SPECIES.some((s) => s.id === id), `${id} can be picked`);
+  assert.equal(speciesFromEmoji('🐶'), 'puppy');
+  assert.equal(speciesFromEmoji('🐢'), 'turtle');
+  const draw = (species, outfit = {}) => buddySvg({ species, outfit }, 'happy', { background: false });
+  const looks = SPECIES.map((s) => draw(s.id));
+  assert.equal(new Set(looks).size, looks.length, 'every species looks different');
+  for (const species of ['puppy', 'turtle']) {
+    for (const item of ITEMS.filter((i) => ['hat', 'face', 'neck', 'music'].includes(i.slot))) {
+      assert.notEqual(draw(species, { [item.slot]: item.id }), draw(species), `${species} wears ${item.id}`);
+    }
+  }
+});
