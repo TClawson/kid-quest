@@ -246,6 +246,17 @@ export function startSync({ familyId, role, kidId }, { onState, onStatus = () =>
   }
 }
 
+// Every kid's name and buddy (with outfit) in the family, for visiting buddies
+// on a kid's device, which otherwise only loads its own kid.
+export function watchBuddies(familyId, onBuddies) {
+  unsubs.push(fb.onSnapshot(kidsCol(familyId), (snap) => {
+    onBuddies(snap.docs.map((d) => {
+      const k = d.data();
+      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy };
+    }));
+  }, (err) => console.error('Kid Quest buddies', err)));
+}
+
 export function stopSync() {
   unsubs.forEach((u) => u());
   unsubs = [];

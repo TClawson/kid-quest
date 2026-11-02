@@ -144,6 +144,24 @@ try {
   await until('merge on Ava’s tablet', () => merged(ava.page));
   log('✓ offline change syncs and merges with a parent change');
 
+  // ---- Mom adds Ben on her phone; Ben visits Ava's map wearing his outfit
+  await mom.page.evaluate(() => {
+    const s = window.kidQuest.state;
+    s.kids.push({ id: 'kid_ben', name: 'Ben', color: '#4dabf7', tasks: [], startDate: s.kids[0].startDate, seenUnlocks: [], buddy: { species: 'bear', outfit: {} } });
+    window.kidQuest.save();
+  });
+  await ava.page.click('[data-action="quest-mode"][data-mode="map"]');
+  const visitor = ava.page.locator('.map-visitor');
+  await until('Ben visiting Ava', async () => (await visitor.count()) === 1 && (await visitor.locator('.visitor-name').textContent()) === 'Ben');
+  const plain = await visitor.locator('.visitor-buddy').innerHTML();
+  await mom.page.evaluate(() => {
+    window.kidQuest.state.kids.find((k) => k.id === 'kid_ben').buddy.outfit.hat = 'hat-party';
+    window.kidQuest.save();
+  });
+  await until('Ben’s new hat on Ava’s map', async () => (await visitor.locator('.visitor-buddy').innerHTML()) !== plain);
+  assert.equal((await stateOf(ava.page)).kids.length, 1, 'visitors are not added to the kid tablet’s own kids');
+  log('✓ another kid visits, wearing their current outfit');
+
   // ---- Dad joins from a fresh phone with a parent code
   const parentCode = await (async () => { await openSettings(mom.page, '1234'); return getCode(mom.page, 'parent'); })();
   const dad = await device('dad', { email: 'dad@example.com' });

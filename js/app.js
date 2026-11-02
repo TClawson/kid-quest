@@ -10,6 +10,7 @@ import { startMusic, stopMusic } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood,
 } from './items.js';
+import { pickVisitors, visitorLines } from './visits.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
@@ -23,6 +24,9 @@ const CLOUD_KEY = 'kidquest.cloud';
 const CLOUD_CACHE_KEY = 'kidquest.cloud.cache';
 const readJson = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 const cloudCfg = readJson(CLOUD_KEY);
+const BUDDIES_KEY = 'kidquest.cloud.buddies';
+// Other family members' buddies (a kid's device only syncs its own kid).
+const family = { buddies: cloudCfg ? readJson(BUDDIES_KEY) : null };
 const cloud = { mod: null, ready: false, pending: 0, error: '', signedOut: false, queued: null };
 
 function cloudWrite(changes, before, after) {
@@ -562,6 +566,31 @@ function taskTile(kid, task, status) {
 
 // Board-game path: one stop per task, winding down the screen, ending at a treasure chest.
 const MAP_ROW = 124;
+const VILLAGE = 150; // extra room at the top of the map when buddies are visiting
+
+// Everyone in the family who has a buddy: this device's kids plus, on a kid's
+// device, the others from the cloud.
+function familyBuddies() {
+  const all = new Map((family.buddies || []).map((b) => [b.id, b]));
+  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy });
+  return [...all.values()];
+}
+
+function visitorsHtml(kid, s) {
+  const visitors = pickVisitors(kid.id, familyBuddies(), today());
+  if (!visitors.length) return { html: '', room: 0 };
+  const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
+  // stand in front of the village houses (see paintOne in maparts.js), then between them
+  const wide = ($app.clientWidth || window.innerWidth) > 600;
+  const spots = wide ? [20, 80, 33, 67] : [22, 78, 37, 63];
+  const html = visitors.map((v, i) => `
+      <div class="map-visitor ${i === 0 ? 'talking' : ''}" data-action="visitor" style="left:${spots[i]}%;--kid:${esc(v.color || '#4dabf7')}">
+        <div class="visitor-buddy">${buddySvg(v.buddy, 'happy', { background: false })}</div>
+        <div class="visitor-name">${esc(v.name)}</div>
+        <div class="visitor-bubble">${esc(lines[i])}</div>
+      </div>`).join('');
+  return { html: `<div class="map-visitors" aria-label="Visiting buddies">${html}</div>`, room: VILLAGE };
+}
 const MAP_WAVE = [0, 22, 30, 18, -4, -24, -30, -16];
 
 function questMap(kid, s, entry, mood) {
@@ -580,7 +609,8 @@ function questMap(kid, s, entry, mood) {
   let here = rows.findIndex((r) => r.type === 'task' && r.status !== 'done' && r.status !== 'pending');
   if (here < 0) here = rows.length - 1;
 
-  const top = 70;
+  const visit = visitorsHtml(kid, s);
+  const top = 70 + visit.room;
   const pts = rows.map((r, i) => ({ x: 50 + (r.type === 'task' || r.type === 'chest' ? MAP_WAVE[i % MAP_WAVE.length] : 0), y: top + i * MAP_ROW }));
   const height = top + rows.length * MAP_ROW;
   // the river runs just above the after-school sign, so crossing the bridge means school's out
@@ -623,6 +653,7 @@ function questMap(kid, s, entry, mood) {
     <section class="quest-map" style="height:${height}px" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-seed="${esc(kid.id)}">
       <canvas class="map-land" aria-hidden="true"></canvas>
       <div class="map-start" style="left:50%;top:0">🚩 Start</div>
+      ${visit.html}
       ${nodes}
       ${walker}
     </section>`;
@@ -1186,6 +1217,14 @@ async function startCloud() {
   }
   cloud.ready = true;
   mod.startSync(cloudCfg, { onState: applyRemote, onStatus: onCloudStatus });
+  if (cloudCfg.role === 'kid') {
+    mod.watchBuddies(cloudCfg.familyId, (list) => {
+      if (stableJson(list) === stableJson(family.buddies)) return;
+      family.buddies = list;
+      try { localStorage.setItem(BUDDIES_KEY, JSON.stringify(list)); } catch { /* only a cache */ }
+      if (ui.view === 'kid' && $modal.hidden) render();
+    });
+  }
 }
 
 // A newer state from the family (another device, or this one's writes coming back).
@@ -1422,6 +1461,17 @@ Object.assign(actions, {
   'family-invite-for': (el) => { closeModal(); showCode('kid', el.dataset.kid || null); },
   'family-leave': () => familyLeave(),
 });
+
+// Visitors take turns talking, one speech bubble at a time. Tapping one makes it talk.
+function nextVisitorTalks(pick) {
+  const all = [...document.querySelectorAll('.map-visitor')];
+  if (all.length < 2 && !pick) return;
+  const now = all.findIndex((el) => el.classList.contains('talking'));
+  const next = pick || all[(now + 1) % all.length];
+  all.forEach((el) => el.classList.toggle('talking', el === next));
+}
+setInterval(() => { if (document.visibilityState === 'visible') nextVisitorTalks(); }, 4000);
+actions.visitor = (el) => { nextVisitorTalks(el); sounds.tap(); };
 
 // ---------- reminders and day rollover ----------
 
