@@ -1,7 +1,10 @@
 // Paints the quest map: a 16-bit top-down scene behind the stops. Each Places background has
 // its own map theme (Forest Village for the meadow, a beach for the sunset, and so on).
 // The stops, labels and buddy stay as HTML on top; this only draws the land on a <canvas>.
+// Moving things (fish, dragons, saucers...) are in maplife.js.
 // One art pixel is SCALE screen pixels, so the scene stays chunky at any screen size.
+
+import { startMapLife } from './maplife.js';
 
 const SCALE = 4;
 const OUT = '#2a1838';
@@ -127,6 +130,7 @@ export const MAP_THEMES = {
 
   'bg-ocean': {
     name: 'Under the Sea',
+    life: 'fish',
     ground: ['#2f86c9', '#2878b6', '#4fa3e3'],
     walls: [[KELP, KELP_PAL], [CORAL, { c: '#ff8787' }]],
     scenery: [[CORAL, { c: '#ff8787' }], [CORAL, { c: '#f783ac' }], [KELP, KELP_PAL]],
@@ -144,6 +148,7 @@ export const MAP_THEMES = {
 
   'bg-space': {
     name: 'Moon Base',
+    life: 'space',
     ground: ['#7d82a8', '#6a6f96', '#9a9fc4'],
     walls: [[BOULDER, { L: '#5c5f8a', l: '#7d82a8', d: '#45476b' }]],
     scenery: [[CRATER, { d: '#5c6088', D: '#6a6f96', l: '#a5aacf' }], [CRATER, { d: '#5c6088', D: '#6a6f96', l: '#a5aacf' }], [CRYSTAL, { c: '#99e9f2', C: '#3bc9db' }]],
@@ -161,6 +166,7 @@ export const MAP_THEMES = {
 
   'bg-castle': {
     name: 'Royal Castle',
+    life: 'castle',
     ground: ['#5cbd52', '#4aa842', '#7bd66b'],
     walls: (p) => drawCastleWalls(p),
     scenery: [[BUSH, TREE_PAL], [TREE, TREE_PAL], [BUSH, TREE_PAL]],
@@ -178,6 +184,7 @@ export const MAP_THEMES = {
 
   'bg-volcano': {
     name: 'Volcano Island',
+    life: 'volcano',
     ground: ['#5b4b45', '#4b3d38', '#75645c'],
     walls: [[TREE, { G: '#2b8a3e', g: '#51cf66', d: '#1b5e20', T: '#5c3a1e' }], [BOULDER, { L: '#3d3330', l: '#5b4b45', d: '#2b211d' }]],
     scenery: [[BOULDER, { L: '#3d3330', l: '#5b4b45', d: '#2b211d' }], [BUSH, { G: '#2b8a3e', g: '#51cf66', d: '#1b5e20' }], [PALM, PALM_PAL]],
@@ -195,6 +202,7 @@ export const MAP_THEMES = {
 
   'bg-rainbow': {
     name: 'Rainbow Land',
+    life: 'unicorn',
     ground: ['#c3fae8', '#a6f0d8', '#e6fcf5'],
     walls: [
       [TREE, { G: '#faa2c1', g: '#fcc2d7', d: '#f06595', T: '#fff0f6' }],
@@ -216,6 +224,7 @@ export const MAP_THEMES = {
 
   'bg-galaxy': {
     name: 'Golden Galaxy',
+    life: 'saucer',
     ground: ['#2a1a5e', '#21134d', '#3a2878'],
     walls: [[SPIRE, { c: '#ffe066', C: '#f59f00' }], [SPIRE, { c: '#d0bfff', C: '#9775fa' }]],
     scenery: [[CRYSTAL, { c: '#ffe066', C: '#f59f00' }], [CRYSTAL, { c: '#d0bfff', C: '#9775fa' }], [SPIRE, { c: '#ffe066', C: '#f59f00' }]],
@@ -434,6 +443,24 @@ function paintOne(section) {
   }
 
   animateRiver(canvas, ctx, band, th.river.shine);
+
+  // somewhere for the knight to keep watch: just past the bridge, on the side away from the road
+  const postY = riverY !== null ? riverY + 14 : ah / 2;
+  const roadX = road.reduce((best, r) => (Math.abs(r.y - postY) < Math.abs(best.y - postY) ? r : best), road[0]).x;
+  const side = roadX > aw / 2 ? -1 : 1;
+  startMapLife({
+    section, aw, ah, scale: SCALE, life: th.life, wall,
+    goal: chest || { x: aw / 2, y: ah - 30 },
+    knightPost: { x: side < 0 ? wall + 2 : aw - wall - 26, y: postY, side },
+    openSpot: ({ top, bottom }) => {
+      for (let tries = 0; tries < 30; tries += 1) {
+        const x = wall + 4 + Math.random() * (aw - 2 * wall - 32);
+        const y = top + Math.random() * Math.max(1, bottom - top - 24);
+        if (y > 18 && open(x + 8, y + 8, 20) && !(band && y + 24 > band.top - 2 && y < band.bottom + 2)) return { x, y };
+      }
+      return null;
+    },
+  });
 }
 
 function drawRiver(px, aw, riverY, road, c) {
