@@ -212,3 +212,37 @@ export function fallbackHash(text) {
   for (let i = 0; i < text.length; i += 1) h = ((h << 5) + h + text.charCodeAt(i)) >>> 0;
   return `djb2:${h.toString(16)}`;
 }
+
+/** A piano practice task, found by its name or its 🎹 icon so renamed tasks still count. */
+export function isPianoTask(task) {
+  return /piano/i.test(task?.name || '') || task?.icon === '🎹';
+}
+
+/** How many days a week piano is on the kid's current schedule (5 for Mon–Fri). */
+export function pianoDaysPerWeek(kid) {
+  const days = new Set();
+  for (const t of kid.tasks || []) if (isPianoTask(t)) t.days.forEach((d) => days.add(d));
+  return days.size;
+}
+
+/**
+ * The piano streak counts piano days done in a row (parent-approved, like the main streak).
+ * Days without piano don't break it, an excused day keeps it, and today only adds once done.
+ * There are no freezes here: the piano rewards are for getting it done every time.
+ */
+export function pianoStreakInfo(state, kid, today) {
+  let streak = 0;
+  let best = 0;
+  const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
+  for (let key = start; key <= today; key = addDays(key, 1)) {
+    const piano = tasksForDay(state, kid, key, today).filter(isPianoTask);
+    if (!piano.length) continue;
+    const entry = entryFor(state, kid.id, key);
+    if (piano.every((t) => entry?.tasks?.[t.id]?.status === 'done')) streak += 1;
+    else if (key === today || entry?.excused) {
+      // in progress, or excused: keep the streak
+    } else streak = 0;
+    best = Math.max(best, streak);
+  }
+  return { streak, best, perWeek: pianoDaysPerWeek(kid) };
+}

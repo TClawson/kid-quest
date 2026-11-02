@@ -235,11 +235,6 @@ label { color: var(--ink); }
     radial-gradient(circle at 10% 70%, #c3fae8 0 40px, transparent 41px),
     radial-gradient(circle at 90% 88%, #b2f2bb 0 30px, transparent 31px),
     linear-gradient(#d3f9d8, #e6fcf5); }
-.map-path { position: absolute; inset: 0; width: 100%; height: 100%; }
-.map-path path { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; }
-.map-path .road { stroke: #ffe8cc; stroke-width: 30; }
-.map-path .road-done { stroke: color-mix(in srgb, var(--kid) 55%, #ffe8cc); stroke-width: 30; }
-.map-path .road-dash { stroke: #fff; stroke-width: 4; stroke-dasharray: 2 14; opacity: 0.9; }
 
 .map-start, .map-sign { position: absolute; transform: translate(-50%, 0); background: #fff; border-radius: 999px; padding: 6px 14px; font-weight: 800; white-space: nowrap; box-shadow: 0 3px 0 var(--line); }
 .map-start { top: 14px !important; }
@@ -273,17 +268,12 @@ label { color: var(--ink); }
 @keyframes buddy-arrive { 0% { transform: translate(-50%, -100%) translateY(-120px) scale(0.8); } 60% { transform: translate(-50%, -100%) translateY(6px) scale(1.05, 0.95); } 100% { transform: translate(-50%, -100%); } }
 
 /* ---------- 16-bit look for the quest map ---------- */
-.quest-map { border-radius: 8px; border: 4px solid var(--px-ink); background-color: #4fb34f;
-  background-image:
-    linear-gradient(90deg, rgba(255,255,255,0.08) 50%, transparent 0),
-    linear-gradient(rgba(0,0,0,0.05) 50%, transparent 0);
-  background-size: 16px 16px, 16px 16px; }
-.map-path .road-edge { stroke: #b88a52; stroke-width: 38; stroke-linecap: square; }
-.map-path .road { stroke: #e8c08a; stroke-width: 30; stroke-linecap: square; }
-.map-path .road-done { stroke: color-mix(in srgb, var(--kid) 60%, #e8c08a); stroke-width: 30; stroke-linecap: square; }
-.map-path .road-dash { stroke: #fff3d6; stroke-width: 6; stroke-dasharray: 6 12; stroke-linecap: butt; opacity: 1; }
+.map-land { position: absolute; left: 0; top: 0; image-rendering: pixelated; image-rendering: crisp-edges; }
+.quest-map { border-radius: 8px; border: 4px solid var(--px-ink); background: #5cbd52; }
 .map-start, .map-sign { border-radius: 4px; border: 3px solid var(--px-ink); box-shadow: 3px 3px 0 var(--px-ink); }
-.map-sign { background: var(--px-ink); color: #fff3bf; }
+.map-sign { background: #a0612f; color: #fff3d6; border-color: var(--px-ink); box-shadow: inset 0 -3px 0 #6e3d1a, 3px 3px 0 var(--px-ink); text-shadow: 1px 1px 0 #6e3d1a; z-index: 1; }
+.map-start { background: #fff3d6; z-index: 1; }
+.map-node.todo { background: linear-gradient(#f1f3f5 0 30%, #dee2e6 30% 75%, #adb5bd 75%); }
 .map-node { border-radius: 10px; border: 4px solid var(--px-ink); box-shadow: 0 6px 0 var(--px-ink); }
 .map-node:active { box-shadow: 0 2px 0 var(--px-ink); }
 .map-node.current { box-shadow: 0 6px 0 var(--px-ink); animation: px-node 0.8s steps(1, end) infinite; }
@@ -294,3 +284,10 @@ label { color: var(--ink); }
 .node-badge { border-radius: 4px; box-shadow: 0 0 0 3px var(--px-ink); }
 .map-label { border-radius: 4px; border: 3px solid var(--px-ink); background: #fffdf5; box-shadow: 3px 3px 0 rgba(42, 24, 56, 0.35); }
 @keyframes px-node { 0% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+/* rock star piano exhaust flames: two frames swapped in steps */
+.buddy-svg .flame-0 { animation: px-flame-a 0.3s steps(1, end) infinite; }
+.buddy-svg .flame-1 { animation: px-flame-b 0.3s steps(1, end) infinite; }
+@keyframes px-flame-a { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes px-flame-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+.item .piano-need { font-weight: 700; color: var(--kid, var(--brand)); }

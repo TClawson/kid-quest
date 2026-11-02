@@ -1,12 +1,13 @@
 import {
   DAY_NAMES, emptyState, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
   tasksForDay, snapshotToday, dayStatus, streakInfo, totalXp, levelFor, taskXp,
-  pendingApprovals, fallbackHash,
+  pendingApprovals, fallbackHash, pianoStreakInfo,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine } from './avatar.js';
+import { paintQuestMaps } from './maparts.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, newUnlocks, speciesFromEmoji, defaultBuddy, restingMood,
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, speciesFromEmoji, defaultBuddy, restingMood,
 } from './items.js';
 
 const STORAGE_KEY = 'kidquest.v1';
@@ -68,7 +69,8 @@ function progressFor(kid) {
   const t = today();
   const info = streakInfo(state, kid, t);
   const lv = levelFor(totalXp(state, kid, t));
-  return { ...info, level: lv.level, into: lv.into };
+  const piano = pianoStreakInfo(state, kid, t);
+  return { ...info, level: lv.level, into: lv.into, piano: piano.streak, pianoBest: piano.best, pianoPerWeek: piano.perWeek };
 }
 
 function missedYesterday(kid, info) {
@@ -560,12 +562,10 @@ function questMap(kid, s, entry, mood) {
   const top = 70;
   const pts = rows.map((r, i) => ({ x: 50 + (r.type === 'task' || r.type === 'chest' ? MAP_WAVE[i % MAP_WAVE.length] : 0), y: top + i * MAP_ROW }));
   const height = top + rows.length * MAP_ROW;
-  const pathD = (upto) => pts.slice(0, upto + 1).map((p, i) => {
-    if (i === 0) return `M ${p.x} ${p.y}`;
-    const q = pts[i - 1];
-    const my = (q.y + p.y) / 2;
-    return `C ${q.x} ${my}, ${p.x} ${my}, ${p.x} ${p.y}`;
-  }).join(' ');
+  // the river runs just above the after-school sign, so crossing the bridge means school's out
+  const pmSign = rows.findIndex((r, i) => i > 0 && r.type === 'sign');
+  const riverY = pmSign > 0 ? pts[pmSign].y - 42 : '';
+  const mapData = esc(JSON.stringify(pts.map((p, i) => [p.x, p.y, rows[i].type])));
 
   // keep labels inside the map: the space on the label's side, minus the node
   const labelWidth = (x) => `max-width:min(240px, calc(${x > 50 ? x : 100 - x}% - 66px))`;
@@ -599,13 +599,8 @@ function questMap(kid, s, entry, mood) {
     </div>`;
 
   return `
-    <section class="quest-map" style="height:${height}px">
-      <svg class="map-path" viewBox="0 0 100 ${height}" preserveAspectRatio="none" aria-hidden="true">
-        <path d="${pathD(rows.length - 1)}" class="road-edge"/>
-        <path d="${pathD(rows.length - 1)}" class="road"/>
-        <path d="${pathD(here)}" class="road-done"/>
-        <path d="${pathD(rows.length - 1)}" class="road-dash"/>
-      </svg>
+    <section class="quest-map" style="height:${height}px" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-seed="${esc(kid.id)}">
+      <canvas class="map-land" aria-hidden="true"></canvas>
       <div class="map-start" style="left:50%;top:0">🚩 Start</div>
       ${nodes}
       ${walker}
@@ -699,12 +694,12 @@ function viewWardrobe() {
   const prog = progressFor(kid);
   const fresh = new Set(kid.newItems || []);
   const items = ITEMS.filter((i) => i.slot === ui.slot);
-  const nextItem = ITEMS.filter((i) => !isUnlocked(i, prog)).sort((a, b) => (a.need.streak ? a.need.streak - prog.best : (a.need.level - prog.level) * 1.5) - (b.need.streak ? b.need.streak - prog.best : (b.need.level - prog.level) * 1.5))[0];
+  const nextItem = ITEMS.filter((i) => !isUnlocked(i, prog)).sort((a, b) => needGap(a, prog) - needGap(b, prog))[0];
   return `
     <div class="screen wardrobe" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="wardrobe-back" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days · Level ${prog.level}</small></div>
+        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days · Level ${prog.level}${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days` : ''}</small></div>
       </header>
       <div class="wardrobe-top">
         ${buddyHtml(kid, 'happy', 'lg')}
@@ -723,9 +718,11 @@ function viewWardrobe() {
             <span class="item-art">${buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
             <small>${open ? (on ? 'Wearing' : 'Tap to wear') : `🔒 ${esc(needLabel(item))}`}</small>
+            ${!open && item.need.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
           </button>`;
   }).join('')}
       </div>
+      ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
       <p class="muted small">Streak items stay yours even if a streak ends. Tap an item again to take it off.</p>
     </div>`;
 }
@@ -894,8 +891,15 @@ function render() {
   const scrollY = window.scrollY;
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
   $app.innerHTML = (views[ui.view] || viewHome)();
+  paintQuestMaps($app);
   if (keepScroll) window.scrollTo(0, scrollY);
 }
+
+let resizeTimer = 0;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => paintQuestMaps($app), 150);
+});
 
 // ---------- events ----------
 

@@ -265,6 +265,96 @@ const ITEM_ART = {
   ], { Y: '#fcc419', B: '#4dabf7' }],
 };
 
+// ---------- music items: an instrument the buddy sits at ----------
+// behind: drawn before the buddy (cabinet, pipes), front: drawn over the buddy's body (keys).
+// flames: two frames that CSS swaps for a flicker.
+
+const KEYS20 = 'WkWkWWkWkWkWWkWkWWkW';
+const WOOD = SH('#a0612f', '#c98a4b', '#6e3d1a');
+const GLOSS = SH('#2b2533', '#4a4256', '#16121b');
+const CHROME = SH('#ced4da', '#ffffff', '#868e96');
+const KEYS = { W: '#fffdf5', k: OUT };
+const FIRE = { Y: '#ffe066', O: '#ff922b', R: '#e03131' };
+
+const MUSIC_ART = {
+  'music-keyboard': {
+    front: [[3, 18, [
+      '.KKKKKKKKKKKKKKKK.',
+      'KCCCCCCCCCCCCrCgCK',
+      'KWkWkWWkWkWkWWkWkK',
+      'KWWWWWWWWWWWWWWWWK',
+      '.KKKKKKKKKKKKKKKK.',
+      '..KK..........KK..',
+    ], { C: SH('#495057', '#868e96', '#343a40'), r: '#ff6b6b', g: '#69db7c', ...KEYS }]],
+  },
+  'music-upright': {
+    behind: [
+      [1, 11, [
+        'KKKKKKKKKKKKKKKKKKKKKK',
+        'KLLLLLLLLLLLLLLLLLLLLK',
+        'KKKKKKKKKKKKKKKKKKKKKK',
+        ...Array(4).fill('KBBBBBBBBBBBBBBBBBBBBK'),
+      ], { L: SH('#d39b5c', '#f0c48a', '#a0612f'), B: WOOD }],
+      // a candle on the left, sheet music on the right
+      [2, 7, ['.Y.', '.O.', 'KWK', 'KWK'], { Y: '#ffe066', O: '#ff922b', W: '#fff3d6' }],
+      [18, 7, ['KKKKK', 'KWkWK', 'KkWWK', 'KWWkK'], { W: '#fffdf5', k: '#5c4a6a' }],
+    ],
+    front: [[1, 18, [
+      'KKKKKKKKKKKKKKKKKKKKKK',
+      `K${KEYS20}K`,
+      'KKKKKKKKKKKKKKKKKKKKKK',
+      'KBBBBBBBGBBBBGBBBBBBBK',
+      'KBBBBBBBBBBBBBBBBBBBBK',
+      'KKKKKKKKKKKKKKKKKKKKKK',
+    ], { B: WOOD, G: '#fcc419', ...KEYS }]],
+  },
+  'music-rock': {
+    behind: [
+      // chrome exhaust pipes on both sides
+      [0, 3, [
+        'KKKK................KKKK',
+        ...Array(7).fill('KCCK................KCCK'),
+      ], { C: CHROME }],
+      [0, 11, [
+        'KKKKKKKKKKKKKKKKKKKKKKKK',
+        'KRRRRRRRRRRRRRRRRRRRRRRK',
+        'KKKKKKKKKKKKKKKKKKKKKKKK',
+        ...Array(4).fill('KNNNNNNNNNNNNNNNNNNNNNNK'),
+      ], { R: SH('#e03131', '#ff6b6b', '#a51d1d'), N: GLOSS }],
+      // flame decals on the sides
+      [1, 13, ['..Y.', '.YY.', '.YOY', 'YOOY', 'OROO'], FIRE],
+      [19, 13, ['.Y..', '.YY.', 'YOY.', 'YOOY', 'OORO'], FIRE],
+    ],
+    front: [[0, 18, [
+      'KKKKKKKKKKKKKKKKKKKKKKKK',
+      'KWkWkWWkWkWkWWkWkWWkWkWK',
+      'KRRRRRRRRRRRRRRRRRRRRRRK',
+      'KNNYNNNNYNNNNYNNNNYNNNNK',
+      'KNYOYNNYOYNNYOYNNYOYNNNK',
+      'KKKKKKKKKKKKKKKKKKKKKKKK',
+    ], { R: '#e03131', N: GLOSS, ...FIRE, ...KEYS }]],
+    flames: [
+      [[0, 0, ['.Y..', 'YOY.', '.RO.'], FIRE], [20, 0, ['..Y.', '.YOY', '.OR.'], FIRE]],
+      [[0, 0, ['..Y.', '.YOY', '.OR.'], FIRE], [20, 0, ['.Y..', 'YOY.', '.RO.'], FIRE]],
+    ],
+  },
+};
+
+function musicLayer(id, part) {
+  const art = MUSIC_ART[id];
+  if (!art) return '';
+  if (part === 'flames') {
+    return (art.flames || []).map((frame, i) => {
+      const px = new Pixels();
+      frame.forEach(([x, y, rows, pal]) => px.grid(x, y, rows, pal));
+      return `<g class="flame flame-${i}">${px.svg()}</g>`;
+    }).join('');
+  }
+  const px = new Pixels();
+  (art[part] || []).forEach(([x, y, rows, pal]) => px.grid(x, y, rows, pal));
+  return px.svg();
+}
+
 // ---------- backgrounds ----------
 
 function bands(px, stops) {
@@ -436,11 +526,14 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
     ${showBg ? `<g class="bg">${bg}</g>` : ''}
     ${showBg ? shadow : ''}
     <g class="char">
+      ${musicLayer(o.music, 'behind')}
       ${capeBehind}
       ${body.svg()}
       ${neckFront}
       ${itemLayer(o.face)}
       ${itemLayer(o.hat)}
+      ${musicLayer(o.music, 'front')}
+      ${musicLayer(o.music, 'flames')}
     </g>
     <g class="fx ${mood === 'sleepy' ? 'zzz' : 'sparkles'}">${extras(mood)}</g>
   </svg>`;
