@@ -1,5 +1,5 @@
 import {
-  DAY_NAMES, emptyState, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
+  DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
   tasksForDay, snapshotToday, dayStatus, streakInfo, totalXp, levelFor, taskXp,
   pendingApprovals, fallbackHash, pianoStreakInfo,
 } from './logic.js';
@@ -8,43 +8,25 @@ import { buddySvg, buddyLine } from './avatar.js';
 import { paintQuestMaps } from './maparts.js';
 import { startMusic, stopMusic } from './music.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, speciesFromEmoji, defaultBuddy, restingMood,
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood,
 } from './items.js';
+import { createStore, migrate } from './store.js';
 
-const STORAGE_KEY = 'kidquest.v1';
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
 
 // ---------- storage ----------
 
-function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return migrate(JSON.parse(raw));
-  } catch {
-    // fall through to a fresh state
-  }
-  return emptyState();
-}
-
-function migrate(s) {
-  const base = emptyState();
-  const kids = (s.kids || []).map((k) => ({
-    ...k,
-    buddy: k.buddy || defaultBuddy(speciesFromEmoji(k.avatar)),
-    seenUnlocks: k.seenUnlocks || [],
-  }));
-  return { ...base, ...s, settings: { ...base.settings, ...(s.settings || {}) }, log: s.log || {}, kids, celebrations: s.celebrations || {} };
-}
+const store = createStore();
 
 function save() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    store.save(state);
   } catch {
     toast('Could not save. Is storage full?');
   }
 }
 
-let state = load();
+let state = store.load();
 setSound(state.settings.sound);
 
 const ui = {
