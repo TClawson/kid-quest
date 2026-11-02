@@ -11,6 +11,7 @@ import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood,
 } from './items.js';
 import { pickVisitors, visitorLines } from './visits.js';
+import { runSeconds, CHEERS, pickCheer } from './practice.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
@@ -416,22 +417,56 @@ function onTaskTap(id, anchor) {
 
 // ---------- practice timer ----------
 
-const timer = { running: false, interval: null, wakeLock: null };
+// The timer counts from clock times (see practice.js). While it runs, the run is
+// also kept in this device's storage, so if Android closes the app in the
+// background, opening it again picks the timer back up.
+const RUN_KEY = 'kidquest.practiceRun';
+const timer = { running: false, interval: null, wakeLock: null, run: null };
 
-async function startTimer() {
-  timer.running = true;
+function keepRun() {
+  try {
+    if (timer.run) localStorage.setItem(RUN_KEY, JSON.stringify(timer.run));
+    else localStorage.removeItem(RUN_KEY);
+  } catch { /* the timer still works while the app stays open */ }
+}
+
+async function grabWakeLock() {
   try {
     timer.wakeLock = await navigator.wakeLock?.request('screen');
   } catch {
     timer.wakeLock = null;
   }
+}
+
+function runTask() {
+  const kid = kidById(timer.run?.kidId);
+  const task = kid && taskById(kid, timer.run.day, timer.run.taskId);
+  return kid && task && task.minutes > 0 ? { kid, task } : null;
+}
+
+function startTimer() {
+  const kid = kidById(ui.kidId);
+  const task = kid && taskById(kid, today(), ui.taskId);
+  if (!task) return;
+  const done = entryFor(state, kid.id, today())?.tasks?.[task.id]?.seconds || 0;
+  timer.run = { kidId: kid.id, taskId: task.id, day: today(), since: Date.now(), base: done };
+  keepRun();
+  resumeTimer();
+}
+
+function resumeTimer() {
+  timer.running = true;
+  grabWakeLock();
   clearInterval(timer.interval);
   timer.interval = setInterval(tickTimer, 1000);
   render();
 }
 
 function stopTimer(rerender = true) {
+  if (timer.run) syncTimer();
   timer.running = false;
+  timer.run = null;
+  keepRun();
   clearInterval(timer.interval);
   timer.interval = null;
   timer.wakeLock?.release?.().catch(() => {});
@@ -439,40 +474,127 @@ function stopTimer(rerender = true) {
   if (rerender && ui.view === 'timer') render();
 }
 
-function tickTimer() {
-  if (ui.view !== 'timer' || document.visibilityState !== 'visible') return;
-  const kid = kidById(ui.kidId);
-  const task = taskById(kid, today(), ui.taskId);
-  if (!kid || !task) return stopTimer();
-  const entry = entryFor(state, kid.id, today(), true);
-  const cur = entry.tasks[task.id] || { status: 'inprogress', seconds: 0 };
-  cur.seconds = Math.min(task.minutes * 60, (cur.seconds || 0) + 1);
-  if (!cur.status) cur.status = 'inprogress';
+// Bring the saved seconds up to the clock. Returns true when the timer is done.
+function syncTimer() {
+  const run = timer.run;
+  const found = runTask();
+  if (!found) return false;
+  const { kid, task } = found;
+  const total = task.minutes * 60;
+  const now = Date.now();
+  const entry = entryFor(state, kid.id, run.day, true);
+  const cur = { status: 'inprogress', ...(entry.tasks[task.id] || {}) };
+  const sec = Math.max(cur.seconds || 0, runSeconds(run, now, total));
+  let changed = sec !== cur.seconds || !entry.tasks[task.id];
+  if (run.awayFrom != null) {
+    // count how much of the timer ran in another app, so a parent can see it
+    const away = Math.max(0, sec - run.awayFrom);
+    if (away) { cur.away = (cur.away || 0) + away; changed = true; }
+    run.awayFrom = null;
+    keepRun();
+  }
+  if (!changed) return sec >= total;
+  cur.seconds = sec;
   entry.tasks[task.id] = cur;
   save();
-  const left = task.minutes * 60 - cur.seconds;
+  return sec >= total;
+}
+
+function tickTimer() {
+  if (document.visibilityState !== 'visible' || !timer.run) return;
+  const found = runTask();
+  if (!found) return stopTimer();
+  const { kid, task } = found;
+  const finished = syncTimer();
+  if (timer.run.day !== today()) {
+    // midnight passed: yesterday's time stays with yesterday
+    stopTimer(false);
+    if (ui.view === 'timer') { ui.view = 'kid'; render(); }
+    return;
+  }
+  const total = task.minutes * 60;
+  const sec = entryFor(state, kid.id, timer.run.day)?.tasks?.[task.id]?.seconds || 0;
   const $t = document.getElementById('timer-left');
   const $ring = document.getElementById('timer-ring');
-  if ($t) $t.textContent = mmss(left);
-  if ($ring) $ring.style.setProperty('--p', cur.seconds / (task.minutes * 60));
-  if (left <= 0) {
-    stopTimer(false);
-    cur.status = 'inprogress';
-    save();
-    sounds.day();
-    confetti(80, 1800);
-    ui.view = 'kid';
-    render();
-    if (task.verify === 'self') markDone(kid, task, 'self');
-    else askParentNowOrLater(kid, task);
+  if ($t) $t.textContent = mmss(total - sec);
+  if ($ring) $ring.style.setProperty('--p', sec / total);
+  if (finished) finishTimer(kid, task);
+}
+
+function finishTimer(kid, task) {
+  stopTimer(false);
+  sounds.day();
+  confetti(80, 1800);
+  ui.view = 'kid';
+  ui.kidId = kid.id;
+  render();
+  if (task.verify === 'self') markDone(kid, task, 'self');
+  else askParentNowOrLater(kid, task);
+}
+
+// Leaving the app: a task set to keep counting in other apps carries on (and
+// remembers where it was, to show the parent the time spent away); any other
+// timer pauses.
+function leaveTimer() {
+  if (!timer.running) return;
+  const found = runTask();
+  if (!found?.task.background) { stopTimer(); return; }
+  syncTimer();
+  timer.run.awayFrom = entryFor(state, found.kid.id, timer.run.day)?.tasks?.[found.task.id]?.seconds || 0;
+  keepRun();
+}
+
+function returnToTimer() {
+  if (!timer.running) return;
+  grabWakeLock();
+  tickTimer();
+}
+
+// The app was closed while a timer ran: pick it up again.
+function restoreTimer() {
+  let run = null;
+  try { run = JSON.parse(localStorage.getItem(RUN_KEY) || 'null'); } catch { run = null; }
+  if (!run?.kidId || !run.taskId || !run.day || !run.since) return;
+  timer.run = run;
+  const found = runTask();
+  if (!found || ui.view === 'setup') { timer.run = null; keepRun(); return; }
+  if (run.day !== today()) { stopTimer(false); return; }
+  if (syncTimer()) {
+    // the time ran out while the app was closed
+    setTimeout(() => finishTimer(found.kid, found.task), 300);
+    return;
   }
+  ui.view = 'timer';
+  ui.kidId = run.kidId;
+  ui.taskId = run.taskId;
+  timer.running = true;
+  grabWakeLock();
+  timer.interval = setInterval(tickTimer, 1000);
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible' && timer.running) stopTimer();
-  if (document.visibilityState !== 'visible') stopMusic();
-  if (document.visibilityState === 'visible') render();
+  if (document.visibilityState !== 'visible') { leaveTimer(); stopMusic(); }
+  if (document.visibilityState === 'visible') { returnToTimer(); render(); }
 });
+
+// The buddy on the timer page says a cheer when tapped.
+let lastCheer = -1;
+let cheerTimeout = 0;
+function buddyCheer() {
+  const kid = kidById(ui.kidId);
+  const $b = document.querySelector('.timer-buddy');
+  const $say = $b?.querySelector('.timer-bubble');
+  if (!kid || !$say) return;
+  lastCheer = pickCheer(lastCheer);
+  $say.textContent = CHEERS[lastCheer](kid.name);
+  $b.classList.remove('hop');
+  void $b.offsetWidth; // restart the hop
+  $b.classList.add('talking', 'hop');
+  $b.querySelector('.timer-sprite')?.addEventListener('animationend', () => $b.classList.remove('hop'), { once: true });
+  sounds.tap();
+  clearTimeout(cheerTimeout);
+  cheerTimeout = setTimeout(() => $b.classList.remove('talking'), 4000);
+}
 
 const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 
@@ -725,20 +847,29 @@ function viewTimer() {
   if (!task) { ui.view = 'kid'; return viewKid(); }
   const done = entryFor(state, kid.id, today())?.tasks?.[task.id]?.seconds || 0;
   const total = task.minutes * 60;
+  const tip = task.background
+    ? 'You can switch to another app, like Note Rush. The timer keeps counting. Come back here when you’re done.'
+    : 'Keep the tablet near the piano with this screen open. The timer pauses if you leave the app.';
   return `
     <div class="screen timer center" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="timer-back" aria-label="Back">←</button>
         <div class="kid-title"><b>${esc(task.icon)} ${esc(task.name)}</b><small>${esc(kid.name)}</small></div>
       </header>
-      <div class="ring" id="timer-ring" style="--p:${done / total}">
-        <div class="ring-inner">
-          <div class="timer-left" id="timer-left">${mmss(total - done)}</div>
-          <small>${timer.running ? 'Keep playing! 🎶' : done ? 'Paused' : 'Ready?'}</small>
+      <div class="timer-stage">
+        <div class="ring" id="timer-ring" style="--p:${done / total}">
+          <div class="ring-inner">
+            <div class="timer-left" id="timer-left">${mmss(total - done)}</div>
+            <small>${timer.running ? 'Keep playing! 🎶' : done ? 'Paused' : 'Ready?'}</small>
+          </div>
         </div>
+        <button class="timer-buddy ${timer.running ? 'bobbing' : ''}" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
+          <span class="timer-bubble" aria-live="polite"></span>
+          <span class="timer-sprite">${buddySvg(kid.buddy, 'happy', { background: false })}</span>
+        </button>
       </div>
       <button class="btn huge" data-action="${timer.running ? 'timer-pause' : 'timer-start'}">${timer.running ? 'Pause' : done ? 'Keep going' : 'Start practice'}</button>
-      <p class="muted small">Keep the tablet near the piano with this screen open. The timer pauses if you leave the app.</p>
+      <p class="muted small">${tip}</p>
     </div>`;
 }
 
@@ -808,6 +939,13 @@ function viewParent() {
     </div>`;
 }
 
+// "· 12 min in other apps" when some of a timer ran while the kid was in another app.
+function awayNote(kid, key, task) {
+  const away = entryFor(state, kid.id, key)?.tasks?.[task.id]?.away || 0;
+  const min = Math.round(away / 60);
+  return away ? ` · ${min || '<1'} min in other apps` : '';
+}
+
 function parentApprovals(pending) {
   if (!pending.length) return '<div class="empty"><p>Nothing to check right now. 🎉</p></div>';
   return `
@@ -816,7 +954,7 @@ function parentApprovals(pending) {
       ${pending.map(({ key, kid, task }) => `
         <div class="list-row">
           ${buddyChip(kid)}
-          <div class="grow"><b>${esc(kid.name)}: ${esc(task.icon)} ${esc(task.name)}</b><small class="muted">${esc(friendlyDate(key))}${task.minutes ? ` · ${task.minutes} min timer finished` : ''}</small></div>
+          <div class="grow"><b>${esc(kid.name)}: ${esc(task.icon)} ${esc(task.name)}</b><small class="muted">${esc(friendlyDate(key))}${task.minutes ? ` · ${task.minutes} min timer finished${awayNote(kid, key, task)}` : ''}</small></div>
           <button class="btn ghost" data-action="send-back" data-kid="${kid.id}" data-key="${key}" data-task="${task.id}">Send back</button>
           <button class="btn" data-action="approve" data-kid="${kid.id}" data-key="${key}" data-task="${task.id}">Approve</button>
         </div>`).join('')}
@@ -858,6 +996,7 @@ function parentEditKid() {
         <label>When <select data-field="period"><option value="morning" ${t.period === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${t.period === 'afternoon' ? 'selected' : ''}>After school</option></select></label>
         <label>Checked by <select data-field="verify"><option value="self" ${t.verify === 'self' ? 'selected' : ''}>Kid taps done</option><option value="parent" ${t.verify === 'parent' ? 'selected' : ''}>Parent PIN</option></select></label>
         <label>Timer <input type="number" min="0" max="180" step="5" data-field="minutes" value="${t.minutes}" class="num"> min</label>
+        ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>` : ''}
       </div>
     </div>`).join('');
   return `
@@ -873,7 +1012,7 @@ function parentEditKid() {
     <h2>☀️ After-school tasks</h2>
     ${taskRows('afternoon')}
     <button class="btn ghost" data-action="add-task" data-period="afternoon">+ Add after-school task</button>
-    <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open.</p>
+    <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it.</p>
     <hr>
     <button class="btn danger" data-action="delete-kid">Remove ${esc(kid.name)}</button>`;
 }
@@ -1002,6 +1141,7 @@ const actions = {
   task: (el) => onTaskTap(el.dataset.id, el),
   'timer-start': () => startTimer(),
   'timer-pause': () => stopTimer(),
+  'timer-buddy': () => buddyCheer(),
   'timer-back': () => { stopTimer(false); ui.view = 'kid'; render(); },
   parent: () => pinPad({ title: 'Parents only', subtitle: 'Type the parent PIN', onSuccess: () => { ui.view = 'parent'; ui.tab = pendingApprovals(state, today()).length ? 'approvals' : ui.tab; render(); } }),
   'parent-exit': () => { ui.view = 'home'; ui.editKidId = null; render(); },
@@ -1143,12 +1283,12 @@ document.addEventListener('change', (e) => {
     const kid = kidById(ui.editKidId);
     const task = kid?.tasks.find((t) => t.id === el.closest('[data-task]')?.dataset.task);
     if (!task) return;
-    let v = el.value;
+    let v = el.type === 'checkbox' ? el.checked : el.value;
     if (el.dataset.field === 'minutes') v = Math.max(0, Math.min(180, Math.round(Number(v) || 0)));
     if (el.dataset.field === 'name' && !v.trim()) v = 'Task';
     task[el.dataset.field] = v;
     save();
-    if (el.tagName === 'SELECT') render();
+    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes') render();
     return;
   }
   if (el.dataset.kidfield) { kidById(ui.editKidId)[el.dataset.kidfield] = el.value.trim() || 'Kid'; save(); render(); return; }
@@ -1527,6 +1667,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 navigator.storage?.persist?.().catch(() => {});
 
+restoreTimer();
 render();
 if (cloudCfg) startCloud();
 
