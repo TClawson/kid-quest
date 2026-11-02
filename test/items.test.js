@@ -45,3 +45,36 @@ test('piano items need weeks of piano days in a row', () => {
   assert.equal(isUnlocked(rock, { best: 99, level: 99, pianoBest: 29, pianoPerWeek: 5 }), false);
   assert.equal(isUnlocked(rock, { best: 0, level: 1, pianoBest: 18, pianoPerWeek: 3 }), true);
 });
+
+test('color versions are cheap shop items, listed after the item they recolor', async () => {
+  const { COLOR_VERSIONS, LEGACY_LEVEL } = await import('../js/items.js');
+  for (const [baseId, cv] of Object.entries(COLOR_VERSIONS)) {
+    const base = itemById(baseId);
+    const at = ITEMS.indexOf(base);
+    cv.colors.forEach((color, n) => {
+      const item = ITEMS[at + 1 + n];
+      assert.equal(item.id, `${baseId}-${color}`);
+      assert.equal(item.slot, base.slot);
+      assert.ok(item.price > 0 && item.price <= 120, item.id);
+      assert.ok(!item.need, item.id);
+      assert.equal(LEGACY_LEVEL(item), Infinity, 'never handed out as an old level item');
+      assert.equal(isUnlocked(item, { best: 999, owned: [base.id] }), false, 'owning one color does not unlock another');
+      assert.equal(isUnlocked(item, { best: 0, owned: [item.id] }), true);
+    });
+  }
+  assert.equal(itemById('hat-cap-blue').name, 'Blue ball cap');
+  assert.equal(itemById('neck-bowtie-pink').price, 30);
+});
+
+test('every color version draws in its own color', async () => {
+  const { buddySvg } = await import('../js/avatar.js');
+  const draw = (item) => buddySvg({ species: 'bear', outfit: { [item.slot]: item.id } }, 'happy', { background: false });
+  const plain = buddySvg({ species: 'bear', outfit: {} }, 'happy', { background: false });
+  for (const item of ITEMS.filter((i) => i.base)) {
+    const svg = draw(item);
+    assert.notEqual(svg, plain, `${item.id} draws something`);
+    assert.notEqual(svg, draw(itemById(item.base)), `${item.id} differs from ${item.base}`);
+  }
+  const all = ITEMS.filter((i) => i.base).map(draw);
+  assert.equal(new Set(all).size, all.length, 'no two colors look the same');
+});
