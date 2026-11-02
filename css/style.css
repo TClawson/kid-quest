@@ -291,3 +291,10 @@ label { color: var(--ink); }
 @keyframes px-flame-a { 0% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes px-flame-b { 0% { opacity: 0; } 50% { opacity: 1; } }
 .item .piano-need { font-weight: 700; color: var(--kid, var(--brand)); }
+
+/* coins and the shop */
+.chip.coin { background: #fff3bf; color: #8a5a00; }
+.coin-line { font-size: 1.2rem; margin: 0; }
+.item .price { display: inline-block; font-weight: 800; color: #8a5a00; background: #fff3bf; border: 2px solid #f0c040; border-radius: 4px; padding: 0 6px; }
+.item .price.can { background: #ffe066; border-color: var(--px-ink, #2a1838); }
+.item.locked:has(.price.can) .item-art { filter: none; opacity: 1; }

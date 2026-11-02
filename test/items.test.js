@@ -12,17 +12,20 @@ test('every item has a known slot and unique id', () => {
   }
 });
 
-test('unlocks use best streak and level', () => {
-  assert.equal(isUnlocked(itemById('hat-crown'), { best: 29, level: 50 }), false);
-  assert.equal(isUnlocked(itemById('hat-crown'), { best: 30, level: 1 }), true);
-  assert.equal(isUnlocked(itemById('hat-cap'), { best: 0, level: 2 }), true);
-  assert.equal(isUnlocked(itemById('bg-meadow'), { best: 0, level: 1 }), true);
+test('streak items unlock by best streak, shop items only when bought', () => {
+  assert.equal(isUnlocked(itemById('hat-crown'), { best: 29, level: 50, owned: [] }), false);
+  assert.equal(isUnlocked(itemById('hat-crown'), { best: 30, level: 1, owned: [] }), true);
+  assert.equal(isUnlocked(itemById('hat-cap'), { best: 0, level: 99, owned: [] }), false);
+  assert.equal(isUnlocked(itemById('hat-cap'), { best: 0, level: 1, owned: ['hat-cap'] }), true);
+  assert.equal(isUnlocked(itemById('bg-meadow'), { best: 0, level: 1, owned: [] }), true);
+  assert.ok(ITEMS.every((i) => !(i.price && i.need)), 'an item is either bought or earned');
+  assert.ok(ITEMS.filter((i) => i.slot === 'music').every((i) => i.need && !i.price), 'pianos are earned, not bought');
 });
 
-test('newUnlocks only reports unseen earned items', () => {
+test('newUnlocks only reports unseen earned items, never shop items', () => {
   const kid = { seenUnlocks: ['neck-bowtie'] };
-  const ids = newUnlocks(kid, { best: 3, level: 2 });
-  assert.deepEqual(ids.sort(), ['bg-sunset', 'hat-cap'].sort());
+  const ids = newUnlocks(kid, { best: 3, level: 2, owned: ['hat-cap'] });
+  assert.deepEqual(ids, ['bg-sunset']);
 });
 
 test('resting mood', () => {
