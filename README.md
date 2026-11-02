@@ -28,16 +28,33 @@ Then on the Android tablet:
 2. Chrome menu (⋮) → **Add to Home screen** → **Install**.
 3. Open Kid Quest from the home screen, choose a parent PIN, and add the kids.
 
+## Family sync
+
+Devices can share one family in Firebase (Firestore + Auth), so progress is safe in the cloud and parents can approve from their phones. Devices that never join keep working on their own as before.
+
+1. On a parent's phone: Parents › Settings › Family sync › **Start a family**, and sign in with Google. This uploads that device's settings and PIN.
+2. **Add a kid's device** shows a code. On each kid's tablet (each Android user), Parents › Settings › Family sync › **Join with a code**. That kid's progress uploads, is read back and checked, and a backup file is saved first. The kid's original local copy is never deleted.
+3. **Add a parent** shows a parent code for the other parent's phone.
+
+Firebase setup (once): the project in `js/firebase-config.js` needs Google and Anonymous sign-in enabled, `tclawson.github.io` as an authorized domain, and the rules in `firestore.rules` published (Firestore › Rules, paste, Publish). Re-publish whenever `firestore.rules` changes.
+
 ## Development
 
-No build step: plain HTML, CSS and JavaScript modules.
+No build step: plain HTML, CSS and JavaScript modules. The Firebase SDK is pre-bundled in `js/vendor/firebase.js` (`npm run build:firebase` rebuilds it).
 
 ```sh
-npm test         # unit tests for the game rules (js/logic.js)
-npm start        # serve locally at http://localhost:8080
+npm test            # unit tests: game rules, catalog, storage layer
+npm start           # serve locally at http://localhost:8080
+npm ci              # for the tests below (Playwright, Firebase emulators; needs Java 21)
+npm run test:smoke  # headless Chrome: load saved data, open a kid, tick a task
+npm run test:rules  # Firestore security rules against the emulator
+npm run test:e2e    # family sync end to end: two phones and a tablet on the emulators
 ```
 
+To try sync locally against the emulators, run `npx firebase emulators:start --project demo-kid-quest` and set `localStorage['kidquest.emulator'] = '1'` in the browser.
+
 - `js/logic.js` holds the rules (schedules, streaks, freezes, XP) with no DOM code, tested in `test/`.
-- `js/store.js` is the storage layer: every save and load goes through it. It also splits the data into family, kid and day documents, ready for cloud sync.
+- `js/store.js` is the storage layer: every save and load goes through it. It splits the data into family, kid and day documents and works out which fields changed.
+- `js/cloud.js` is family sync: sign-in, join codes, upload and check, live listeners, and field-level writes (so two devices changing the same day don't overwrite each other). `firestore.rules` keeps each family's data to its members.
 - `js/app.js` is the UI, `js/avatar.js` draws the 16-bit pixel buddies, outfits and backgrounds (letter grids rendered to SVG), `js/items.js` the unlock catalog, `js/fx.js` the sounds and confetti, `sw.js` the offline cache.
 - When you change a cached file, bump `CACHE` in `sw.js` so installed tablets pick up the update.

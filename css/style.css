@@ -148,6 +148,8 @@ label { color: var(--ink); }
 .celebrate.big .celebrate-emoji { font-size: 8rem; }
 .celebrate h1 { color: var(--brand); }
 .celebrate p { font-size: 1.15rem; }
+.code-input { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.15em; text-align: center; text-transform: uppercase; width: 100%; max-width: 280px; }
+.join-code { font-size: 2.4rem; font-weight: 900; letter-spacing: 0.12em; color: var(--brand); user-select: all; }
 
 .setup { display: grid; justify-items: center; gap: 12px; padding-top: 12vh; }
 .setup .logo { font-size: 6rem; animation: bounce 1.6s infinite; }

@@ -11,9 +11,11 @@ permissions:
   pages: write
   id-token: write
 
+# Deploys from main queue up in one group. Each PR gets its own group, so a PR
+# push never cancels a deploy that is running.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -25,9 +27,34 @@ jobs:
           node-version: 22
       - run: npm test
 
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('package-lock.json') }}
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke test (app loads, opens a kid, ticks a task)
+        run: npm run test:smoke
+      - name: Security rules tests
+        run: npm run test:rules
+      - name: Family sync end to end
+        run: npm run test:e2e
+
   deploy:
     if: github.event_name != 'pull_request'
-    needs: test
+    needs: [test, browser]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

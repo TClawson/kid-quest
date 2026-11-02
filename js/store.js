@@ -26,7 +26,15 @@ export function migrate(s) {
   return { ...base, ...s, settings: { ...base.settings, ...(s.settings || {}) }, log: s.log || {}, kids, celebrations: s.celebrations || {} };
 }
 
-const dayDocId = (date, kidId) => `${date}_${kidId}`;
+export const dayDocId = (date, kidId) => `${date}_${kidId}`;
+
+// JSON with object keys sorted, so two copies of the same data compare equal
+// whatever order their keys came back in.
+export function stableJson(v) {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).sort().filter((k) => v[k] !== undefined).map((k) => `${JSON.stringify(k)}:${stableJson(v[k])}`).join(',')}}`;
+  return JSON.stringify(v ?? null);
+}
 
 // state -> { family, device, kids: {kidId: doc}, days: {date_kidId: doc} }
 // The documents are copies, so later changes to the state don't reach them.
@@ -103,7 +111,41 @@ export function localBackend(storage = globalThis.localStorage, key = STORAGE_KE
   };
 }
 
-export function createStore(backend = localBackend()) {
+// One document of a splitState result, by its diffDocs path.
+export function docAt(parts, path) {
+  if (path === 'family' || path === 'device') return parts[path];
+  const [kind, id] = path.split('/');
+  return parts[kind]?.[id];
+}
+
+export const DELETE = Symbol('delete');
+
+// Field-level changes between two versions of one document, as [path, value]
+// pairs (value DELETE for a removed field). Maps are compared `depth` levels
+// down, so a task ticked on one device and another approved on a second device
+// touch different fields of the same day. Arrays and deeper values go whole.
+export function diffFields(before, after, depth = 3, prefix = []) {
+  const out = [];
+  const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+  const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  for (const k of keys) {
+    const a = before?.[k];
+    const b = after?.[k];
+    const path = [...prefix, k];
+    if (b === undefined) {
+      if (a !== undefined) out.push([path, DELETE]);
+    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
+      if (depth > 1 && isMap(a) && isMap(b)) out.push(...diffFields(a, b, depth - 1, path));
+      else out.push([path, b]);
+    }
+  }
+  return out;
+}
+
+// onSave(changes, before, after) runs after each successful save with the
+// changed document paths and the splitState views before and after, so a
+// cloud backend can write just those.
+export function createStore(backend = localBackend(), { onSave } = {}) {
   let lastDocs = null;
   return {
     // Never throws: unreadable data starts a fresh state, as before.
@@ -119,13 +161,21 @@ export function createStore(backend = localBackend()) {
       return state;
     },
     // Throws if the backend cannot save (for example, storage is full).
-    // Returns which documents changed since the last load or save.
+    // Returns which documents changed since the last load, save or replace.
     save(state) {
       backend.write(JSON.stringify(state));
       const docs = splitState(state);
-      const changes = diffDocs(lastDocs, docs);
+      const before = lastDocs;
+      const changes = diffDocs(before, docs);
       lastDocs = docs;
+      if (onSave && (changes.changed.length || changes.removed.length)) onSave(changes, before, docs);
       return changes;
+    },
+    // Takes a state that came from elsewhere (another device): keeps it locally
+    // without reporting it as a change to send back.
+    replace(state) {
+      try { backend.write(JSON.stringify(state)); } catch { /* the cloud still has it */ }
+      lastDocs = splitState(state);
     },
   };
 }

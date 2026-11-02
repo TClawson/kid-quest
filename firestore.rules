@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// Kid Quest: only members of a family can see or change that family's data.
+// Paste this into Firebase console > Firestore > Rules and publish it.
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function memberPath(fid, uid) { return /databases/$(db)/documents/families/$(fid)/members/$(uid); }
+    function isMember(fid) { return signedIn() && exists(memberPath(fid, request.auth.uid)); }
+    function isParent(fid) { return isMember(fid) && get(memberPath(fid, request.auth.uid)).data.role == 'parent'; }
+
+    // A join code a parent made for this family and role, not yet expired.
+    function validCode(fid, data) {
+      let path = /databases/$(db)/documents/joinCodes/$(data.code);
+      return data.code is string && exists(path)
+        && get(path).data.familyId == fid
+        && get(path).data.role == data.role
+        && get(path).data.expiresAt > request.time;
+    }
+
+    // Which family a signed-in person belongs to, so a parent's new phone can find it.
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && existsAfter(memberPath(request.resource.data.familyId, uid));
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Short-lived codes a parent shows to add a device. Readable one at a time
+    // by anyone signed in (they are random and expire), never listable.
+    match /joinCodes/{code} {
+      allow get: if signedIn();
+      allow create: if isParent(request.resource.data.familyId)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.role in ['parent', 'kid'];
+      allow delete: if isParent(resource.data.familyId);
+    }
+
+    match /families/{fid} {
+      // Created together with its first parent member, in one batch.
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid
+        && getAfter(memberPath(fid, request.auth.uid)).data.role == 'parent';
+      allow read, update: if isMember(fid);
+
+      match /members/{uid} {
+        allow read: if isMember(fid);
+        allow create: if signedIn() && request.auth.uid == uid && (
+          // the family's creator, in the batch that creates the family
+          (request.resource.data.role == 'parent'
+            && !exists(/databases/$(db)/documents/families/$(fid))
+            && getAfter(/databases/$(db)/documents/families/$(fid)).data.createdBy == uid)
+          // anyone else, with a valid join code
+          || validCode(fid, request.resource.data));
+        allow update: if isParent(fid);
+        allow delete: if isParent(fid) || (signedIn() && request.auth.uid == uid);
+      }
+
+      match /kids/{kidId} {
+        allow read, write: if isMember(fid);
+      }
+
+      match /days/{dayId} {
+        allow read, write: if isMember(fid);
+      }
+    }
+  }
+}

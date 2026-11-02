@@ -10,13 +10,33 @@ import { startMusic, stopMusic } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood,
 } from './items.js';
-import { createStore, migrate } from './store.js';
+import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
 
 // ---------- storage ----------
 
-const store = createStore();
+// When this device syncs with a family, kidquest.cloud holds { familyId, role,
+// kidId, email } and the data is kept in kidquest.cloud.cache plus Firebase.
+// The original kidquest.v1 copy is left untouched as a fallback.
+const CLOUD_KEY = 'kidquest.cloud';
+const CLOUD_CACHE_KEY = 'kidquest.cloud.cache';
+const readJson = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
+const cloudCfg = readJson(CLOUD_KEY);
+const cloud = { mod: null, ready: false, pending: 0, error: '', signedOut: false, queued: null };
+
+function cloudWrite(changes, before, after) {
+  if (!cloud.ready) {
+    // not connected yet: remember everything since the first unsent save
+    cloud.queued = { before: cloud.queued ? cloud.queued.before : before, after };
+    return;
+  }
+  cloud.mod.writeChanges(cloudCfg.familyId, changes, before, after, onCloudStatus);
+}
+
+const store = cloudCfg
+  ? createStore(localBackend(localStorage, CLOUD_CACHE_KEY), { onSave: cloudWrite })
+  : createStore();
 
 function save() {
   try {
@@ -27,6 +47,12 @@ function save() {
 }
 
 let state = store.load();
+if (cloudCfg && !localStorage.getItem(CLOUD_CACHE_KEY)) {
+  // first start after joining on a device with nothing to bring: keep this
+  // device's own sound and map settings, wait for the family's data
+  const local = createStore().load();
+  for (const k of DEVICE_SETTINGS) if (k in local.settings) state.settings[k] = local.settings[k];
+}
 setSound(state.settings.sound);
 
 const ui = {
@@ -153,6 +179,7 @@ function closeModal() {
   const cb = modalOnClose;
   modalOnClose = null;
   cb?.();
+  if (pendingRemote && $modal.hidden) { const next = pendingRemote; pendingRemote = null; applyRemote(next); }
 }
 
 $modal.addEventListener('click', (e) => {
@@ -462,6 +489,8 @@ function viewSetup() {
       <p>Daily quests for chores and piano, with streaks and celebrations.</p>
       <p class="muted">First, choose a 4-digit parent PIN. Kids will need a parent to type it to sign off tasks and change settings.</p>
       <button class="btn huge" data-action="setup-pin">Choose parent PIN</button>
+      <p class="muted small">Already set up Kid Quest on another device?</p>
+      <button class="btn ghost" data-action="family-join">Join your family with a code</button>
     </div>`;
 }
 
@@ -773,7 +802,7 @@ function parentKids() {
           <button class="btn ghost" data-action="edit-kid" data-id="${kid.id}">Edit</button>
         </div>`).join('') || '<p class="muted">No kids yet.</p>'}
     </div>
-    <button class="btn" data-action="add-kid">+ Add a kid</button>
+    ${cloudCfg?.role === 'kid' ? '' : '<button class="btn" data-action="add-kid">+ Add a kid</button>'}
     <p class="muted small">New kids start with the standard routine: morning teeth, bed and floor; piano Monday to Friday; chore of the week Monday to Thursday; deep clean, vacuum and dust on Friday; laundry on Saturday. Change any of it per kid.</p>`;
 }
 
@@ -872,12 +901,16 @@ function parentSettings() {
     </div>
     <div class="card">
       <h2>Backup</h2>
+      ${cloudCfg ? `
+      <p class="muted small">Progress is kept in your family's cloud. A backup file is still a handy extra copy.</p>
+      <div class="row wrap"><button class="btn" data-action="export">Save backup file</button></div>` : `
       <p class="muted small">Everything is saved only on this tablet. Save a backup file now and then (for example to Google Drive) so a reset or new tablet doesn't lose streaks.</p>
       <div class="row wrap">
         <button class="btn" data-action="export">Save backup file</button>
         <label class="btn ghost">Restore from file<input type="file" accept="application/json,.json" data-action-change="import" hidden></label>
-      </div>
-    </div>`;
+      </div>`}
+    </div>
+    ${familyCard()}`;
 }
 
 function buyItem(kid, item, prog) {
@@ -905,6 +938,8 @@ function render() {
   const scrollY = window.scrollY;
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
   $app.innerHTML = (views[ui.view] || viewHome)();
+  // load the sign-in code early, so a sign-in popup opens straight from the tap
+  if (ui.view === 'setup' || (ui.view === 'parent' && ui.tab === 'settings')) loadCloud().catch(() => {});
   paintQuestMaps($app);
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
@@ -1110,6 +1145,284 @@ function importFile(file) {
   });
 }
 
+// ---------- family sync ----------
+
+let pendingRemote = null;
+
+async function loadCloud() {
+  if (!cloud.mod) {
+    const mod = await import('./cloud.js');
+    await mod.connect();
+    cloud.mod = mod;
+  }
+  return cloud.mod;
+}
+
+function onCloudStatus({ pending, error }) {
+  const before = `${cloud.pending}|${cloud.error}`;
+  if (pending !== undefined) cloud.pending = pending;
+  if (error !== undefined) cloud.error = error;
+  if (`${cloud.pending}|${cloud.error}` !== before && ui.view === 'parent' && ui.tab === 'settings') render();
+}
+
+async function startCloud() {
+  let mod;
+  try {
+    mod = await loadCloud();
+  } catch (err) {
+    console.error(err);
+    onCloudStatus({ error: 'Could not load sync. It will try again next time the app opens.' });
+    return;
+  }
+  if (!mod.currentUser()) {
+    cloud.signedOut = true;
+    render();
+    return;
+  }
+  if (cloud.queued) {
+    const { before, after } = cloud.queued;
+    cloud.queued = null;
+    mod.writeChanges(cloudCfg.familyId, mod.changesBetween(before, after), before, after, onCloudStatus);
+  }
+  cloud.ready = true;
+  mod.startSync(cloudCfg, { onState: applyRemote, onStatus: onCloudStatus });
+}
+
+// A newer state from the family (another device, or this one's writes coming back).
+function applyRemote(next) {
+  for (const k of DEVICE_SETTINGS) {
+    if (k in state.settings) next.settings[k] = state.settings[k];
+    else delete next.settings[k];
+  }
+  if (stableJson(next) === stableJson(state)) return;
+  // don't swap the data under an open dialog; apply it when the dialog closes
+  if (!$modal.hidden) { pendingRemote = next; return; }
+  state = next;
+  store.replace(state);
+  if (ui.view === 'setup' && state.settings.pinHash) ui.view = 'home';
+  if (ui.view !== 'timer') render();
+}
+
+function familyCard() {
+  if (!cloudCfg) {
+    return `
+    <div class="card">
+      <h2>Family sync</h2>
+      <p class="muted small">Keep progress safe in the cloud and share it between each kid's tablet and the parents' phones. Start the family on a parent's phone, then join each kid's tablet with a code.</p>
+      <div class="row wrap">
+        <button class="btn" data-action="family-create">Start a family</button>
+        <button class="btn ghost" data-action="family-join">Join with a code</button>
+      </div>
+    </div>`;
+  }
+  const who = cloudCfg.role === 'kid' ? `${esc(kidById(cloudCfg.kidId)?.name || 'A kid')}'s device` : `a parent (${esc(cloudCfg.email || 'signed in')})`;
+  const status = cloud.signedOut ? '⚠️ This device was signed out of the family. Stop syncing, then join again with a new code.'
+    : cloud.error ? `⚠️ Sync problem: ${esc(cloud.error)}`
+      : cloud.pending ? `⏳ ${navigator.onLine ? 'Saving to the cloud…' : 'Offline. Changes are kept here and will sync when back online.'}`
+        : '✅ Synced';
+  return `
+    <div class="card">
+      <h2>Family sync</h2>
+      <p class="small">This device syncs with your family as ${who}.</p>
+      <p class="muted small">${status}</p>
+      ${cloudCfg.role === 'parent' ? `
+      <div class="row wrap">
+        <button class="btn" data-action="family-invite-kid">Add a kid's device</button>
+        <button class="btn ghost" data-action="family-invite-parent">Add a parent</button>
+      </div>` : ''}
+      <button class="btn ghost" data-action="family-leave">Stop syncing on this device</button>
+    </div>`;
+}
+
+function busyModal(text) {
+  openModal(`<div data-sticky class="celebrate"><h2>${esc(text)}</h2><p class="muted">Keep the app open.</p></div>`);
+}
+
+function errorModal(title, text) {
+  openModal(`
+    <div class="celebrate">
+      <h2>${esc(title)}</h2>
+      <p>${esc(text)}</p>
+      <button class="btn" data-action="modal-close">OK</button>
+    </div>`);
+}
+
+// Switch this device to the family and restart the app on the cloud copy.
+function finishJoin(cfg, cacheState) {
+  localStorage.setItem(CLOUD_KEY, JSON.stringify(cfg));
+  if (cacheState) localStorage.setItem(CLOUD_CACHE_KEY, JSON.stringify(cacheState));
+  else localStorage.removeItem(CLOUD_CACHE_KEY);
+  window.location.reload();
+}
+
+async function familyCreate() {
+  if (!navigator.onLine) { errorModal('You are offline', 'Connect to Wi-Fi to start a family.'); return; }
+  let mod;
+  let user;
+  try {
+    mod = await loadCloud();
+    user = await mod.signInParent();
+  } catch (err) {
+    console.error(err);
+    errorModal('Sign-in did not finish', 'Try again. If no Google window appears, allow pop-ups for this site.');
+    return;
+  }
+  try {
+    busyModal('Checking your account…');
+    const existing = await mod.findFamily();
+    closeModal();
+    if (existing) {
+      confirmModal({
+        title: 'You already have a family',
+        text: `${user.email} is already in a family. Connect this device to it as a parent? This device's own data stays saved here and is not uploaded.`,
+        yes: 'Connect',
+        onYes: () => finishJoin({ ...existing, email: user.email }, null),
+      });
+      return;
+    }
+    confirmModal({
+      title: 'Start a family?',
+      text: `This uploads this device's settings, parent PIN${state.kids.length ? ` and ${state.kids.map((k) => k.name).join(', ')}` : ''} to your family's cloud, signed in as ${user.email}. A backup file is saved first.`,
+      yes: 'Start family',
+      onYes: async () => {
+        actions.export();
+        busyModal('Uploading…');
+        try {
+          const cfg = await mod.createFamily(state);
+          finishJoin({ ...cfg, email: user.email }, state);
+        } catch (err) {
+          console.error(err);
+          closeModal();
+          errorModal('That did not work', 'Nothing changed on this device. Check the connection and try again.');
+        }
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    closeModal();
+    errorModal('That did not work', 'Check the connection and try again.');
+  }
+}
+
+function familyJoin() {
+  openModal(`
+    <div class="celebrate">
+      <h2>Join your family</h2>
+      <p class="muted">On a parent's device, open Parents › Settings › Family sync and tap "Add a kid's device" or "Add a parent" to get a code.</p>
+      <input class="code-input" data-join-code autocomplete="off" autocapitalize="characters" placeholder="Code" maxlength="12">
+      <div class="stack">
+        <button class="btn huge" data-action="family-join-go">Join</button>
+        <button class="btn ghost" data-action="modal-close">Cancel</button>
+      </div>
+    </div>`);
+  loadCloud().catch(() => {});
+  setTimeout(() => $modal.querySelector('[data-join-code]')?.focus(), 50);
+}
+
+async function familyJoinGo() {
+  const input = $modal.querySelector('[data-join-code]');
+  let mod;
+  try { mod = await loadCloud(); } catch { errorModal('You are offline', 'Connect to Wi-Fi and try again.'); return; }
+  const code = mod.normalizeCode(input?.value);
+  const role = mod.codeRole(code);
+  if (!role || code.length < 6) { toast('That code doesn’t look right. Check it and try again.'); return; }
+  if (role === 'kid' && state.kids.length > 1) {
+    errorModal('More than one kid here', 'A kid’s device should hold just that kid. Use this device as a parent instead, or remove the extra kids first.');
+    return;
+  }
+  let user;
+  try {
+    user = role === 'parent' ? await mod.signInParent() : await mod.signInDevice();
+  } catch (err) {
+    console.error(err);
+    errorModal('Sign-in did not finish', 'Try again. If no Google window appears, allow pop-ups for this site.');
+    return;
+  }
+  if (role === 'kid' && state.kids.length) actions.export();
+  busyModal(role === 'kid' && state.kids.length ? `Uploading ${state.kids[0].name}'s progress…` : 'Joining…');
+  try {
+    const cfg = await mod.joinFamily(code, state);
+    finishJoin({ ...cfg, email: role === 'parent' ? user.email : null }, role === 'kid' && state.kids.length ? state : null);
+  } catch (err) {
+    console.error(err);
+    closeModal();
+    const msg = err.code === 'bad-code' ? 'That code is wrong or has expired. Ask for a new one.'
+      : err.code === 'which-kid' ? err.message
+        : err.code === 'check-failed' ? 'The upload did not check out, so this device keeps using its own copy. Try again later.'
+          : 'Check the connection and try again. Nothing changed on this device.';
+    errorModal('Could not join', msg);
+  }
+}
+
+async function familyInvite(role) {
+  let kidId = null;
+  if (role === 'kid') {
+    openModal(`
+      <div class="celebrate">
+        <h2>Add a kid's device</h2>
+        <p class="muted">Whose device is it?</p>
+        <div class="stack">
+          <button class="btn" data-action="family-invite-for" data-kid="">A kid whose progress is on that device</button>
+          ${state.kids.map((k) => `<button class="btn ghost" data-action="family-invite-for" data-kid="${k.id}">${esc(k.name)} (already in the family)</button>`).join('')}
+          <button class="btn ghost" data-action="modal-close">Cancel</button>
+        </div>
+      </div>`);
+    return;
+  }
+  showCode(role, kidId);
+}
+
+async function showCode(role, kidId) {
+  busyModal('Making a code…');
+  try {
+    const mod = await loadCloud();
+    const code = await mod.makeJoinCode(cloudCfg.familyId, role, kidId);
+    const pretty = `${code.slice(0, 4)}-${code.slice(4)}`;
+    closeModal();
+    openModal(`
+      <div class="celebrate">
+        <h2>Join code</h2>
+        <p class="join-code">${pretty}</p>
+        <p class="muted">${role === 'parent'
+    ? 'On the other parent’s phone, open Kid Quest, tap "Join your family with a code" (or Parents › Settings › Family sync), enter this code, and sign in with Google.'
+    : 'On the kid’s device, open Kid Quest, go to Parents › Settings › Family sync, tap "Join with a code" and enter this code.'} It works for 30 minutes.</p>
+        <button class="btn" data-action="modal-close">Done</button>
+      </div>`);
+  } catch (err) {
+    console.error(err);
+    closeModal();
+    errorModal('Could not make a code', navigator.onLine ? 'Try again in a moment.' : 'You are offline. Connect to Wi-Fi and try again.');
+  }
+}
+
+function familyLeave() {
+  confirmModal({
+    title: 'Stop syncing on this device?',
+    text: 'This device goes back to the copy it had before joining. Everything stays safe in the family cloud, and you can join again with a new code.',
+    yes: 'Stop syncing', danger: true,
+    onYes: async () => {
+      try {
+        const mod = await loadCloud();
+        mod.stopSync();
+        await mod.signOutDevice();
+      } catch { /* offline: still leave */ }
+      localStorage.removeItem(CLOUD_KEY);
+      localStorage.removeItem(CLOUD_CACHE_KEY);
+      window.location.reload();
+    },
+  });
+}
+
+Object.assign(actions, {
+  'family-create': () => familyCreate(),
+  'family-join': () => familyJoin(),
+  'family-join-go': () => familyJoinGo(),
+  'family-invite-kid': () => familyInvite('kid'),
+  'family-invite-parent': () => familyInvite('parent'),
+  'family-invite-for': (el) => { closeModal(); showCode('kid', el.dataset.kid || null); },
+  'family-leave': () => familyLeave(),
+});
+
 // ---------- reminders and day rollover ----------
 
 let lastDay = today();
@@ -1155,6 +1468,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 navigator.storage?.persist?.().catch(() => {});
 
 render();
+if (cloudCfg) startCloud();
 
 // Exposed for debugging in the browser console only.
-window.kidQuest = { get state() { return state; } };
+window.kidQuest = { get state() { return state; }, save, get cloud() { return cloud; } };
