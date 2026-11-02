@@ -1,6 +1,7 @@
 import {
   DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
-  tasksForDay, snapshotToday, dayStatus, streakInfo, totalXp, levelFor, taskXp,
+  tasksForDay, snapshotToday, dayStatus, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
+  defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
@@ -91,7 +92,7 @@ function progressFor(kid) {
     kid.spent = 0;
     save();
   }
-  const coins = Math.max(0, xp - (kid.spent || 0));
+  const coins = Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0));
   return { ...info, level: lv.level, into: lv.into, piano: piano.streak, pianoBest: piano.best, pianoPerWeek: piano.perWeek, owned: kid.owned, coins };
 }
 
@@ -358,7 +359,9 @@ function setTask(kid, key, task, value) {
 function markDone(kid, task, by, anchor) {
   setTask(kid, today(), task, { status: 'done', at: Date.now(), by });
   sounds.task();
-  floatText(`+${taskXp(task)} XP · 🪙`, anchor);
+  const xp = taskXp(task);
+  const coins = taskCoins(task);
+  floatText([xp && `+${xp} XP`, coins && `+${coins} 🪙`].filter(Boolean).join(' · ') || 'Done!', anchor);
   ui.cheerUntil = Date.now() + 2600;
   ui.cheerKid = kid.id;
   render();
@@ -812,7 +815,7 @@ function viewKid() {
         <div class="chips">
           <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak">🔥 ${info.streak}</span>
           <span class="chip ice" title="Streak freezes">❄️ ${info.freezes}</span>
-          <span class="chip coin" title="Coins">🪙 ${Math.max(0, xp - (kid.spent || 0))}</span>
+          <span class="chip coin" title="Coins">🪙 ${Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0))}</span>
         </div>
       </header>
       <div class="buddy-panel">
@@ -998,6 +1001,10 @@ function parentEditKid() {
         <label>Timer <input type="number" min="0" max="180" step="5" data-field="minutes" value="${t.minutes}" class="num"> min</label>
         ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>` : ''}
       </div>
+      <div class="row wrap reward-edit">
+        <label>Earns 🪙 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="coins" value="${Number.isFinite(t.coins) ? t.coins : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="Coins earned"> coins</label>
+        <label>and <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="xp" value="${Number.isFinite(t.xp) ? t.xp : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="XP earned"> XP</label>
+      </div>
     </div>`).join('');
   return `
     <div class="row"><button class="btn ghost" data-action="edit-kid-done">← All kids</button></div>
@@ -1012,7 +1019,7 @@ function parentEditKid() {
     <h2>☀️ After-school tasks</h2>
     ${taskRows('afternoon')}
     <button class="btn ghost" data-action="add-task" data-period="afternoon">+ Add after-school task</button>
-    <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it.</p>
+    <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. Each task earns 10 coins and 10 XP (30 for a timer task) unless you type other amounts; leave a box empty to use the default. A new amount counts from today, so coins already earned stay earned. Every 100 XP is a level.</p>
     <hr>
     <button class="btn danger" data-action="delete-kid">Remove ${esc(kid.name)}</button>`;
 }
@@ -1286,9 +1293,12 @@ document.addEventListener('change', (e) => {
     let v = el.type === 'checkbox' ? el.checked : el.value;
     if (el.dataset.field === 'minutes') v = Math.max(0, Math.min(180, Math.round(Number(v) || 0)));
     if (el.dataset.field === 'name' && !v.trim()) v = 'Task';
-    task[el.dataset.field] = v;
+    const isReward = el.dataset.field === 'coins' || el.dataset.field === 'xp';
+    if (isReward) v = parseReward(v);
+    if (v === null) delete task[el.dataset.field];
+    else task[el.dataset.field] = v;
     save();
-    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes') render();
+    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes' || isReward) render();
     return;
   }
   if (el.dataset.kidfield) { kidById(ui.editKidId)[el.dataset.kidfield] = el.value.trim() || 'Kid'; save(); render(); return; }

@@ -1,4 +1,4 @@
-// Pure game rules: schedules, day status, streaks, freezes, XP.
+// Pure game rules: schedules, day status, streaks, freezes, XP and coins.
 // No DOM access here so it can be unit tested with `node --test`.
 
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -77,8 +77,33 @@ export function emptyState() {
   };
 }
 
-export function taskXp(task) {
+export const MAX_REWARD = 500;
+
+/** What a task earns when a parent has not set it: 10, or 30 for a timer task like piano. */
+export function defaultReward(task) {
   return task.minutes > 0 ? 30 : 10;
+}
+
+function reward(task, field) {
+  const v = task[field];
+  return Number.isFinite(v) && v >= 0 ? v : defaultReward(task);
+}
+
+/** XP a task earns. Parents can set it per task; otherwise the default. */
+export function taskXp(task) {
+  return reward(task, 'xp');
+}
+
+/** Coins a task earns. Parents can set it per task, separately from XP. */
+export function taskCoins(task) {
+  return reward(task, 'coins');
+}
+
+/** Clean up a number a parent typed. Blank means "use the default" (null). */
+export function parseReward(value) {
+  if (value === '' || value == null) return null;
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.max(0, Math.min(MAX_REWARD, n)) : null;
 }
 
 export function entryFor(state, kidId, key, create = false) {
@@ -176,16 +201,27 @@ export function streakInfo(state, kid, today) {
   return { streak, best, freezes, frozen, todayComplete: todayStatus.complete };
 }
 
-export function totalXp(state, kid, today) {
-  let xp = 0;
+// Past days use that day's snapshot, so changing a task's reward later only
+// affects today and the days after it: what a kid already earned stays earned.
+function totalEarned(state, kid, today, perTask) {
+  let sum = 0;
   for (const key of Object.keys(state.log)) {
     const entry = state.log[key][kid.id];
     if (!entry) continue;
     for (const t of tasksForDay(state, kid, key, today)) {
-      if (entry.tasks?.[t.id]?.status === 'done') xp += taskXp(t);
+      if (entry.tasks?.[t.id]?.status === 'done') sum += perTask(t);
     }
   }
-  return xp;
+  return sum;
+}
+
+export function totalXp(state, kid, today) {
+  return totalEarned(state, kid, today, taskXp);
+}
+
+/** Coins earned ever (before spending). */
+export function totalCoins(state, kid, today) {
+  return totalEarned(state, kid, today, taskCoins);
 }
 
 export function levelFor(xp) {
