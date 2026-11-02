@@ -24,10 +24,12 @@ const EARS = {
     '.KoooK....KoooK.',
     '.KooOKKKKKKOooK.',
   ],
-  spikes: [
-    '......K..K......',
-    '.....KsKKsK.....',
-    '....KKssssKK....',
+  // three back plates standing on top of the head
+  // back plates; the tall middle one starts in the two DINO_CREST rows above
+  plates: [
+    '..K..KssssK..K..',
+    '.KsK.KssssK.KsK.',
+    '.KsKKKKssKKKKsK.',
     '..KKOOOOOOOOKK..',
   ],
   // floppy ears are painted down the sides of the head in speciesGrid
@@ -75,12 +77,68 @@ const COMMON = { K: OUT, E: OUT, N: OUT, H: '#ffffff', P: '#ff8fa3', M: '#7a2e1c
 const SPECIES = {
   fox: { ears: 'pointed', tail: true, pal: { O: '#f08a3c', W: '#fff3e0', o: '#7a2e1c', T: '#f08a3c', t: '#fff3e0' }, shade: { O: ['#ffb066', '#c25e1c'], W: ['#ffffff', '#e8cfb4'], T: ['#ffb066', '#c25e1c'] } },
   bear: { ears: 'round', tail: false, pal: { O: '#b07443', W: '#ecc9a2', o: '#e8a77a' }, shade: { O: ['#d3955f', '#7f4f2a'], W: ['#f8e0c4', '#cfa77c'] } },
-  panda: { ears: 'round', tail: false, pal: { O: '#ffffff', W: '#ffffff', o: '#2f2a36', D: '#2f2a36' }, shade: { O: ['#ffffff', '#d4d6e2'], W: ['#ffffff', '#d4d6e2'], D: ['#4a4356', '#1d1924'] } },
+  panda: { ears: 'round', tail: false, pal: { O: '#ffffff', W: '#ffffff', o: '#2f2a36', D: '#2f2a36', Q: '#4f475e', M: '#2f2a36' }, shade: { O: ['#ffffff', '#d4d6e2'], W: ['#ffffff', '#d4d6e2'], D: ['#4a4356', '#1d1924'] } },
   cat: { ears: 'pointed', tail: true, whiskers: true, pal: { O: '#a6b1c6', W: '#f3f5fa', o: '#ffb3c6', T: '#a6b1c6', t: '#a6b1c6' }, shade: { O: ['#c8d0de', '#7d889e'], W: ['#ffffff', '#d5dae6'], T: ['#c8d0de', '#7d889e'] } },
   puppy: { ears: 'floppy', tail: true, floppy: true, pal: { O: '#e0a85e', W: '#fff4df', o: '#8a5530', T: '#e0a85e', t: '#8a5530' }, shade: { O: ['#f5c582', '#b47a3a'], W: ['#ffffff', '#e8d2ae'], o: ['#a8703f', '#5e3519'], T: ['#f5c582', '#b47a3a'] } },
   turtle: { ears: 'dome', tail: false, shell: true, pal: { O: '#7ccf6a', W: '#dff5b8', S: '#4f8a3a', s: '#a6d86b', y: '#f2d27a', Y: '#c99a3f' }, shade: { O: ['#a3e38f', '#4f9e44'], W: ['#f2ffd8', '#b8d98a'], S: ['#6aa84f', '#2f5e22'], y: ['#ffe8a3', '#c99a3f'] } },
-  dino: { ears: 'spikes', tail: true, pal: { O: '#6cc56f', W: '#dcf5c9', s: '#f7b538', T: '#6cc56f', t: '#6cc56f' }, shade: { O: ['#94dc94', '#3f9446'], W: ['#f0ffe4', '#b5dca0'], T: ['#94dc94', '#3f9446'], s: ['#ffd36b', '#d08c12'] } },
+  dino: { ears: 'plates', tail: true, pal: { O: '#5cbf5f', W: '#e6f7c8', w: '#c2e09a', d: '#3f9446', c: '#fffbe6', s: '#f79a38', T: '#5cbf5f', t: '#5cbf5f' }, shade: { O: ['#88d98a', '#3a8c41'], W: ['#f6ffe6', '#bcd99a'], T: ['#88d98a', '#3a8c41'], s: ['#ffc46b', '#c8650f'] } },
 };
+
+const paint = (g, y, x, row) => {
+  for (let i = 0; i < row.length; i += 1) if (row[i] !== ' ') g[y][x + i] = row[i];
+};
+
+// Panda: black ears, slanted teardrop eye patches with white-ringed eyes, a black shoulder band, arms and legs.
+function pandaMarks(g) {
+  const patch = { 5: [4, 5, 10, 11], 6: [3, 4, 5, 6, 9, 10, 11, 12], 7: [3, 4, 5, 6, 9, 10, 11, 12], 8: [3, 4, 5, 10, 11, 12] };
+  for (const [y, xs] of Object.entries(patch)) {
+    for (const x of xs) {
+      const c = g[y][x];
+      if (c === 'O' || c === 'W' || c === 'P') g[y][x] = 'Q';
+    }
+  }
+  for (let y = 0; y < 4; y += 1) for (let x = 0; x < 16; x += 1) if (g[y][x] === 'O' || g[y][x] === 'o') g[y][x] = 'D';
+  for (let y = 12; y < 16; y += 1) for (let x = 0; x < 16; x += 1) if (g[y][x] === 'O') g[y][x] = 'D';
+  return g;
+}
+
+// Dino mouths by mood: a wide jaw that pokes out past the cheeks, with nostrils and little teeth.
+const DINO_CREST = ['.......KK.......', '......KssK......'];
+
+const DINO_MOUTH = {
+  happy: ['KOPOOONOONOOOPOK', 'KOOMHMHMMHMHMOOK', '.KOOMMMPPMMMOOK.'],
+  excited: ['KOPOOONOONOOOPOK', 'KOMHMHMHHMHMHMOK', '.KOOMMMPPMMMOOK.'],
+  proud: ['KOPOOONOONOOOPOK', 'KOMOOOOOOOOOOMOK', '.KOMHMHMMHMHMOK.'],
+  sleepy: ['KOPOOONOONOOOPOK', 'KOOOOOOOOOOOOOOK', '.KOOOOMMMMOOOOK.'],
+  sad: ['KOBOOONOONOOOPOK', 'KOOOOOMMMMOOOOOK', '.KOOOMOOOOMOOOK.'],
+};
+
+// Dino: a ridge of spikes on the head, brow ridges, a wide toothy jaw, a striped belly and a big spiky tail.
+function dinoMarks(g, mood) {
+  g = g.map((r) => [...r, '.', '.', '.', '.']);
+  const mouth = DINO_MOUTH[mood] || DINO_MOUTH.happy;
+  mouth.forEach((r, i) => paint(g, 8 + i, 0, r.replace(/\./g, ' ')));
+  paint(g, 11, 2, 'KKKKKKKKKKKK');
+  // brow ridges over the eyes and spots on the head
+  for (const [y, x] of [[5, 3], [5, 4], [5, 11], [5, 12], [4, 6], [4, 9]]) if (g[y][x] === 'O') g[y][x] = 'd';
+  // striped belly
+  paint(g, 13, 6, 'wwww');
+  // claws
+  paint(g, 15, 4, 'cc'); paint(g, 15, 10, 'cc');
+  // big tail with spikes along the top
+  const tail = {
+    8: '      K ',
+    9: '     KsK',
+    10: '  K  KTK',
+    11: ' KsK KTK',
+    12: 'KsTsKKTK',
+    13: 'KTTTTTTK',
+    14: 'TTTTTTK ',
+    15: 'KKKKKK  ',
+  };
+  for (const [y, r] of Object.entries(tail)) paint(g, Number(y), 12, r);
+  return g;
+}
 
 function speciesGrid(speciesId, mood) {
   const sp = SPECIES[speciesId] || SPECIES.bear;
@@ -93,17 +151,8 @@ function speciesGrid(speciesId, mood) {
     g[13][13] = 'K'; g[14][13] = 'K';
     g[12][12] = 'K';
   }
-  if (speciesId === 'panda') {
-    // black eye patches (eyes become white), black arms and legs
-    for (const y of [6, 7]) {
-      for (const x of [3, 4, 5, 10, 11, 12]) {
-        const c = g[y][x];
-        if (c === 'O') g[y][x] = 'D';
-        else if (c === 'E' || c === 'K') g[y][x] = 'H';
-      }
-    }
-    for (let y = 12; y < 16; y += 1) for (let x = 0; x < 16; x += 1) if (g[y][x] === 'O') g[y][x] = 'D';
-  }
+  if (speciesId === 'panda') g = pandaMarks(g);
+  if (speciesId === 'dino') g = dinoMarks(g, mood);
   if (sp.floppy) {
     // ears hang down beside the cheeks
     const left = ['Koo', 'Koo', 'KooK', 'KooK', '.KoK'];
@@ -132,8 +181,10 @@ function speciesGrid(speciesId, mood) {
   if (sp.whiskers) {
     g[8][0] = 'K'; g[9][0] = 'K'; g[8][15] = 'K'; g[9][15] = 'K';
   }
-  g = g.map((r) => r.join(''));
-  return { grid: g, pal: { ...COMMON, ...sp.pal }, shade: sp.shade };
+  // rows drawn above the usual top of the sprite (the dino's tallest plate)
+  const above = speciesId === 'dino' ? DINO_CREST.map((r) => r.padEnd(g[0].length, '.').split('')) : [];
+  g = [...above, ...g].map((r) => r.join(''));
+  return { grid: g, lift: above.length, pal: { ...COMMON, ...sp.pal }, shade: sp.shade };
 }
 
 // ---------- outfit items: [originX, originY, grid, palette, shade?, behind?] ----------
@@ -597,7 +648,7 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
 
   const sp = speciesGrid(speciesId, mood);
   const body = new Pixels();
-  body.grid(SPRITE_X, SPRITE_Y, sp.grid, sp.pal, sp.shade);
+  body.grid(SPRITE_X, SPRITE_Y - sp.lift, sp.grid, sp.pal, sp.shade);
 
   const shadow = `<rect class="shadow" x="7" y="23" width="10" height="1" fill="#000" opacity="0.18"/>`;
   const capeBehind = ITEM_ART[o.neck]?.[4] ? itemLayer(o.neck) : '';
