@@ -1099,7 +1099,17 @@ setInterval(() => {
 // ---------- start ----------
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // The service worker serves the cached app first, so after a new version is deployed the
+  // first open still shows the old one. When the new worker takes over, reload once to show it,
+  // unless a piano timer is on screen (then the next open picks it up).
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading || ui.view === 'timer') return;
+    reloading = true;
+    window.location.reload();
+  });
+  navigator.serviceWorker.register('sw.js').then((reg) => reg.update()).catch(() => {});
 }
 navigator.storage?.persist?.().catch(() => {});
 
