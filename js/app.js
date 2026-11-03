@@ -19,6 +19,7 @@ import {
 import { pickVisitors, visitorLines, planVisits } from './visits.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
 import { startListening, buddyState, TUNING } from './listen.js';
+import { loadRecognizer } from './hear.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
@@ -999,8 +1000,18 @@ function viewTimer() {
 
 // ---------- piano listening test (parents) ----------
 // A test page to see how well the tablet hears piano playing, before the timer
-// uses it. It shows what the engine in listen.js hears, live.
-const listenTest = { run: null, events: [], error: '', settings: null, lastUi: 0, woke: 0 };
+// uses it. It shows what the engine in listen.js hears, live. A switch picks who
+// decides what is piano: the built-in engine, Google's recognizer, or both.
+const listenTest = { run: null, events: [], error: '', settings: null, lastUi: 0, woke: 0, loading: false };
+const LISTEN_MODE_KEY = 'kidquest.listenMode';
+const LISTEN_MODES = [['builtin', 'Built-in'], ['google', 'Google'], ['both', 'Both agree']];
+function listenMode() {
+  if (!ui.listenMode) {
+    try { ui.listenMode = localStorage.getItem(LISTEN_MODE_KEY); } catch { /* private window */ }
+    if (!LISTEN_MODES.some(([m]) => m === ui.listenMode)) ui.listenMode = 'google';
+  }
+  return ui.listenMode;
+}
 let lastListenMood = '';
 const LISTEN_MOODS = { playing: 'excited', waiting: 'happy', bored: 'sad', asleep: 'sleepy' };
 const LISTEN_LABELS = { playing: '🎹 Hearing piano', waiting: '👂 Listening…', bored: '😐 Bored (no piano for 30 s)', asleep: '😴 Asleep (the timer would pause)' };
@@ -1010,6 +1021,7 @@ function viewListen() {
   const kid = kidById(ui.listenKid) || state.kids[0];
   const buddy = kid?.buddy || { species: 'fox', outfit: {} };
   const on = !!listenTest.run;
+  const mode = listenMode();
   lastListenMood = '';
   return `
     <div class="screen listen">
@@ -1030,13 +1042,20 @@ function viewListen() {
           <small class="muted">Bored at ${TUNING.boredAfter} s · asleep at ${TUNING.asleepAfter} s</small>
         </div>
       </div>
+      <div class="listen-modes" role="group" aria-label="Who decides what is piano">
+        <span class="muted small">Who decides:</span>
+        ${LISTEN_MODES.map(([m, label]) => `<button class="btn ${m === mode ? '' : 'ghost'}" data-action="listen-mode" data-mode="${m}" aria-pressed="${m === mode}">${label}</button>`).join('')}
+      </div>
       <div class="listen-actions">
-        <button class="btn huge" data-action="${on ? 'listen-stop' : 'listen-start'}">${on ? 'Stop listening' : 'Start listening'}</button>
+        ${listenTest.loading ? '<p class="muted">Loading Google’s sound recognizer (about 25 MB the first time)…</p>'
+    : `<button class="btn huge" data-action="${on ? 'listen-stop' : 'listen-start'}">${on ? 'Stop listening' : 'Start listening'}</button>`}
       </div>
       ${listenTest.error ? `<p class="listen-error">${esc(listenTest.error)}</p>` : ''}
       <div class="card listen-live">
         <div class="listen-row"><span>Loudness</span><div class="listen-meter"><i id="ls-level"></i><em id="ls-gate"></em></div></div>
         <div class="listen-row"><span>Last sound</span><b id="ls-last">–</b></div>
+        ${mode === 'builtin' ? '' : `<div class="listen-row"><span>Google hears</span><b id="ls-google">–</b></div>
+        <div class="listen-row"><span>Piano score</span><div class="listen-meter"><i id="ls-gpiano"></i><em style="left:${TUNING.googlePiano * 100}%"></em></div></div>`}
         <div class="listen-row"><span>Piano notes</span><b id="ls-piano">0</b></div>
         <div class="listen-row"><span>Other sounds</span><b id="ls-other">0</b></div>
         <div class="listen-row"><span>Steady beat</span><b id="ls-bpm">–</b></div>
@@ -1048,6 +1067,7 @@ function viewListen() {
         <h2>Things to try</h2>
         <ol class="small listen-tries">
           <li>Put the tablet on the piano, where it sits during practice, and tap Start.</li>
+          <li>Try each “Who decides” choice: Built-in hears each note at once, Google knows piano from voices best but decides about half a second later, and Both agree counts a note only when both say piano.</li>
           <li>Play slowly, then fast, then chords. Each note should add a green dot and make the buddy hop.</li>
           <li>Play something with a steady beat for a few seconds and see if the beat shows up.</li>
           <li>Stop playing and talk near the tablet. Talking should add orange dots and not reset the clock.</li>
@@ -1055,7 +1075,7 @@ function viewListen() {
           <li>Stop for 30 seconds (bored), then 60 (asleep), then play one note to wake the buddy.</li>
           <li>Try very soft playing.</li>
         </ol>
-        <p class="muted small">Nothing is recorded or saved. Listening stops when you leave this page or the app.</p>
+        <p class="muted small">Nothing is recorded or saved. Google’s recognizer runs on this tablet too: only the recognizer itself downloads, the sound never leaves the tablet. Listening stops when you leave this page or the app.</p>
       </div>
     </div>`;
 }
@@ -1071,9 +1091,22 @@ async function startListenTest() {
   if (listenTest.run) return;
   listenTest.error = '';
   listenTest.events = [];
+  const mode = listenMode();
+  let recognizer = null;
+  if (mode !== 'builtin') {
+    listenTest.loading = true;
+    render();
+    try {
+      recognizer = await loadRecognizer();
+    } catch (e) {
+      listenTest.error = `Couldn’t load Google’s recognizer, so the built-in one is listening. It needs the internet the first time. (${e?.message || e})`;
+    }
+    listenTest.loading = false;
+    if (ui.view !== 'listen') return;
+  }
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
-    listenTest.run = await startListening(onListenFrame);
+    listenTest.run = await startListening(onListenFrame, { mode, recognizer });
     listenTest.settings = { ...listenTest.run.settings, sampleRate: listenTest.run.sampleRate };
     grabWakeLock();
   } catch (e) {
@@ -1094,15 +1127,22 @@ function stopListenTest() {
 
 function onListenFrame(listener, events, now) {
   const wasAsleep = lastListenMood === 'asleep';
+  const hop = () => {
+    const $b = document.querySelector('.listen-buddy');
+    if ($b) { $b.classList.remove('hop'); void $b.offsetWidth; $b.classList.add('hop'); }
+  };
+  const builtin = listener.mode === 'builtin';
   for (const ev of events) {
-    if (ev.type === 'onset') continue;
+    // Google decides about half a second late, so with it the buddy hops on each new
+    // sound while Google is hearing piano
+    if (ev.type === 'onset') { if (!builtin && listener.hearingPiano(now)) hop(); continue; }
     listenTest.events.push(ev);
     if (ev.type === 'piano') {
-      const $b = document.querySelector('.listen-buddy');
-      if ($b) { $b.classList.remove('hop'); void $b.offsetWidth; $b.classList.add('hop'); }
+      if (builtin) hop();
       if (wasAsleep) listenTest.woke = now;
     }
   }
+  if (!builtin && wasAsleep && listener.hearingPiano(now)) listenTest.woke = now;
   while (listenTest.events.length && now - listenTest.events[0].at > 60000) listenTest.events.shift();
   if (now - listenTest.lastUi > 100) { listenTest.lastUi = now; updateListenUi(listener, now); }
 }
@@ -1124,7 +1164,14 @@ function updateListenUi(listener, now) {
     $('ls-last').textContent = st.last.type === 'piano'
       ? `Piano${st.last.note ? ` · ${st.last.note}` : ''}`
       : 'Not piano (talking or noise)';
-    $('ls-last').title = `steady ${st.last.steady?.toFixed(2) ?? '–'}, growth ${st.last.growth.toFixed(1)} dB`;
+    const f = st.last.f || {};
+    $('ls-last').title = `built-in: ${st.last.local ? 'piano' : 'not piano'} (wobble ${f.wobble?.toFixed(1) ?? '–'} cents, clean ${f.tonal?.toFixed(2)}, growth ${f.growth?.toFixed(1)} dB)${st.last.google != null ? `; Google: ${st.last.google ? 'piano' : 'not piano'}` : ''}`;
+  }
+  const g = st.google;
+  if (g && $('ls-google')) {
+    $('ls-google').textContent = g.top.map((c) => `${c.name} ${Math.round(c.score * 100)}%`).join(' · ');
+    $('ls-gpiano').style.width = `${Math.min(100, g.piano * 100)}%`;
+    $('ls-gpiano').classList.toggle('loud', g.isPiano);
   }
   $('ls-piano').textContent = st.pianoNotes;
   $('ls-other').textContent = st.otherSounds;
@@ -1654,6 +1701,14 @@ const actions = {
   'listen-open': () => { ui.view = 'listen'; ui.listenKid = ui.listenKid || state.kids[0]?.id; render(); window.scrollTo(0, 0); },
   'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; render(); },
   'listen-start': () => startListenTest(),
+  'listen-mode': (el) => {
+    const was = !!listenTest.run;
+    stopListenTest();
+    ui.listenMode = el.dataset.mode;
+    try { localStorage.setItem(LISTEN_MODE_KEY, ui.listenMode); } catch { /* the choice lasts while the page is open */ }
+    render();
+    if (was) startListenTest();
+  },
   'listen-stop': () => { stopListenTest(); render(); },
   'listen-kid': (el) => { ui.listenKid = el.dataset.id; lastListenMood = ''; render(); },
   'parent-exit': () => { ui.view = 'home'; ui.editKidId = null; render(); },

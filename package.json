@@ -11,7 +11,9 @@
     "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-kid-quest \"node test/e2e/sync.mjs\""
   },
   "devDependencies": {
+    "@audio-samples/piano-mp3-velocity8": "1.0.5",
     "@firebase/rules-unit-testing": "6.0.0",
+    "@mediapipe/tasks-audio": "1.1.1",
     "esbuild": "0.28.2",
     "firebase": "13.1.0",
     "firebase-tools": "15.34.2",
