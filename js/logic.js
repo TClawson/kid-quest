@@ -167,7 +167,7 @@ export function parseAllowance(value) {
 /** The tasks on a kid's current setup for a day (ignoring what past days remember). */
 export function scheduledOn(kid, key) {
   const dow = dayOfWeek(key);
-  return kid.tasks.filter((t) => t.days.includes(dow));
+  return kid.tasks.filter((t) => t.days.includes(dow) && onWeek(t, key));
 }
 
 const splitCache = new Map();
@@ -278,6 +278,34 @@ export function tasksForDay(state, kid, key, today) {
   const entry = entryFor(state, kid.id, key);
   if (key !== today && entry && Array.isArray(entry.scheduled)) return entry.scheduled;
   return scheduledOn(kid, key);
+}
+
+// Every-other-week tasks. Weeks run Monday to Sunday and are counted from a
+// fixed Monday, so every device (each kid's tablet, each parent's phone) agrees
+// on which weeks are "on" without talking to each other. A task with
+// everyOtherWeek 0 or 1 runs in the weeks whose number has that parity; any
+// other value means every week.
+const FIRST_MONDAY = Date.UTC(2024, 0, 1);
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Weeks since Monday 1 January 2024 (Monday to Sunday weeks). */
+export function weekNumber(key) {
+  const [y, m, d] = weekStart(key).split('-').map(Number);
+  return Math.round((Date.UTC(y, m - 1, d) - FIRST_MONDAY) / WEEK_MS);
+}
+
+/** 0 or 1: which kind of week a day is in. Alternate weeks have opposite parity. */
+export function weekParity(key) {
+  return ((weekNumber(key) % 2) + 2) % 2;
+}
+
+export function isEveryOtherWeek(task) {
+  return task.everyOtherWeek === 0 || task.everyOtherWeek === 1;
+}
+
+/** True when a task runs in the week of this day (always, unless it is every other week). */
+export function onWeek(task, key) {
+  return !isEveryOtherWeek(task) || weekParity(key) === task.everyOtherWeek;
 }
 
 /** Store today's schedule, and what each task is worth, so it is remembered once the day is over. */
