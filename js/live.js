@@ -43,7 +43,9 @@ export function liveHtml(key, buddy, opts = {}) {
   looks.set(key, buddy);
   const st = stateOf(key);
   if (opts.feel) feel(key, opts.feel, { idle: opts.idle });
-  return `<canvas class="live-buddy" width="24" height="24" data-live="${esc(key)}" data-bg="${opts.background === false ? 0 : 1}" role="img" aria-label="${esc(opts.label || `${buddy?.species || 'buddy'} buddy`)}"></canvas>`;
+  // the look is in the markup too, so a changed outfit (say, synced from another device) changes the page
+  const look = [buddy?.species, ...Object.values(buddy?.outfit || {})].filter(Boolean).join(' ');
+  return `<canvas class="live-buddy" width="24" height="24" data-live="${esc(key)}" data-look="${esc(look)}" data-bg="${opts.background === false ? 0 : 1}" role="img" aria-label="${esc(opts.label || `${buddy?.species || 'buddy'} buddy`)}"></canvas>`;
 }
 
 /** Sets where a buddy's feelings are heading. opts.idle: gets bored when nobody taps it. */
