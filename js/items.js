@@ -64,7 +64,7 @@ const BASE_ITEMS = [
 
   // Buddy specials: each is made for one kind of buddy and only sold to it.
   { id: 'hat-coonskin', slot: 'hat', name: 'Raccoon hat', price: 1000, species: 'fox' },
-  { id: 'face-honeycomb', slot: 'face', name: 'Honeycomb glasses', price: 1000, species: 'bear' },
+  { id: 'hat-beehive', slot: 'hat', name: 'Beehive hat', price: 1000, species: 'bear' },
   { id: 'neck-bamboo', slot: 'neck', name: 'Bamboo stick', price: 1000, species: 'panda' },
   { id: 'neck-yarn', slot: 'neck', name: 'Yarn ball necklace', price: 1000, species: 'cat' },
   { id: 'neck-jersey', slot: 'neck', name: 'Basketball jersey', price: 1000, species: 'dino' },

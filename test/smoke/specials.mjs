@@ -50,7 +50,7 @@ try {
     await page.waitForTimeout(1800);
 
     // Each other buddy sees only its own special, in its own tab.
-    const tabs = { fox: ['hat', 'hat-coonskin'], bear: ['face', 'face-honeycomb'], cat: ['neck', 'neck-yarn'], dino: ['neck', 'neck-jersey'], puppy: ['neck', 'neck-bone'], turtle: ['face', 'face-ninja'] };
+    const tabs = { fox: ['hat', 'hat-coonskin'], bear: ['hat', 'hat-beehive'], cat: ['neck', 'neck-yarn'], dino: ['neck', 'neck-jersey'], puppy: ['neck', 'neck-bone'], turtle: ['face', 'face-ninja'] };
     for (const [species, [slot, id]] of Object.entries(tabs)) {
       await page.click(`[data-action="wardrobe-species"][data-val="${species}"]`);
       await page.click(`[data-action="wardrobe-slot"][data-slot="${slot}"]`);

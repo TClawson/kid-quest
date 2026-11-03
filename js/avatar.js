@@ -375,14 +375,22 @@ const ITEM_ART = {
     '..............KddK',
     '...............KK.',
   ], { F: SH('#9c8470', '#c4ad96', '#6e5a48'), f: '#c4ad96', t: '#d9ccb8', d: '#2f2a28', B: SH('#6e4a2e', '#8d6240', '#4a2f1c'), b: '#b08a62' }],
-  // bear: six-sided honeycomb lenses
-  'face-honeycomb': [6, 11, [
-    '.KKK....KKK.',
-    'KHYHK..KHYHK',
-    'KYHYKKKKYHYK',
-    'KHYHK..KHYHK',
-    '.KKK....KKK.',
-  ], { Y: '#f59f00', H: '#ffd43b' }],
+  // bear: a straw beehive worn upside down on the head, dripping honey, with two bees
+  'hat-beehive': [2, 1, [
+    '........KKKK........',
+    '.......KYYYYK.......',
+    '......KbbbbbbK......',
+    'WW....KYYYYYYK......',
+    'YK...KbbbbbbbbK.....',
+    '.....KYYYYYYYYK.....',
+    '....KbbbbbbbbbbK..WW',
+    '....KYYYKKKYYYYK..KY',
+    '...KbbbbKKKbbbbbK...',
+    '...KYYYYYYYYYYYYK...',
+    '...KbbbbbbbbbbbbK...',
+    '...KHKKKKKKKKKKHK...',
+    '....H..........H....',
+  ], { Y: SH('#f2c25a', '#ffe08a', '#c98a2b'), b: '#c98a3a', H: '#f59f00', W: '#e7f5ff' }],
   // panda: a bamboo stick leaning on the side away from held sports gear (drawn behind the panda)
   'neck-bamboo': [16, 6, [
     'LL....l.',
@@ -413,13 +421,11 @@ const ITEM_ART = {
     '...KRRrRRK..',
     '....KrRRK.SS',
   ], { S: '#c92a2a', R: SH('#f03e3e', '#ff8787', '#a51d1d'), r: '#ffc9c9' }],
-  // dino: a sleeveless basketball jersey with trim and a big number 1
-  'neck-jersey': [8, 18, [
-    'KJJK..KJJK',
-    'KJTKKKKTJK',
-    'KJJJJWJJJK',
-    'KJJJWWJJJK',
-    'KTTTTWTTTK',
+  // dino: a basketball jersey with a gold collar and a number 7, fitted inside the body outline below the chin
+  'neck-jersey': [7, 19, [
+    '.JJTTTTJJ',
+    'JJJJWWJJJ',
+    'JJJJJWJJJ',
   ], { J: SH('#7048e8', '#9775fa', '#4c2bb5'), T: '#ffd43b', W: '#ffffff' }],
   // puppy: a chew bone held in its mouth
   'neck-bone': [3, 15, [
