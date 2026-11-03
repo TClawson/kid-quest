@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, dateKey, addDays, fallbackHash } from '../../js/logic.js';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -27,11 +27,18 @@ try {
   await page.reload();
   const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
 
-  // The first start turns the allowance on from today.
+  // The first start turns the allowance on from tomorrow, so chores already
+  // ticked today keep their typed amounts.
   let s = await stored();
   assert.equal(s.settings.allowance.on, true);
   assert.equal(s.settings.allowance.coins, 300);
-  assert.equal(s.settings.allowance.since, dateKey());
+  assert.equal(s.settings.allowance.since, addDays(dateKey(), 1));
+  assert.equal(s.settings.allowance.startFixed, true);
+
+  // From here on, test a family whose allowance already runs today.
+  s.settings.allowance.since = dateKey();
+  await page.evaluate((x) => localStorage.setItem('kidquest.v1', JSON.stringify(x)), s);
+  await page.reload();
 
   // Ava brushes her teeth: a small task's share of 300.
   await page.click('[data-action="open-kid"][data-id="kid_ava"]');

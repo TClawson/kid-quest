@@ -4,7 +4,7 @@ import {
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
-  defaultAllowance, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
+  defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
 } from './logic.js';
@@ -1585,12 +1585,19 @@ const SIDE_SCROLLERS = '.tabs, .pick';
 let lastHtml = '';
 let lastView = '';
 
-// The weekly allowance starts the first day this version runs (on a synced
-// device, once the family's data has arrived, so it uses the family's date).
+// The weekly allowance starts the day after this version first runs (on a
+// synced device, once the family's data has arrived, so it uses the family's
+// date). Starting tomorrow keeps chores already ticked today at their typed
+// amounts. repairAllowanceStart fixes families stamped by the older rule,
+// which started it the same day and lowered that day's coins.
 function stampAllowance() {
-  if (state.settings.allowance || (cloudCfg && !cloud.gotState)) return;
-  state.settings.allowance = defaultAllowance(today());
-  save();
+  if (cloudCfg && !cloud.gotState) return;
+  if (!state.settings.allowance) {
+    state.settings.allowance = { ...defaultAllowance(addDays(today(), 1)), startFixed: true };
+    save();
+  } else if (repairAllowanceStart(state)) {
+    save();
+  }
 }
 
 function render() {
