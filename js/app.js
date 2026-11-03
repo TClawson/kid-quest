@@ -955,10 +955,21 @@ function familyBuddies() {
 
 const visitorsArrived = new Set();
 
+// How a visiting buddy feels on the map: content, focused while fishing, and
+// bouncing to play once the host's quest is done.
+function visitFeel(area, complete) {
+  if (area?.kind === 'pond') return { valence: 0.6, arousal: 0.45, focus: 0.3 };
+  if (complete) return { valence: 0.9, arousal: 0.85 };
+  if (area) return { valence: 0.8, arousal: 0.65 };
+  return { valence: 0.6, arousal: 0.55 };
+}
+
 function visitorsHtml(kid, s) {
   const visitors = pickVisitors(kid.id, familyBuddies(), today());
   if (!visitors.length) return { html: '', room: 0, areas: '' };
   const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
+  // once the quest is done, every visitor wants to play (see playWith)
+  if (s.complete) visitors.forEach((v, i) => { lines[i] = gameFor(bestGear(v.owned)) === 'soccer' ? 'Keepy-uppy? Tap me!' : 'Wanna play tag? Tap me!'; });
   // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
   const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [22, 37], right: [78, 63] };
@@ -992,7 +1003,7 @@ function visitorsHtml(kid, s) {
     }
     return `
       <div class="map-visitor ${i === 0 ? 'talking' : ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
-        <div class="visitor-buddy">${buddySvg(look, 'happy', { background: false })}</div>
+        <div class="visitor-buddy">${liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` })}</div>
         ${extra}
         <div class="visitor-name">${esc(v.name)}</div>
         <div class="visitor-bubble">${esc(lines[i])}</div>
@@ -2575,7 +2586,7 @@ actions.visitor = (el) => {
     el.querySelector('.visitor-bubble').textContent = `Finish your quest and let's play! ${left} to go`;
   }
   nextVisitorTalks(el);
-  if (!v || !doMove(el, v)) sounds.tap();
+  if (!v || !doMove(el, v)) { sounds.tap(); live(`visit:${el.dataset.id}`).giggle(); }
 };
 
 // ---------- playing with a visitor ----------
