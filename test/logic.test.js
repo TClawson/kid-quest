@@ -240,3 +240,41 @@ test('the exercise streak counts weeks with 5 exercise days, and keeps the best'
   assert.equal(info.weeks, 6); // 3 weeks, the fixed week, the sick-day week, a skipped week, then one more
   assert.equal(info.best, 6);
 });
+
+test('every-other-week tasks alternate Monday-to-Sunday weeks the same way on every device', async () => {
+  const { weekNumber, weekParity, onWeek } = await import('../js/logic.js');
+  assert.equal(weekNumber('2024-01-01'), 0);
+  assert.equal(weekNumber('2024-01-07'), 0); // Sunday ends the week
+  assert.equal(weekNumber('2024-01-08'), 1);
+  // the whole week shares one parity, and the next week flips it
+  for (let i = 0; i < 7; i += 1) assert.equal(weekParity(addDays(MONDAY, i)), weekParity(MONDAY));
+  assert.notEqual(weekParity(addDays(MONDAY, 7)), weekParity(MONDAY));
+  // across a daylight-saving change (US clocks went back on 2026-11-01) and a year end
+  assert.equal(weekNumber('2026-11-02') - weekNumber('2026-10-26'), 1);
+  assert.equal(weekNumber('2027-01-04') - weekNumber('2026-12-28'), 1);
+  const task = { days: [1], everyOtherWeek: weekParity(MONDAY) };
+  assert.ok(onWeek(task, MONDAY) && !onWeek(task, addDays(MONDAY, 7)) && onWeek(task, addDays(MONDAY, 14)));
+  assert.ok(onWeek({ days: [1] }, addDays(MONDAY, 7)));
+});
+
+test('two kids take turns on a chore, and off weeks never hurt the streak', () => {
+  const a = setup();
+  const state = a.state;
+  const kidA = a.kid;
+  const kidB = { id: newId('kid'), name: 'B', tasks: defaultTasks(), startDate: MONDAY };
+  state.kids.push(kidB);
+  const parity = (key) => (Math.round((Date.parse(weekStart(key)) - Date.parse('2024-01-01')) / 6048e5) % 2 + 2) % 2;
+  const p = parity(MONDAY);
+  kidA.tasks.push({ id: newId('task'), name: 'Bathroom', icon: '🛁', period: 'afternoon', days: [6], verify: 'parent', minutes: 0, everyOtherWeek: p });
+  kidB.tasks.push({ id: newId('task'), name: 'Bathroom', icon: '🛁', period: 'afternoon', days: [6], verify: 'parent', minutes: 0, everyOtherWeek: 1 - p });
+  const has = (kid, key) => tasksForDay(state, kid, key, key).some((t) => t.name === 'Bathroom');
+  const sat1 = addDays(MONDAY, 5);
+  const sat2 = addDays(MONDAY, 12);
+  assert.ok(has(kidA, sat1) && !has(kidB, sat1));
+  assert.ok(!has(kidA, sat2) && has(kidB, sat2));
+  // B finishes every day it has: the first Saturday (A's turn) doesn't break B's streak
+  const end = addDays(MONDAY, 13);
+  for (let key = MONDAY; key <= end; key = addDays(key, 1)) finishDay(state, kidB, key, end);
+  assert.equal(streakInfo(state, kidB, end).streak, 14);
+  assert.equal(dayStatus(state, kidB, sat1, end).complete, true);
+});
