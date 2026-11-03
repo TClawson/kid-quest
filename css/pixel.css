@@ -1,0 +1,153 @@
+/* ---------- 16-bit look for the whole app, plus phone layout fixes ----------
+   Loaded after style.css and moves.css, so it restyles the plain app to match the
+   pixel buddies and the quest map: chunky dark outlines, square corners, hard drop
+   shadows with no blur, beveled buttons and a pixel font. */
+
+@font-face { font-family: 'Jersey 10'; src: url('../fonts/jersey-10-latin-400-normal.woff2') format('woff2'); font-display: swap; }
+
+:root {
+  --px-font: 'Jersey 10', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --px-text: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --px-paper: #fff8e7;
+  --px-paper-2: #f3e6c4;
+  --px-line: #d9cdf5;
+  --px-shade: rgba(42, 24, 56, 0.28);
+  --px-bevel: inset 0 -4px 0 rgba(0, 0, 0, 0.22), inset 0 3px 0 rgba(255, 255, 255, 0.35);
+  --radius: 6px;
+  font-family: var(--px-font);
+  /* the pixel font is small for its size and has one weight: grow it to match, never fake-bold it */
+  font-size-adjust: 0.55;
+  font-synthesis: none;
+}
+
+/* a faint 2-tone checker floor, like an SNES menu backdrop */
+html, body { background-color: var(--bg); }
+body { background-image: repeating-conic-gradient(#efeaff 0 25%, transparent 0 50%); background-size: 16px 16px; }
+/* nothing may push the page sideways on a phone */
+html, body { overflow-x: clip; }
+.screen { overflow-wrap: anywhere; }
+
+h1, h2, .kid-name, .streak, .tile-text b, .item-name, .timer-left, .join-code, .celebrate h1 { font-family: var(--px-font); font-weight: 700; letter-spacing: 0.01em; }
+h1 { font-size: 2rem; text-shadow: 2px 2px 0 var(--px-line); }
+h2 { font-size: 1.35rem; }
+/* long help text and form fields stay in an easy-to-read font */
+small, .small, p.muted, .parent label, .parent .block, .muted.small, input, select, .block > small, .list-row small, .tile-text small { font-family: var(--px-text); }
+.tile-text small, .list-row small, .item small { font-size: 0.85rem; }
+
+/* ---------- buttons ---------- */
+.btn { border: 3px solid var(--px-ink); border-radius: 6px; font-family: var(--px-font); font-weight: 700; letter-spacing: 0.02em; box-shadow: var(--px-bevel), 0 4px 0 var(--px-ink); transition: none; }
+.btn:active { transform: translateY(3px); box-shadow: var(--px-bevel), 0 1px 0 var(--px-ink); }
+.btn.ghost { background: var(--px-paper); color: var(--px-ink); box-shadow: inset 0 -4px 0 var(--px-paper-2), 0 4px 0 var(--px-ink); }
+.btn.ghost:active { box-shadow: inset 0 -4px 0 var(--px-paper-2), 0 1px 0 var(--px-ink); }
+.btn.danger { background: var(--danger); }
+.btn.round { width: 48px; border-radius: 6px; font-size: 1.2rem; }
+.btn.small-btn { border-width: 2px; box-shadow: inset 0 -3px 0 var(--px-paper-2), 0 3px 0 var(--px-ink); }
+.linkish { font-family: var(--px-font); }
+.badge { border-radius: 3px; border: 2px solid var(--px-ink); padding: 0 6px; font-family: var(--px-font); }
+
+/* ---------- panels ---------- */
+.card, .tile, .list-row, .task-edit, .buddy-panel, .wardrobe-top, .exercise, .item, .move, .kid-card, .modal-card, .quest-progress:not(.buddy-panel .quest-progress) {
+  border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink);
+}
+.card, .list-row, .task-edit, .buddy-panel, .wardrobe-top, .exercise, .modal-card { background: var(--px-paper); }
+.card .list-row { border: 0; box-shadow: none; background: none; }
+.buddy-panel .quest-progress { border: 0; background: none; }
+
+.kid-card { border-top-width: 3px; padding-top: 30px; position: relative; background: var(--px-paper); box-shadow: 0 6px 0 var(--px-ink); }
+.kid-card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 14px; background: var(--kid); border-bottom: 3px solid var(--px-ink); box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.35); }
+.kid-card:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--px-ink); }
+.kid-card .buddy, .buddy-panel .buddy, .wardrobe-top .buddy { border: 3px solid var(--px-ink); border-radius: 4px; }
+
+.tile { background: #fff; transition: none; }
+.tile:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--px-ink); }
+.tile-check { border-radius: 4px; box-shadow: none; border: 3px solid var(--px-ink); background: #fff; }
+.tile.done { background: #e6f8ea; box-shadow: 0 4px 0 var(--px-ink); }
+.tile.done .tile-check { background: var(--done); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2); }
+.tile.pending { background: #fff1d6; }
+.tile.pending .tile-check { box-shadow: none; border-color: #b86e00; background: #ffe0a3; }
+
+.item { background: #fff; }
+.item.on { box-shadow: 0 0 0 3px var(--brand), 0 4px 0 var(--px-ink); }
+.item-art { border-radius: 3px; border: 2px solid var(--px-line); }
+.item .price { border-radius: 3px; font-family: var(--px-font); }
+.item.special { box-shadow: 0 0 0 3px #f0c040, 0 4px 0 var(--px-ink); }
+.item.special.on { box-shadow: 0 0 0 3px var(--brand), 0 4px 0 var(--px-ink); }
+.move { box-shadow: 0 3px 0 var(--px-ink); border-width: 2px; }
+.move:not(.locked) { background: #f3f0ff; }
+
+/* speech bubbles: cream paper with an ink outline, like the timer and visitor bubbles */
+.bubble { background: #fff3d6; color: var(--px-ink); border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 3px 3px 0 var(--px-shade); font-family: var(--px-font); font-weight: 700; }
+@media (min-width: 561px) { .bubble::before { left: -12px; border-right-color: var(--px-ink); } }
+@media (max-width: 560px) { .bubble::before { top: -12px; border-bottom-color: var(--px-ink); } }
+
+/* ---------- chips, tabs, toggles ---------- */
+.chip { border-radius: 4px; box-shadow: none; border: 2px solid var(--px-ink); font-family: var(--px-font); font-weight: 700; background: #fff; }
+.chip.coin { background: #ffe9a3; }
+.chip.gem { background: #e5dbff; }
+.tabs { flex-wrap: wrap; overflow: visible; gap: 8px; }
+.tabs button { border-radius: 4px; border: 2px solid var(--px-ink); background: var(--px-paper); color: var(--px-ink); font-family: var(--px-font); font-weight: 700; box-shadow: 0 3px 0 var(--px-ink); padding: 8px 14px; }
+.tabs button.on { background: var(--brand); color: #fff; box-shadow: var(--px-bevel), 0 3px 0 var(--px-ink); }
+.view-toggle { border-radius: 6px; border: 3px solid var(--px-ink); box-shadow: 0 3px 0 var(--px-ink); padding: 3px; background: var(--px-paper); }
+.view-toggle button { border-radius: 3px; font-family: var(--px-font); font-weight: 700; color: var(--px-ink); }
+.view-toggle button.on { box-shadow: var(--px-bevel); }
+.daychip { border-radius: 4px; border: 2px solid var(--px-ink); font-family: var(--px-font); background: #fff; color: var(--muted); }
+.daychip.on { box-shadow: var(--px-bevel); }
+.pick-item { border-radius: 4px; border: 2px solid var(--px-line); }
+.pick-item.on { border-color: var(--px-ink); box-shadow: 0 0 0 3px var(--brand); }
+.swatch { border-radius: 4px; border: 2px solid var(--px-ink); }
+
+/* ---------- bars and dots: blocky segments ---------- */
+.bar { border-radius: 2px; border: 2px solid var(--px-ink); background: #fff; height: 14px; }
+.bar.big { height: 22px; }
+.bar span { border-radius: 0; background: repeating-linear-gradient(90deg, var(--kid) 0 12px, color-mix(in srgb, var(--kid) 70%, #000) 12px 14px); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.35); }
+.xpbar { border-radius: 2px; border: 2px solid var(--px-ink); height: 10px; background: #fff; }
+.dot span { border-radius: 4px; border: 2px solid var(--px-ink); font-family: var(--px-font); }
+.dot.today span { box-shadow: inset 0 0 0 3px var(--kid); }
+.dot.future span { border-color: var(--px-line); box-shadow: none; }
+.ex-dot { border-radius: 4px; }
+
+/* ---------- avatar, inputs, modal, toast ---------- */
+.avatar { border-radius: 6px; border: 3px solid var(--px-ink); }
+.avatar.xs { border-width: 2px; }
+.buddy-chip { border-radius: 4px; }
+input:not([type=checkbox]), select { border: 2px solid var(--px-ink); border-radius: 4px; box-shadow: inset 0 3px 0 #eee8fb; }
+input[type=checkbox] { accent-color: var(--brand); }
+.modal { background: rgba(42, 24, 56, 0.6); }
+.modal-card { border-width: 4px; box-shadow: 0 6px 0 var(--px-ink); }
+.pin-dots span { border-radius: 3px; }
+.pin-keys button { border-radius: 6px; border: 3px solid var(--px-ink); background: #fff; font-family: var(--px-font); box-shadow: inset 0 -4px 0 var(--px-line), 0 3px 0 var(--px-ink); }
+.pin-keys button:active { transform: translateY(2px); box-shadow: inset 0 -4px 0 var(--px-line), 0 1px 0 var(--px-ink); }
+.toast { border-radius: 6px; border: 3px solid var(--px-ink); background: #fff3d6; color: var(--px-ink); box-shadow: 0 4px 0 var(--px-ink); font-family: var(--px-font); }
+.float-xp { font-family: var(--px-font); text-shadow: 2px 2px 0 var(--px-ink); color: #ffd43b; }
+.ring { border-radius: 50%; }
+.ring { border: 4px solid var(--px-ink); }
+.ring-inner { background: var(--px-paper); border: 4px solid var(--px-ink); }
+
+/* reminder times are a time box and an ✕, not big pills */
+.chip:has(input[type=time]) { padding: 2px 4px 2px 2px; background: #fff; }
+.chip input[type=time] { min-height: 36px; padding: 4px 6px; box-shadow: none; font-size: 1rem; }
+
+/* ---------- phone layout ---------- */
+@media (max-width: 520px) {
+  .screen { padding-left: 12px; padding-right: 12px; }
+  h1 { font-size: 1.7rem; }
+  /* kid header: back button and name on one line, the coin/streak chips on the next */
+  .kid-head { flex-wrap: wrap; row-gap: 8px; }
+  .kid-head .chips { order: 3; flex: 1 1 100%; flex-wrap: wrap; gap: 6px; }
+  .kid-head .chips .chip { padding: 4px 8px; font-size: 1rem; }
+  /* the parent's approvals: name and chore on top, the two buttons share the row below */
+  .list-row:has([data-action="approve"]) { flex-wrap: wrap; }
+  .list-row:has([data-action="approve"]) > .grow { flex: 1 1 calc(100% - 70px); }
+  .list-row:has([data-action="approve"]) > .btn { flex: 1 1 0; }
+  /* task editor: icon and name get a full line, the move and delete buttons go below */
+  .task-edit > .row:first-child { flex-wrap: wrap; }
+  .task-edit > .row:first-child .grow { flex: 1 1 calc(100% - 80px); }
+  .task-edit > .row:first-child .btn.round:first-of-type { margin-left: auto; }
+  .tabs button { padding: 8px 10px; font-size: 0.95rem; }
+  .parent .tabs { display: grid; grid-template-columns: 1fr 1fr; }
+  .tiles { grid-template-columns: minmax(0, 1fr); }
+  .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .moves { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .week { gap: 4px; }
+  .dot span { width: min(42px, 11vw); height: min(42px, 11vw); }
+}

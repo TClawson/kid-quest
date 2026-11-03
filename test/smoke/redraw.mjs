@@ -58,11 +58,13 @@ try {
   assert.equal(seen.arrivals, 0, 'visitors do not walk in again on a redraw');
   assert.ok(seen.fish > 5, `fish keep swimming through redraws (seen in ${seen.fish} checks)`);
 
-  // the wardrobe's slot tabs keep their scroll place when the screen is redrawn
+  // side scrollers keep their scroll place when the screen is redrawn. The slot tabs now
+  // wrap onto two lines on a phone, so make them a side scroller here to test it.
   await page.click('[data-action="wardrobe"]');
+  await page.addStyleTag({ content: '.tabs { flex-wrap: nowrap !important; overflow-x: auto !important; display: flex !important; }' });
   await page.evaluate(() => { document.querySelector('.tabs').scrollLeft = 150; });
   const before = await page.evaluate(() => document.querySelector('.tabs').scrollLeft);
-  assert.ok(before > 0, 'the tabs scroll sideways on a phone');
+  assert.ok(before > 0, 'the tabs scroll sideways');
   await page.evaluate(() => { window.kidQuest.state.kids[0].name = 'Sammy'; document.querySelector('.tabs button.on').click(); });
   assert.equal(await page.evaluate(() => document.querySelector('.tabs').scrollLeft), before, 'tabs stay scrolled after a redraw');
 
