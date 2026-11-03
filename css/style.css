@@ -503,3 +503,12 @@ label { color: var(--ink); }
 .listen-metro.tick { animation: metro-tick 0.18s ease-out; }
 @keyframes metro-tick { 0% { background: #ffe066; } 100% { background: #f3d9a4; } }
 @media (prefers-reduced-motion: reduce) { .listen-metro i { transition: none; } .listen-metro.tick { animation: none; } }
+
+/* ---------- playing with a visitor (js/playground.js) ---------- */
+.playground { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: #5fbf5a; touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: contain; }
+.play-stage { position: relative; }
+.play-stage canvas { position: absolute; inset: 0; display: block; }
+.play-field { image-rendering: pixelated; image-rendering: crisp-edges; }
+.play-top { position: absolute; top: max(8px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; pointer-events: none; color: #fff; text-shadow: 2px 2px 0 #1b1430; font-size: 1.1rem; }
+.play-top b { flex: 1; }
+.play-close { pointer-events: auto; }

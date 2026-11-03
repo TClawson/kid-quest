@@ -54,6 +54,10 @@ export const sounds = {
   ),
   reminder: () => play([N.G5, N.C6, N.G5, N.C6], 0.18, 0.3, 'sine', 0.25),
   error: () => play([N.E4, N.C4], 0.12, 0.2, 'square', 0.08),
+  // playing with a visitor: a kick climbs a little with the count, a tag, the end of a game
+  kick: (n = 0) => play([[N.C5, N.E5, N.G5, N.C6][n % 4]], 0, 0.07, 'square', 0.06),
+  tag: () => play([N.G5, N.C6], 0.06, 0.12, 'square', 0.08),
+  over: (best) => (best ? play([N.C5, N.E5, N.G5, N.C6], 0.09, 0.2, 'square', 0.1) : play([N.G5, N.E5, N.C5], 0.1, 0.18, 'triangle', 0.12)),
   // a quick rising whoosh for a buddy's sports move; fishing gets a plip
   move: (kind) => (kind === 'rod'
     ? play([N.G5, null, N.C6, N.E6], 0.09, 0.15, 'sine', 0.16)
