@@ -4,6 +4,7 @@ import {
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
+  weekParity, isEveryOtherWeek, weekStart,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
@@ -1114,6 +1115,37 @@ function dayChips(task) {
   return [1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="daychip ${task.days.includes(d) ? 'on' : ''}" data-action="toggle-day" data-task="${task.id}" data-day="${d}">${DAY_NAMES[d]}</button>`).join('');
 }
 
+const sameTask = (a, b) => a.name.trim().toLowerCase() === b.name.trim().toLowerCase();
+const shortDate = (key) => parseKey(key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+/** Other kids who do this task (same name) on the opposite weeks. */
+function turnPartners(kid, task) {
+  if (!isEveryOtherWeek(task)) return [];
+  return state.kids.filter((k) => k.id !== kid.id && k.tasks.some((t) => sameTask(t, task) && isEveryOtherWeek(t) && t.everyOtherWeek !== task.everyOtherWeek));
+}
+
+/** "Every week" or "Every other week" with this week on or off, plus the turn-taking buttons. */
+function repeatRow(kid, t) {
+  const now = today();
+  const parity = weekParity(now);
+  const val = !isEveryOtherWeek(t) ? 'every' : t.everyOtherWeek === parity ? 'this' : 'next';
+  const nextMon = addDays(weekStart(now), 7);
+  const note = val === 'this' ? `On this week, off the week of ${shortDate(nextMon)}` : val === 'next' ? `Off this week, on from ${shortDate(nextMon)}` : '';
+  const partners = turnPartners(kid, t);
+  const others = t.period === 'exercise' || val === 'every' ? [] : state.kids.filter((k) => k.id !== kid.id && !partners.includes(k));
+  return `
+      <div class="row wrap repeat-edit">
+        <label>Repeats <select data-action-change="task-repeat" data-task="${t.id}">
+          <option value="every" ${val === 'every' ? 'selected' : ''}>Every week</option>
+          <option value="this" ${val === 'this' ? 'selected' : ''}>Every other week, from this week</option>
+          <option value="next" ${val === 'next' ? 'selected' : ''}>Every other week, from next week</option>
+        </select></label>
+        ${note ? `<small class="muted">${note}</small>` : ''}
+      </div>
+      ${partners.length ? `<p class="small turns">🔁 Takes turns with ${partners.map((k) => `<b>${esc(k.name)}</b>`).join(' and ')}</p>` : ''}
+      ${others.length ? `<div class="row wrap turns"><small class="muted">Take turns with</small>${others.map((k) => `<button class="btn ghost small-btn" data-action="task-turns" data-task="${t.id}" data-kid="${k.id}">${esc(k.name)}</button>`).join('')}</div>` : ''}`;
+}
+
 function parentEditKid() {
   const kid = kidById(ui.editKidId);
   if (!kid) { ui.editKidId = null; return parentKids(); }
@@ -1126,7 +1158,7 @@ function parentEditKid() {
         <button class="btn ghost round" data-action="move-task" data-task="${t.id}" data-dir="1" aria-label="Move down">↓</button>
         <button class="btn ghost round danger-text" data-action="delete-task" data-task="${t.id}" aria-label="Delete">✕</button>
       </div>
-      <div class="days">${dayChips(t)}</div>
+      <div class="days">${dayChips(t)}</div>${repeatRow(kid, t)}
       <div class="row wrap">
         <label>When <select data-field="period"><option value="morning" ${t.period === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${t.period === 'afternoon' ? 'selected' : ''}>After school</option><option value="exercise" ${t.period === 'exercise' ? 'selected' : ''}>Bonus exercise</option></select></label>
         <label>Checked by <select data-field="verify"><option value="self" ${t.verify === 'self' ? 'selected' : ''}>Kid taps done</option><option value="parent" ${t.verify === 'parent' ? 'selected' : ''}>Parent PIN</option></select></label>
@@ -1158,6 +1190,7 @@ function parentEditKid() {
     ${taskRows('exercise') || '<p class="muted small">None yet. Add a run, a bike ride, soccer practice or anything active.</p>'}
     <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise task</button>
     <p class="muted small">Exercise tasks are optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week keeps the exercise streak going, which unlocks moves for the kid's buddy at 1, 3 and 6 weeks. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day, and a week with 5 or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
+    <p class="muted small">A task can repeat every other week (weeks run Monday to Sunday). To have two kids take turns, like cleaning the bathroom, set the task to every other week for one kid, then tap the other kid's name next to “Take turns with”: they get the same task on the opposite weeks. On a kid's off week the task isn't on their list at all, so it never counts against their streak or the day's treasure.</p>
     <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. Each task earns 10 coins and 10 XP (30 for a timer task) unless you type other amounts; leave a box empty to use the default. A new amount counts from today, so coins already earned stay earned. Every 100 XP is a level.</p>
     <hr>
     <button class="btn danger" data-action="delete-kid">Remove ${esc(kid.name)}</button>`;
@@ -1431,6 +1464,23 @@ const actions = {
     task.days = task.days.includes(d) ? task.days.filter((x) => x !== d) : [...task.days, d].sort();
     save(); render();
   },
+  'task-turns': (el) => {
+    const kid = kidById(ui.editKidId);
+    const other = kidById(el.dataset.kid);
+    const task = kid?.tasks.find((t) => t.id === el.dataset.task);
+    if (!task || !other) return;
+    if (!isEveryOtherWeek(task)) task.everyOtherWeek = weekParity(today());
+    const off = 1 - task.everyOtherWeek;
+    const mine = other.tasks.find((t) => sameTask(t, task));
+    if (mine) mine.everyOtherWeek = off;
+    else {
+      const copy = { ...task, id: newId('task'), days: [...task.days], everyOtherWeek: off };
+      other.tasks.push(copy);
+    }
+    save(); render();
+    const first = task.everyOtherWeek === weekParity(today()) ? kid : other;
+    toast(`🔁 ${first.name} does ${task.name} this week, ${(first === kid ? other : kid).name} next week`);
+  },
   'move-task': (el) => {
     const kid = kidById(ui.editKidId);
     const i = kid.tasks.findIndex((t) => t.id === el.dataset.task);
@@ -1517,6 +1567,15 @@ document.addEventListener('change', (e) => {
   if (el.dataset.settingBool) { state.settings[el.dataset.settingBool] = el.checked; setSound(el.checked); save(); return; }
   if (el.dataset.reminder) { state.settings.reminders[Number(el.dataset.reminder)] = el.value; save(); return; }
   const act = el.dataset.actionChange;
+  if (act === 'task-repeat') {
+    const task = kidById(ui.editKidId)?.tasks.find((t) => t.id === el.dataset.task);
+    if (!task) return;
+    const parity = weekParity(today());
+    if (el.value === 'every') delete task.everyOtherWeek;
+    else task.everyOtherWeek = el.value === 'this' ? parity : 1 - parity;
+    save(); render();
+    return;
+  }
   if (act === 'history-date') { ui.historyDate = el.value && el.value <= today() ? el.value : null; render(); }
   if (act === 'history-excuse') { entryFor(state, el.dataset.kid, el.dataset.key, true).excused = el.checked; save(); render(); }
   if (act === 'import') importFile(el.files?.[0]);
