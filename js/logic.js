@@ -142,6 +142,27 @@ export function defaultAllowance(since = dateKey()) {
   return { on: true, coins: DEFAULT_ALLOWANCE, xp: DEFAULT_ALLOWANCE, bonus: DEFAULT_BONUS_LIMIT, since };
 }
 
+/**
+ * One-time repair (2026-11-03). The first version of the allowance started it
+ * on the day it was first opened, so that day's chores, already ticked and
+ * counted at their typed amounts, were paid again from the allowance (less).
+ * Kids saw their coins and XP drop the next morning. The allowance now starts
+ * the day after it is switched on; this moves an older start date one day
+ * later and drops the allowance amounts saved for that first day, so it is
+ * paid at its typed amounts again. Returns true when it changed something.
+ */
+export function repairAllowanceStart(state) {
+  const a = state.settings?.allowance;
+  if (!a || a.startFixed || !a.since) return false;
+  const first = a.since;
+  for (const entry of Object.values(state.log[first] || {})) {
+    if (!Array.isArray(entry?.scheduled)) continue;
+    entry.scheduled = entry.scheduled.map(({ pay, ...t }) => t);
+  }
+  state.settings.allowance = { ...a, since: addDays(first, 1), startFixed: true };
+  return true;
+}
+
 /** How big a task is: what the parent picked, otherwise big for a timer task, medium for a parent-checked one, small for the rest. */
 export function taskSize(task) {
   if (SIZES.some((sz) => sz.id === task.size)) return task.size;

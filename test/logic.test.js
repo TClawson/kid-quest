@@ -379,3 +379,30 @@ test('two kids take turns on a chore, and off weeks never hurt the streak', () =
   assert.equal(streakInfo(state, kidB, end).streak, 14);
   assert.equal(dayStatus(state, kidB, sat1, end).complete, true);
 });
+
+test('repair: an allowance stamped on a day that already had chores done gives that day its typed coins back', async () => {
+  const { defaultAllowance, totalCoins, totalXp, repairAllowanceStart } = await import('../js/logic.js');
+  const { state, kid } = setup();
+  const sunday = addDays(MONDAY, -1);
+  // Sunday and Monday ticked on the old version: snapshots without pay, typed amounts
+  for (const key of [sunday, MONDAY]) {
+    entryFor(state, kid.id, key, true).scheduled = tasksForDay(state, kid, key, key).map((t) => ({ ...t }));
+    finishDay(state, kid, key, key);
+  }
+  const tue = addDays(MONDAY, 1);
+  const before = totalCoins(state, kid, tue);
+  const beforeXp = totalXp(state, kid, tue);
+  assert.ok(before > 0);
+  // Monday evening the new version stamps the allowance from Monday, and a
+  // parent opening the kid's screen saves Monday's allowance amounts
+  state.settings.allowance = defaultAllowance(MONDAY);
+  snapshotToday(state, kid, MONDAY);
+  assert.ok(totalCoins(state, kid, tue) < before, 'the bug: Monday was paid again from the allowance');
+  assert.equal(repairAllowanceStart(state), true);
+  assert.equal(state.settings.allowance.since, tue);
+  assert.equal(totalCoins(state, kid, tue), before);
+  assert.equal(totalXp(state, kid, tue), beforeXp);
+  // runs once only
+  assert.equal(repairAllowanceStart(state), false);
+  assert.equal(state.settings.allowance.since, tue);
+});
