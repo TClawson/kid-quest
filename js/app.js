@@ -3,13 +3,15 @@ import {
   tasksForDay, snapshotToday, dayStatus, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
+  isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
-import { buddySvg, buddyLine } from './avatar.js';
+import { buddySvg, buddyLine, MOVE_ART, catchFor } from './avatar.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { startMusic, stopMusic } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, moveWornToBuddy, switchSpecies,
+  SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
 import { pickVisitors, visitorLines } from './visits.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
@@ -94,8 +96,24 @@ function progressFor(kid) {
     save();
   }
   const coins = Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0));
-  return { ...info, level: lv.level, into: lv.into, piano: piano.streak, pianoBest: piano.best, pianoPerWeek: piano.perWeek, owned: ownedFor(kid), coins };
+  const gems = Math.max(0, totalGems(state, kid, t) - (kid.gemsSpent || 0));
+  const ex = exerciseInfo(kid);
+  return { ...info, level: lv.level, into: lv.into, piano: piano.streak, pianoBest: piano.best, pianoPerWeek: piano.perWeek, owned: ownedFor(kid), coins, gems, ex };
 }
+
+/**
+ * The kid's exercise streak. The best run is also kept on the kid (kid.exBest),
+ * so other kids' devices, which don't load this kid's days, know which moves
+ * this buddy can do when it visits.
+ */
+function exerciseInfo(kid) {
+  const ex = exerciseStreakInfo(state, kid, today());
+  if ((kid.exBest || 0) < ex.best) { kid.exBest = ex.best; save(); }
+  return ex;
+}
+
+/** Everything a buddy needs to do its moves: its look, the kid's gear, and how far the exercise streak got. */
+const mover = (kid) => ({ buddy: kid.buddy, owned: kid.owned || [], exBest: Math.max(kid.exBest || 0, exerciseInfo(kid).best) });
 
 function missedYesterday(kid, info) {
   const t = today();
@@ -293,6 +311,7 @@ function celebrate({ kid, emoji, title, text, sound, big = false, onClose = null
 /** Show any newly unlocked wardrobe items. Returns true if something was shown. */
 function showUnlocks(kid) {
   if (!$modal.hidden) return false;
+  if (showNewMoves(kid)) return true;
   const ids = newUnlocks(kid, progressFor(kid));
   if (!ids.length) return false;
   kid.seenUnlocks = [...(kid.seenUnlocks || []), ...ids];
@@ -312,6 +331,29 @@ function showUnlocks(kid) {
         <button class="btn ghost" data-action="modal-close">Later</button>
       </div>
     </div>`);
+  return true;
+}
+
+/** Moves the kid's buddy just learned from the exercise streak (or from new gear). Shows the first one in action. */
+function showNewMoves(kid) {
+  const who = mover(kid);
+  const seen = new Set(kid.seenMoves || []);
+  const fresh = unlockedMoves(who.owned, who.exBest).filter((m) => !seen.has(m.move.id));
+  if (!fresh.length) return false;
+  kid.seenMoves = [...seen, ...fresh.map((m) => m.move.id)];
+  save();
+  const first = fresh[0];
+  sounds.week();
+  confetti(140, 2600);
+  openModal(`
+    <div class="celebrate">
+      <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" data-move="${first.move.id}" aria-label="See the move again">${buddyHtml(kid, 'excited', 'xl')}</button>
+      <h1>New move${fresh.length > 1 ? 's' : ''}!</h1>
+      <p>${fresh.map((m) => `<b>${esc(m.move.name)}</b>`).join(', ')}</p>
+      <p class="muted small">Best exercise streak: ${who.exBest} ${who.exBest === 1 ? 'week' : 'weeks'} 💪 Tap your buddy anytime to see a move.</p>
+      <button class="btn huge" data-action="modal-close">Awesome!</button>
+    </div>`, () => setTimeout(() => showUnlocks(kid), 250));
+  setTimeout(() => { const el = $modal.querySelector('.buddy-tap'); if (el) doMove(el, who, first.move.id); }, 500);
   return true;
 }
 
@@ -362,7 +404,8 @@ function markDone(kid, task, by, anchor) {
   sounds.task();
   const xp = taskXp(task);
   const coins = taskCoins(task);
-  floatText([xp && `+${xp} XP`, coins && `+${coins} 🪙`].filter(Boolean).join(' · ') || 'Done!', anchor);
+  const gems = taskGems(task);
+  floatText([gems && `+${gems} 💎`, xp && `+${xp} XP`, coins && `+${coins} 🪙`].filter(Boolean).join(' · ') || 'Done!', anchor);
   ui.cheerUntil = Date.now() + 2600;
   ui.cheerKid = kid.id;
   render();
@@ -698,7 +741,7 @@ const VILLAGE = 150; // extra room at the top of the map when buddies are visiti
 // device, the others from the cloud.
 function familyBuddies() {
   const all = new Map((family.buddies || []).map((b) => [b.id, b]));
-  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy });
+  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: mover(k).exBest });
   return [...all.values()];
 }
 
@@ -711,12 +754,19 @@ function visitorsHtml(kid, s) {
   // stand in front of the village houses (see paintOne in maparts.js), then between them
   const wide = ($app.clientWidth || window.innerWidth) > 600;
   const spots = wide ? [20, 80, 33, 67] : [22, 78, 37, 63];
-  const html = visitors.map((v, i) => `
-      <div class="map-visitor ${i === 0 ? 'talking' : ''}" data-action="visitor" style="left:${spots[i]}%;--kid:${esc(v.color || '#4dabf7')}">
-        <div class="visitor-buddy">${buddySvg(v.buddy, 'happy', { background: false })}</div>
+  const html = visitors.map((v, i) => {
+    // a visitor with a fishing rod fishes in the village pond, facing away from the road
+    const rod = bestGear(v.owned).rod;
+    const look = rod ? { ...v.buddy, outfit: { ...v.buddy.outfit, sport: `sport-rod-${['regular', 'good', 'super'][rod - 1]}` } } : v.buddy;
+    const side = spots[i] < 50 ? 'left' : 'right';
+    return `
+      <div class="map-visitor ${i === 0 ? 'talking' : ''} ${rod ? `fishing face-${side}` : ''}" data-action="visitor" data-id="${esc(v.id)}" ${rod ? `data-rod="${rod}"` : ''} style="left:${spots[i]}%;--kid:${esc(v.color || '#4dabf7')}">
+        <div class="visitor-buddy">${buddySvg(look, 'happy', { background: false })}</div>
+        ${rod ? '<div class="fish-line" aria-hidden="true"><span class="bobber"></span></div><div class="fish-catch" aria-hidden="true"></div>' : ''}
         <div class="visitor-name">${esc(v.name)}</div>
         <div class="visitor-bubble">${esc(lines[i])}</div>
-      </div>`).join('');
+      </div>`;
+  }).join('');
   // they walk in once a day per kid; later redraws show them already there
   const key = `${kid.id}|${today()}`;
   const arrive = !visitorsArrived.has(key);
@@ -779,12 +829,12 @@ function questMap(kid, s, entry, mood) {
   }).join('');
 
   const hp = pts[here];
-  const walker = `<div class="map-buddy ${mood === 'excited' ? 'hop' : ''}" style="left:${hp.x}%;top:${hp.y}px">
+  const walker = `<div class="map-buddy ${mood === 'excited' ? 'hop' : ''}" style="left:${hp.x}%;top:${hp.y}px" data-action="buddy-move" data-kid="${kid.id}">
       ${buddyHtml(kid, mood === 'sad' || mood === 'sleepy' ? mood : mood === 'proud' ? 'proud' : mood === 'excited' ? 'excited' : 'happy', 'mini', { background: false })}
     </div>`;
 
   return `
-    <section class="quest-map" style="height:${height}px;background:${mapTheme(kidTheme(kid)).ground[0]}" data-theme="${esc(kidTheme(kid))}" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-seed="${esc(kid.id)}">
+    <section class="quest-map" style="height:${height}px;background:${mapTheme(kidTheme(kid)).ground[0]}" data-theme="${esc(kidTheme(kid))}" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-pond="${visit.room ? 1 : ''}" data-seed="${esc(kid.id)}">
       <canvas class="map-land" aria-hidden="true"></canvas>
       <div class="map-start" style="left:50%;top:0">🚩 Start</div>
       ${visit.html}
@@ -816,6 +866,7 @@ function viewKid() {
   const mood = moodFor(kid);
   const listMode = state.settings.questView === 'list';
   const newCount = (kid.newItems || []).length;
+  const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
   return `
     <div class="screen kid" style="--kid:${kid.color}">
       <header class="kid-head">
@@ -825,10 +876,11 @@ function viewKid() {
           <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak">🔥 ${info.streak}</span>
           <span class="chip ice" title="Streak freezes">❄️ ${info.freezes}</span>
           <span class="chip coin" title="Coins">🪙 ${Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0))}</span>
+          ${exTasks.length || kid.gemsSpent ? `<span class="chip gem" title="Gems">💎 ${Math.max(0, totalGems(state, kid, t) - (kid.gemsSpent || 0))}</span>` : ''}
         </div>
       </header>
       <div class="buddy-panel">
-        ${buddyHtml(kid, mood, 'lg')}
+        <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy to see a move">${buddyHtml(kid, mood, 'lg')}</button>
         <div class="buddy-side">
           <div class="bubble">${esc(buddyLine(mood, kid.name))}</div>
           <div class="quest-progress">
@@ -838,6 +890,7 @@ function viewKid() {
           <button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>
         </div>
       </div>
+      ${exerciseSection(kid, exTasks, entry)}
       <div class="view-toggle">
         <button class="${listMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
         <button class="${listMode ? 'on' : ''}" data-action="quest-mode" data-mode="list">📋 List</button>
@@ -851,6 +904,20 @@ function viewKid() {
         <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Best streak: ${info.best} days.</p>
       </section>
     </div>`;
+}
+
+/** Bonus exercise: optional tiles that earn gems, and how the exercise week is going. */
+function exerciseSection(kid, tasks, entry) {
+  if (!tasks.length) return '';
+  const ex = exerciseInfo(kid);
+  const dots = Array.from({ length: ex.goal }, (_, i) => `<span class="ex-dot ${i < ex.thisWeek ? 'on' : ''}">${i < ex.thisWeek ? '💪' : ''}</span>`).join('');
+  const streak = ex.weeks ? `${ex.weeks}-week exercise streak 🔥` : 'Exercise 5 days this week to start a streak';
+  return `
+      <section class="exercise">
+        <h2>💪 Bonus exercise <small class="muted">earns 💎 gems</small></h2>
+        <div class="ex-week"><div class="ex-dots" aria-label="${ex.thisWeek} of ${ex.goal} exercise days this week">${dots}</div><small>${ex.thisWeek >= ex.goal ? '<b>This week counts!</b> ' : `${ex.thisWeek} of ${ex.goal} days this week · `}${esc(streak)}</small></div>
+        <div class="tiles">${tasks.map((x) => taskTile(kid, x, entry?.tasks?.[x.id])).join('')}</div>
+      </section>`;
 }
 
 function viewTimer() {
@@ -892,6 +959,7 @@ function viewWardrobe() {
   const fresh = new Set(kid.newItems || []);
   const items = ITEMS.filter((i) => i.slot === ui.slot);
   const nextItem = ITEMS.filter((i) => i.need && !isUnlocked(i, prog)).sort((a, b) => needGap(a, prog) - needGap(b, prog))[0];
+  const sportTab = ui.slot === 'sport';
   return `
     <div class="screen wardrobe" style="--kid:${kid.color}">
       <header class="kid-head">
@@ -899,11 +967,12 @@ function viewWardrobe() {
         <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days` : ''}</small></div>
       </header>
       <div class="wardrobe-top">
-        ${buddyHtml(kid, 'happy', 'lg')}
+        <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap for a move">${buddyHtml(kid, 'happy', 'lg')}</button>
         <div class="buddy-side">
           <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
-          <p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
-          ${nextItem ? `<p class="muted">Next streak prize: <b>${esc(nextItem.name)}</b> at ${esc(needLabel(nextItem))}</p>` : ''}
+          ${sportTab ? `<p class="gem-line">💎 <b>${prog.gems}</b> gems to spend</p>
+          <p class="muted">💪 Exercise streak: <b>${prog.ex.weeks} ${prog.ex.weeks === 1 ? 'week' : 'weeks'}</b> (best ${prog.ex.best}) · ${prog.ex.thisWeek} of ${prog.ex.goal} days this week</p>` : `<p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
+          ${nextItem ? `<p class="muted">Next streak prize: <b>${esc(nextItem.name)}</b> at ${esc(needLabel(nextItem))}</p>` : ''}`}
         </div>
       </div>
       <nav class="tabs">${SLOTS.map((sl) => `<button class="${ui.slot === sl.id ? 'on' : ''}" data-action="wardrobe-slot" data-slot="${sl.id}">${sl.icon} ${sl.name}</button>`).join('')}</nav>
@@ -912,17 +981,38 @@ function viewWardrobe() {
     const open = isUnlocked(item, prog);
     const on = kid.buddy.outfit[item.slot] === item.id;
     const preview = { ...kid.buddy, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
-    return `<button class="item ${open ? '' : 'locked'} ${item.price ? 'shop' : ''} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
+    const wearing = item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
+    const price = item.gems ? `<span class="price gems ${prog.gems >= item.gems ? 'can' : ''}">💎 ${item.gems}</span>`
+      : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : '';
+    return `<button class="item ${open ? '' : 'locked'} ${item.price || item.gems ? 'shop' : ''} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
             <span class="item-art">${buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
-            <small>${open ? (on ? 'Wearing' : 'Tap to wear') : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : `🔒 ${esc(needLabel(item))}`}</small>
+            <small>${open ? wearing : price || `🔒 ${esc(needLabel(item))}`}</small>
             ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
           </button>`;
   }).join('')}
       </div>
+      ${sportTab ? movesList(kid, prog) : ''}
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
-      <p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>
+      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on ${prog.ex.goal} days in a week to keep your exercise streak going: 1, 3 and 6 weeks in a row unlock new moves for each piece of gear you own, and moves stay yours even if the streak ends. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing!</p>` : ''}
+      ${sportTab ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
+}
+
+/** Every move, grouped by gear: which ones this kid has, and what the rest need. Tapping one shows it. */
+function movesList(kid, prog) {
+  const gear = bestGear(prog.owned);
+  const have = new Set(unlockedMoves(prog.owned, prog.ex.best).map((m) => m.move.id));
+  const kinds = [{ id: 'body', name: 'No gear needed', icon: '🤸' }, ...SPORTS];
+  return `<h2>Moves</h2>${kinds.map((k) => `
+      <h3 class="moves-kind">${k.icon} ${esc(k.name)}</h3>
+      <div class="moves">${MOVES.filter((m) => m.kind === k.id).map((m) => {
+    const open = have.has(m.id);
+    const weeks = moveWeeks(m);
+    const need = k.id !== 'body' && !gear[k.id] ? `Get a ${k.name.toLowerCase()} and a ${weeks}-week streak` : `${weeks}-week exercise streak`;
+    return `<button class="move ${open ? '' : 'locked'}" ${open ? `data-action="try-move" data-move="${m.id}"` : 'data-action="move-locked"'} data-need="${esc(need)}">
+          <b>${open ? '' : '🔒 '}${esc(m.name)}</b><small>${open ? 'Tap to see it' : esc(need)}</small></button>`;
+  }).join('')}</div>`).join('')}`;
 }
 
 // ----- parent area -----
@@ -1005,15 +1095,18 @@ function parentEditKid() {
       </div>
       <div class="days">${dayChips(t)}</div>
       <div class="row wrap">
-        <label>When <select data-field="period"><option value="morning" ${t.period === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${t.period === 'afternoon' ? 'selected' : ''}>After school</option></select></label>
+        <label>When <select data-field="period"><option value="morning" ${t.period === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${t.period === 'afternoon' ? 'selected' : ''}>After school</option><option value="exercise" ${t.period === 'exercise' ? 'selected' : ''}>Bonus exercise</option></select></label>
         <label>Checked by <select data-field="verify"><option value="self" ${t.verify === 'self' ? 'selected' : ''}>Kid taps done</option><option value="parent" ${t.verify === 'parent' ? 'selected' : ''}>Parent PIN</option></select></label>
         <label>Timer <input type="number" min="0" max="180" step="5" data-field="minutes" value="${t.minutes}" class="num"> min</label>
         ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>` : ''}
       </div>
-      <div class="row wrap reward-edit">
+      ${isExercise(t) ? `<div class="row wrap reward-edit">
+        <label>Earns 💎 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="gems" value="${Number.isFinite(t.gems) ? t.gems : ''}" placeholder="${DEFAULT_GEMS}" class="num" aria-label="Gems earned"> gems</label>
+        <label>and <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="xp" value="${Number.isFinite(t.xp) ? t.xp : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="XP earned"> XP</label>
+      </div>` : `<div class="row wrap reward-edit">
         <label>Earns 🪙 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="coins" value="${Number.isFinite(t.coins) ? t.coins : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="Coins earned"> coins</label>
         <label>and <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="xp" value="${Number.isFinite(t.xp) ? t.xp : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="XP earned"> XP</label>
-      </div>
+      </div>`}
     </div>`).join('');
   return `
     <div class="row"><button class="btn ghost" data-action="edit-kid-done">← All kids</button></div>
@@ -1028,6 +1121,10 @@ function parentEditKid() {
     <h2>☀️ After-school tasks</h2>
     ${taskRows('afternoon')}
     <button class="btn ghost" data-action="add-task" data-period="afternoon">+ Add after-school task</button>
+    <h2>💪 Bonus exercise</h2>
+    ${taskRows('exercise') || '<p class="muted small">None yet. Add a run, a bike ride, soccer practice or anything active.</p>'}
+    <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise task</button>
+    <p class="muted small">Exercise tasks are optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week keeps the exercise streak going, which unlocks moves for the kid's buddy at 1, 3 and 6 weeks. A sick or travel day you excuse counts as an exercise day.</p>
     <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. Each task earns 10 coins and 10 XP (30 for a timer task) unless you type other amounts; leave a box empty to use the default. A new amount counts from today, so coins already earned stay earned. Every 100 XP is a level.</p>
     <hr>
     <button class="btn danger" data-action="delete-kid">Remove ${esc(kid.name)}</button>`;
@@ -1047,10 +1144,10 @@ function parentHistory() {
     return `
       <div class="card">
         <div class="row">${buddyChip(kid)}<b class="grow">${esc(kid.name)}</b><span class="muted">${s.done}/${s.total} done${s.complete ? ' ✓' : ''}</span></div>
-        ${s.tasks.map((task) => {
+        ${tasksForDay(state, kid, key, t).map((task) => {
     const st = entry?.tasks?.[task.id]?.status;
     return `<div class="list-row">
-            <span>${esc(task.icon)}</span><span class="grow">${esc(task.name)}</span>
+            <span>${esc(task.icon)}</span><span class="grow">${esc(task.name)}${isExercise(task) ? ' <small class="muted">bonus</small>' : ''}</span>
             <button class="btn ${st === 'done' ? '' : 'ghost'}" data-action="history-toggle" data-kid="${kid.id}" data-key="${key}" data-task="${task.id}">${st === 'done' ? '✓ Done' : st === 'pending' ? 'Approve' : 'Mark done'}</button>
           </div>`;
   }).join('')}
@@ -1107,7 +1204,28 @@ function changeSpecies(kid, species) {
 
 const speciesName = (id) => SPECIES.find((sp) => sp.id === id)?.name || 'buddy';
 
+function buyGear(kid, item, prog) {
+  if (prog.gems < item.gems) {
+    sounds.error();
+    toast(`${item.gems - prog.gems} more gems to go! Exercise to earn them. 💪`);
+    return;
+  }
+  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, sport: item.id } };
+  openModal(`
+    <div class="celebrate">
+      <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
+      <h1>Buy ${esc(item.name)}?</h1>
+      <p>It costs <b>💎 ${item.gems}</b>. You'll have ${prog.gems - item.gems} gems left.</p>
+      <p class="muted small">Every buddy can use it. Keep exercising to unlock its moves.</p>
+      <div class="stack">
+        <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
+        <button class="btn ghost" data-action="modal-close">Keep saving</button>
+      </div>
+    </div>`);
+}
+
 function buyItem(kid, item, prog) {
+  if (item.gems) { buyGear(kid, item, prog); return; }
   if (prog.coins < item.price) {
     sounds.error();
     toast(`${item.price - prog.coins} more coins to go! Finish tasks to earn them.`);
@@ -1215,7 +1333,7 @@ const actions = {
     const item = itemById(el.dataset.id);
     if (!item) return;
     const prog = progressFor(kid);
-    if (!isUnlocked(item, prog) && item.price) { buyItem(kid, item, prog); return; }
+    if (!isUnlocked(item, prog) && (item.price || item.gems)) { buyItem(kid, item, prog); return; }
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
     const outfit = kid.buddy.outfit;
     if (outfit[item.slot] === item.id && item.slot !== 'background') delete outfit[item.slot];
@@ -1235,9 +1353,15 @@ const actions = {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
     const prog = progressFor(kid);
-    if (!item?.price || prog.coins < item.price || prog.owned.includes(item.id)) { closeModal(); return; }
+    if (!item || prog.owned.includes(item.id)) { closeModal(); return; }
+    if (item.gems) {
+      if (prog.gems < item.gems) { closeModal(); return; }
+      kid.gemsSpent = (kid.gemsSpent || 0) + item.gems;
+    } else {
+      if (!item.price || prog.coins < item.price) { closeModal(); return; }
+      kid.spent = (kid.spent || 0) + item.price;
+    }
     addOwned(kid, item);
-    kid.spent = (kid.spent || 0) + item.price;
     kid.buddy.outfit[item.slot] = item.id;
     save();
     closeModal();
@@ -1245,7 +1369,14 @@ const actions = {
     confetti(80, 1600);
     toast(`${item.name} is yours!`);
     render();
+    if (item.gems) setTimeout(() => showUnlocks(kid), 700);
   },
+  'try-move': (el) => {
+    const kid = kidById(ui.kidId);
+    const tap = document.querySelector('.wardrobe-top .buddy-tap');
+    if (kid && tap) { tap.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); doMove(tap, mover(kid), el.dataset.move); }
+  },
+  'move-locked': (el) => { sounds.error(); toast(`🔒 ${el.dataset.need}`); },
   'unlock-try': (el) => { closeModal(); ui.slot = el.dataset.slot; ui.view = 'wardrobe'; render(); window.scrollTo(0, 0); },
   'kid-color': (el) => { kidById(ui.editKidId).color = el.dataset.val; save(); render(); },
   'toggle-day': (el) => {
@@ -1270,7 +1401,8 @@ const actions = {
     confirmModal({ title: 'Delete task?', text: `Remove "${task.name}" for ${kid.name}?`, yes: 'Delete', danger: true, onYes: () => { kid.tasks = kid.tasks.filter((t) => t.id !== task.id); save(); render(); } });
   },
   'add-task': (el) => {
-    kidById(ui.editKidId).tasks.push({ id: newId('task'), name: 'New task', icon: '⭐', period: el.dataset.period, days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0 });
+    const ex = el.dataset.period === 'exercise';
+    kidById(ui.editKidId).tasks.push({ id: newId('task'), name: ex ? 'Exercise' : 'New task', icon: ex ? '🏃' : '⭐', period: el.dataset.period, days: [0, 1, 2, 3, 4, 5, 6], verify: ex ? 'parent' : 'self', minutes: 0 });
     save(); render();
   },
   'delete-kid': () => {
@@ -1326,7 +1458,7 @@ document.addEventListener('change', (e) => {
     let v = el.type === 'checkbox' ? el.checked : el.value;
     if (el.dataset.field === 'minutes') v = Math.max(0, Math.min(180, Math.round(Number(v) || 0)));
     if (el.dataset.field === 'name' && !v.trim()) v = 'Task';
-    const isReward = el.dataset.field === 'coins' || el.dataset.field === 'xp';
+    const isReward = el.dataset.field === 'coins' || el.dataset.field === 'xp' || el.dataset.field === 'gems';
     if (isReward) v = parseReward(v);
     if (v === null) delete task[el.dataset.field];
     else task[el.dataset.field] = v;
@@ -1668,7 +1800,75 @@ function nextVisitorTalks(pick) {
   all.forEach((el) => el.classList.toggle('talking', el === next));
 }
 setInterval(() => { if (document.visibilityState === 'visible') nextVisitorTalks(); }, 4000);
-actions.visitor = (el) => { nextVisitorTalks(el); sounds.tap(); };
+actions.visitor = (el) => {
+  nextVisitorTalks(el);
+  const v = familyBuddies().find((b) => b.id === el.dataset.id);
+  if (!v || !doMove(el, v)) sounds.tap();
+};
+
+// Fishing visitors now and then reel in something from the pond: what bites depends on the map.
+function fishBite() {
+  const fishers = [...document.querySelectorAll('.map-visitor.fishing:not(.reeling)')].filter((el) => !el.dataset.moving);
+  if (!fishers.length) return;
+  const el = fishers[Math.floor(Math.random() * fishers.length)];
+  const theme = el.closest('.quest-map')?.dataset.theme;
+  const got = catchFor(theme, Number(el.dataset.rod) || 1);
+  const $catch = el.querySelector('.fish-catch');
+  $catch.innerHTML = got.svg;
+  el.classList.add('reeling');
+  setTimeout(() => {
+    if (!el.isConnected) return;
+    el.querySelector('.visitor-bubble').textContent = `${got.rare ? 'WOW! ' : ''}I caught ${/^[aeiou]/.test(got.name) ? 'an' : 'a'} ${got.name}! ${got.icon}`;
+    nextVisitorTalks(el);
+  }, 900);
+  setTimeout(() => el.classList.remove('reeling'), 3400);
+}
+setInterval(() => { if (document.visibilityState === 'visible' && Math.random() < 0.6) fishBite(); }, 6000);
+
+// ---------- sports moves ----------
+
+const lastMove = new Map();
+
+/**
+ * Tap a buddy and it does one of its unlocked moves at random. el holds the
+ * buddy's <svg>; who is { buddy, owned, exBest }. Returns false (and does
+ * nothing) when the buddy has no moves yet or is already mid-move.
+ * pick: a move id to do instead of a random one.
+ */
+function doMove(el, who, pick = null) {
+  const svg = el.querySelector('svg.buddy-svg');
+  if (!svg || el.dataset.moving) return false;
+  const moves = unlockedMoves(who.owned, who.exBest);
+  const choice = pick ? moves.find((m) => m.move.id === pick) : pickMove(moves, lastMove.get(el.dataset.id || el.dataset.kid));
+  if (!choice) return false;
+  lastMove.set(el.dataset.id || el.dataset.kid, choice.move.id);
+  const host = svg.parentElement;
+  const before = host.innerHTML;
+  const opts = { background: Boolean(svg.querySelector('.bg')), trick: { move: choice.move.id, kind: choice.move.kind, tier: choice.tier } };
+  // a fishing visitor keeps facing the pond
+  const buddy = el.classList.contains('fishing') ? { ...who.buddy, outfit: { ...who.buddy.outfit, sport: undefined } } : who.buddy;
+  host.innerHTML = buddySvg(buddy, 'excited', opts);
+  el.dataset.moving = '1';
+  el.classList.add('doing-move');
+  sounds.move?.(choice.move.kind);
+  floatText(`${choice.move.name}!`, el);
+  setTimeout(() => {
+    delete el.dataset.moving;
+    el.classList.remove('doing-move');
+    if (host.isConnected) host.innerHTML = before;
+  }, MOVE_ART[choice.move.id].ms + 80);
+  return true;
+}
+
+actions['buddy-move'] = (el) => {
+  const kid = kidById(el.dataset.kid);
+  if (!kid) return;
+  if (doMove(el, mover(kid), el.dataset.move || null)) return;
+  if (el.dataset.moving) return;
+  sounds.tap();
+  const ex = exerciseInfo(kid);
+  toast(`Exercise ${ex.goal} days in one week to learn your first move! 💪`);
+};
 
 // ---------- reminders and day rollover ----------
 

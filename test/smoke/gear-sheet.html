@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../../css/style.css"><link rel="stylesheet" href="../../css/moves.css">
+<style>body{background:#fff8e7;padding:10px;font-family:sans-serif} .grid{display:grid;grid-template-columns:repeat(var(--cols,6),130px);gap:10px} .cell{text-align:center;font-size:12px;font-weight:700} .cell .buddy{width:120px;height:120px;margin:auto}</style></head>
+<body><div class="grid" id="g"></div>
+<script type="module">
+import { buddySvg } from '../../js/avatar.js';
+import { ITEMS, MOVES, SPORTS } from '../../js/items.js';
+const q = new URLSearchParams(location.search);
+const g = document.getElementById('g');
+const species = ['fox','bear','panda','cat','dino','puppy','turtle'];
+const cell = (svg, label) => `<div class="cell"><div class="buddy mood-happy" style="--kid:#4dabf7">${svg}</div>${label}</div>`;
+if (q.get('mode') === 'gear') {
+  g.style.setProperty('--cols', 6);
+  let i = 0;
+  for (const it of ITEMS.filter((x) => x.slot === 'sport')) {
+    g.innerHTML += cell(buddySvg({ species: species[i++ % 7], outfit: { background: 'bg-meadow', sport: it.id } }, 'happy'), it.name);
+  }
+} else {
+  g.style.setProperty('--cols', 6);
+  const draw = () => { g.innerHTML = ''; drawMoves(); };
+  if (q.get('loop')) setInterval(draw, 2600);
+  drawMoves();
+}
+function drawMoves() {
+  const tier = Number(q.get('tier') || 1);
+  MOVES.forEach((m, i) => {
+    g.innerHTML += cell(buddySvg({ species: species[i % 7], outfit: { background: 'bg-meadow', hat: i % 3 === 0 ? 'hat-cap' : undefined } }, 'excited', { trick: { move: m.id, kind: m.kind, tier: m.kind === 'body' ? 0 : tier } }), m.name);
+  });
+}
+</script></body></html>

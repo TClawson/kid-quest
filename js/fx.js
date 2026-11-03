@@ -54,6 +54,10 @@ export const sounds = {
   ),
   reminder: () => play([N.G5, N.C6, N.G5, N.C6], 0.18, 0.3, 'sine', 0.25),
   error: () => play([N.E4, N.C4], 0.12, 0.2, 'square', 0.08),
+  // a quick rising whoosh for a buddy's sports move; fishing gets a plip
+  move: (kind) => (kind === 'rod'
+    ? play([N.G5, null, N.C6, N.E6], 0.09, 0.15, 'sine', 0.16)
+    : play([N.C5, N.E5, N.G5, N.C6, N.E6], 0.05, 0.14, 'square', 0.08)),
 };
 
 export function confetti(amount = 120, duration = 2600) {

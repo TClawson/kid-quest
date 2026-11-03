@@ -94,9 +94,18 @@ export function taskXp(task) {
   return reward(task, 'xp');
 }
 
-/** Coins a task earns. Parents can set it per task, separately from XP. */
+/** Coins a task earns. Parents can set it per task, separately from XP. Exercise earns gems instead. */
 export function taskCoins(task) {
-  return reward(task, 'coins');
+  return isExercise(task) ? 0 : reward(task, 'coins');
+}
+
+export const DEFAULT_GEMS = 10;
+
+/** Gems an exercise task earns: 10 unless a parent set another amount. Other tasks earn none. */
+export function taskGems(task) {
+  if (!isExercise(task)) return 0;
+  const v = task.gems;
+  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_GEMS;
 }
 
 /** Clean up a number a parent typed. Blank means "use the default" (null). */
@@ -141,8 +150,16 @@ export function taskStatus(state, kidId, key, taskId) {
   return entryFor(state, kidId, key)?.tasks?.[taskId] ?? null;
 }
 
+/** Exercise tasks are optional bonus tasks: they earn gems and never count toward the day's quest. */
+export function isExercise(task) {
+  return task?.period === 'exercise';
+}
+
+/** The tasks that make up the day's quest (everything but the bonus exercise). */
+export const questTasks = (tasks) => tasks.filter((t) => !isExercise(t));
+
 export function dayStatus(state, kid, key, today) {
-  const tasks = tasksForDay(state, kid, key, today);
+  const tasks = questTasks(tasksForDay(state, kid, key, today));
   const entry = entryFor(state, kid.id, key);
   let done = 0;
   let pending = 0;
@@ -224,6 +241,11 @@ export function totalCoins(state, kid, today) {
   return totalEarned(state, kid, today, taskCoins);
 }
 
+/** Gems earned ever (before spending). */
+export function totalGems(state, kid, today) {
+  return totalEarned(state, kid, today, taskGems);
+}
+
 export function levelFor(xp) {
   return { level: Math.floor(xp / 100) + 1, into: xp % 100 };
 }
@@ -281,4 +303,48 @@ export function pianoStreakInfo(state, kid, today) {
     best = Math.max(best, streak);
   }
   return { streak, best, perWeek: pianoDaysPerWeek(kid) };
+}
+
+// ---------- exercise streak ----------
+
+/** Exercise days a week needs to count toward the exercise streak. */
+export const EXERCISE_DAYS = 5;
+
+/** Monday of the week a day is in. */
+export function weekStart(key) {
+  return addDays(key, -((dayOfWeek(key) + 6) % 7));
+}
+
+/** True when at least one exercise task is done that day (parent-approved if it needs a parent). */
+export function exercisedOn(state, kid, key, today) {
+  const entry = entryFor(state, kid.id, key);
+  if (!entry) return false;
+  return tasksForDay(state, kid, key, today).some((t) => isExercise(t) && entry.tasks?.[t.id]?.status === 'done');
+}
+
+/**
+ * The exercise streak counts weeks (Monday to Sunday) in a row with exercise on
+ * at least 5 days. An excused day counts as an exercise day, so a sick day
+ * doesn't cost a week. This week adds as soon as its 5th day is done, and it
+ * can't break the streak until it is over. best is the longest run ever: moves
+ * it unlocked are never taken away.
+ */
+export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
+  const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
+  const thisWeek = weekStart(today);
+  let weeks = 0;
+  let best = 0;
+  let days = 0;
+  for (let wk = weekStart(start); wk <= thisWeek; wk = addDays(wk, 7)) {
+    days = 0;
+    for (let i = 0; i < 7; i += 1) {
+      const key = addDays(wk, i);
+      if (key > today) break;
+      if (exercisedOn(state, kid, key, today) || (key < today && entryFor(state, kid.id, key)?.excused)) days += 1;
+    }
+    if (days >= goal) weeks += 1;
+    else if (wk !== thisWeek) weeks = 0;
+    best = Math.max(best, weeks);
+  }
+  return { weeks, best, thisWeek: days, goal, today: exercisedOn(state, kid, today, today) };
 }

@@ -449,6 +449,212 @@ function musicLayer(id, part) {
   return px.svg();
 }
 
+// ---------- sports gear ----------
+// Each kind has one drawing and three palettes: regular, good and super.
+// Gear is drawn where the buddy holds it. During a move, CSS animates the
+// .gear and .prop groups (see the .trick-* rules in style.css).
+
+const GEAR_ART = {
+  soccer: [0, 16, [
+    '..KKK..',
+    '.KWDWK.',
+    'KWDDDWK',
+    'KDWDWDK',
+    'KWWWWWK',
+    '.KWDWK.',
+    '..KKK..',
+  ], [
+    { W: SH('#ffffff', '#ffffff', '#ced4da'), D: '#343a40' },
+    { W: SH('#ffffff', '#ffffff', '#ced4da'), D: '#1c7ed6' },
+    { W: SH('#ffe066', '#fff3bf', '#f59f00'), D: '#e8590c' },
+  ]],
+  football: [0, 15, [
+    '..KKKK..',
+    '.KBBBBK.',
+    'KWBLLBWK',
+    '.KBBBBK.',
+    '..KKKK..',
+  ], [
+    { B: SH('#a0522d', '#c97a4a', '#6e3517'), W: '#ffffff', L: '#ffffff' },
+    { B: SH('#7a2e1c', '#a0522d', '#4a1a0e'), W: '#ffd43b', L: '#ffffff' },
+    { B: SH('#fcc419', '#ffe066', '#e67700'), W: '#ffffff', L: '#e03131' },
+  ]],
+  hockey: [0, 10, [
+    '....KK',
+    '...KTK',
+    '..KSK.',
+    '..KSK.',
+    '.KSK..',
+    '.KSK..',
+    '.KSK..',
+    'KSK...',
+    'KSK...',
+    'KSK...',
+    'KSKKKK',
+    'KBBBBK',
+    'KKKKKK',
+  ], [
+    { S: SH('#c98a4b', '#f0c48a', '#a0612f'), T: '#343a40', B: '#ffffff' },
+    { S: SH('#343a40', '#5c636a', '#1b1e21'), T: '#e03131', B: '#1c7ed6' },
+    { S: SH('#fcc419', '#ffe066', '#e67700'), T: '#e03131', B: '#e03131' },
+  ]],
+  rod: [17, 5, [
+    '.....KK',
+    '....KRK',
+    '....KRK',
+    '...KRK.',
+    '...KRK.',
+    '..KRK..',
+    '.KCCK..',
+    '.KCCK..',
+    '.KRK...',
+    'KRK....',
+    'KKK....',
+  ], [
+    { R: '#c98a4b', C: '#868e96' },
+    { R: '#495057', C: '#e03131' },
+    { R: '#fcc419', C: '#4dabf7' },
+  ]],
+  // worn on the feet
+  shoes: [0, 0, null, [
+    { S: SH('#e03131', '#ff6b6b', '#a51d1d'), W: '#ffffff' },
+    { S: SH('#1c7ed6', '#4dabf7', '#1864ab'), W: '#ffd43b' },
+    { S: SH('#fcc419', '#ffe066', '#e67700'), W: '#ffffff' },
+  ]],
+};
+const SHOE = ['KSSSK.', 'KSWSSK', 'KWWWWK'];
+const WING = ['W.', 'WW'];
+
+/** The gear's pixels. dx/dy move it from where it is held. */
+function gearPixels(kind, tier, dx = 0, dy = 0) {
+  const art = GEAR_ART[kind];
+  if (!art) return '';
+  const pal = art[3][Math.max(0, Math.min(2, tier - 1))];
+  const px = new Pixels();
+  if (kind === 'shoes') {
+    px.grid(6 + dx, 21 + dy, SHOE, pal);
+    px.grid(13 + dx, 21 + dy, SHOE, pal);
+    if (tier >= 3) { px.grid(4 + dx, 20 + dy, WING, { W: '#ffffff' }); px.grid(11 + dx, 20 + dy, WING, { W: '#ffffff' }); }
+  } else {
+    px.grid(art[0] + dx, art[1] + dy, art[2], pal);
+  }
+  return px.svg();
+}
+
+// Small pieces some moves need, drawn at [x, y].
+const PROP_ART = {
+  puck: [6, 22, ['KKK', 'KPK'], { P: '#495057' }],
+  hurdle: [20, 17, ['KKKK', 'KRWK', 'K..K', 'K..K', 'K..K', 'K..K'], { R: '#e03131', W: '#ffffff' }],
+  bobber: [20, 18, ['KK', 'RW'], { R: '#e03131', W: '#ffffff' }],
+  dust: [1, 20, ['.D.', 'DDD', '.D.'], { D: '#dee2e6' }],
+  wind: [1, 9, ['WW....WW', '......', '..WWW...'], { W: '#e7f5ff' }],
+};
+const FISH = ['.KKK.K', 'KFFFKF', 'KFEFFK', 'KFFFKF', '.KKK.K'];
+const FISH_PAL = [
+  { F: SH('#74c0fc', '#d0ebff', '#1c7ed6'), E: OUT },
+  { F: SH('#ff922b', '#ffc078', '#d9480f'), E: OUT },
+  { F: SH('#fcc419', '#fff3bf', '#e67700'), E: OUT },
+];
+const BIG_FISH = [
+  '...KKKKKK....K',
+  '..KFFFFFFK..KF',
+  '.KFHFFFFFFKKFK',
+  'KFEFFFfFfFFFFK',
+  'KFFFFFFfFFFFFK',
+  '.KFFFFFFFFKKFK',
+  '..KFFFFFFK..KF',
+  '...KKKKKK....K',
+];
+
+function propPixels(id, tier) {
+  const px = new Pixels();
+  if (id === 'fish') px.grid(18, 14, FISH, FISH_PAL[Math.max(0, tier - 1)]);
+  else if (id === 'bigfish') px.grid(5, 0, BIG_FISH, { ...FISH_PAL[Math.max(0, tier - 1)], H: '#ffffff', f: FISH_PAL[Math.max(0, tier - 1)].F[1][1] });
+  else if (id === 'twinkle') {
+    const star = (x, y) => px.grid(x - 1, y - 1, ['.Y.', 'YWY', '.Y.'], { Y: tier >= 3 ? '#ffd43b' : '#a5d8ff', W: '#ffffff' });
+    star(2, 8); star(21, 4); star(3, 20);
+  } else {
+    const [x, y, rows, pal] = PROP_ART[id];
+    px.grid(x, y, rows, pal);
+  }
+  return px.svg();
+}
+
+// What each move draws. gear: where the gear goes ('char' moves with the body,
+// 'free' moves on its own). props: extra pieces, each in its own .prop-<id> group.
+// ms: how long the move lasts (the CSS animations match).
+export const MOVE_ART = {
+  jacks: { props: ['arms'], ms: 1600 },
+  cartwheel: { ms: 1600 },
+  backflip: { ms: 1600 },
+  keepy: { gear: 'free', ms: 1800 },
+  flick: { gear: 'free', ms: 1600 },
+  bicycle: { gear: 'free', ms: 1800 },
+  dash: { gear: 'char', props: ['dust'], ms: 1400 },
+  hurdle: { gear: 'char', props: ['hurdle'], ms: 1600 },
+  tornado: { gear: 'char', props: ['wind'], ms: 1800 },
+  spike: { gear: 'free', ms: 1600 },
+  spiral: { gear: 'free', ms: 1800 },
+  flipcatch: { gear: 'free', ms: 1800 },
+  dangle: { gear: 'char', props: ['puck'], ms: 1600 },
+  slapshot: { gear: 'char', props: ['puck'], ms: 1600 },
+  spinorama: { gear: 'char', props: ['puck'], ms: 1800 },
+  cast: { gear: 'char', props: ['bobber'], ms: 1800 },
+  reel: { gear: 'char', props: ['fish'], ms: 1800 },
+  whopper: { gear: 'char', props: ['bigfish'], ms: 2200 },
+};
+
+// ---------- what visitors catch in each map's pond ----------
+// [name, grid, palette]: a common catch and a rare one per map theme. Better rods catch rare ones more often.
+const CRAB = ['K.K..K.K', 'KRK..KRK', '.KRKKRK.', 'KRHRRHRK', 'KRRRRRRK', '.KKKKKK.', 'K.K..K.K'];
+const JELLY = ['..KKKK..', '.KJJJJK.', 'KJHJJHJK', 'KJJJJJJK', 'KKKKKKKK', '.J.J.J.J', 'J.J.J.J.'];
+const BOOT = ['.KKKK...', '.KBBK...', '.KBBK...', '.KBBK...', '.KBBKKKK', 'KBBBBBBK', 'KKKKKKKK'];
+const GOBLET = ['KKKKKKK', 'KGgGGGK', 'KGGGGGK', '.KGGGK.', '..KGK..', '..KGK..', '.KGGGK.', 'KKKKKKK'];
+const STAR = ['...K...', '..KYK..', 'KKKYKKK', 'KYYYYYK', '.KYYYK.', '.KYKYK.', 'KK...KK'];
+const PEARL = ['.KKKKK.', 'KSSSSSK', 'KSKWKSK', 'KSKKKSK', 'KSSSSSK', '.KKKKK.'];
+const fishPal = (base, light, dark) => ({ F: SH(base, light, dark), E: OUT });
+const CATCHES = {
+  'bg-meadow': [['bluegill', FISH, fishPal('#4dabf7', '#a5d8ff', '#1971c2')], ['golden trout', FISH, fishPal('#fcc419', '#fff3bf', '#e67700')]],
+  'bg-sunset': [['crab', CRAB, { R: SH('#fa5252', '#ff8787', '#c92a2a'), H: '#ffffff' }], ['starfish', STAR, { Y: SH('#f783ac', '#fcc2d7', '#c2255c') }]],
+  'bg-ocean': [['pufferfish', FISH, fishPal('#ffd43b', '#fff3bf', '#f08c00')], ['pearl', PEARL, { S: SH('#e599f7', '#f3d9fa', '#ae3ec9'), W: '#ffffff' }]],
+  'bg-space': [['space jelly', JELLY, { J: SH('#63e6be', '#c3fae8', '#0ca678'), H: '#ffffff' }], ['moon fish', FISH, fishPal('#dee2e6', '#ffffff', '#868e96')]],
+  'bg-castle': [['old boot', BOOT, { B: SH('#8d5524', '#b07443', '#5c3a1e') }], ['golden goblet', GOBLET, { G: SH('#fcc419', '#fff3bf', '#e67700'), g: '#ffffff' }]],
+  'bg-volcano': [['lava fish', FISH, fishPal('#ff6b1a', '#ffe066', '#c92a2a')], ['fire dragon fish', FISH, fishPal('#e03131', '#ffd43b', '#862e9c')]],
+  'bg-rainbow': [['rainbow trout', FISH, { F: SH('#ff8787', '#ffe066', '#748ffc'), E: OUT }], ['unicorn fish', FISH, fishPal('#f3d9fa', '#ffffff', '#da77f2')]],
+  'bg-galaxy': [['star fish', STAR, { Y: SH('#ffd43b', '#fff9db', '#f08c00') }], ['comet fish', FISH, fishPal('#b197fc', '#e5dbff', '#5f3dc4')]],
+};
+const CATCH_ICON = { 'bg-volcano': '🔥', 'bg-space': '🚀', 'bg-castle': '🏰', 'bg-galaxy': '✨', 'bg-ocean': '🫧', 'bg-rainbow': '🌈', 'bg-sunset': '🏖️', 'bg-meadow': '🎣' };
+
+/**
+ * A catch for a fishing visitor on this map theme. rod: 1-3, better rods land
+ * the rare catch more often. Returns { name, rare, icon, svg }.
+ */
+export function catchFor(theme, rod = 1, rnd = Math.random) {
+  const list = CATCHES[theme] || CATCHES['bg-meadow'];
+  const rare = rnd() < [0.1, 0.25, 0.5][Math.max(0, Math.min(2, rod - 1))];
+  const [name, grid, pal] = list[rare ? 1 : 0];
+  const w = Math.max(...grid.map((r) => r.length));
+  const px = new Pixels();
+  px.grid(0, 0, grid, pal);
+  return {
+    name, rare, icon: CATCH_ICON[theme] || '🎣',
+    svg: `<svg class="catch-svg pixel" viewBox="0 0 ${w} ${grid.length}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${px.svg()}</svg>`,
+  };
+}
+
+/** Arms for jumping jacks, in the buddy's fur color: up and down frames. */
+function armPixels(speciesId) {
+  const sp = SPECIES[speciesId] || SPECIES.bear;
+  const fur = sp.pal.D && speciesId === 'panda' ? sp.pal.D : sp.pal.O;
+  const up = new Pixels();
+  up.grid(2, 9, ['K.', 'OK', 'KOK', '.KOK'], { O: fur });
+  up.grid(18, 9, ['.K', 'KO', 'KOK', 'KOK.'].map((r) => r.padStart(4, '.')), { O: fur });
+  const down = new Pixels();
+  down.grid(2, 19, ['.KOK', 'KOK.', 'KK..'], { O: fur });
+  down.grid(18, 19, ['KOK.', '.KOK', '..KK'], { O: fur });
+  return `<g class="arms-up">${up.svg()}</g><g class="arms-down">${down.svg()}</g>`;
+}
+
 // ---------- backgrounds ----------
 
 function bands(px, stops) {
@@ -629,15 +835,34 @@ function extras(mood) {
   return px.svg();
 }
 
+/** The kind and version of a sport item id, like 'sport-rod-good' -> { kind: 'rod', tier: 2 }. */
+export function gearOf(id) {
+  const m = /^sport-([a-z]+)-(regular|good|super)$/.exec(id || '');
+  return m ? { kind: m[1], tier: { regular: 1, good: 2, super: 3 }[m[2]] } : null;
+}
+
 /**
- * buddy: { species, outfit: { background, hat, face, neck } }
+ * buddy: { species, outfit: { background, hat, face, neck, music, sport } }
  * mood: happy | excited | proud | sleepy | sad
  * opts.background: false to draw the character only (for small chips)
+ * opts.trick: { move: move id, kind, tier } to draw the buddy doing a move
+ * opts.gear: false to leave out held sports gear (small chips)
  */
 export function buddySvg(buddy, mood = 'happy', opts = {}) {
   const speciesId = SPECIES[buddy?.species] ? buddy.species : 'bear';
   const o = buddy?.outfit || {};
   const showBg = opts.background !== false;
+  const trick = opts.trick && MOVE_ART[opts.trick.move] ? opts.trick : null;
+  const art = trick ? MOVE_ART[trick.move] : null;
+  // the gear in the buddy's hands: what the move uses, or else what it holds
+  let gear = trick ? (trick.kind && trick.kind !== 'body' ? { kind: trick.kind, tier: trick.tier || 1 } : null) : gearOf(o.sport);
+  if (opts.gear === false) gear = null;
+  // body moves keep held shoes on (they're on the feet); other gear is put down
+  if (trick && !gear && gearOf(o.sport)?.kind === 'shoes') gear = gearOf(o.sport);
+  const gearSvg = gear ? `<g class="gear gear-${gear.kind} tier-${gear.tier}">${gearPixels(gear.kind, gear.tier)}</g>` : '';
+  const inChar = gear && (gear.kind === 'shoes' || gear.kind === 'rod' || gear.kind === 'hockey' || art?.gear === 'char');
+  const props = (art?.props || []).map((id) => (id === 'arms' ? armPixels(speciesId) : `<g class="prop prop-${id}">${propPixels(id, trick.tier)}</g>`)).join('');
+  const twinkle = trick && trick.tier >= 2 ? `<g class="prop prop-twinkle">${propPixels('twinkle', trick.tier)}</g>` : '';
 
   let bg = '';
   if (showBg) {
@@ -654,19 +879,28 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
   const capeBehind = ITEM_ART[o.neck]?.[4] ? itemLayer(o.neck) : '';
   const neckFront = ITEM_ART[o.neck]?.[4] ? '<rect x="10" y="18" width="4" height="1" fill="#fcc419"/>' : itemLayer(o.neck);
 
-  return `<svg class="buddy-svg pixel" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="${speciesId} buddy, ${mood}">
+  // a piano and sports moves don't mix: the piano steps aside while the buddy shows off
+  const music = trick ? undefined : o.music;
+  const behindProps = art?.props?.includes('bigfish') ? props : '';
+  const frontProps = behindProps ? '' : props;
+  return `<svg class="buddy-svg pixel${trick ? ` trick trick-${trick.move} tier-${trick.tier || 0}` : ''}" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="${speciesId} buddy, ${trick ? trick.move : mood}">
     ${showBg ? `<g class="bg">${bg}</g>` : ''}
     ${showBg ? shadow : ''}
+    ${behindProps}
     <g class="char">
-      ${musicLayer(o.music, 'behind')}
+      ${musicLayer(music, 'behind')}
       ${capeBehind}
       ${body.svg()}
       ${neckFront}
       ${itemLayer(o.face)}
       ${itemLayer(o.hat)}
-      ${musicLayer(o.music, 'front')}
-      ${musicLayer(o.music, 'flames')}
+      ${inChar ? gearSvg : ''}
+      ${musicLayer(music, 'front')}
+      ${musicLayer(music, 'flames')}
     </g>
+    ${inChar ? '' : gearSvg}
+    ${frontProps}
+    ${twinkle}
     <g class="fx ${mood === 'sleepy' ? 'zzz' : 'sparkles'}">${extras(mood)}</g>
   </svg>`;
 }

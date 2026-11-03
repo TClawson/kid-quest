@@ -90,7 +90,8 @@ const temple = (pal) => (px, cx, cy) => drawTemple(px, cx, cy, pal);
 /**
  * One theme per Places background. Colors are art-pixel colors; sprites are drawn with pal.
  * walls: sprites down both sides (or a function), scenery: clumps in the open, houses at the start,
- * river: the band the bridge crosses before after school, goal: what stands around the treasure.
+ * river: the band the bridge crosses before after school, goal: what stands around the treasure,
+ * pond: what floats on the village fishing ponds (see POND_EXTRAS), pondColors: pond colors if not the river's.
  */
 export const MAP_THEMES = {
   'bg-meadow': {
@@ -101,6 +102,7 @@ export const MAP_THEMES = {
     rocks: [ROCK, ROCK_PAL],
     road: { layers: [[9, '#a4743f'], [7, '#d9a86c']], walked: '#ecc78f', pebble: '#a4743f' },
     river: { bank: '#3c9a3c', water: '#2b8adf', deep: '#1f6fc0', shine: '#9fd0ff' },
+    pond: 'lily',
     bridge: { plank: '#a0522d', dark: '#7a4a26', rail: '#c98a4b' },
     house: HOUSE,
     housePals: [{ R: '#e03131', r: '#ff6b6b' }, { R: '#4c6ef5', r: '#748ffc' }, { R: '#2f9e44', r: '#69db7c' }, { R: '#f08c00', r: '#ffc078' }],
@@ -118,6 +120,7 @@ export const MAP_THEMES = {
     rocks: [CRYSTAL, { c: '#ffc9c9', C: '#ff8787' }],
     road: { layers: [[9, '#7a4a26'], [7, '#c98a4b']], walked: '#e8b77a', stripes: '#a0612f' },
     river: { bank: '#d9a35f', water: '#3bc9db', deep: '#1098ad', shine: '#e3fafc' },
+    pond: 'rocks',
     bridge: { plank: '#8b5a2b', dark: '#6e3d1a', rail: '#c98a4b' },
     house: HUT,
     housePals: [{ R: '#d4a24c', r: '#f0c674' }, { R: '#c08a3e', r: '#e9b96e' }],
@@ -137,6 +140,7 @@ export const MAP_THEMES = {
     rocks: [ROCK, { L: '#748ffc', d: '#5c7cfa' }],
     road: { layers: [[9, '#c9a35d'], [7, '#f0d9a0']], walked: '#fff4d1', pebble: '#c9a35d' },
     river: { bank: '#1c5d99', water: '#163e73', deep: '#0f2d57', shine: '#4dabf7' },
+    pond: 'bubbles',
     bridge: { plank: '#8d6e63', dark: '#5d4037', rail: '#bcaaa4' },
     house: DOME,
     housePals: [{ R: '#f783ac', r: '#fcc2d7' }, { R: '#ffa94d', r: '#ffd8a8' }, { R: '#da77f2', r: '#eebefa' }, { R: '#ffd43b', r: '#fff3bf' }],
@@ -155,6 +159,8 @@ export const MAP_THEMES = {
     rocks: [ROCK, { L: '#5c5f8a', d: '#45476b' }],
     road: { layers: [[9, '#495057'], [7, '#adb5bd']], walked: '#e9ecef', stripes: '#868e96' },
     river: { bank: '#45476b', water: '#0b1026', deep: '#1b1f4b', shine: '#ffffff' },
+    pond: 'goo',
+    pondColors: { bank: '#45476b', water: '#37b24d', deep: '#2b8a3e', shine: '#b2f2bb' },
     bridge: { plank: '#868e96', dark: '#495057', rail: '#ffd43b' },
     house: DOME,
     housePals: [{ R: '#74c0fc', r: '#d0ebff' }, { R: '#63e6be', r: '#c3fae8' }],
@@ -173,6 +179,7 @@ export const MAP_THEMES = {
     rocks: [ROCK, ROCK_PAL],
     road: { layers: [[9, '#495057'], [7, '#ced4da']], walked: '#f1f3f5', stripes: '#adb5bd' },
     river: { bank: '#868e96', water: '#3b5bdb', deep: '#364fc7', shine: '#bac8ff' },
+    pond: 'lily',
     bridge: { plank: '#8b5a2b', dark: '#5c3a1e', rail: '#495057' },
     house: HOUSE,
     housePals: [{ R: '#7048e8', r: '#9775fa' }, { R: '#e64980', r: '#f783ac' }, { R: '#1c7ed6', r: '#4dabf7' }, { R: '#7048e8', r: '#b197fc' }],
@@ -191,6 +198,7 @@ export const MAP_THEMES = {
     rocks: [ROCK, { L: '#2b211d', d: '#1a1210' }],
     road: { layers: [[9, '#2b211d'], [7, '#8a7466']], walked: '#b8a395', pebble: '#2b211d' },
     river: { bank: '#2b211d', water: '#ff6b1a', deep: '#e03131', shine: '#ffe066' },
+    pond: 'lava',
     bridge: { plank: '#495057', dark: '#343a40', rail: '#868e96' },
     house: HUT,
     housePals: [{ R: '#2f9e44', r: '#69db7c' }, { R: '#5c940d', r: '#94d82d' }],
@@ -213,6 +221,7 @@ export const MAP_THEMES = {
     rocks: [BUSH, { G: '#ffffff', g: '#ffffff', d: '#dee2e6' }],
     road: { layers: [[11, '#ff6b6b'], [9, '#ffa94d'], [7, '#ffd43b'], [5, '#69db7c'], [3, '#4dabf7']], walked: '#ffffff', walkedSize: 3 },
     river: { bank: '#ffffff', water: '#f783ac', deep: '#e64980', shine: '#fff0f6' },
+    pond: 'sparkle',
     bridge: { plank: '#ffffff', dark: '#ff8787', rail: '#ff6b6b' },
     house: MUSHROOM,
     housePals: [{ R: '#ff6b6b', w: '#ffffff' }, { R: '#845ef7', w: '#ffffff' }, { R: '#4dabf7', w: '#ffffff' }, { R: '#f783ac', w: '#ffffff' }],
@@ -231,6 +240,7 @@ export const MAP_THEMES = {
     rocks: [ROCK, { L: '#5f3dc4', d: '#4527a0' }],
     road: { layers: [[9, '#e67700'], [7, '#fcc419']], walked: '#fff3bf', stripes: '#fab005' },
     river: { bank: '#5f3dc4', water: '#7950f2', deep: '#5f3dc4', shine: '#ffffff' },
+    pond: 'stars',
     bridge: { plank: '#fab005', dark: '#e67700', rail: '#fff3bf' },
     house: DOME,
     housePals: [{ R: '#ffd43b', r: '#fff3bf' }, { R: '#b197fc', r: '#e5dbff' }, { R: '#ffa94d', r: '#ffe8cc' }, { R: '#63e6be', r: '#c3fae8' }],
@@ -355,8 +365,12 @@ function paintOne(section) {
     }
   }
 
+  // fishing ponds by the village, one each side of the road, when buddies are visiting
+  const ponds = section.dataset.pond ? pondSpots(aw, wall) : [];
+  const inPond = (x, y, pad) => ponds.some((p) => x > p.x - pad && x < p.x + p.w + pad && y > p.y - pad && y < p.y + p.h + pad);
+
   // a few clumps of scenery in the open, away from the road
-  const open = (x, y, r) => x > wall + 2 && x < aw - wall - 8 && !nearRoad(x + 4, y + 4, r);
+  const open = (x, y, r) => x > wall + 2 && x < aw - wall - 8 && !nearRoad(x + 4, y + 4, r) && !inPond(x + 4, y + 4, 8);
   // more scenery on wide screens, where there is lots of open ground
   const clumps = Math.floor((ah * Math.max(1, aw - 2 * wall)) / 900);
   for (let i = 0; i < clumps; i += 1) {
@@ -399,6 +413,7 @@ function paintOne(section) {
     else if (th.road.pebble && rnd() < 0.5) px(r.x + (rnd() < 0.5 ? -2 : 2), r.y, th.road.pebble);
   }
   if (band) drawBridge(px, band, th.bridge);
+  ponds.forEach((p) => drawPond(px, p, th));
 
   // the village at the start: houses on both sides of the road, more on wide screens
   const homes = aw > 140 ? [0.2, 0.33, 0.67, 0.8] : [0.24, 0.76];
@@ -421,6 +436,7 @@ function paintOne(section) {
     const y = Math.floor(rnd() * ah);
     if (x < wall || x > aw - wall || nearRoad(x, y, 6)) continue;
     if (band && y > band.top - 2 && y < band.bottom + 2) continue;
+    if (inPond(x, y, 1)) continue;
     const c = sp.colors[i % sp.colors.length];
     if (sp.bubbles && i % 5 === 0) {
       px(x, y - 1, c); px(x - 1, y, c); px(x + 1, y, c); px(x, y + 1, c);
@@ -462,6 +478,72 @@ function paintOne(section) {
     },
   });
 }
+
+/**
+ * Where the village ponds go, in map pixels. Visiting buddies stand above them
+ * (see .map-visitor in style.css) and cast their lines in: keep the two in step.
+ */
+export const POND_TOP = 38;
+export const POND_HEIGHT = 13;
+export function pondSpots(aw, wall) {
+  const gap = 8; // room for the road
+  const w = Math.floor(aw / 2) - gap - wall - 3;
+  return [
+    { x: wall + 3, y: POND_TOP, w, h: POND_HEIGHT },
+    { x: Math.ceil(aw / 2) + gap, y: POND_TOP, w, h: POND_HEIGHT },
+  ];
+}
+
+/** A round pond in the map's river colors: water, lava, goo or stardust, with a bit of theme on top. */
+function drawPond(px, { x, y, w, h }, th) {
+  const c = th.pondColors || th.river;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const inside = (xx, yy, grow = 0) => ((xx + 0.5 - cx) / (w / 2 + grow)) ** 2 + ((yy + 0.5 - cy) / (h / 2 + grow)) ** 2 <= 1;
+  for (let yy = y - 2; yy < y + h + 2; yy += 1) {
+    for (let xx = x - 2; xx < x + w + 2; xx += 1) {
+      if (inside(xx, yy)) {
+        const deep = inside(xx, yy, -2.5);
+        px(xx, yy, deep ? c.deep : c.water);
+      } else if (inside(xx, yy, 1.5)) {
+        px(xx, yy, c.bank);
+      }
+    }
+  }
+  // shine on the water
+  for (let i = 3; i < w - 3; i += 7) {
+    const sy = Math.round(cy - 2 + (i % 3));
+    for (let k = 0; k < 3; k += 1) if (inside(x + i + k, sy, -1)) px(x + i + k, sy, c.shine);
+  }
+  const extra = POND_EXTRAS[th.pond] || POND_EXTRAS.lily;
+  extra(px, { x, y, w, h, cx, cy });
+}
+
+const POND_EXTRAS = {
+  // lily pads with a pink flower
+  lily: (px, { x, y, w }) => {
+    px(x + 4, y + 3, '#40c057', 3, 2); px(x + 5, y + 3, '#ff8fa3');
+    px(x + w - 7, y + 8, '#40c057', 3, 2);
+  },
+  // lava bubbles popping
+  lava: (px, { x, y, w }) => {
+    for (const [dx, dy] of [[4, 4], [w - 8, 7], [Math.floor(w / 2), 9]]) { px(x + dx, y + dy, '#ffe066', 2, 1); px(x + dx, y + dy - 1, '#ff922b', 2, 1); }
+  },
+  // glowing bubbles in alien goo, or stars in a pool of stardust
+  sparkle: (px, { x, y, w }, color = '#ffffff') => {
+    for (const [dx, dy] of [[4, 3], [w - 6, 5], [Math.floor(w / 2) - 2, 9]]) { px(x + dx, y + dy, color); px(x + dx - 1, y + dy + 1, color); px(x + dx + 1, y + dy + 1, color); }
+  },
+  goo: (px, p) => POND_EXTRAS.sparkle(px, p, '#d3f9d8'),
+  stars: (px, p) => POND_EXTRAS.sparkle(px, p, '#ffd43b'),
+  // rocks around a tide pool
+  rocks: (px, { x, y, w, h }) => {
+    for (const [dx, dy] of [[-2, 2], [w, h - 4], [w - 4, -2]]) px(x + dx, y + dy, '#868e96', 3, 2);
+  },
+  // bubbles rising from a deep sea trench
+  bubbles: (px, { x, y, w }) => {
+    for (const [dx, dy] of [[5, 2], [w - 7, 4], [Math.floor(w / 2), 7]]) { px(x + dx, y + dy, '#d0ebff'); px(x + dx + 1, y + dy - 2, '#d0ebff'); }
+  },
+};
 
 function drawRiver(px, aw, riverY, road, c) {
   const wave = (x) => Math.round(riverY + Math.sin(x / 13) * 2);
