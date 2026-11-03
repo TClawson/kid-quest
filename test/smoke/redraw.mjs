@@ -42,6 +42,7 @@ try {
     window.__fish = 0;
     setInterval(() => {
       const c = document.querySelector('canvas.map-life');
+      if (!c) return; // the test moves on to the wardrobe while this still runs
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       for (let i = 3; i < d.length; i += 4) if (d[i]) { window.__fish += 1; break; }
     }, 200);

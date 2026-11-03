@@ -325,10 +325,9 @@ label { color: var(--ink); }
 .map-visitor { position: absolute; top: 68px; width: 64px; margin-left: -32px; display: grid; justify-items: center; cursor: pointer; }
 .map-visitors.arrive .map-visitor { animation: visitor-arrive 0.7s ease-out both; }
 .map-visitor.talking { z-index: 1; }
-.map-visitors.arrive .map-visitor:nth-child(2) { animation-delay: 0.15s; }
-.map-visitors.arrive .map-visitor:nth-child(3) { animation-delay: 0.3s; }
-.map-visitors.arrive .map-visitor:nth-child(4) { animation-delay: 0.45s; }
-.map-visitor:nth-child(3), .map-visitor:nth-child(4) { top: 84px; }
+.map-visitors.arrive .map-visitor.inner { animation-delay: 0.2s; }
+.map-visitors.arrive .map-visitor.playing { animation-delay: 0.4s; }
+.map-visitor.inner { top: 84px; }
 .visitor-buddy { width: 58px; height: 58px; animation: visitor-bob 2.4s ease-in-out infinite; }
 .visitor-buddy svg { width: 100%; height: 100%; display: block; }
 .visitor-name { margin-top: -4px; font-size: 0.7rem; font-weight: 800; color: #fff; background: var(--kid); border: 2px solid var(--px-ink); border-radius: 4px; padding: 0 5px; line-height: 1.4; }
@@ -338,3 +337,96 @@ label { color: var(--ink); }
 @keyframes visitor-arrive { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
 @keyframes visitor-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .map-visitor, .visitor-buddy { animation: none; } }
+
+/* ---------- sports: gems, bonus exercise, moves and fishing ---------- */
+.chip.gem { background: #e5dbff; color: #5f3dc4; }
+.gem-line { font-size: 1.2rem; margin: 0; }
+.item .price.gems { color: #5f3dc4; background: #f3f0ff; border-color: #b197fc; }
+.item .price.gems.can { background: #d0bfff; border-color: var(--px-ink, #2a1838); }
+.buddy-tap { border: 0; padding: 0; background: none; cursor: pointer; flex: none; border-radius: 8px; }
+.buddy-tap:active { transform: translateY(2px); }
+.map-buddy[data-action] { pointer-events: auto; cursor: pointer; }
+.exercise { background: color-mix(in srgb, #7950f2 7%, var(--card)); border-radius: var(--radius); padding: 4px 14px 14px; margin: 10px 0; }
+.exercise h2 { margin-bottom: 6px; }
+.ex-week { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 10px; }
+.ex-dots { display: flex; gap: 6px; }
+.ex-dot { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; font-size: 1rem; background: #fff; box-shadow: inset 0 0 0 3px #d0bfff; }
+.ex-dot.on { background: #d0bfff; box-shadow: inset 0 0 0 3px #7950f2; }
+.moves { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; }
+.move { border: 0; border-radius: 8px; padding: 8px 10px; text-align: left; background: var(--card); box-shadow: 0 3px 0 var(--line); display: grid; gap: 2px; font: inherit; cursor: pointer; }
+.move b { font-size: 0.95rem; }
+.move small { color: var(--muted); font-size: 0.75rem; }
+.move.locked { opacity: 0.6; }
+.move:not(.locked) { box-shadow: 0 3px 0 #b197fc; }
+.moves-kind { margin: 14px 0 2px; font-size: 1rem; }
+
+/* fishing visitors cast into the village pond (see pondSpots in maparts.js) */
+.map-visitor { --line: 98px; }
+.map-visitor.inner { --line: 82px; }
+.map-visitor.face-left .visitor-buddy svg { transform: scaleX(-1); }
+.fish-line { position: absolute; top: 12px; left: 60px; width: 1px; height: var(--line); background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 0.5px rgba(42, 24, 56, 0.35); pointer-events: none; transform-origin: top; }
+.map-visitor.face-left .fish-line { left: 3px; }
+.bobber { position: absolute; bottom: -4px; left: -3px; width: 7px; height: 7px; border-radius: 2px; background: linear-gradient(#e03131 50%, #fff 50%); border: 1px solid var(--px-ink); animation: bobber 1.6s steps(2, end) infinite; }
+@keyframes bobber { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
+.map-visitor.reeling .fish-line { animation: reel-line 3.4s steps(6, end) both; }
+.map-visitor.reeling .bobber { animation: bobber-bite 0.25s steps(1, end) 3; }
+@keyframes bobber-bite { 0% { transform: translateY(4px); } 50% { transform: translateY(0); } }
+@keyframes reel-line { 0%, 25% { transform: scaleY(1); } 45% { transform: scaleY(0.15); } 85% { transform: scaleY(0.15); } 100% { transform: scaleY(1); } }
+.fish-catch { position: absolute; left: 50%; top: -6px; width: 28px; margin-left: -14px; opacity: 0; pointer-events: none; }
+.fish-catch svg { width: 100%; height: auto; display: block; image-rendering: pixelated; }
+.map-visitor.reeling .fish-catch { animation: catch-pop 3.4s steps(1, end) both; }
+@keyframes catch-pop {
+  0%, 25% { opacity: 0; transform: translate(26px, 90px); }
+  30% { opacity: 1; transform: translate(22px, 50px) rotate(20deg); }
+  35% { transform: translate(14px, 18px) rotate(-20deg); }
+  40% { transform: translate(6px, -8px) rotate(10deg); }
+  45%, 55%, 65%, 75% { transform: translate(0, -14px) rotate(-8deg); }
+  50%, 60%, 70%, 80% { transform: translate(0, -14px) rotate(8deg); }
+  90% { opacity: 1; transform: translate(0, -14px); }
+  95%, 100% { opacity: 0; transform: translate(0, -20px); }
+}
+.map-visitor.face-left .fish-catch { animation-name: catch-pop-left; }
+@keyframes catch-pop-left {
+  0%, 25% { opacity: 0; transform: translate(-26px, 90px); }
+  30% { opacity: 1; transform: translate(-22px, 50px) rotate(-20deg); }
+  35% { transform: translate(-14px, 18px) rotate(20deg); }
+  40% { transform: translate(-6px, -8px) rotate(-10deg); }
+  45%, 55%, 65%, 75% { transform: translate(0, -14px) rotate(8deg); }
+  50%, 60%, 70%, 80% { transform: translate(0, -14px) rotate(-8deg); }
+  90% { opacity: 1; transform: translate(0, -14px); }
+  95%, 100% { opacity: 0; transform: translate(0, -20px); }
+}
+/* a buddy mid-move doesn't bob, so the move reads cleanly */
+.map-visitor.doing-move .visitor-buddy { animation: none; }
+.map-visitor.doing-move .fish-line { opacity: 0; }
+
+/* visitors with the same gear play together on a small field or rink (see drawField in maparts.js) */
+.map-visitor.playing { top: 118px; }
+.map-game { position: absolute; top: 170px; height: 0; pointer-events: none; }
+.game-ball { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); line-height: 0; }
+.game-ball svg { display: block; image-rendering: pixelated; }
+.game-soccer .game-ball { animation: ball-pass 2.4s steps(12, end) infinite; }
+.game-hockey .game-ball { top: 6px; animation: ball-pass 1.6s steps(10, end) infinite; }
+.game-football .game-ball { animation: ball-pass 2.8s steps(14, end) infinite, ball-arc 1.4s steps(7, end) infinite; }
+@keyframes ball-pass { 0%, 100% { left: 6%; } 50% { left: 94%; } }
+@keyframes ball-arc { 0%, 100% { margin-top: 0; } 50% { margin-top: -34px; } }
+/* each player kicks, shoots or throws as the ball leaves them */
+.map-visitor.playing .visitor-buddy { animation: none; }
+.play-soccer.player-a .visitor-buddy { animation: player-kick 2.4s steps(1, end) infinite; }
+.play-soccer.player-b .visitor-buddy { animation: player-kick 2.4s steps(1, end) 1.2s infinite; }
+.play-hockey.player-a .visitor-buddy { animation: player-kick 1.6s steps(1, end) infinite; }
+.play-hockey.player-b .visitor-buddy { animation: player-kick 1.6s steps(1, end) 0.8s infinite; }
+.play-football.player-a .visitor-buddy { animation: player-kick 2.8s steps(1, end) infinite; }
+.play-football.player-b .visitor-buddy { animation: player-kick 2.8s steps(1, end) 1.4s infinite; }
+@keyframes player-kick { 0% { transform: translateY(-5px); } 6% { transform: translateY(-2px); } 12%, 100% { transform: none; } }
+.map-visitor.face-left.playing .visitor-buddy svg { transform: scaleX(-1); }
+@media (prefers-reduced-motion: reduce) { .game-ball { animation: none !important; } }
+/* on a phone the fields are small, so the players are too */
+@media (max-width: 600px) { .map-visitor.playing { top: 126px; } .map-visitor.playing .visitor-buddy { width: 46px; height: 46px; } }
+/* near the map's edge, the speech bubble opens toward the middle so it isn't cut off */
+.map-visitor.edge-left .visitor-bubble { left: 0; transform: scale(0.6); transform-origin: top left; }
+.map-visitor.edge-left.talking .visitor-bubble { transform: none; }
+.map-visitor.edge-left .visitor-bubble::before { left: 24px; }
+.map-visitor.edge-right .visitor-bubble { left: auto; right: 0; transform: scale(0.6); transform-origin: top right; }
+.map-visitor.edge-right.talking .visitor-bubble { transform: none; }
+.map-visitor.edge-right .visitor-bubble::before { left: auto; right: 19px; }

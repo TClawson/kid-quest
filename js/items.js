@@ -16,6 +16,7 @@ export const SLOTS = [
   { id: 'face', name: 'Glasses', icon: '🕶️' },
   { id: 'neck', name: 'Extras', icon: '🎀' },
   { id: 'music', name: 'Music', icon: '🎹' },
+  { id: 'sport', name: 'Sports', icon: '⚽' },
 ];
 
 // Slots the buddy wears. Bought items in these slots belong to one buddy: switching
@@ -85,7 +86,85 @@ export const COLOR_VERSIONS = {
 /** "Blue" + "Ball cap" -> "Blue ball cap" */
 const colorName = (color, name) => `${COLORS[color]} ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
 
-export const ITEMS = BASE_ITEMS.flatMap((item) => {
+// ---------- sports gear ----------
+// Bought with gems, which only exercise earns. Gear belongs to the kid (every
+// buddy can use it), like the pianos. Each kind comes in three versions; a
+// better version makes its moves flashier and its fish rarer.
+export const SPORTS = [
+  { id: 'rod', name: 'Fishing rod', icon: '🎣' },
+  { id: 'soccer', name: 'Soccer ball', icon: '⚽' },
+  { id: 'shoes', name: 'Running shoes', icon: '👟' },
+  { id: 'football', name: 'Football', icon: '🏈' },
+  { id: 'hockey', name: 'Hockey stick', icon: '🏒' },
+];
+export const TIERS = [
+  { tier: 1, id: 'regular', name: '', gems: 40 },
+  { tier: 2, id: 'good', name: 'Good', gems: 120 },
+  { tier: 3, id: 'super', name: 'Super', gems: 300 },
+];
+const SPORT_ITEMS = SPORTS.flatMap((k) => TIERS.map((t) => ({
+  id: `sport-${k.id}-${t.id}`,
+  slot: 'sport',
+  name: t.name ? `${t.name} ${k.name.charAt(0).toLowerCase()}${k.name.slice(1)}` : k.name,
+  gems: t.gems,
+  kind: k.id,
+  tier: t.tier,
+})));
+
+// Moves a buddy does when tapped. Each kind of gear has three, unlocked by the
+// best exercise streak: 1, 3 and 6 weeks. 'body' moves need no gear.
+export const MOVE_WEEKS = [1, 3, 6];
+export const MOVES = [
+  { id: 'jacks', kind: 'body', step: 1, name: 'Jumping jacks' },
+  { id: 'cartwheel', kind: 'body', step: 2, name: 'Cartwheel' },
+  { id: 'backflip', kind: 'body', step: 3, name: 'Backflip' },
+  { id: 'cast', kind: 'rod', step: 1, name: 'Big cast' },
+  { id: 'reel', kind: 'rod', step: 2, name: 'Reel one in' },
+  { id: 'whopper', kind: 'rod', step: 3, name: 'The whopper' },
+  { id: 'keepy', kind: 'soccer', step: 1, name: 'Keepy-uppy' },
+  { id: 'flick', kind: 'soccer', step: 2, name: 'Rainbow flick' },
+  { id: 'bicycle', kind: 'soccer', step: 3, name: 'Bicycle kick' },
+  { id: 'dash', kind: 'shoes', step: 1, name: 'Speed dash' },
+  { id: 'hurdle', kind: 'shoes', step: 2, name: 'Hurdle jump' },
+  { id: 'tornado', kind: 'shoes', step: 3, name: 'Tornado spin' },
+  { id: 'spike', kind: 'football', step: 1, name: 'Touchdown spike' },
+  { id: 'spiral', kind: 'football', step: 2, name: 'Spiral pass' },
+  { id: 'flipcatch', kind: 'football', step: 3, name: 'Flip catch' },
+  { id: 'dangle', kind: 'hockey', step: 1, name: 'Stickhandling' },
+  { id: 'slapshot', kind: 'hockey', step: 2, name: 'Slap shot' },
+  { id: 'spinorama', kind: 'hockey', step: 3, name: 'Spin-o-rama' },
+];
+export const moveById = (id) => MOVES.find((m) => m.id === id);
+export const moveWeeks = (move) => MOVE_WEEKS[move.step - 1];
+
+/** The best version (1-3) of each kind of gear in a list of owned item ids. */
+export function bestGear(owned = []) {
+  const out = {};
+  for (const id of owned) {
+    const item = itemById(id);
+    if (item?.slot === 'sport') out[item.kind] = Math.max(out[item.kind] || 0, item.tier);
+  }
+  return out;
+}
+
+/**
+ * Moves a buddy can do: body moves, plus moves for gear the kid owns, up to
+ * what their best exercise streak (in weeks) has unlocked. Each comes with the
+ * gear version to use: [{ move, tier }].
+ */
+export function unlockedMoves(owned, bestWeeks) {
+  const gear = bestGear(owned);
+  return MOVES.filter((m) => (m.kind === 'body' || gear[m.kind]) && (bestWeeks || 0) >= moveWeeks(m))
+    .map((move) => ({ move, tier: gear[move.kind] || 0 }));
+}
+
+/** Pick a random move, avoiding the one just done when there is a choice. */
+export function pickMove(moves, last, rnd = Math.random) {
+  const pool = moves.length > 1 ? moves.filter((m) => m.move.id !== last) : moves;
+  return pool.length ? pool[Math.floor(rnd() * pool.length)] : null;
+}
+
+export const ITEMS = [...BASE_ITEMS, ...SPORT_ITEMS].flatMap((item) => {
   const cv = COLOR_VERSIONS[item.id];
   if (!cv) return [item];
   return [item, ...cv.colors.map((color) => ({
@@ -101,6 +180,7 @@ export const ITEMS = BASE_ITEMS.flatMap((item) => {
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
 
 export function isUnlocked(item, progress) {
+  if (item.gems) return Boolean(progress.owned?.includes(item.id));
   if (item.price) return Boolean(progress.owned?.includes(item.id));
   if (!item.need) return true;
   if (item.need.streak) return progress.best >= item.need.streak;
@@ -125,6 +205,7 @@ export function needGap(item, progress) {
 }
 
 export function needLabel(item) {
+  if (item.gems) return `${item.gems} gems`;
   if (item.price) return `${item.price} coins`;
   if (!item.need) return 'Free';
   if (item.need.streak) return `${item.need.streak}-day streak`;

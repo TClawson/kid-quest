@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById } from '../js/items.js';
+import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel } from '../js/items.js';
 
 test('every item has a known slot and unique id', () => {
   const slots = new Set(SLOTS.map((s) => s.id));
@@ -144,4 +144,29 @@ test('puppy and turtle are their own buddies and wear every item', async () => {
       assert.notEqual(draw(species, { [item.slot]: item.id }), draw(species), `${species} wears ${item.id}`);
     }
   }
+});
+
+test('sports gear: 5 kinds in 3 versions, bought with gems only', () => {
+  const gear = ITEMS.filter((i) => i.slot === 'sport');
+  assert.equal(gear.length, 15);
+  const rod = itemById('sport-rod-good');
+  assert.equal(rod.gems, 120);
+  assert.equal(rod.price, undefined);
+  assert.equal(needLabel(rod), '120 gems');
+  assert.equal(isUnlocked(rod, { owned: [] }), false);
+  assert.equal(isUnlocked(rod, { owned: ['sport-rod-good'] }), true);
+  assert.deepEqual(bestGear(['sport-rod-regular', 'sport-rod-super', 'hat-cap', 'sport-soccer-good']), { rod: 3, soccer: 2 });
+});
+
+test('moves unlock at 1, 3 and 6 exercise weeks, for gear the kid owns', () => {
+  const ids = (owned, weeks) => unlockedMoves(owned, weeks).map((m) => m.move.id);
+  assert.deepEqual(ids([], 0), []);
+  assert.deepEqual(ids([], 1), ['jacks']);
+  assert.deepEqual(ids(['sport-soccer-regular'], 3), ['jacks', 'cartwheel', 'keepy', 'flick']);
+  assert.equal(ids(['sport-soccer-regular', 'sport-rod-super'], 6).length, 9);
+  assert.equal(unlockedMoves(['sport-rod-super'], 6).find((m) => m.move.kind === 'rod').tier, 3);
+  assert.equal(MOVES.length, 18);
+  const two = unlockedMoves([], 3);
+  assert.equal(pickMove(two, 'jacks').move.id, 'cartwheel');
+  assert.equal(pickMove([], null), null);
 });
