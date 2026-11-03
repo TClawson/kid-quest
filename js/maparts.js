@@ -129,6 +129,7 @@ export const MAP_THEMES = {
     goal: (px, cx, cy) => drawFort(px, cx, cy, { stone: '#e9c46a', hi: '#f6e0a3', lo: '#c9a24a', flag: '#ff6b6b' }, false),
     sparkle: { colors: ['#ffffff', '#ffa8a8', '#ff922b', '#fff3bf'], every: 160 },
     tint: { top: '#ff922b', alpha: 0.22 },
+    life: 'crab',
   },
 
   'bg-ocean': {
@@ -467,7 +468,7 @@ function paintOne(section) {
   startMapLife({
     section, aw, ah, scale: SCALE, life: th.life, wall,
     goal: chest || { x: aw / 2, y: ah - 30 },
-    knightPost: { x: side < 0 ? wall + 2 : aw - wall - 26, y: postY, side },
+    knightPost: { x: side < 0 ? wall + 2 : aw - wall - 28, y: postY, side },
     openSpot: ({ top, bottom }) => {
       for (let tries = 0; tries < 30; tries += 1) {
         const x = wall + 4 + Math.random() * (aw - 2 * wall - 32);
