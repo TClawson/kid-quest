@@ -7,7 +7,7 @@
     "start": "npx --yes http-server@14.1.1 -c-1 -p 8080 .",
     "build:firebase": "node scripts/build-firebase.mjs",
     "test:rules": "firebase emulators:exec --only firestore,auth --project demo-kid-quest \"node --test test/rules/*.test.js\"",
-    "test:smoke": "node test/smoke/smoke.mjs && node test/smoke/timer.mjs && node test/smoke/rewards.mjs && node test/smoke/buddies.mjs",
+    "test:smoke": "node test/smoke/smoke.mjs && node test/smoke/timer.mjs && node test/smoke/rewards.mjs && node test/smoke/buddies.mjs && node test/smoke/redraw.mjs",
     "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-kid-quest \"node test/e2e/sync.mjs\""
   },
   "devDependencies": {
