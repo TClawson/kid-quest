@@ -989,8 +989,8 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
   const neckFront = !neckBehind ? itemLayer(neck)
     : neck === 'neck-cape' ? '<rect x="10" y="18" width="4" height="1" fill="#fcc419"/>' : '';
 
-  // a piano and sports moves don't mix: the piano steps aside while the buddy shows off
-  const music = trick ? undefined : o.music;
+  // a piano and sports don't mix: the piano steps aside while the buddy holds gear or shows off
+  const music = trick || gearOf(o.sport) ? undefined : o.music;
   const behindProps = art?.props?.includes('bigfish') ? props : '';
   const frontProps = behindProps ? '' : props;
   return `<svg class="buddy-svg pixel${trick ? ` trick trick-${trick.move} tier-${trick.tier || 0}` : ''}" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="${speciesId} buddy, ${trick ? trick.move : mood}">
