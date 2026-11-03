@@ -140,10 +140,48 @@ test('puppy and turtle are their own buddies and wear every item', async () => {
   const looks = SPECIES.map((s) => draw(s.id));
   assert.equal(new Set(looks).size, looks.length, 'every species looks different');
   for (const species of ['puppy', 'turtle']) {
-    for (const item of ITEMS.filter((i) => ['hat', 'face', 'neck', 'music'].includes(i.slot))) {
+    for (const item of ITEMS.filter((i) => ['hat', 'face', 'neck', 'music'].includes(i.slot) && (!i.species || i.species === species))) {
       assert.notEqual(draw(species, { [item.slot]: item.id }), draw(species), `${species} wears ${item.id}`);
     }
   }
+});
+
+test('buddy specials: one per buddy, 1000 coins, only for their own buddy', async () => {
+  const { buddySvg } = await import('../js/avatar.js');
+  const { SPECIES, fitsSpecies, LEGACY_LEVEL, switchSpecies, ownedFor, addOwned, isWorn } = await import('../js/items.js');
+  const specials = ITEMS.filter((i) => i.species);
+  assert.deepEqual(specials.map((i) => i.species).sort(), SPECIES.map((s) => s.id).sort(), 'one special for every buddy');
+  const draw = (species, outfit = {}) => buddySvg({ species, outfit }, 'happy', { background: false });
+  for (const item of specials) {
+    assert.equal(item.price, 1000);
+    assert.equal(isWorn(item), true, `${item.id} is worn, so it belongs to the buddy`);
+    assert.equal(LEGACY_LEVEL(item), Infinity, 'never handed out as an old level item');
+    assert.equal(fitsSpecies(item, item.species), true);
+    for (const sp of SPECIES.filter((s) => s.id !== item.species)) {
+      assert.equal(fitsSpecies(item, sp.id), false);
+      assert.equal(draw(sp.id, { [item.slot]: item.id }), draw(sp.id), `${sp.id} never shows ${item.id}`);
+    }
+    assert.notEqual(draw(item.species, { [item.slot]: item.id }), draw(item.species), `${item.species} wears ${item.id}`);
+  }
+  // a stale special in another buddy's closet doesn't come back on the wrong buddy
+  const kid = { owned: [], buddy: { species: 'panda', outfit: {} } };
+  addOwned(kid, itemById('neck-bamboo'));
+  kid.buddy.outfit.neck = 'neck-bamboo';
+  kid.buddy.closet = { bear: { neck: 'neck-bamboo' } };
+  const unlocked = (item, sp) => fitsSpecies(item, sp) && isUnlocked(item, { best: 0, owned: [...ownedFor(kid, sp), 'neck-bamboo'] });
+  switchSpecies(kid, 'bear', unlocked);
+  assert.equal(kid.buddy.outfit.neck, undefined);
+  switchSpecies(kid, 'panda', unlocked);
+  assert.equal(kid.buddy.outfit.neck, 'neck-bamboo', 'the panda gets its bamboo back');
+});
+
+test('the panda’s bamboo leans on the side away from held gear', async () => {
+  const { buddySvg } = await import('../js/avatar.js');
+  const draw = (sport) => buddySvg({ species: 'panda', outfit: { neck: 'neck-bamboo', sport } }, 'happy', { background: false });
+  const xs = (svg) => [...svg.matchAll(/x="(\d+)"[^>]*fill="#69b34c"/g)].map((m) => Number(m[1]));
+  assert.ok(Math.min(...xs(draw())) >= 12, 'on the right with no gear');
+  assert.ok(Math.min(...xs(draw('sport-soccer-regular'))) >= 12, 'on the right when the ball is on the left');
+  assert.ok(Math.max(...xs(draw('sport-rod-regular'))) <= 12, 'on the left when the rod is on the right');
 });
 
 test('sports gear: 5 kinds in 3 versions, bought with gems only', () => {

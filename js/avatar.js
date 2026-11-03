@@ -2,7 +2,7 @@
 // Every layer (background, species sprite, outfit items) is a small grid of palette letters.
 // Animation is done in CSS (see .buddy rules in style.css) using the classes set here.
 
-import { ITEMS } from './items.js';
+import { ITEMS, itemById, fitsSpecies } from './items.js';
 
 const SIZE = 24;
 const OUT = '#2a1838'; // outline
@@ -357,6 +357,88 @@ const ITEM_ART = {
     '...KBBK...',
     '....KK....',
   ], { Y: '#fcc419', B: '#4dabf7' }],
+  // ----- buddy specials (one kind of buddy each, see items.js) -----
+  // fox: a furry frontier cap with a ringed tail hanging down the side
+  'hat-coonskin': [5, 4, [
+    '....KKKKKK........',
+    '..KKFFfFFFKK......',
+    '.KFFFfFFFfFFK.....',
+    '.KFfFFFFFFFfKKK...',
+    'KFFFFFfFFFFFFtdK..',
+    'KFFfFFFFFfFFFKttK.',
+    'KBBBBBBBBBBBBKddK.',
+    'KBbBBbBBbBBbBKttK.',
+    'KKKKKKKKKKKKKKddK.',
+    '..............KttK',
+    '..............KddK',
+    '..............KttK',
+    '..............KddK',
+    '...............KK.',
+  ], { F: SH('#9c8470', '#c4ad96', '#6e5a48'), f: '#c4ad96', t: '#d9ccb8', d: '#2f2a28', B: SH('#6e4a2e', '#8d6240', '#4a2f1c'), b: '#b08a62' }],
+  // bear: six-sided honeycomb lenses
+  'face-honeycomb': [6, 11, [
+    '.KKK....KKK.',
+    'KHYHK..KHYHK',
+    'KYHYKKKKYHYK',
+    'KHYHK..KHYHK',
+    '.KKK....KKK.',
+  ], { Y: '#f59f00', H: '#ffd43b' }],
+  // panda: a bamboo stick leaning on the side away from held sports gear (drawn behind the panda)
+  'neck-bamboo': [16, 6, [
+    'LL....l.',
+    '.LLL.ll.',
+    '...LKlK.',
+    '..KGgK..',
+    '..KGgK..',
+    '..KNNK..',
+    '..KGgK..',
+    '...KGgK.',
+    '...KGgK.',
+    '...KNNK.',
+    '...KGgK.',
+    '...KGgK.',
+    '....KGgK',
+    '....KNNK',
+    '....KGgK',
+    '....KGgK',
+    '....KNNK',
+    '....KKKK',
+  ], { G: '#69b34c', g: '#3f8a2e', N: '#2f6e22', L: '#3f9e34', l: '#7bd65a' }, 'behind'],
+  // cat: a yarn necklace with a ball of yarn and a loose end
+  'neck-yarn': [6, 18, [
+    'S..........S',
+    '.SS......SS.',
+    '...SSKKKSS..',
+    '....KRrRK...',
+    '...KRRrRRK..',
+    '....KrRRK.SS',
+  ], { S: '#c92a2a', R: SH('#f03e3e', '#ff8787', '#a51d1d'), r: '#ffc9c9' }],
+  // dino: a sleeveless basketball jersey with trim and a big number 1
+  'neck-jersey': [8, 18, [
+    'KJJK..KJJK',
+    'KJTKKKKTJK',
+    'KJJJJWJJJK',
+    'KJJJWWJJJK',
+    'KTTTTWTTTK',
+  ], { J: SH('#7048e8', '#9775fa', '#4c2bb5'), T: '#ffd43b', W: '#ffffff' }],
+  // puppy: a chew bone held in its mouth
+  'neck-bone': [3, 15, [
+    '.KK............KK.',
+    'KWWKKKKKKKKKKKKWWK',
+    'KWWWWWWWWWWWWWWWWK',
+    'KWWKKKKKKKKKKKKWWK',
+    '.KK............KK.',
+  ], { W: SH('#fbf8f0', '#ffffff', '#c9c1ad') }],
+  // turtle: a tied cloth eye mask with two tails fluttering behind
+  'face-ninja': [5, 12, [
+    'KKKKKKKKKKKKKK....',
+    'KMM..MMMM..MMKKK..',
+    'KMM..MMMM..MMKMMK.',
+    'KKKKKKKKKKKKKKKMMK',
+    '.............KMK.K',
+    '..............KMMK',
+    '...............KK.',
+  ], { M: SH('#1c7ed6', '#4dabf7', '#1864ab') }],
 };
 
 // ---------- music items: an instrument the buddy sits at ----------
@@ -825,6 +907,13 @@ for (const item of ITEMS) {
   ITEM_ART[item.id] = [x, y, newRows || rows, { ...pal, ...newPal }, behind];
 }
 
+// The bamboo stick on the left, for when held gear is on the right (the fishing rod).
+{
+  const [x, y, rows, pal, behind] = ITEM_ART['neck-bamboo'];
+  const w = rows[0].length;
+  ITEM_ART['neck-bamboo-left'] = [SIZE - x - w, y, rows.map((r) => [...r].reverse().join('')), pal, behind];
+}
+
 function itemLayer(id) {
   const art = ITEM_ART[id];
   if (!art) return '';
@@ -888,8 +977,17 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
   body.grid(SPRITE_X, SPRITE_Y - sp.lift, sp.grid, sp.pal, sp.shade);
 
   const shadow = `<rect class="shadow" x="7" y="23" width="10" height="1" fill="#000" opacity="0.18"/>`;
-  const capeBehind = ITEM_ART[o.neck]?.[4] ? itemLayer(o.neck) : '';
-  const neckFront = ITEM_ART[o.neck]?.[4] ? '<rect x="10" y="18" width="4" height="1" fill="#fcc419"/>' : itemLayer(o.neck);
+  // a buddy special only shows on its own kind of buddy
+  const worn = (id) => (fitsSpecies(itemById(id), speciesId) ? id : undefined);
+  const hat = worn(o.hat);
+  const face = worn(o.face);
+  let neck = worn(o.neck);
+  // the bamboo leans on the side away from the held gear: only the fishing rod is held on the right
+  if (neck === 'neck-bamboo' && (gear?.kind === 'rod' || gearOf(o.sport)?.kind === 'rod')) neck = 'neck-bamboo-left';
+  const neckBehind = ITEM_ART[neck]?.[4];
+  const capeBehind = neckBehind ? itemLayer(neck) : '';
+  const neckFront = !neckBehind ? itemLayer(neck)
+    : neck === 'neck-cape' ? '<rect x="10" y="18" width="4" height="1" fill="#fcc419"/>' : '';
 
   // a piano and sports moves don't mix: the piano steps aside while the buddy shows off
   const music = trick ? undefined : o.music;
@@ -904,8 +1002,8 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
       ${capeBehind}
       ${body.svg()}
       ${neckFront}
-      ${itemLayer(o.face)}
-      ${itemLayer(o.hat)}
+      ${itemLayer(face)}
+      ${itemLayer(hat)}
       ${inChar ? gearSvg : ''}
       ${musicLayer(music, 'front')}
       ${musicLayer(music, 'flames')}

@@ -10,7 +10,7 @@ import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { startMusic, stopMusic } from './music.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, moveWornToBuddy, switchSpecies,
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
 import { pickVisitors, visitorLines, planVisits } from './visits.js';
@@ -987,7 +987,9 @@ function viewWardrobe() {
   if (!kid) { ui.view = 'home'; return viewHome(); }
   const prog = progressFor(kid);
   const fresh = new Set(kid.newItems || []);
-  const items = ITEMS.filter((i) => i.slot === ui.slot);
+  // buddy specials show only for their own buddy, first in their tab
+  const items = ITEMS.filter((i) => i.slot === ui.slot && fitsSpecies(i, kid.buddy.species))
+    .sort((a, b) => Boolean(b.species) - Boolean(a.species));
   const nextItem = ITEMS.filter((i) => i.need && !isUnlocked(i, prog)).sort((a, b) => needGap(a, prog) - needGap(b, prog))[0];
   const sportTab = ui.slot === 'sport';
   return `
@@ -1014,7 +1016,8 @@ function viewWardrobe() {
     const wearing = item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
     const price = item.gems ? `<span class="price gems ${prog.gems >= item.gems ? 'can' : ''}">💎 ${item.gems}</span>`
       : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : '';
-    return `<button class="item ${open ? '' : 'locked'} ${item.price || item.gems ? 'shop' : ''} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
+    return `<button class="item ${open ? '' : 'locked'} ${item.price || item.gems ? 'shop' : ''} ${item.species ? 'special' : ''} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
+            ${item.species ? `<span class="special-tag">⭐ ${esc(speciesName(item.species))} only</span>` : ''}
             <span class="item-art">${buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
             <small>${open ? wearing : price || `🔒 ${esc(needLabel(item))}`}</small>
@@ -1229,7 +1232,7 @@ function parentSettings() {
 /** Switch buddies. Each buddy remembers what it was wearing; bought hats and such stay with the buddy they were bought for. */
 function changeSpecies(kid, species) {
   const prog = progressFor(kid);
-  switchSpecies(kid, species, (item, sp) => isUnlocked(item, { ...prog, owned: ownedFor(kid, sp) }));
+  switchSpecies(kid, species, (item, sp) => fitsSpecies(item, sp) && isUnlocked(item, { ...prog, owned: ownedFor(kid, sp) }));
 }
 
 const speciesName = (id) => SPECIES.find((sp) => sp.id === id)?.name || 'buddy';
@@ -1267,7 +1270,8 @@ function buyItem(kid, item, prog) {
       <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
       <h1>Buy ${esc(item.name)}${isWorn(item) ? ` for your ${esc(speciesName(kid.buddy.species).toLowerCase())}` : ''}?</h1>
       <p>It costs <b>🪙 ${item.price}</b>. You'll have ${prog.coins - item.price} coins left.</p>
-      ${isWorn(item) ? '<p class="muted small">Only this buddy can wear it. Other buddies need their own.</p>' : ''}
+      ${item.species ? `<p class="muted small">⭐ A special made just for ${esc(speciesName(item.species).toLowerCase())}s. Every kind of buddy has its own.</p>`
+    : isWorn(item) ? '<p class="muted small">Only this buddy can wear it. Other buddies need their own.</p>' : ''}
       <div class="stack">
         <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
         <button class="btn ghost" data-action="modal-close">Keep saving</button>
@@ -1361,7 +1365,7 @@ const actions = {
   'wardrobe-item': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
-    if (!item) return;
+    if (!item || !fitsSpecies(item, kid.buddy.species)) return;
     const prog = progressFor(kid);
     if (!isUnlocked(item, prog) && (item.price || item.gems)) { buyItem(kid, item, prog); return; }
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
@@ -1383,7 +1387,7 @@ const actions = {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
     const prog = progressFor(kid);
-    if (!item || prog.owned.includes(item.id)) { closeModal(); return; }
+    if (!item || prog.owned.includes(item.id) || !fitsSpecies(item, kid.buddy.species)) { closeModal(); return; }
     if (item.gems) {
       if (prog.gems < item.gems) { closeModal(); return; }
       kid.gemsSpent = (kid.gemsSpent || 0) + item.gems;
