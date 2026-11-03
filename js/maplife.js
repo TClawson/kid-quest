@@ -233,6 +233,80 @@ const SAUCER = sprite([
 ]);
 const PEACE = sprite(['g...g', 'g...g', '.g.g', '.g.g', 'gggg', 'gggg', '.gg']);
 
+// A fish that has just seen the shark: a huge eye looking back and a little open mouth.
+const SCARED_EYE = ['......llwleee', '.....lllwleeeel', '....oooowoeKKeoo', '...ooooowoeeeeooK', '...ooooowooooooKK'];
+const scared = (rows) => rows.map((r, i) => (i >= 2 && i < 2 + SCARED_EYE.length ? r.slice(0, 3) + SCARED_EYE[i - 2].slice(3) : r));
+const FISH_SCARED = [sprite(scared(FISH_BODY)), sprite(scared(swap(FISH_BODY, 3, ['.....lllwlllll', '.ff.oooowoooooeK', 'fffooooowoooooooo', '.ffooooowooooooo', 'fff.ddddwdddddd', '.ff..dddwdddd', '......ddwdd'])))];
+const SWEAT = sprite(['.w', 'www', 'www', '.w']);
+const BANG2 = sprite(['y.y', 'y.y', 'y.y', '...', 'y.y']);
+
+// The shark faces right: S back, s fins, W belly, e eye, b its grumpy brow, t teeth, r mouth.
+const SHARK_BODY = [
+  '..............s',
+  '.............ss',
+  '............sss',
+  's..........ssss',
+  'ss.....SSSSSSSSSSSS',
+  'sss..SSSSSSSSSSSSSSSSS',
+  '.ssSSSSSSSSSSSSSSSSSSSSbbS',
+  '..sSSSSSSSSSSSSKSKSKSSSSeKSS',
+  '..sSSSSSSSSSSSSKSKSKSSSSSSSSS',
+  '.ssSSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  'sss.WWWWWWWWWWWWWWWWWWWKKKKKKKK',
+  's.....WWWWWWWWWWWWWWWWWWWWWWWW',
+  '..........WWWsWWWWWWWWWWWWW',
+  '............ss',
+];
+const SHARK = sprite(SHARK_BODY);
+const SHARK_CHOMP = sprite(swap(SHARK_BODY, 10, [
+  'sss.WWWWWWWWWWWWWWWWWWWWKtKtKtK',
+  's.....WWWWWWWWWWWWWWWWWWrrrrrr',
+  '..........WWWsWWWWWWWWWWrrrrr',
+  '............ss..........WtWtWK',
+  '.........................WWWW',
+]));
+
+// Volcano villagers in tiki masks: M mask, m its shade, e eye, t teeth, g/y/r feathers,
+// b skin, G grass skirt. They wave their arms over their heads when the volcano blows.
+const TIKI_BODY = [
+  '..g.y.g',
+  '..gyryg',
+  '..MMMMM',
+  '.MMMMMMM',
+  '.MeKMeKM',
+  '.MMMmMMM',
+  '.MtttttM',
+  '.MKKKKKM',
+  '..mmmmm',
+  '...bbb',
+  '..bbbbb',
+  '.b.bbb.b',
+  '..GGGGG',
+  '.GGGGGGG',
+  '...b.b',
+  '...b.b',
+  '..bb.bb',
+];
+const CRAB_BODY = [
+  'rr...........rr',
+  'r.r..e...e..r.r',
+  'rrr..K...K..rrr',
+  '.r...r...r...r',
+  '..rrrrrrrrrrr',
+  '...rlllllllr',
+  '...rrrrrrrrr',
+  '..r.r.r.r.r.r',
+  '.r..r.....r..r',
+];
+// beach crabs: r shell, l its light top, e eye. Claws open and shut, legs scuttle.
+const CRAB_CLAWS_SHUT = ['rr...........rr', 'rrr..e...e..rrr', 'rr...K...K...rr'];
+const CRAB = [CRAB_BODY, swap(CRAB_BODY, 7, ['.r..r.r.r.r..r', 'r...r.....r...r'])].map((b) => [sprite(b), sprite(swap(b, 0, CRAB_CLAWS_SHUT))]);
+const TIKI = sprite(TIKI_BODY);
+const TIKI_RUN = [
+  ['..b..b', '.b...b', 'bb...bb'],
+  ['...bb', '...bb', '..bbb'],
+].map((legs) => sprite(swap(swap(TIKI_BODY, 0, ['b.g.y.g.b', 'b.gyryg.b', 'b.MMMMM.b']), 9, ['...bbb', '..bbbbb', '...bbb', '..GGGGG', '.GGGGGGG', ...legs])));
+
 function draw(ctx, x0, y0, rows, pal, flip = false) {
   const x = Math.round(x0);
   const y = Math.round(y0);
@@ -268,7 +342,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 
 // ---------- the actors, one set per theme ----------
 
-/** Fish swim across now and then, in little schools. */
+/** Fish swim across now and then, in little schools. Now and then a shark chases one off. */
 function fishLife(m) {
   const fish = [];
   const colors = [
@@ -277,7 +351,12 @@ function fishLife(m) {
     { o: '#f783ac', l: '#fcc2d7', d: '#d6336c', w: '#ffffff', f: '#ae3ec9', e: '#ffffff' },
     { o: '#63e6be', l: '#c3fae8', d: '#0ca678', w: '#1098ad', f: '#0b7285', e: '#ffffff' },
   ];
+  const sPal = { S: '#748ffc', s: '#5c7cfa', W: '#edf2ff', e: '#ffffff', b: OUT, t: '#ffffff', r: '#c92a2a' };
+  const SW = SHARK[0].length;
+  const FW = FISH[0].length;
   let next = 600;
+  let nextChase = 4000;
+  let chase = null; // { prey, shark: { x, y, speed, dir } }
   return {
     step(t, view) {
       if (t > next) {
@@ -290,11 +369,50 @@ function fishLife(m) {
           fish.push({ x: dir > 0 ? -22 - i * 26 : m.aw + 2 + i * 26, y: y + i * 10 * (i % 2 ? 1 : -1), dir, pal, speed: rand(0.9, 1.4), phase: Math.random() * 6 });
         }
       }
-      for (const f of fish) { f.x += f.dir * f.speed; f.phase += 0.25; }
-      for (let i = fish.length - 1; i >= 0; i -= 1) if (fish[i].x < -40 || fish[i].x > m.aw + 40) fish.splice(i, 1);
+      if (!chase && t > nextChase) {
+        // a lone fish swims in, and a shark comes along behind it
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        const y = rand(view.top + 20, Math.max(view.top + 21, view.bottom - 40));
+        const prey = { x: dir > 0 ? -FW : m.aw, y, base: y, dir, pal: colors[Math.floor(Math.random() * colors.length)], speed: 1, phase: 0, fright: 0, scared: false };
+        fish.push(prey);
+        chase = { prey, shark: { x: dir > 0 ? -FW - SW - 60 : m.aw + FW + 60, y: y - 3, dir, speed: 1.7 } };
+      }
+      if (chase) {
+        const { prey, shark } = chase;
+        const gap = shark.dir > 0 ? prey.x - (shark.x + SW) : shark.x - (prey.x + FW);
+        if (!prey.scared && gap < 34) { prey.scared = true; prey.fright = 9; } // eek!
+        if (prey.scared) {
+          if (prey.fright > 0) { prey.fright -= 1; prey.speed = 0; } else prey.speed = Math.min(3.4, prey.speed + 0.5);
+          prey.zig = (prey.zig || 0) + 1;
+          prey.y = prey.base + Math.sin(prey.zig / 2.2) * 6;
+          shark.speed = Math.min(3, shark.speed + 0.08);
+        }
+        shark.x += shark.dir * shark.speed;
+        shark.y += Math.max(-1, Math.min(1, prey.y - 3 - shark.y));
+        chase.chomp = gap < 16;
+        if ((shark.dir > 0 && shark.x > m.aw + 20) || (shark.dir < 0 && shark.x < -SW - 20)) { chase = null; nextChase = t + rand(15000, 25000); }
+      }
+      for (const f of fish) { f.x += f.dir * f.speed; f.phase += f.scared ? 0.8 : 0.25; }
+      for (let i = fish.length - 1; i >= 0; i -= 1) if (fish[i].x < -60 || fish[i].x > m.aw + 60) fish.splice(i, 1);
     },
     draw(ctx, frame) {
-      for (const f of fish) draw(ctx, f.x, f.y + Math.round(Math.sin(f.phase) * 1.5), (frame + Math.round(f.phase)) % 4 < 2 ? FISH : FISH_TAIL, f.pal, f.dir < 0);
+      for (const f of fish) {
+        const tail = (frame + Math.round(f.phase)) % (f.scared ? 2 : 4) < (f.scared ? 1 : 2);
+        if (!f.scared) { draw(ctx, f.x, f.y + Math.round(Math.sin(f.phase) * 1.5), tail ? FISH : FISH_TAIL, f.pal, f.dir < 0); continue; }
+        // shaking with fright, with sweat drops flying and a "!!"
+        const jx = f.fright > 0 ? (frame % 2 ? 1 : -1) : 0;
+        const jy = f.fright > 0 ? -2 : 0;
+        draw(ctx, f.x + jx, f.y + jy, FISH_SCARED[tail ? 0 : 1], f.pal, f.dir < 0);
+        const back = f.dir > 0 ? f.x - 2 : f.x + FW - 3;
+        if (frame % 4 < 3) draw(ctx, back - f.dir * (frame % 4), f.y - 4 + jy - (frame % 4), SWEAT, { w: '#a5d8ff' });
+        if (frame % 4 < 3) draw(ctx, back + 4 - f.dir * (frame % 3), f.y + 9 + (frame % 3), SWEAT, { w: '#a5d8ff' });
+        if (f.fright > 0 || frame % 6 < 4) draw(ctx, f.x + FW / 2 - 2, f.y - 9 + jy, BANG2, { y: '#ffe066' });
+      }
+      if (chase) {
+        const { shark } = chase;
+        const bite = chase.chomp && frame % 4 < 2;
+        draw(ctx, shark.x, shark.y + Math.round(Math.sin(frame / 3)), bite ? SHARK_CHOMP : SHARK, sPal, shark.dir < 0);
+      }
     },
   };
 }
@@ -361,18 +479,67 @@ function spaceLife(m) {
   };
 }
 
-/** The volcano rumbles and erupts every so often. */
+/** The volcano rumbles and erupts every so often, and the villagers in tiki masks run about in a panic. */
 function volcanoLife(m) {
   const crater = { x: m.goal.x, y: m.goal.y - 26 };
   const blobs = [];
   const smoke = [];
   let next = 2500;
   let glow = 0;
+  let panic = 0;
+  const masks = [{ M: '#d9480f', m: '#a0612f' }, { M: '#f59f00', m: '#a0612f' }, { M: '#c92a2a', m: '#6e3d1a' }, { M: '#e9c46a', m: '#a0612f' }];
+  const tikis = [];
+  // most of the village lives near the volcano, a few further up the map
+  const n = Math.max(5, Math.floor(m.ah / 70));
+  for (let i = 0; i < n; i += 1) {
+    const near = i < 4;
+    const band = near ? { top: Math.max(20, crater.y - 90), bottom: Math.min(m.ah - 24, crater.y + 40) } : { top: ((i - 4) * crater.y) / (n - 4) + 10, bottom: ((i - 3) * crater.y) / (n - 4) - 30 };
+    const spot = m.openSpot(band);
+    if (spot) tikis.push({ ...spot, home: { ...spot }, tx: spot.x, ty: spot.y, dir: i % 2 ? 1 : -1, pal: { ...masks[i % masks.length], e: '#ffffff', t: '#fff3bf', g: '#40c057', y: '#ffe066', r: '#ff6b6b', b: '#8a5a3c', G: '#94d82d' }, hop: i * 3 });
+  }
+  const wander = (k, far) => {
+    k.tx = Math.max(m.wall + 4, Math.min(m.aw - m.wall - 14, k.home.x + rand(-far, far)));
+    k.ty = Math.max(20, Math.min(m.ah - 24, k.home.y + rand(-far / 2, far / 2)));
+  };
+  const stepTikis = () => {
+    if (panic > 0) panic -= 1;
+    for (const k of tikis) {
+      const speed = panic > 0 ? 2.2 : 0.35;
+      const dx = k.tx - k.x;
+      const dy = k.ty - k.y;
+      const d = Math.hypot(dx, dy);
+      if (d < speed + 0.5) {
+        if (panic > 0) wander(k, 40);
+        else if (Math.random() < 0.02) wander(k, 12);
+      } else {
+        k.x += (dx / d) * speed;
+        k.y += (dy / d) * speed;
+        if (Math.abs(dx) > 0.5) k.dir = dx > 0 ? 1 : -1;
+      }
+      k.moving = d >= speed + 0.5;
+      k.hop += 1;
+    }
+  };
+  const drawTikis = (ctx, frame) => {
+    for (const k of tikis) {
+      if (panic > 0) {
+        const y = k.y - (frame % 2 ? 2 : 0);
+        draw(ctx, k.x, y, TIKI_RUN[frame % 2], k.pal, k.dir < 0);
+        if (frame % 4 < 3) draw(ctx, k.x + 5, y - 8, BANG2, { y: '#ffe066' });
+      } else {
+        // a little dance on the spot, or a stroll
+        draw(ctx, k.x, k.y - (k.hop % 8 < 2 ? 1 : 0), k.moving && frame % 4 < 2 ? TIKI_RUN[1] : TIKI, k.pal, k.dir < 0);
+      }
+    }
+  };
   return {
     step(t) {
+      stepTikis();
       if (t > next) {
         next = t + rand(9000, 14000);
         glow = 40;
+        panic = Math.round(FPS * 4.5);
+        for (const k of tikis) wander(k, 40);
         for (let i = 0; i < 28; i += 1) blobs.push({ x: crater.x + rand(-4, 4), y: crater.y, vx: rand(-1.8, 1.8), vy: rand(-4.6, -2.2), delay: Math.floor(rand(0, 22)), big: Math.random() < 0.4 });
       }
       if (glow > 0) {
@@ -388,6 +555,7 @@ function volcanoLife(m) {
       for (let i = blobs.length - 1; i >= 0; i -= 1) if (blobs[i].y > crater.y + 50) blobs.splice(i, 1);
     },
     draw(ctx, frame) {
+      drawTikis(ctx, frame);
       // a puffy smoke cloud billows up while the crater flares
       for (const s of smoke) puff(ctx, s.x, s.y, s.r, s.life > 28 ? '#adb5bd' : '#868e96', OUT);
       for (const s of smoke) puff(ctx, s.x - s.r / 3, s.y - s.r / 3, s.r / 2.5, s.life > 28 ? '#ced4da' : '#a5abb1');
@@ -634,7 +802,71 @@ function saucerLife(m) {
   };
 }
 
-const LIVES = { fish: fishLife, space: spaceLife, volcano: volcanoLife, castle: castleLife, unicorn: unicornLife, saucer: saucerLife };
+
+/**
+ * Little crabs scuttle about the beach. Tap the sand and any crab that is fairly close runs over,
+ * snapping its claws, for a couple of seconds, then wanders slowly back to its own spot.
+ */
+function crabLife(m) {
+  const crabs = [];
+  const shells = [{ r: '#fa5252', l: '#ff8787' }, { r: '#fd7e14', l: '#ffa94d' }, { r: '#e64980', l: '#f783ac' }];
+  const n = Math.max(4, Math.floor(m.ah / 55));
+  for (let i = 0; i < n; i += 1) {
+    const spot = m.openSpot({ top: (i * m.ah) / n + 10, bottom: ((i + 1) * m.ah) / n - 10 });
+    if (spot) crabs.push({ x: spot.x, y: spot.y, home: { ...spot }, tx: spot.x, ty: spot.y, rush: 0, rest: Math.floor(rand(0, 40)), pal: { ...shells[i % shells.length], e: '#ffffff' } });
+  }
+  const W = CRAB[0][0][0].length;
+  const H = CRAB[0][0].length;
+  const REACH = 75; // how far away a crab will notice a tap, in map pixels
+  return {
+    where: () => (crabs[0] ? { x: crabs[0].x + W / 2, y: crabs[0].y + H / 2 } : { x: m.aw / 2, y: 60 }),
+    poke(x, y) {
+      let any = false;
+      for (const c of crabs) {
+        if (Math.hypot(c.x + W / 2 - x, c.y + H / 2 - y) > REACH) continue;
+        c.rush = Math.round(FPS * 2);
+        // stop next to the tap, not all on top of each other
+        c.tx = x - W / 2 + rand(-8, 8);
+        c.ty = y - H / 2 + rand(-5, 5);
+        any = true;
+      }
+      return any;
+    },
+    step() {
+      for (const c of crabs) {
+        if (c.rush > 0) {
+          c.rush -= 1;
+          if (c.rush === 0) { c.tx = c.home.x; c.ty = c.home.y; c.rest = 0; } // and home again
+        } else if (Math.hypot(c.tx - c.x, c.ty - c.y) < 0.5) {
+          // potter about near home: a few steps sideways, a rest
+          if (c.rest > 0) c.rest -= 1;
+          else { c.tx = c.home.x + rand(-14, 14); c.ty = c.home.y + rand(-3, 3); c.rest = Math.floor(rand(20, 70)); }
+        }
+        const speed = c.rush > 0 ? 2.4 : 0.4;
+        const dx = c.tx - c.x;
+        const dy = c.ty - c.y;
+        const d = Math.hypot(dx, dy);
+        c.moving = d >= 0.5;
+        if (d <= speed) { c.x = c.tx; c.y = c.ty; } else { c.x += (dx / d) * speed; c.y += (dy / d) * speed; }
+      }
+    },
+    draw(ctx, frame) {
+      for (const c of crabs) {
+        const legs = c.moving && (c.rush > 0 ? frame % 2 : Math.floor(frame / 2) % 2) ? 1 : 0;
+        const snap = c.rush > 0 ? frame % 2 : Math.floor(frame / 8) % 4 === 0 ? 1 : 0;
+        draw(ctx, c.x, c.y - (c.rush > 0 && frame % 2 ? 1 : 0), CRAB[legs][snap], c.pal);
+        if (c.rush > 0 && !c.moving && frame % 2) {
+          // snip snip
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(Math.round(c.x) - 1, Math.round(c.y) - 2, 1, 1);
+          ctx.fillRect(Math.round(c.x) + W, Math.round(c.y) - 2, 1, 1);
+        }
+      }
+    },
+  };
+}
+
+const LIVES = { crab: crabLife, fish: fishLife, space: spaceLife, volcano: volcanoLife, castle: castleLife, unicorn: unicornLife, saucer: saucerLife };
 const running = new WeakMap();
 // The screen is redrawn whenever family sync brings news, which makes a new map each time.
 // Keep each kid's moving things (and their clock) across redraws, so a fish that is halfway

@@ -126,6 +126,7 @@ export const MAP_THEMES = {
     goal: (px, cx, cy) => drawFort(px, cx, cy, { stone: '#e9c46a', hi: '#f6e0a3', lo: '#c9a24a', flag: '#ff6b6b' }, false),
     sparkle: { colors: ['#ffffff', '#ffa8a8', '#ff922b', '#fff3bf'], every: 160 },
     tint: { top: '#ff922b', alpha: 0.22 },
+    life: 'crab',
   },
 
   'bg-ocean': {
