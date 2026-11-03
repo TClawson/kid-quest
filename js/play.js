@@ -478,11 +478,11 @@ export class Play {
     const u = S * 4; // a text unit
     if (this.kind === 'soccer') {
       text(String(this.count), W / 2, u * 2.6, u * 4.2, '#ffd43b');
-      text(`Best ${this.best}`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
+      if (this.best) text(`Best ${this.best}`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
     } else {
       const free = this.phase === 'over' ? this.score : this.free;
       text(`${free.toFixed(1)} s`, W / 2, u * 2.6, u * 3.6, '#ffd43b');
-      text(`Best ${this.best.toFixed ? this.best.toFixed(1) : this.best} s`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
+      if (this.best) text(`Best ${this.best.toFixed(1)} s`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
       if (this.phase === 'play') {
         const msg = this.it === 'vis' ? `${this.vis.name} is IT! Run!` : `You're IT! Tag ${this.vis.name}!`;
         text(msg, W / 2, (this.H - 5) * S, u * 1.6, this.it === 'vis' ? '#ffffff' : '#ffd43b');

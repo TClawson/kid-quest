@@ -18,6 +18,8 @@ import {
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
 import { pickVisitors, visitorLines, planVisits } from './visits.js';
+import { gameFor } from './play.js';
+import { openPlay } from './playground.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
 import { startListening, buddyState, TUNING } from './listen.js';
 import { createBeatFollower } from './beat.js';
@@ -1007,7 +1009,7 @@ function visitorsHtml(kid, s) {
   const key = `${kid.id}|${today()}`;
   const arrive = !visitorsArrived.has(key);
   visitorsArrived.add(key);
-  return { html: `<div class="map-visitors ${arrive ? 'arrive' : ''}" aria-label="Visiting buddies">${games}${html}</div>`, room: VILLAGE, areas };
+  return { html: `<div class="map-visitors ${arrive ? 'arrive' : ''}" data-host="${esc(kid.id)}" aria-label="Visiting buddies">${games}${html}</div>`, room: VILLAGE, areas };
 }
 /** The map theme follows the kid's Places background. */
 const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
@@ -2563,10 +2565,37 @@ function nextVisitorTalks(pick) {
 }
 setInterval(() => { if (document.visibilityState === 'visible') nextVisitorTalks(); }, 4000);
 actions.visitor = (el) => {
-  nextVisitorTalks(el);
   const v = familyBuddies().find((b) => b.id === el.dataset.id);
+  const kid = kidById(el.closest('.map-visitors')?.dataset.host);
+  // once the day's quest is done, visitors want to play
+  if (v && kid) {
+    const s = dayStatus(state, kid, today(), today());
+    if (s.complete) { sounds.tap(); playWith(kid, v); return; }
+    const left = s.total - s.done;
+    el.querySelector('.visitor-bubble').textContent = `Finish your quest and let's play! ${left} to go`;
+  }
+  nextVisitorTalks(el);
   if (!v || !doMove(el, v)) sounds.tap();
 };
+
+// ---------- playing with a visitor ----------
+// A ball game when the visitor owns a ball, tag when not. Best scores live on the kid (kid.playBest).
+function playWith(kid, v) {
+  const gear = bestGear(v.owned);
+  const kind = gameFor(gear);
+  const best = kid.playBest?.[kind] || 0;
+  openPlay({
+    kind,
+    best,
+    kid: { buddy: kid.buddy, name: kid.name, gear: bestGear(kid.owned || []) },
+    visitor: { buddy: v.buddy, name: v.name, gear },
+    sounds,
+    onScore: (score) => {
+      kid.playBest = { ...(kid.playBest || {}), [kind]: score };
+      save();
+    },
+  });
+}
 
 // Fishing visitors now and then reel in something from the pond: what bites depends on the map.
 function fishBite() {
