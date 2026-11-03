@@ -483,6 +483,10 @@ label { color: var(--ink); }
 .listen-actions { display: flex; justify-content: center; margin: 8px 0; }
 .listen-modes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 4px 0 8px; }
 .listen-modes .btn { min-height: 40px; padding: 6px 14px; }
+/* on the timer page, when the task listens to the piano: the metronome and what the buddy hears */
+.timer-beat { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 0 auto; max-width: 460px; text-align: left; }
+.timer-beat b { font-size: 1.05rem; line-height: 1.3; }
+.task-hint { display: block; margin-top: 6px; }
 /* the follow-along metronome: its arm swings to one side on each beat the buddy dances to */
 .listen-beat { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
 .listen-beat b { font-size: 1rem; display: block; }

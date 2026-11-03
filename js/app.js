@@ -559,6 +559,7 @@ function tickTimer() {
   const finished = syncTimer();
   if (timer.run.day !== today()) {
     // midnight passed: yesterday's time stays with yesterday
+    stopEars();
     stopTimer(false);
     if (ui.view === 'timer') { ui.view = 'kid'; render(); }
     return;
@@ -573,6 +574,7 @@ function tickTimer() {
 }
 
 function finishTimer(kid, task) {
+  stopEars();
   stopTimer(false);
   sounds.day();
   confetti(80, 1800);
@@ -624,8 +626,16 @@ function restoreTimer() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') { leaveTimer(); stopMusic(); if (listenTest.run) { stopListenTest(); render(); } }
-  if (document.visibilityState === 'visible') { returnToTimer(); render(); }
+  // the microphone is only used while this screen is showing
+  if (document.visibilityState !== 'visible') {
+    const listening = !!(ears.run || ears.loading || listenTest.run);
+    stopEars();
+    leaveTimer();
+    stopMusic();
+    if (listenTest.run) stopListenTest();
+    if (listening) render();
+  }
+  if (document.visibilityState === 'visible') { returnToTimer(); render(); startEars(); }
 });
 
 // The buddy on the timer page says a cheer when tapped.
@@ -648,6 +658,147 @@ function buddyCheer() {
 }
 
 const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+
+// ---------- listening during practice ----------
+// A timer task with "Listen to the piano" on listens while its timer runs and the
+// timer page is on screen (listen.js; Google's recognizer decides what is piano).
+// The buddy dances on the kid's beat (beat.js), or hops on notes when there is no
+// beat. With no piano for 30 s it gets bored; after 60 s it falls asleep and the
+// timer pauses, and playing again wakes it and the timer carries on. Without
+// Google's recognizer (offline the first time) the buddy still dances, but it
+// can't tell piano from talking, so it never falls asleep. Nothing is recorded.
+const ears = { run: null, beat: null, side: 1, token: 0, loading: false, error: '', google: false, from: 0, mood: '', asleep: false, asleepAt: 0, woke: -Infinity, lastUi: 0 };
+const EARS_NAP = 10 * 60_000;   // asleep this long: stop listening and let the screen turn off
+
+/** The timer page's task, when it listens. */
+function earsTask() {
+  if (ui.view !== 'timer') return null;
+  const kid = kidById(ui.kidId);
+  const task = kid && taskById(kid, today(), ui.taskId);
+  return task?.listen && task.minutes > 0 ? { kid, task } : null;
+}
+
+async function startEars() {
+  if (ears.run || ears.loading || !earsTask() || !(timer.running || ears.asleep)) return;
+  const token = ++ears.token;
+  ears.error = '';
+  ears.loading = true;
+  updateEarsUi();
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
+    const recognizer = await loadRecognizer().catch(() => null);
+    if (token !== ears.token || !earsTask() || !timer.running) return;
+    const run = await startListening(onEarsFrame, { mode: 'google', recognizer });
+    if (token !== ears.token || !earsTask() || !timer.running) { run.stop(); return; }
+    Object.assign(ears, { run, beat: createBeatFollower(), google: run.listener.mode !== 'builtin', from: performance.now(), mood: '', asleep: false, woke: -Infinity });
+  } catch (e) {
+    if (token === ears.token) ears.error = e?.name === 'NotAllowedError' ? 'blocked' : e?.name === 'NotFoundError' || e?.name === 'NoMic' ? 'nomic' : 'other';
+  } finally {
+    if (token === ears.token) ears.loading = false;
+    updateEarsUi();
+  }
+}
+
+function stopEars() {
+  ears.token++;
+  ears.run?.stop();
+  Object.assign(ears, { run: null, beat: null, loading: false, asleep: false, mood: '' });
+}
+
+/** The kid tapped Start or Keep going: the quiet clock starts again. */
+function wakeEars() {
+  ears.asleep = false;
+  ears.from = performance.now();
+}
+
+function onEarsFrame(listener, events, now) {
+  if (ears.run?.listener !== listener) return;
+  if (!earsTask() || (!timer.running && !ears.asleep)) { stopEars(); updateEarsUi(); return; }
+  const $b = document.querySelector('.timer .timer-buddy');
+  const beat = ears.beat;
+  const builtin = listener.mode === 'builtin';
+  const piano = pianoNow(listener, now);
+  const dancing = piano && beat.following(now);
+  for (const ev of events) {
+    if (ev.type === 'onset') {
+      beat.note(ev.at);
+      if (!builtin && !dancing && piano && !ears.asleep) buddyStep($b, 'hop');
+    } else if (ev.type === 'piano' && builtin && !dancing) buddyStep($b, 'hop');
+  }
+  if (beat.beats(now).length && piano && !ears.asleep) danceBeat(ears, $b, document.getElementById('ears-metro'), beat.period);
+
+  if (!ears.run.running) {
+    // Chrome keeps the sound off until the screen is tapped (after the app reopened)
+    ears.from = now;
+  } else if (ears.asleep) {
+    if (piano) {
+      // playing again wakes the buddy, and the timer carries on
+      Object.assign(ears, { asleep: false, woke: now, from: now, mood: 'playing' });
+      startTimer();
+      updateEarsUi(now);
+      return;
+    }
+    if (now - ears.asleepAt > EARS_NAP) { stopEars(); timer.wakeLock?.release?.().catch(() => {}); timer.wakeLock = null; render(); return; }
+  }
+  // seconds with no piano, counted from when listening (or the timer) last started
+  const since = Math.min(listener.since(now), (now - ears.from) / 1000);
+  ears.mood = ears.asleep ? 'asleep'
+    : ears.google ? buddyState(since, listener.state.lastPiano != null)
+      : piano ? 'playing' : 'waiting';
+  if (ears.mood === 'asleep' && !ears.asleep && timer.running) {
+    // a minute with no piano: the buddy falls asleep and the timer pauses (still
+    // listening, with the screen on, so playing wakes it)
+    ears.asleep = true;
+    ears.asleepAt = now;
+    stopTimer(false);
+    grabWakeLock();
+    render();
+    updateEarsUi(now);
+    return;
+  }
+  if (now - ears.lastUi > 100) { ears.lastUi = now; updateEarsUi(now); }
+}
+
+/** The line under the buddy: what it hears. */
+function earsText(now = performance.now()) {
+  if (ears.error === 'blocked') return 'I can’t hear you: the microphone is blocked. Ask a parent.';
+  if (ears.error === 'nomic') return 'I can’t hear you: no microphone was found.';
+  if (ears.error) return 'I can’t hear you right now. Try Pause, then Keep going.';
+  if (ears.asleep) return 'Asleep… play to wake me up!';
+  if (ears.loading) return 'Getting my ears ready…';
+  const listener = ears.run?.listener;
+  if (!listener) return timer.running ? 'Getting my ears ready…' : 'Start, then play. I’ll dance to your beat!';
+  if (!ears.run.running) return 'Tap the screen so I can hear you!';
+  const piano = pianoNow(listener, now);
+  if (piano && ears.beat.following(now)) return `Dancing to your beat! About ${ears.beat.bpm} a minute`;
+  return piano ? 'Playing! No steady beat yet (that’s ok)' : 'Listening for the piano…';
+}
+
+function updateEarsUi(now = performance.now()) {
+  const $text = document.getElementById('ears-text');
+  if (!$text) return;
+  const text = earsText(now);
+  if ($text.textContent !== text) $text.textContent = text;
+  const listener = ears.run?.listener;
+  const $b = document.querySelector('.timer .timer-buddy');
+  if (!(listener && pianoNow(listener, now) && ears.beat.following(now))) danceRest($b, document.getElementById('ears-metro'));
+  const kid = earsTask()?.kid;
+  const $sprite = $b?.querySelector('.timer-sprite');
+  if (!$sprite || !kid) return;
+  // the page keeps what it shows (a redraw may leave it be), so compare with the page
+  const mood = ears.run || ears.asleep ? ears.mood || 'waiting' : '';
+  if (mood !== $sprite.dataset.mood) {
+    $sprite.dataset.mood = mood;
+    $sprite.innerHTML = buddySvg(kid.buddy, mood ? LISTEN_MOODS[mood] : 'happy', { background: false });
+  }
+  // what it says (a cheer from a tap stays until it fades)
+  const say = now - ears.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';
+  const $say = $b.querySelector('.timer-bubble');
+  const mine = $say.dataset.ears || '';
+  if (say && (say !== mine || !$b.classList.contains('talking'))) { $say.textContent = say; $b.classList.add('talking'); }
+  else if (!say && mine && $say.textContent === mine) $b.classList.remove('talking');
+  $say.dataset.ears = say;
+}
 
 // ---------- views ----------
 
@@ -973,9 +1124,13 @@ function viewTimer() {
   if (!task) { ui.view = 'kid'; return viewKid(); }
   const done = entryFor(state, kid.id, today())?.tasks?.[task.id]?.seconds || 0;
   const total = task.minutes * 60;
+  const naps = 'If the piano stops for a minute, it falls asleep and the timer pauses until you play again.';
   const tip = task.background
-    ? 'You can switch to another app, like Note Rush. The timer keeps counting. Come back here when you’re done.'
-    : 'Keep the tablet near the piano with this screen open. The timer pauses if you leave the app.';
+    ? `You can switch to another app, like Note Rush. The timer keeps counting. Come back here when you’re done.${task.listen ? ` On this screen your buddy listens and dances to your beat. ${naps}` : ''}`
+    : task.listen
+      ? `Keep the tablet on the piano with this screen open. Your buddy listens and dances to your beat. ${naps} The timer also pauses if you leave the app.`
+      : 'Keep the tablet near the piano with this screen open. The timer pauses if you leave the app.';
+  const mood = task.listen && (ears.run || ears.asleep) ? ears.mood || 'waiting' : '';
   return `
     <div class="screen timer center" style="--kid:${kid.color}">
       <header class="kid-head">
@@ -986,14 +1141,18 @@ function viewTimer() {
         <div class="ring" id="timer-ring" style="--p:${done / total}">
           <div class="ring-inner">
             <div class="timer-left" id="timer-left">${mmss(total - done)}</div>
-            <small>${timer.running ? 'Keep playing! 🎶' : done ? 'Paused' : 'Ready?'}</small>
+            <small>${timer.running ? 'Keep playing! 🎶' : ears.asleep ? 'Asleep 💤' : done ? 'Paused' : 'Ready?'}</small>
           </div>
         </div>
         <button class="timer-buddy ${timer.running ? 'bobbing' : ''}" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
           <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite">${buddySvg(kid.buddy, 'happy', { background: false })}</span>
+          <span class="timer-sprite" data-mood="${mood}">${buddySvg(kid.buddy, mood ? LISTEN_MOODS[mood] : 'happy', { background: false })}</span>
         </button>
       </div>
+      ${task.listen ? `<div class="timer-beat" id="ears">
+        <div class="listen-metro" id="ears-metro" aria-hidden="true"><i></i></div>
+        <b id="ears-text" aria-live="polite">${esc(earsText())}</b>
+      </div>` : ''}
       <button class="btn huge" data-action="${timer.running ? 'timer-pause' : 'timer-start'}">${timer.running ? 'Pause' : done ? 'Keep going' : 'Start practice'}</button>
       <p class="muted small">${tip}</p>
     </div>`;
@@ -1140,9 +1299,8 @@ function pianoNow(listener, now) {
   return listener.state.lastPiano != null && now - listener.state.lastPiano < 1500;
 }
 
-/** Restarts one of the buddy's moves: a hop on a note, or a dance step on a beat. */
-function listenMove(cls, ms) {
-  const $b = document.querySelector('.listen-buddy');
+/** Restarts one of a buddy's moves: a hop on a note, or a dance step on a beat. */
+function buddyStep($b, cls, ms) {
   if (!$b) return;
   $b.classList.remove('hop', 'dance-l', 'dance-r');
   void $b.offsetWidth;
@@ -1150,19 +1308,31 @@ function listenMove(cls, ms) {
   $b.classList.add(cls);
 }
 
-/** A beat: the buddy steps to the other side, and the metronome ticks and swings back over. */
-function listenBeat(p) {
-  listenTest.side = -listenTest.side;
-  listenMove(listenTest.side < 0 ? 'dance-l' : 'dance-r', Math.min(450, p * 0.85));
-  const $m = document.getElementById('ls-metro');
-  const $arm = document.getElementById('ls-arm');
-  if (!$m || !$arm) return;
+/**
+ * A beat (p ms long): the buddy steps to the other side, and the metronome ticks
+ * and swings over. st keeps which side it is on.
+ */
+function danceBeat(st, $b, $m, p) {
+  st.side = -(st.side || 1);
+  buddyStep($b, st.side < 0 ? 'dance-l' : 'dance-r', Math.min(450, p * 0.85));
+  const $arm = $m?.querySelector('i');
+  if (!$arm) return;
   $m.classList.remove('tick');
   void $m.offsetWidth;
   $m.classList.add('tick', 'on');
   // it reaches the far side right on the next beat
   $arm.style.transitionDuration = `${Math.round(p)}ms`;
-  $arm.style.transform = `rotate(${listenTest.side * -26}deg)`;
+  $arm.style.transform = `rotate(${st.side * -26}deg)`;
+}
+
+/** No beat: the metronome comes to rest in the middle and the buddy stands up straight. */
+function danceRest($b, $m) {
+  if ($b && !$b.classList.contains('hop')) $b.classList.remove('dance-l', 'dance-r');
+  const $arm = $m?.querySelector('i');
+  if (!$arm || !$m.classList.contains('on')) return;
+  $m.classList.remove('on');
+  $arm.style.transitionDuration = '600ms';
+  $arm.style.transform = 'rotate(0deg)';
 }
 
 function onListenFrame(listener, events, now) {
@@ -1177,17 +1347,17 @@ function onListenFrame(listener, events, now) {
       beat?.note(ev.at);
       // Google decides about half a second late, so with it the buddy hops on each
       // new sound while Google is hearing piano
-      if (!builtin && !dancing && listener.hearingPiano(now)) listenMove('hop');
+      if (!builtin && !dancing && listener.hearingPiano(now)) buddyStep(document.querySelector('.listen-buddy'), 'hop');
       continue;
     }
     listenTest.events.push(ev);
     if (ev.type === 'piano') {
-      if (builtin && !dancing) listenMove('hop');
+      if (builtin && !dancing) buddyStep(document.querySelector('.listen-buddy'), 'hop');
       if (wasAsleep) listenTest.woke = now;
     }
   }
   // beats come due between frames; one step per frame, and only while piano is playing
-  if (beat?.beats(now).length && pianoNow(listener, now)) listenBeat(beat.period);
+  if (beat?.beats(now).length && pianoNow(listener, now)) danceBeat(listenTest, document.querySelector('.listen-buddy'), document.getElementById('ls-metro'), beat.period);
   if (!builtin && wasAsleep && listener.hearingPiano(now)) listenTest.woke = now;
   while (listenTest.events.length && now - listenTest.events[0].at > 60000) listenTest.events.shift();
   if (now - listenTest.lastUi > 100) { listenTest.lastUi = now; updateListenUi(listener, now); }
@@ -1225,12 +1395,7 @@ function updateListenUi(listener, now) {
   const piano = pianoNow(listener, now);
   const dancing = piano && !!beat?.following(now);
   $('ls-beat').textContent = dancing ? `Dancing at about ${beat.bpm} beats a minute` : piano ? LISTEN_BEAT.free : LISTEN_BEAT.none;
-  if (!dancing && $('ls-metro')?.classList.contains('on')) {
-    // no beat: the metronome comes to rest in the middle
-    $('ls-metro').classList.remove('on');
-    $('ls-arm').style.transitionDuration = '600ms';
-    $('ls-arm').style.transform = 'rotate(0deg)';
-  }
+  if (!dancing) danceRest(document.querySelector('.listen-buddy'), $('ls-metro'));
   $('ls-line').innerHTML = listenTest.events
     .map((e) => `<span class="dot ${e.type}" style="left:${100 - ((now - e.at) / 60000) * 100}%"></span>`).join('');
   const say = now - listenTest.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';
@@ -1457,8 +1622,10 @@ function parentEditKid() {
         <label>When <select data-field="period"><option value="morning" ${t.period === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${t.period === 'afternoon' ? 'selected' : ''}>After school</option><option value="exercise" ${t.period === 'exercise' ? 'selected' : ''}>Bonus exercise</option></select></label>
         <label>Checked by <select data-field="verify"><option value="self" ${t.verify === 'self' ? 'selected' : ''}>Kid taps done</option><option value="parent" ${t.verify === 'parent' ? 'selected' : ''}>Parent PIN</option></select></label>
         <label>Timer <input type="number" min="0" max="180" step="5" data-field="minutes" value="${t.minutes}" class="num"> min</label>
-        ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>` : ''}
+        ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>
+        <label class="row"><input type="checkbox" data-field="listen" ${t.listen ? 'checked' : ''}> Listen to the piano</label>` : ''}
       </div>
+      ${t.minutes > 0 && t.listen ? '<small class="muted task-hint">While the timer runs, the buddy listens and dances to the playing. With no piano for 30 seconds it gets bored; after a minute it falls asleep and the timer pauses until the piano starts again. It uses the microphone only on the timer screen, and nothing is recorded. Try it in Settings › Piano listening test.</small>' : ''}
       ${isExercise(t) ? `<div class="row wrap reward-edit">
         <label>Earns 💎 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="gems" value="${Number.isFinite(t.gems) ? t.gems : ''}" placeholder="${DEFAULT_GEMS}" class="num" aria-label="Gems earned"> gems</label>
         <label>and <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="xp" value="${Number.isFinite(t.xp) ? t.xp : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="XP earned"> XP</label>
@@ -1551,7 +1718,7 @@ function parentSettings() {
 ${allowanceCard()}
     <div class="card">
       <h2>🎹 Piano listening test</h2>
-      <p class="muted small">Try whether the tablet can hear piano playing, before the timer uses it. Nothing is recorded or saved.</p>
+      <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>
       <button class="btn ghost" data-action="listen-open">Open the listening test</button>
     </div>
     <div class="card">
@@ -1748,10 +1915,10 @@ const actions = {
     setTimeout(() => celebrateIfDue(kidById(ui.kidId)), 300);
   },
   task: (el) => onTaskTap(el.dataset.id, el),
-  'timer-start': () => startTimer(),
-  'timer-pause': () => stopTimer(),
+  'timer-start': () => { wakeEars(); startTimer(); startEars(); },
+  'timer-pause': () => { stopEars(); stopTimer(); },
   'timer-buddy': () => buddyCheer(),
-  'timer-back': () => { stopTimer(false); ui.view = 'kid'; render(); },
+  'timer-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
   parent: () => pinPad({ title: 'Parents only', subtitle: 'Type the parent PIN', onSuccess: () => { ui.view = 'parent'; ui.tab = pendingApprovals(state, today()).length ? 'approvals' : ui.tab; render(); } }),
   'listen-open': () => { ui.view = 'listen'; ui.listenKid = ui.listenKid || state.kids[0]?.id; render(); window.scrollTo(0, 0); },
   'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; render(); },
@@ -1976,7 +2143,7 @@ document.addEventListener('change', (e) => {
     if (v === null) delete task[el.dataset.field];
     else task[el.dataset.field] = v;
     save();
-    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes' || isReward) render();
+    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes' || el.dataset.field === 'listen' || isReward) render();
     return;
   }
   if (el.dataset.kidallow) {
@@ -2459,6 +2626,7 @@ navigator.storage?.persist?.().catch(() => {});
 
 restoreTimer();
 render();
+startEars();
 if (cloudCfg) startCloud();
 
 // Exposed for debugging in the browser console only.
