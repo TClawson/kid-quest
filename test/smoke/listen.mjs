@@ -2,6 +2,8 @@
 // microphone: real grand-piano notes (Salamander piano samples), made-up talking,
 // and a quiet room. It tries the built-in listener, Google's recognizer, and both,
 // and checks that the buddy dances to the melody's beat (and not to talking).
+// Then the real thing: the piano timer of a task set to listen. The buddy dances,
+// gets bored, falls asleep and pauses the timer, and playing wakes it again.
 // Run: node test/smoke/listen.mjs   (SHOTS=dir also saves screenshots;
 // YAMNET_FILE=path uses a saved copy of Google's model instead of downloading it)
 import assert from 'node:assert/strict';
@@ -12,13 +14,14 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { pianoNotes, talking, concat, addNoise, room, wav, RATE } from '../helpers/sound.mjs';
 import { MEDIAPIPE, YAMNET } from '../../js/hear.js';
-import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
 
 const shots = process.env.SHOTS;
 const site = await serve('.');
 const dir = await mkdtemp(join(tmpdir(), 'kq-listen-'));
 const SCALE = [262, 294, 330, 349, 392, 440, 494, 523];
 const PIANO_DIR = 'node_modules/@audio-samples/piano-mp3-velocity8/audio/';
+const PIANO = 'task_piano';
 const MEDIAPIPE_DIR = 'node_modules/@mediapipe/tasks-audio/';
 
 const browserArgs = (file) => ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${file}`, '--autoplay-policy=no-user-gesture-required'];
@@ -51,7 +54,28 @@ async function realPiano(names, gap) {
   }
 }
 
-async function withMic(samples, { mode = 'builtin', viewport = { width: 1280, height: 800 }, clock = false }, check) {
+/** The parent's listening test page. */
+async function openTest(page, mode) {
+  await page.click('[data-action="parent"]');
+  for (const d of '1234') await page.click(`[data-pin="${d}"]`);
+  await page.click('[data-action="tab"][data-tab="settings"]');
+  await page.click('[data-action="listen-open"]');
+  assert.equal(await page.getAttribute(`[data-action="listen-mode"][data-mode="${mode}"]`, 'aria-pressed'), 'true');
+  await page.click('[data-action="listen-start"]');
+  await page.waitForSelector('[data-action="listen-stop"]', { timeout: 60000 });
+  if (await page.locator('.listen-error').count()) assert.fail(await page.textContent('.listen-error'));
+}
+
+/** Sam's piano timer (the task listens), started. */
+async function openTimer(page) {
+  await page.click('[data-action="open-kid"][data-id="kid_sam"]');
+  await page.click(`[data-action="task"][data-id="${PIANO}"]`);
+  assert.match(await page.textContent('#ears-text'), /dance to your beat/);
+  await page.click('[data-action="timer-start"]');
+  await page.waitForFunction(() => /Listening|Playing|Dancing/.test(document.getElementById('ears-text')?.textContent), null, { timeout: 60000 });
+}
+
+async function withMic(samples, { mode = 'builtin', viewport = { width: 1280, height: 800 }, clock = false, open = openTest }, check) {
   const file = join(dir, `mic-${Math.random().toString(36).slice(2)}.wav`);
   await writeFile(file, wav(addNoise(samples)));
   const browser = await chromium.launch({ args: browserArgs(file) });
@@ -68,20 +92,15 @@ async function withMic(samples, { mode = 'builtin', viewport = { width: 1280, he
     saved.settings.pinHash = fallbackHash('kidquest:1234');
     saved.settings.questView = 'list';
     saved.settings.sound = false;
-    saved.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'panda', outfit: {} } });
-    saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: {} } });
-    if (clock) await page.clock.install();
+    // Sam's piano practice listens, every day
+    const tasks = defaultTasks().map((t) => (/piano/i.test(t.name) ? { ...t, id: PIANO, listen: true, days: [0, 1, 2, 3, 4, 5, 6] } : t));
+    saved.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: '2026-10-01', buddy: { species: 'panda', outfit: {} } });
+    saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: '2026-10-01', buddy: { species: 'fox', outfit: {} } });
+    if (clock) await page.clock.install({ time: new Date(2026, 10, 2, 16, 0, 0) });
     await page.goto(site.url);
     await page.evaluate(([s, m]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.listenMode', m); }, [saved, mode]);
     await page.reload();
-    await page.click('[data-action="parent"]');
-    for (const d of '1234') await page.click(`[data-pin="${d}"]`);
-    await page.click('[data-action="tab"][data-tab="settings"]');
-    await page.click('[data-action="listen-open"]');
-    assert.equal(await page.getAttribute(`[data-action="listen-mode"][data-mode="${mode}"]`, 'aria-pressed'), 'true');
-    await page.click('[data-action="listen-start"]');
-    await page.waitForSelector('[data-action="listen-stop"]', { timeout: 60000 });
-    if (await page.locator('.listen-error').count()) assert.fail(await page.textContent('.listen-error'));
+    await open(page, mode);
     await check(page);
     // MediaPipe writes its own start-up notes (INFO, W1103...) to the error console
     assert.deepEqual(errors.filter((e) => !/^(INFO:|[IWE]\d{4} )|Graph successfully/.test(e)), []);
@@ -171,6 +190,63 @@ try {
       document.dispatchEvent(new Event('visibilitychange'));
     });
     assert.ok(await page.isVisible('[data-action="listen-start"]'));
+  });
+
+  // the piano timer listens: the buddy dances to the playing while the timer runs
+  await withMic(melody, { mode: 'google', open: openTimer }, async (page) => {
+    await page.waitForFunction(() => /Dancing to your beat! About \d+/.test(document.getElementById('ears-text').textContent), null, { timeout: 40000 });
+    const bpm = Number((await page.textContent('#ears-text')).match(/About (\d+)/)[1]);
+    assert.ok(Math.abs(bpm - 133) <= 8 || Math.abs(bpm - 67) <= 5, `dancing at ${bpm} a minute`);
+    await page.waitForFunction(() => /dance-[lr]/.test(document.querySelector('.timer .timer-buddy').className), null, { timeout: 5000 });
+    assert.ok(await page.locator('#ears-metro.on').count(), 'the metronome swings along');
+    assert.ok(await page.isVisible('[data-action="timer-pause"]'), 'the timer runs');
+    assert.doesNotMatch(await page.textContent('.timer-bubble'), /I’m up/, 'it never fell asleep');
+    if (shots) await page.screenshot({ path: `${shots}/timer-dancing.png` });
+    // pausing stops listening
+    await page.click('[data-action="timer-pause"]');
+    assert.match(await page.textContent('#ears-text'), /Start, then play/);
+  });
+
+  // no piano: bored at 30 s, asleep at 60 s with the timer paused; playing wakes it
+  const quietThenPiano = concat(new Float32Array(RATE * 30), melody, melody);
+  await withMic(quietThenPiano, { mode: 'google', open: openTimer, clock: true, viewport: { width: 390, height: 844 } }, async (page) => {
+    assert.match(await page.textContent('#ears-text'), /Listening for the piano/);
+    await page.clock.fastForward(31_000);
+    await page.clock.runFor(500);
+    assert.match(await page.textContent('.timer-bubble'), /bored/);
+    assert.ok(await page.isVisible('[data-action="timer-pause"]'), 'bored, but the timer still runs');
+    await page.clock.fastForward(30_000);
+    await page.clock.runFor(500);
+    await page.waitForSelector('[data-action="timer-start"]');
+    assert.match(await page.textContent('#ears-text'), /Asleep/);
+    assert.match(await page.textContent('.ring-inner small'), /Asleep/);
+    assert.ok(await page.locator('.timer .timer-sprite .zzz').count(), 'the buddy sleeps');
+    const left = await page.textContent('#timer-left');
+    await page.clock.fastForward(5_000);
+    assert.equal(await page.textContent('#timer-left'), left, 'the timer is paused');
+    if (shots) await page.screenshot({ path: `${shots}/timer-asleep-phone.png` });
+    // the piano starts (after the quiet part of the sound file): the buddy wakes and the timer carries on
+    await page.waitForSelector('[data-action="timer-pause"]', { timeout: 60000 });
+    await page.waitForFunction(() => /I’m up/.test(document.querySelector('.timer-bubble').textContent), null, { timeout: 2000 });
+    assert.equal(await page.locator('.timer .timer-sprite .zzz').count(), 0);
+    if (shots) await page.screenshot({ path: `${shots}/timer-awake-phone.png` });
+  });
+
+  // the parent setting: in the task editor, only for timer tasks
+  await withMic(new Float32Array(RATE), { open: async (page) => {
+    await page.click('[data-action="parent"]');
+    for (const d of '1234') await page.click(`[data-pin="${d}"]`);
+    await page.click('[data-action="tab"][data-tab="kids"]');
+    await page.click('[data-action="edit-kid"][data-id="kid_ava"]');
+  } }, async (page) => {
+    const listenBoxes = page.locator('[data-field="listen"]');
+    assert.equal(await listenBoxes.count(), 1, 'one timer task, one switch');
+    assert.equal(await listenBoxes.isChecked(), false, 'off unless a parent turns it on');
+    assert.equal(await page.locator('.task-hint').count(), 0);
+    await listenBoxes.check();
+    await page.waitForSelector('.task-hint');
+    const piano = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids.find((k) => k.id === 'kid_ava').tasks.find((t) => /piano/i.test(t.name)));
+    assert.equal(piano.listen, true);
   });
 
   // the synthetic scale still works too (no real samples needed)

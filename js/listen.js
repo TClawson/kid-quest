@@ -264,7 +264,8 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
  * Opens the microphone with the voice filters off (they treat held piano notes as
  * noise) and feeds a listener. onFrame(listener, events, now) runs each frame, and
  * after each of Google's verdicts when a recognizer (from hear.js) is given.
- * Returns { stop, settings } where settings says which filters Chrome actually used.
+ * Returns { listener, stop, settings, sampleRate, running }, where settings says which
+ * filters Chrome actually used.
  */
 export async function startListening(onFrame, { tune = TUNING, mode = 'builtin', recognizer = null } = {}) {
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -273,6 +274,9 @@ export async function startListening(onFrame, { tune = TUNING, mode = 'builtin',
   const Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx();
   await ctx.resume().catch(() => {});
+  // without a tap first (the app reopened by itself), Chrome keeps the sound off until the next tap
+  const wake = () => { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); };
+  document.addEventListener('pointerdown', wake);
   const src = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 2048;
@@ -289,20 +293,34 @@ export async function startListening(onFrame, { tune = TUNING, mode = 'builtin',
     onFrame(listener, listener.frame(db, wave, now), now);
   };
   const timer = setInterval(tick, 20);
-  const stopGoogle = recognizer ? await recognizer.listen(ctx, src, (score) => {
-    const now = performance.now();
-    onFrame(listener, listener.heard(score, now), now);
-  }) : () => {};
+  const closeAll = () => {
+    document.removeEventListener('pointerdown', wake);
+    clearInterval(timer);
+    stream.getTracks().forEach((t) => t.stop());
+    ctx.close().catch(() => {});
+  };
+  let stopGoogle = () => {};
+  try {
+    if (recognizer) {
+      stopGoogle = await recognizer.listen(ctx, src, (score) => {
+        const now = performance.now();
+        onFrame(listener, listener.heard(score, now), now);
+      });
+    }
+  } catch (e) {
+    closeAll();   // don't leave the microphone on
+    throw e;
+  }
   const track = stream.getAudioTracks()[0];
   return {
     listener,
     settings: track?.getSettings?.() || {},
     sampleRate: ctx.sampleRate,
+    /** False while Chrome waits for a tap before it lets the page hear. */
+    get running() { return ctx.state === 'running'; },
     stop() {
-      clearInterval(timer);
       stopGoogle();
-      stream.getTracks().forEach((t) => t.stop());
-      ctx.close().catch(() => {});
+      closeAll();
     },
   };
 }
