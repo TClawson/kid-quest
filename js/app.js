@@ -4,7 +4,9 @@ import {
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
-  weekParity, isEveryOtherWeek, weekStart,
+  defaultAllowance, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
+  DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
+  weekParity, isEveryOtherWeek, onWeek, weekStart,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
@@ -403,9 +405,7 @@ function setTask(kid, key, task, value) {
 function markDone(kid, task, by, anchor) {
   setTask(kid, today(), task, { status: 'done', at: Date.now(), by });
   sounds.task();
-  const xp = taskXp(task);
-  const coins = taskCoins(task);
-  const gems = taskGems(task);
+  const { xp, coins, gems } = taskPay(state, kid, today(), task, today());
   floatText([gems && `+${gems} 💎`, xp && `+${xp} XP`, coins && `+${coins} 🪙`].filter(Boolean).join(' · ') || 'Done!', anchor);
   ui.cheerUntil = Date.now() + 2600;
   ui.cheerKid = kid.id;
@@ -932,9 +932,22 @@ function viewKid() {
       <section>
         <h2>This week</h2>
         ${weekDots(kid, info)}
+        ${weekCoinsHtml(kid)}
         <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Best streak: ${info.best} days.</p>
       </section>
     </div>`;
+}
+
+/** "🪙 120 of 300 this week", and any bonuses a parent gave. */
+function weekCoinsHtml(kid) {
+  const w = weekEarnings(state, kid, today());
+  if (!w.allowance && !w.bonuses.length) return '';
+  const pct = w.allowance?.coins ? Math.min(100, Math.round((w.coins / w.allowance.coins) * 100)) : 0;
+  return `
+        <div class="week-coins">
+          ${w.allowance ? `<div class="row"><b>🪙 ${w.coins} of ${w.allowance.coins} this week</b></div><div class="bar coin-bar"><span style="width:${pct}%"></span></div>` : ''}
+          ${w.bonuses.map((b) => `<div class="bonus-line">🎁 <b>+${b.coins}</b> ${esc(b.reason || 'Bonus')} <small class="muted">from ${esc(b.by || 'a parent')}</small></div>`).join('')}
+        </div>`;
 }
 
 /** Bonus exercise: optional tiles that earn gems, and how the exercise week is going. */
@@ -1098,21 +1111,50 @@ function parentApprovals(pending) {
 }
 
 function parentKids() {
+  const t = today();
+  const log = state.kids.flatMap((kid) => recentBonuses(state, kid, t)).sort((a, b) => (b.at || 0) - (a.at || 0));
   return `
     <div class="list">
-      ${state.kids.map((kid) => `
+      ${state.kids.map((kid) => {
+    const w = weekEarnings(state, kid, t);
+    const week = w.allowance ? `🪙 ${w.coins} of ${w.allowance.coins} this week${w.bonus ? ` + ${w.bonus} bonus` : ''}` : `${kid.tasks.length} tasks${w.bonus ? ` · ${w.bonus} bonus this week` : ''}`;
+    return `
         <div class="list-row">
           ${buddyChip(kid)}
-          <div class="grow"><b>${esc(kid.name)}</b><small class="muted">${kid.tasks.length} tasks</small></div>
+          <div class="grow"><b>${esc(kid.name)}</b><small class="muted">${week}</small></div>
+          <button class="btn ghost" data-action="bonus" data-kid="${kid.id}" ${w.bonusLeft ? '' : 'disabled'}>🎁 Bonus</button>
           <button class="btn ghost" data-action="edit-kid" data-id="${kid.id}">Edit</button>
-        </div>`).join('') || '<p class="muted">No kids yet.</p>'}
+        </div>`;
+  }).join('') || '<p class="muted">No kids yet.</p>'}
     </div>
+    ${log.length ? `
+    <h2>🎁 Bonus log</h2>
+    <div class="list bonus-log">
+      ${log.map((b) => `
+        <div class="list-row">
+          ${buddyChip(b.kid)}
+          <div class="grow"><b>${esc(b.kid.name)}: +${b.coins} ${esc(b.reason || 'Bonus')}</b><small class="muted">${esc(friendlyDate(b.key))} · from ${esc(b.by || 'a parent')}</small></div>
+          <button class="linkish" data-action="bonus-remove" data-kid="${b.kid.id}" data-key="${b.key}" data-id="${b.id}" aria-label="Take back this bonus">✕</button>
+        </div>`).join('')}
+    </div>` : ''}
     ${cloudCfg?.role === 'kid' ? '' : '<button class="btn" data-action="add-kid">+ Add a kid</button>'}
     <p class="muted small">New kids start with the standard routine: morning teeth, bed and floor; piano Monday to Friday; chore of the week Monday to Thursday; deep clean, vacuum and dust on Friday; laundry on Saturday. Change any of it per kid.</p>`;
 }
 
 function dayChips(task) {
   return [1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="daychip ${task.days.includes(d) ? 'on' : ''}" data-action="toggle-day" data-task="${task.id}" data-day="${d}">${DAY_NAMES[d]}</button>`).join('');
+}
+
+// "About 6 🪙 and 6 XP each time": this week's share of the allowance, from the setup as it is now.
+function payNote(kid, task) {
+  const days = [];
+  const monday = weekStart(today());
+  for (let i = 0; i < 7; i += 1) days.push(addDays(monday, i));
+  const on = days.filter((d) => task.days.includes(parseKey(d).getDay()) && onWeek(task, d));
+  if (!on.length) return isEveryOtherWeek(task) ? 'Off this week' : 'Not on any day';
+  const pays = on.map((d) => taskPay(state, kid, d, task, d));
+  const avg = (f) => Math.round(pays.reduce((n, p) => n + p[f], 0) / pays.length);
+  return `About ${avg('coins')} 🪙 and ${avg('xp')} XP each time`;
 }
 
 const sameTask = (a, b) => a.name.trim().toLowerCase() === b.name.trim().toLowerCase();
@@ -1149,6 +1191,8 @@ function repeatRow(kid, t) {
 function parentEditKid() {
   const kid = kidById(ui.editKidId);
   if (!kid) { ui.editKidId = null; return parentKids(); }
+  const allowance = allowanceFor(state, kid);
+  const fam = state.settings.allowance;
   const taskRows = (period) => kid.tasks.filter((t) => t.period === period).map((t) => `
     <div class="task-edit" data-task="${t.id}">
       <div class="row">
@@ -1168,6 +1212,9 @@ function parentEditKid() {
       ${isExercise(t) ? `<div class="row wrap reward-edit">
         <label>Earns 💎 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="gems" value="${Number.isFinite(t.gems) ? t.gems : ''}" placeholder="${DEFAULT_GEMS}" class="num" aria-label="Gems earned"> gems</label>
         <label>and <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="xp" value="${Number.isFinite(t.xp) ? t.xp : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="XP earned"> XP</label>
+      </div>` : allowance ? `<div class="row wrap reward-edit">
+        <label>Size <select data-field="size">${SIZES.map((sz) => `<option value="${sz.id}" ${taskSize(t) === sz.id ? 'selected' : ''}>${sz.name}</option>`).join('')}</select></label>
+        <small class="muted">${payNote(kid, t)}</small>
       </div>` : `<div class="row wrap reward-edit">
         <label>Earns 🪙 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="coins" value="${Number.isFinite(t.coins) ? t.coins : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="Coins earned"> coins</label>
         <label>and <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="xp" value="${Number.isFinite(t.xp) ? t.xp : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="XP earned"> XP</label>
@@ -1179,6 +1226,13 @@ function parentEditKid() {
       <label class="block">Name <input data-kidfield="name" value="${esc(kid.name)}"></label>
       <div class="block">Buddy <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="kid-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div></div>
       <div class="block">Color <div class="pick">${COLORS.map((c) => `<button class="pick-item swatch ${kid.color === c ? 'on' : ''}" style="background:${c}" data-action="kid-color" data-val="${c}" aria-label="${c}"></button>`).join('')}</div></div>
+      ${allowance ? `<div class="block">Weekly allowance
+        <div class="row wrap allow-row">
+          <label>🪙 <input type="number" min="0" step="10" class="num" data-kidallow="coins" value="${Number.isFinite(kid.allowance?.coins) ? kid.allowance.coins : ''}" placeholder="${fam.coins}" aria-label="Coins a week"> coins</label>
+          <label><input type="number" min="0" step="10" class="num" data-kidallow="xp" value="${Number.isFinite(kid.allowance?.xp) ? kid.allowance.xp : ''}" placeholder="${fam.xp}" aria-label="XP a week"> XP a week</label>
+        </div>
+        <small class="muted allow-help">Leave empty to use the family's amount (Settings). A perfect week earns exactly this, split across ${esc(kid.name)}'s tasks by size.</small>
+      </div>` : ''}
     </div>
     <h2>🌅 Morning tasks</h2>
     ${taskRows('morning')}
@@ -1191,7 +1245,7 @@ function parentEditKid() {
     <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise task</button>
     <p class="muted small">Exercise tasks are optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week keeps the exercise streak going, which unlocks moves for the kid's buddy at 1, 3 and 6 weeks. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day, and a week with 5 or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
     <p class="muted small">A task can repeat every other week (weeks run Monday to Sunday). To have two kids take turns, like cleaning the bathroom, set the task to every other week for one kid, then tap the other kid's name next to “Take turns with”: they get the same task on the opposite weeks. On a kid's off week the task isn't on their list at all, so it never counts against their streak or the day's treasure.</p>
-    <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. Each task earns 10 coins and 10 XP (30 for a timer task) unless you type other amounts; leave a box empty to use the default. A new amount counts from today, so coins already earned stay earned. Every 100 XP is a level.</p>
+    <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. ${allowance ? `${esc(kid.name)} earns up to ${allowance.coins} coins and ${allowance.xp} XP a week. It is split across the week's tasks by size: a big task is worth 3 small ones, a medium one 2. A kid with more tasks doesn't earn more, each task is just worth a little less, and a missed task loses its share. Exercise is extra: it earns gems and its own XP.` : 'Each task earns 10 coins and 10 XP (30 for a timer task) unless you type other amounts; leave a box empty to use the default.'} Changes count from today, so coins already earned stay earned. Every 100 XP is a level.</p>
     <hr>
     <button class="btn danger" data-action="delete-kid">Remove ${esc(kid.name)}</button>`;
 }
@@ -1244,6 +1298,7 @@ function parentSettings() {
       </div>
       <label class="row"><input type="checkbox" data-setting-bool="sound" ${st.sound ? 'checked' : ''}> Sounds on</label>
     </div>
+${allowanceCard()}
     <div class="card">
       <h2>Parent PIN</h2>
       <button class="btn ghost" data-action="change-pin">Change PIN</button>
@@ -1260,6 +1315,53 @@ function parentSettings() {
       </div>`}
     </div>
     ${familyCard()}`;
+}
+
+function allowanceCard() {
+  const a = state.settings.allowance || defaultAllowance(today());
+  return `
+    <div class="card">
+      <h2>🪙 Weekly allowance</h2>
+      <label class="row"><input type="checkbox" data-allowance-on ${a.on ? 'checked' : ''}> Limit what each kid can earn in a week</label>
+      ${a.on ? `
+      <div class="row wrap allow-row">
+        <label>🪙 <input type="number" min="0" step="10" class="num" data-allow="coins" value="${a.coins}" aria-label="Coins a week"> coins</label>
+        <label><input type="number" min="0" step="10" class="num" data-allow="xp" value="${a.xp}" aria-label="XP a week"> XP a week</label>
+      </div>
+      <div class="row wrap allow-row"><label>Bonus up to 🪙 <input type="number" min="0" step="5" class="num" data-allow="bonus" value="${a.bonus}" aria-label="Bonus limit"> a week per kid</label></div>
+      <small class="muted allow-help">Every kid can earn the same amount for a perfect week, however many tasks they have. It is split across each kid's tasks by size (set in Kids &amp; tasks). You can give one kid a different amount in their page. On top of it, either parent can give a 🎁 bonus with a reason, up to the bonus limit; bonuses also add the same XP. Changes count from today.</small>` : '<small class="muted">Off: each task earns the coins and XP typed on it in Kids &amp; tasks.</small>'}
+    </div>`;
+}
+
+/** The name a bonus is signed with: the signed-in parent's first name on a parent's phone. */
+function parentName() {
+  const user = cloudCfg?.role === 'parent' ? cloud.mod?.currentUser?.() : null;
+  const name = user?.displayName || '';
+  return name.split(' ')[0] || (cloudCfg?.role === 'parent' && cloudCfg.email ? cloudCfg.email.split('@')[0] : 'a parent');
+}
+
+const BONUS_REASONS = ['Helped without being asked', 'Kind to a sibling', 'Extra chore', 'Great attitude', 'Worked really hard'];
+
+function bonusModal(kid, amount = null, reason = '') {
+  const w = weekEarnings(state, kid, today());
+  const left = w.bonusLeft;
+  const amounts = [...new Set([5, 10, 20, left].filter((n) => n > 0 && n <= left))].sort((x, y) => x - y);
+  const pick = amount && amount <= left ? amount : amounts[0];
+  openModal(`
+    <h2>🎁 Bonus for ${esc(kid.name)}</h2>
+    <p class="muted small">${left} of ${w.bonusLimit} bonus coins left this week. A bonus adds the same XP too.</p>
+    <div class="block">How much
+      <div class="row wrap">${amounts.map((n) => `<button class="btn ${n === pick ? '' : 'ghost'}" data-action="bonus-amount" data-n="${n}">+${n} 🪙</button>`).join('')}</div>
+    </div>
+    <div class="block">What for
+      <div class="row wrap">${BONUS_REASONS.map((r) => `<button class="btn ${r === reason ? '' : 'ghost'} small-btn" data-action="bonus-reason" data-r="${esc(r)}">${esc(r)}</button>`).join('')}</div>
+      <input class="bonus-why" maxlength="60" placeholder="Or type a reason" value="${esc(BONUS_REASONS.includes(reason) ? '' : reason)}">
+    </div>
+    <div class="row end">
+      <button class="btn ghost" data-action="modal-close">Cancel</button>
+      <button class="btn" data-action="bonus-give" data-kid="${kid.id}" data-n="${pick}">Give +${pick} 🪙</button>
+    </div>`);
+  $modal.dataset.reason = reason;
 }
 
 /** Switch buddies. Each buddy remembers what it was wearing; bought hats and such stay with the buddy they were bought for. */
@@ -1330,7 +1432,16 @@ const SIDE_SCROLLERS = '.tabs, .pick';
 let lastHtml = '';
 let lastView = '';
 
+// The weekly allowance starts the first day this version runs (on a synced
+// device, once the family's data has arrived, so it uses the family's date).
+function stampAllowance() {
+  if (state.settings.allowance || (cloudCfg && !cloud.gotState)) return;
+  state.settings.allowance = defaultAllowance(today());
+  save();
+}
+
 function render() {
+  stampAllowance();
   const scrollY = window.scrollY;
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
   const html = (views[ui.view] || viewHome)();
@@ -1525,9 +1636,39 @@ const actions = {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },
+  bonus: (el) => { const kid = kidById(el.dataset.kid); if (kid) bonusModal(kid); },
+  'bonus-amount': (el) => { const kid = kidById($modal.querySelector('[data-action="bonus-give"]').dataset.kid); bonusModal(kid, Number(el.dataset.n), bonusReason()); },
+  'bonus-reason': (el) => { const kid = kidById($modal.querySelector('[data-action="bonus-give"]').dataset.kid); bonusModal(kid, Number($modal.querySelector('[data-action="bonus-give"]').dataset.n), el.dataset.r); },
+  'bonus-give': (el) => {
+    const kid = kidById(el.dataset.kid);
+    const left = weekEarnings(state, kid, today()).bonusLeft;
+    const coins = Math.min(Number(el.dataset.n) || 0, left);
+    if (!coins) { closeModal(); return; }
+    const reason = bonusReason() || 'Bonus';
+    const entry = entryFor(state, kid.id, today(), true);
+    entry.bonus = { ...(entry.bonus || {}), [newId('bonus')]: { coins, reason, by: parentName(), at: Date.now() } };
+    save();
+    closeModal();
+    sounds.task();
+    toast(`${kid.name} got +${coins} 🪙`);
+    render();
+  },
+  'bonus-remove': (el) => {
+    const kid = kidById(el.dataset.kid);
+    const entry = entryFor(state, el.dataset.kid, el.dataset.key);
+    const b = entry?.bonus?.[el.dataset.id];
+    if (!kid || !b) return;
+    confirmModal({ title: 'Take back this bonus?', text: `${kid.name}: +${b.coins} for “${b.reason}”`, yes: 'Take back', danger: true, onYes: () => { delete entry.bonus[el.dataset.id]; save(); render(); } });
+  },
   'modal-close': () => closeModal(),
   'modal-yes': () => { const cb = modalYes; modalYes = null; closeModal(); cb?.(); },
 };
+
+// The reason typed in the box wins over a picked chip.
+function bonusReason() {
+  const typed = $modal.querySelector('.bonus-why')?.value.trim();
+  return typed || $modal.dataset.reason || '';
+}
 
 function approve(kidId, key, taskId) {
   const kid = kidById(kidId);
@@ -1556,11 +1697,32 @@ document.addEventListener('change', (e) => {
     if (el.dataset.field === 'name' && !v.trim()) v = 'Task';
     const isReward = el.dataset.field === 'coins' || el.dataset.field === 'xp' || el.dataset.field === 'gems';
     if (isReward) v = parseReward(v);
+    if (el.dataset.field === 'size') v = Number(v);
     if (v === null) delete task[el.dataset.field];
     else task[el.dataset.field] = v;
     save();
     if (el.tagName === 'SELECT' || el.dataset.field === 'minutes' || isReward) render();
     return;
+  }
+  if (el.dataset.kidallow) {
+    const kid = kidById(ui.editKidId);
+    const v = parseAllowance(el.value);
+    const own = { ...(kid.allowance || {}) };
+    if (v === null) delete own[el.dataset.kidallow]; else own[el.dataset.kidallow] = v;
+    if (Object.keys(own).length) kid.allowance = own; else delete kid.allowance;
+    save(); render(); return;
+  }
+  if (el.dataset.allow) {
+    const v = parseAllowance(el.value);
+    const a = state.settings.allowance;
+    a[el.dataset.allow] = v ?? (el.dataset.allow === 'bonus' ? DEFAULT_BONUS_LIMIT : DEFAULT_ALLOWANCE);
+    save(); render(); return;
+  }
+  if ('allowanceOn' in el.dataset) {
+    const a = state.settings.allowance || defaultAllowance(today());
+    // switching back on counts from today, so days earned while it was off stay as they were
+    state.settings.allowance = el.checked ? { ...a, on: true, since: a.on ? a.since : today() } : { ...a, on: false };
+    save(); render(); return;
   }
   if (el.dataset.kidfield) { kidById(ui.editKidId)[el.dataset.kidfield] = el.value.trim() || 'Kid'; save(); render(); return; }
   if (el.dataset.setting) { state.settings[el.dataset.setting] = el.value; save(); return; }
@@ -1649,6 +1811,7 @@ async function startCloud() {
 
 // A newer state from the family (another device, or this one's writes coming back).
 function applyRemote(next) {
+  cloud.gotState = true;
   for (const k of DEVICE_SETTINGS) {
     if (k in state.settings) next.settings[k] = state.settings[k];
     else delete next.settings[k];

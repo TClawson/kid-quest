@@ -241,6 +241,107 @@ test('the exercise streak counts weeks with 5 exercise days, and keeps the best'
   assert.equal(info.best, 6);
 });
 
+// ---------- weekly allowance and parent bonus ----------
+
+test('the weekly allowance is split by size, and a perfect week earns exactly the allowance', async () => {
+  const { defaultAllowance, weekEarnings, taskPay, taskSize, totalCoins, totalXp } = await import('../js/logic.js');
+  const { state, kid } = setup();
+  state.settings.allowance = { ...defaultAllowance(MONDAY), coins: 300, xp: 200 };
+  const piano = kid.tasks.find((t) => t.name === 'Piano practice');
+  const teeth = kid.tasks.find((t) => t.name === 'Brush teeth');
+  assert.equal(taskSize(piano), 3, 'timer tasks are big');
+  assert.equal(taskSize(teeth), 1);
+  assert.equal(taskSize(kid.tasks.find((t) => t.name === 'Laundry')), 2, 'parent-checked tasks are medium');
+  const sunday = addDays(MONDAY, 6);
+  for (let i = 0; i < 7; i += 1) {
+    const key = addDays(MONDAY, i);
+    snapshotToday(state, kid, key);
+    finishDay(state, kid, key, key);
+  }
+  const week = weekEarnings(state, kid, sunday);
+  assert.equal(week.coins, 300);
+  assert.equal(week.xp, 200);
+  assert.equal(totalCoins(state, kid, sunday), 300);
+  assert.equal(totalXp(state, kid, sunday), 200);
+  // piano is worth about 3 times brushing teeth
+  const p = taskPay(state, kid, MONDAY, piano, MONDAY).coins;
+  const b = taskPay(state, kid, MONDAY, teeth, MONDAY).coins;
+  assert.ok(Math.abs(p - 3 * b) <= 2, `${p} vs ${b}`);
+});
+
+test('kids with more chores earn the same for a perfect week, a missed chore loses its share', async () => {
+  const { defaultAllowance, weekEarnings } = await import('../js/logic.js');
+  const { state, kid } = setup();
+  const busy = { id: 'kid_busy', name: 'Busy', tasks: [...defaultTasks(), { id: 'task_dish', name: 'Dishes', icon: '🍽️', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'parent', minutes: 0 }], startDate: MONDAY };
+  state.kids.push(busy);
+  state.settings.allowance = defaultAllowance(MONDAY);
+  const sunday = addDays(MONDAY, 6);
+  for (let i = 0; i < 7; i += 1) { finishDay(state, kid, addDays(MONDAY, i), sunday); finishDay(state, busy, addDays(MONDAY, i), sunday); }
+  assert.equal(weekEarnings(state, kid, sunday).coins, 300);
+  assert.equal(weekEarnings(state, busy, sunday).coins, 300);
+  // skip Monday's piano: lose its share only
+  delete state.log[MONDAY][kid.id].tasks[kid.tasks.find((t) => t.name === 'Piano practice').id];
+  const c = weekEarnings(state, kid, sunday).coins;
+  assert.ok(c < 300 && c > 270, String(c));
+  // a kid's own amount overrides the family's
+  busy.allowance = { coins: 100 };
+  assert.equal(weekEarnings(state, busy, sunday).coins, 100);
+  assert.equal(weekEarnings(state, busy, sunday).xp, 300);
+});
+
+test('days before the allowance started, and past snapshots, keep what they earned', async () => {
+  const { defaultAllowance, totalCoins } = await import('../js/logic.js');
+  const { state, kid } = setup();
+  // Monday: typed amounts (no allowance yet), 70 coins
+  snapshotToday(state, kid, MONDAY);
+  finishDay(state, kid, MONDAY, MONDAY);
+  const tue = addDays(MONDAY, 1);
+  state.settings.allowance = defaultAllowance(tue);
+  assert.equal(totalCoins(state, kid, tue), 70, 'Monday unchanged');
+  snapshotToday(state, kid, tue);
+  finishDay(state, kid, tue, tue);
+  const tueCoins = totalCoins(state, kid, tue) - 70;
+  assert.ok(tueCoins > 0);
+  // Wednesday: allowance doubles and teeth become big; Tuesday stays as it was
+  const wed = addDays(MONDAY, 2);
+  state.settings.allowance.coins = 600;
+  kid.tasks.find((t) => t.name === 'Brush teeth').size = 3;
+  assert.equal(totalCoins(state, kid, wed), 70 + tueCoins);
+  // turning it off goes back to typed amounts from then on
+  state.settings.allowance.on = false;
+  finishDay(state, kid, wed, wed);
+  assert.equal(totalCoins(state, kid, wed), 70 + tueCoins + 70);
+});
+
+test('parent bonuses add coins and XP and count against the weekly bonus limit', async () => {
+  const { defaultAllowance, weekEarnings, totalCoins, totalXp, recentBonuses } = await import('../js/logic.js');
+  const { state, kid } = setup();
+  state.settings.allowance = defaultAllowance(MONDAY);
+  const tue = addDays(MONDAY, 1);
+  entryFor(state, kid.id, MONDAY, true).bonus = { b1: { coins: 20, reason: 'Helped with groceries', by: 'Mom', at: 1 } };
+  entryFor(state, kid.id, tue, true).bonus = { b2: { coins: 10, reason: 'Kind to a sibling', by: 'Dad', at: 2 } };
+  const w = weekEarnings(state, kid, tue);
+  assert.equal(w.bonus, 30);
+  assert.equal(w.bonusLeft, 20);
+  assert.equal(totalCoins(state, kid, tue), 30);
+  assert.equal(totalXp(state, kid, tue), 30);
+  assert.deepEqual(recentBonuses(state, kid, tue).map((b) => b.by), ['Dad', 'Mom']);
+  // next week starts fresh
+  assert.equal(weekEarnings(state, kid, addDays(MONDAY, 7)).bonusLeft, 50);
+});
+
+test('an every-other-week chore is part of the split only on its weeks', async () => {
+  const { defaultAllowance, weekEarnings, weekParity } = await import('../js/logic.js');
+  const { state, kid } = setup();
+  state.settings.allowance = defaultAllowance(MONDAY);
+  kid.tasks.push({ id: 'task_bath', name: 'Bathroom', icon: '🛁', period: 'afternoon', days: [6], verify: 'parent', minutes: 0, everyOtherWeek: weekParity(MONDAY) });
+  for (const monday of [MONDAY, addDays(MONDAY, 7)]) {
+    const sunday = addDays(monday, 6);
+    for (let i = 0; i < 7; i += 1) finishDay(state, kid, addDays(monday, i), sunday);
+    assert.equal(weekEarnings(state, kid, sunday).coins, 300);
+  }
+});
+
 test('every-other-week tasks alternate Monday-to-Sunday weeks the same way on every device', async () => {
   const { weekNumber, weekParity, onWeek } = await import('../js/logic.js');
   assert.equal(weekNumber('2024-01-01'), 0);
