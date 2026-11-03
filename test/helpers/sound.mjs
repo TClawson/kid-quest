@@ -44,6 +44,57 @@ export function talking(seconds, { rate = RATE, gain = 0.25, f0 = 180 } = {}) {
   return out;
 }
 
+/** A small room's echo: real rooms make every sound ring on a little. */
+export function room(x, { rate = RATE, wet = 0.25 } = {}) {
+  const out = Float32Array.from(x);
+  for (const [d, g] of [[0.011, 0.5], [0.023, 0.35], [0.037, 0.25], [0.053, 0.18]]) {
+    const k = Math.floor(d * rate);
+    for (let i = k; i < x.length; i++) out[i] += wet * g * x[i - k];
+  }
+  for (let pass = 0; pass < 2; pass++) {
+    const k = Math.floor(0.071 * rate);
+    for (let i = k; i < out.length; i++) out[i] += wet * 0.3 * out[i - k];
+  }
+  return out;
+}
+
+/** Sung notes: a held pitch with vibrato (cents), swelling in over attack seconds. */
+export function singing(seconds, { rate = RATE, f0 = 330, vibrato = 40, attack = 0.06, notes = [0, 1.3, 2.6], len = 1.1 } = {}) {
+  const out = new Float32Array(Math.ceil(seconds * rate));
+  notes.forEach((at, n) => {
+    const s0 = Math.floor(at * rate);
+    const hz = f0 * 2 ** ((n * 2) / 12);
+    let ph = 0;
+    for (let i = 0; i < len * rate && s0 + i < out.length; i++) {
+      const t = i / rate;
+      const p = hz * 2 ** ((vibrato / 1200) * Math.sin(2 * Math.PI * 5.5 * t) + 0.01 * Math.sin(2 * Math.PI * 0.7 * t));
+      ph += 2 * Math.PI * p / rate;
+      const env = Math.min(1, t / attack) * Math.min(1, (len - t) / 0.08);
+      let v = 0;
+      for (let k = 1; k <= 12; k++) v += Math.sin(ph * k) * (Math.exp(-(((p * k - 700) / 300) ** 2)) / k + 0.02);
+      out[s0 + i] += 0.3 * env * v;
+    }
+  });
+  return out;
+}
+
+/** Coughs: short bursts of rough noise. */
+export function coughs(seconds, { rate = RATE, at = [0.3, 1.4, 2.1] } = {}) {
+  const out = new Float32Array(Math.ceil(seconds * rate));
+  let r = 7, lp = 0, lp2 = 0;
+  for (const a of at) {
+    const s0 = Math.floor(a * rate);
+    for (let i = 0; i < 0.35 * rate && s0 + i < out.length; i++) {
+      const t = i / rate;
+      r = (r * 16807) % 2147483647;
+      lp += 0.3 * (r / 2147483647 - 0.5 - lp);
+      lp2 += 0.05 * (lp - lp2);
+      out[s0 + i] += Math.min(1, t / 0.005) * Math.exp(-t * 9) * (0.9 * (lp - lp2) + 0.05 * Math.sin(2 * Math.PI * 160 * t * (1 - t)));
+    }
+  }
+  return out;
+}
+
 export function concat(...parts) {
   const out = new Float32Array(parts.reduce((a, p) => a + p.length, 0));
   let o = 0;
@@ -100,13 +151,13 @@ export function runListener(listener, samples, { rate = RATE, size = 2048, hopMs
   const win = Float64Array.from({ length: size }, (_, i) => 0.42 - 0.5 * Math.cos(2 * Math.PI * i / size) + 0.08 * Math.cos(4 * Math.PI * i / size));
   for (let end = size, f = 0; end <= samples.length; end += hop, f++) {
     const re = new Float64Array(size), im = new Float64Array(size);
-    let sum = 0;
-    for (let i = 0; i < size; i++) { const v = samples[end - size + i]; sum += v * v; re[i] = v * win[i]; }
+    const wave = samples.subarray(end - size, end);
+    for (let i = 0; i < size; i++) re[i] = wave[i] * win[i];
     fft(re, im);
     const db = new Float32Array(size / 2);
     for (let i = 0; i < size / 2; i++) db[i] = 20 * Math.log10(Math.hypot(re[i], im[i]) / size + 1e-12);
     const now = (end / rate) * 1000;
-    events.push(...listener.frame(db, 10 * Math.log10(sum / size || 1e-12), now));
+    events.push(...listener.frame(db, wave, now));
   }
   return events;
 }

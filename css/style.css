@@ -476,3 +476,5 @@ label { color: var(--ink); }
 .listen-error { background: #ffe3e3; border: 2px solid #c92a2a; border-radius: 6px; padding: 10px; }
 .listen-tries li { margin: 4px 0; }
 .listen-actions { display: flex; justify-content: center; margin: 8px 0; }
+.listen-modes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 4px 0 8px; }
+.listen-modes .btn { min-height: 40px; padding: 6px 14px; }

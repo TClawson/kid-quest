@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createListener, steadyBpm, buddyState, noteName } from '../js/listen.js';
-import { RATE, pianoNotes, talking, addNoise, runListener } from './helpers/sound.mjs';
+import { RATE, pianoNotes, talking, addNoise, runListener, room, singing, coughs } from './helpers/sound.mjs';
 
 const listen = (samples) => {
   const l = createListener({ sampleRate: RATE, fftSize: 2048 });
@@ -35,6 +35,19 @@ test('talking is not piano', () => {
   }
 });
 
+test('in a room with an echo: piano is piano; talking, singing and coughs are not', () => {
+  const piano = listen(room(pianoNotes(SCALE.map((hz, i) => ({ at: 0.3 + i * 0.5, hz })), { length: 5 })));
+  assert.equal(piano.l.state.pianoNotes, 8);
+  for (const [name, x] of [
+    ['talking', room(talking(5, { f0: 120 }))], ['kid talking', room(talking(5, { f0: 280 }))],
+    ['singing', room(singing(4))], ['kid singing', room(singing(4, { f0: 500, vibrato: 25, attack: 0.04 }))],
+    ['coughs', room(coughs(3))],
+  ]) {
+    const { l } = listen(x);
+    assert.equal(l.state.pianoNotes, 0, name);
+  }
+});
+
 test('silence makes no notes, and the clock counts from the start', () => {
   const { l } = listen(new Float32Array(RATE * 3));
   assert.equal(l.state.pianoNotes + l.state.otherSounds, 0);
@@ -61,4 +74,44 @@ test('note names', () => {
   assert.equal(noteName(440), 'A4');
   assert.equal(noteName(261.6), 'C4');
   assert.equal(noteName(0), '');
+});
+
+test('with Google deciding, a sound counts once Google gives its verdict', () => {
+  const notes = pianoNotes(SCALE.slice(0, 4).map((hz, i) => ({ at: 0.3 + i * 0.5, hz })), { length: 2.5 });
+  const google = createListener({ sampleRate: RATE, fftSize: 2048, mode: 'google' });
+  const early = runListener(google, addNoise(notes)).filter((e) => e.type !== 'onset');
+  assert.equal(early.length, 0, 'nothing is counted before Google answers');
+  const out = google.heard({ piano: 0.4, voice: 0, top: [{ name: 'Piano', score: 0.4 }] }, 2600);
+  assert.equal(out.length, 4);
+  assert.ok(out.every((e) => e.type === 'piano' && e.local === true && e.google === true));
+  assert.ok(google.hearingPiano(3000));
+  assert.ok(!google.hearingPiano(4500));
+  assert.equal(google.since(2600), 0, 'hearing piano keeps the buddy awake');
+
+  // talking that the built-in engine would call piano is still not piano when Google says speech
+  const fooled = createListener({ sampleRate: RATE, fftSize: 2048, mode: 'google' });
+  runListener(fooled, addNoise(notes));
+  const said = fooled.heard({ piano: 0.01, voice: 0.9, top: [{ name: 'Speech', score: 0.9 }] }, 2600);
+  assert.ok(said.every((e) => e.type === 'other'));
+  assert.equal(fooled.state.lastPiano, null);
+});
+
+test('with both deciding, a note needs both to say piano', () => {
+  const both = createListener({ sampleRate: RATE, fftSize: 2048, mode: 'both' });
+  runListener(both, addNoise(talking(3)));
+  const out = both.heard({ piano: 0.5, voice: 0.2, top: [] }, 3100);
+  assert.ok(out.length > 3);
+  assert.ok(out.every((e) => e.type === 'other'), 'the built-in engine said talking');
+  assert.equal(both.since(3100), 3.1, 'Google alone does not keep the buddy awake');
+});
+
+test('Google piano score picks the piano labels and the top three', async () => {
+  const { pianoScore } = await import('../js/hear.js');
+  const s = pianoScore([
+    { categoryName: 'Music', score: 0.97 }, { categoryName: 'Piano', score: 0.33 },
+    { categoryName: 'Keyboard (musical)', score: 0.41 }, { categoryName: 'Speech', score: 0.2 }, { categoryName: 'Cough', score: 0.05 },
+  ]);
+  assert.equal(s.piano, 0.41);
+  assert.equal(s.voice, 0.2);
+  assert.deepEqual(s.top.map((c) => c.name), ['Music', 'Keyboard (musical)', 'Piano']);
 });
