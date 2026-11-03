@@ -17,6 +17,7 @@ try {
   const saved = emptyState();
   saved.settings.pinHash = fallbackHash('kidquest:1234');
   saved.settings.questView = 'list';
+  saved.settings.allowance = { on: false, coins: 300, xp: 300, bonus: 50, since: dateKey() }; // typed amounts per task
   const tasks = defaultTasks();
   saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: dateKey(), owned: [], spent: 0 });
   await page.goto(site.url);

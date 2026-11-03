@@ -435,3 +435,15 @@ label { color: var(--ink); }
 .item.special { background: linear-gradient(180deg, #fff9db, var(--card) 45%); box-shadow: 0 0 0 3px #f0c040, 0 4px 0 var(--line); }
 .item.special.on { box-shadow: 0 0 0 4px var(--brand), 0 4px 0 var(--line); }
 .item .special-tag { font-size: 0.75rem; font-weight: 800; color: #8a5a00; background: #ffe066; border-radius: 4px; padding: 0 6px; }
+
+/* weekly allowance and parent bonus */
+.week-coins { display: grid; gap: 6px; margin: 12px 0 4px; }
+.coin-bar span { background: #fcc419; }
+.bonus-line { background: #fff3bf; color: #5c3d00; border-radius: 12px; padding: 6px 10px; }
+.btn.small-btn { min-height: 40px; padding: 8px 14px; font-size: 0.95rem; }
+.bonus-why { width: 100%; margin-top: 8px; }
+.btn[disabled] { opacity: 0.45; }
+.reward-edit small { align-self: center; }
+.allow-row label { display: inline-flex; align-items: center; gap: 6px; }
+.block .allow-row input.num { display: inline-block; width: 90px; margin-top: 0; }
+.allow-help { display: block; margin-top: 8px; }
