@@ -89,11 +89,11 @@ const rand = (a, b) => a + Math.random() * (b - a);
 function fishLife(m) {
   const fish = [];
   const colors = [{ o: '#ff922b', w: '#ffffff', e: OUT }, { o: '#ffd43b', w: '#4dabf7', e: OUT }, { o: '#f783ac', w: '#ffffff', e: OUT }, { o: '#63e6be', w: '#1098ad', e: OUT }];
-  let next = 1500;
+  let next = 600;
   return {
     step(t, view) {
       if (t > next) {
-        next = t + rand(4000, 9000);
+        next = t + rand(3000, 7000);
         const dir = Math.random() < 0.5 ? 1 : -1;
         const y = rand(view.top + 10, view.bottom - 15);
         const pal = colors[Math.floor(Math.random() * colors.length)];
@@ -373,6 +373,10 @@ function saucerLife(m) {
 
 const LIVES = { fish: fishLife, space: spaceLife, volcano: volcanoLife, castle: castleLife, unicorn: unicornLife, saucer: saucerLife };
 const running = new WeakMap();
+// The screen is redrawn whenever family sync brings news, which makes a new map each time.
+// Keep each kid's moving things (and their clock) across redraws, so a fish that is halfway
+// across keeps swimming instead of starting over off the edge.
+const kept = new Map();
 
 /**
  * Start the moving things for a painted map.
@@ -394,7 +398,16 @@ export function startMapLife(m) {
   canvas.style.width = `${m.aw * m.scale}px`;
   canvas.style.height = `${m.ah * m.scale}px`;
   const ctx = canvas.getContext('2d');
-  const actor = LIVES[m.life](m);
+  const key = `${m.section.dataset.seed || ''}|${m.life}`;
+  let keep = kept.get(key);
+  if (keep) {
+    Object.assign(keep.geo, m); // the actors read the map's size and spots from here
+  } else {
+    const geo = { ...m };
+    keep = { geo, actor: LIVES[m.life](geo), t0: performance.now(), frame: 0, last: -Infinity };
+    kept.set(key, keep);
+  }
+  const { actor, t0 } = keep;
   m.section.mapLife = actor; // lets the preview script find the unicorn
   const view = () => {
     const r = m.section.getBoundingClientRect();
@@ -410,15 +423,18 @@ export function startMapLife(m) {
     });
   }
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let frame = 0;
-  const t0 = performance.now();
   const tick = () => {
     if (!canvas.isConnected) { clearInterval(running.get(m.section)); return; }
     if (document.visibilityState === 'hidden') return;
-    actor.step(performance.now() - t0, view());
+    const t = performance.now() - t0;
+    // a frame's worth of time since the last step (a redraw can call this early)
+    if (t - keep.last >= FRAME * 0.8) {
+      actor.step(t, view());
+      keep.frame += 1;
+      keep.last = t;
+    }
     ctx.clearRect(0, 0, m.aw, m.ah);
-    actor.draw(ctx, frame);
-    frame += 1;
+    actor.draw(ctx, keep.frame);
   };
   tick();
   if (!reduce) running.set(m.section, setInterval(tick, FRAME));

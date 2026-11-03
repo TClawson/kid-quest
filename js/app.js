@@ -702,6 +702,8 @@ function familyBuddies() {
   return [...all.values()];
 }
 
+const visitorsArrived = new Set();
+
 function visitorsHtml(kid, s) {
   const visitors = pickVisitors(kid.id, familyBuddies(), today());
   if (!visitors.length) return { html: '', room: 0 };
@@ -715,7 +717,11 @@ function visitorsHtml(kid, s) {
         <div class="visitor-name">${esc(v.name)}</div>
         <div class="visitor-bubble">${esc(lines[i])}</div>
       </div>`).join('');
-  return { html: `<div class="map-visitors" aria-label="Visiting buddies">${html}</div>`, room: VILLAGE };
+  // they walk in once a day per kid; later redraws show them already there
+  const key = `${kid.id}|${today()}`;
+  const arrive = !visitorsArrived.has(key);
+  visitorsArrived.add(key);
+  return { html: `<div class="map-visitors ${arrive ? 'arrive' : ''}" aria-label="Visiting buddies">${html}</div>`, room: VILLAGE };
 }
 /** The map theme follows the kid's Places background. */
 const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
@@ -1123,12 +1129,27 @@ function buyItem(kid, item, prog) {
 
 const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent, wardrobe: viewWardrobe };
 
+// Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
+const SIDE_SCROLLERS = '.tabs, .pick';
+let lastHtml = '';
+let lastView = '';
+
 function render() {
   const scrollY = window.scrollY;
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
-  $app.innerHTML = (views[ui.view] || viewHome)();
+  const html = (views[ui.view] || viewHome)();
   // load the sign-in code early, so a sign-in popup opens straight from the tap
   if (ui.view === 'setup' || (ui.view === 'parent' && ui.tab === 'settings')) loadCloud().catch(() => {});
+  // Family sync can ask for a redraw many times a minute (another tablet saving, a piano timer
+  // ticking). When nothing on screen changed, leave the page alone: the visitors don't arrive
+  // again, the fish keep swimming and a half-scrolled row stays where it is.
+  if (html === lastHtml && $app.firstElementChild) { syncMusic(); return; }
+  const sameView = lastView === ui.view;
+  const side = sameView ? [...$app.querySelectorAll(SIDE_SCROLLERS)].map((el) => el.scrollLeft) : [];
+  $app.innerHTML = html;
+  lastHtml = html;
+  lastView = ui.view;
+  $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
   paintQuestMaps($app);
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
