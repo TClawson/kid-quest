@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickVisitors, visitorLines, MAX_VISITORS } from '../js/visits.js';
+import { pickVisitors, visitorLines, MAX_VISITORS, planVisits } from '../js/visits.js';
 import { addDays } from '../js/logic.js';
 
 const fam = (n) => Array.from({ length: n }, (_, i) => ({ id: `kid_${i}`, name: `Kid ${i}`, buddy: { species: 'fox', outfit: {} } }));
@@ -44,4 +44,31 @@ test('each visitor says something different, and celebrates a finished quest', (
   assert.equal(lines.length, 3);
   assert.equal(new Set(lines).size, 3);
   assert.match(lines[0], /Quest complete|Way to go/);
+});
+
+test('visitors with the same gear play together, rod owners fish, and the plan is fixed for the day', () => {
+  const vs = [
+    { id: 'a', gear: { soccer: 1, rod: 2 } },
+    { id: 'b', gear: { soccer: 3 } },
+    { id: 'c', gear: { rod: 1 } },
+    { id: 'd', gear: {} },
+  ];
+  let games = 0;
+  for (let d = 0; d < 60; d += 1) {
+    const date = addDays('2026-11-01', d);
+    const plan = planVisits('host', vs, date);
+    assert.deepEqual(plan, planVisits('host', vs, date));
+    assert.ok(plan.areas.length <= 2);
+    assert.equal(new Set(plan.areas.map((a) => a.side)).size, plan.areas.length, 'one area a side');
+    for (const a of plan.areas) {
+      if (a.kind === 'soccer') { assert.deepEqual([...a.members].sort(), ['a', 'b']); games += 1; }
+      if (a.kind === 'pond') assert.ok(a.members.every((id) => vs.find((v) => v.id === id).gear.rod));
+    }
+    // everyone gets a spot, no two share one
+    const spots = Object.values(plan.spots).map((s) => `${s.side}${s.slot}`);
+    assert.equal(spots.length, 4);
+    assert.equal(new Set(spots).size, 4);
+  }
+  assert.ok(games > 20, 'soccer happens on most days');
+  assert.deepEqual(planVisits('host', [{ id: 'x', gear: { hockey: 1 } }], '2026-11-01').areas, [], 'one player is not a game');
 });

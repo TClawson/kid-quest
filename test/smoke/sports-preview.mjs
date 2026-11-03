@@ -5,7 +5,8 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, newId, fallbackHash } from '../../js/logic.js';
-import { pickVisitors } from '../../js/visits.js';
+import { pickVisitors, planVisits } from '../../js/visits.js';
+import { bestGear } from '../../js/items.js';
 
 const out = process.argv[2] || 'previews';
 const part = process.argv[3] || 'all';
@@ -17,7 +18,7 @@ const ids = ['kid_ava', 'kid_ben', 'kid_cy', 'kid_dee'];
 let day = '2026-11-03';
 while (pickVisitors('kid_ava', ids.map((id) => ({ id, buddy: {} })), day).length < 3) day = addDays(day, 1);
 
-function family(theme) {
+function family(theme, gear = null) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
@@ -35,6 +36,11 @@ function family(theme) {
     mk('kid_dee', 'Dee', '#da77f2', 'dino', { owned: ['sport-hockey-super'] }),
   );
   s.kids.forEach((k) => { delete k.owned2; });
+  // other gear for the game previews: { kidId: [item ids] }, and a fifth kid if named
+  if (gear) {
+    if (gear.kid_eve) s.kids.push(mk('kid_eve', 'Eve', '#ffa94d', 'puppy', {}));
+    for (const k of s.kids) if (gear[k.id]) k.owned = gear[k.id];
+  }
   // six full weeks of exercise (Mon-Fri), and 3 days so far this week; Ava also did morning tasks today
   for (let i = 1; i <= 46; i += 1) {
     const key = addDays(day, -i);
@@ -51,13 +57,13 @@ function family(theme) {
 const site = await serve('.');
 const browser = await chromium.launch();
 const errors = [];
-async function open(viewport, theme, video) {
+async function open(viewport, theme, video, gear = null) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: video ? 1 : 2, ...(video ? { recordVideo: { dir: `${out}/raw`, size: viewport } } : {}) });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.clock.install({ time: new Date(`${day}T16:00:00`) });
   await page.goto(site.url);
-  await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), family(theme));
+  await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), family(theme, gear));
   await page.reload();
   return { ctx, page };
 }
@@ -120,6 +126,45 @@ try {
       await c2.close();
       fs.renameSync(await p2.video().path(), `${out}/raw/fishing-${theme.slice(3)}.webm`);
     }
+  }
+  if (part === 'all' || part === 'games') {
+    // find a day when the visitors split up the way we want to show, then film it
+    const GAMES = [
+      ['soccer-and-fishing', 'bg-meadow', { kid_ben: ['sport-rod-super', 'sport-soccer-good'], kid_cy: ['sport-soccer-regular'], kid_dee: ['sport-rod-regular'] }, ['soccer', 'pond']],
+      ['hockey-and-football', 'bg-volcano', { kid_ben: ['sport-hockey-super'], kid_cy: ['sport-hockey-regular'], kid_dee: ['sport-football-good'], kid_eve: ['sport-football-super'] }, ['hockey', 'football']],
+      ['soccer-and-fishing-castle', 'bg-castle', { kid_ben: ['sport-rod-super', 'sport-soccer-good'], kid_cy: ['sport-soccer-super'], kid_dee: ['sport-rod-good'] }, ['soccer', 'pond']],
+    ];
+    const keep = day;
+    for (const [name, theme, gear, want] of GAMES) {
+      const all = ['kid_ava', 'kid_ben', 'kid_cy', 'kid_dee', ...(gear.kid_eve ? ['kid_eve'] : [])];
+      for (day = keep; ; day = addDays(day, 1)) {
+        const vis = pickVisitors('kid_ava', all.map((id) => ({ id, buddy: {} })), day);
+        if (vis.length < all.length - 1) continue;
+        const plan = planVisits('kid_ava', vis.map((v) => ({ id: v.id, gear: bestGear(gear[v.id] || []) })), day);
+        if (want.every((k) => plan.areas.some((a) => a.kind === k))) break;
+      }
+      const vp = { width: 800, height: 340 };
+      const { ctx, page } = await open(vp, theme, true, gear);
+      await page.clock.resume();
+      await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+      await page.waitForTimeout(800);
+      await closeModal(page);
+      const box = await page.locator('.quest-map').boundingBox();
+      await page.evaluate((y) => window.scrollTo(0, y + window.scrollY - 4), box.y);
+      await page.waitForTimeout(12000);
+      await ctx.close();
+      fs.renameSync(await page.video().path(), `${out}/raw/games-${name}.webm`);
+      // and a still on a phone
+      const { ctx: c2, page: p2 } = await open({ width: 412, height: 915 }, theme, false, gear);
+      await p2.click('[data-action="open-kid"][data-id="kid_ava"]');
+      await p2.clock.runFor(1500);
+      await closeModal(p2);
+      await p2.clock.runFor(1200);
+      const b2 = await p2.locator('.quest-map').boundingBox();
+      await p2.screenshot({ path: `${out}/games-${name}-phone.png`, clip: { x: b2.x, y: b2.y, width: b2.width, height: 300 }, fullPage: true });
+      await c2.close();
+    }
+    day = keep;
   }
 } finally {
   if (errors.length) console.log('page errors:', errors);

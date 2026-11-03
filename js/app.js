@@ -6,14 +6,14 @@ import {
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
-import { buddySvg, buddyLine, MOVE_ART, catchFor } from './avatar.js';
+import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { startMusic, stopMusic } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
-import { pickVisitors, visitorLines } from './visits.js';
+import { pickVisitors, visitorLines, planVisits } from './visits.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
@@ -749,29 +749,59 @@ const visitorsArrived = new Set();
 
 function visitorsHtml(kid, s) {
   const visitors = pickVisitors(kid.id, familyBuddies(), today());
-  if (!visitors.length) return { html: '', room: 0 };
+  if (!visitors.length) return { html: '', room: 0, areas: '' };
   const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
-  // stand in front of the village houses (see paintOne in maparts.js), then between them
+  // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
-  const spots = wide ? [20, 80, 33, 67] : [22, 78, 37, 63];
+  const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [22, 37], right: [78, 63] };
+  // players stand at the two ends of their field (see pondSpots in maparts.js)
+  const GX = wide ? { left: [16, 42], right: [84, 58] } : { left: [16, 41], right: [84, 59] };
+  const gearOf = (v) => bestGear(v.owned);
+  const plan = planVisits(kid.id, visitors.map((v) => ({ id: v.id, gear: gearOf(v) })), today());
+  const areaOf = (id) => plan.areas.find((a) => a.members.includes(id));
+  const version = (tier) => ['regular', 'good', 'super'][tier - 1];
   const html = visitors.map((v, i) => {
-    // a visitor with a fishing rod fishes in the village pond, facing away from the road
-    const rod = bestGear(v.owned).rod;
-    const look = rod ? { ...v.buddy, outfit: { ...v.buddy.outfit, sport: `sport-rod-${['regular', 'good', 'super'][rod - 1]}` } } : v.buddy;
-    const side = spots[i] < 50 ? 'left' : 'right';
+    const spot = plan.spots[v.id];
+    const area = areaOf(v.id);
+    const x = (area && area.kind !== 'pond' ? GX : X)[spot.side][spot.slot];
+    const gear = gearOf(v);
+    let look = v.buddy;
+    let cls = '';
+    let extra = '';
+    let data = '';
+    if (area?.kind === 'pond') {
+      // fishing in the village pond, facing away from the road
+      look = { ...v.buddy, outfit: { ...v.buddy.outfit, sport: `sport-rod-${version(gear.rod)}` } };
+      cls = `fishing face-${spot.side}`;
+      data = `data-rod="${gear.rod}"`;
+      extra = '<div class="fish-line" aria-hidden="true"><span class="bobber"></span></div><div class="fish-catch" aria-hidden="true"></div>';
+    } else if (area) {
+      // playing a game: the one nearer the left edge is player a. Sticks are held, balls are shared.
+      const a = x === Math.min(...area.members.map((id) => GX[plan.spots[id].side][plan.spots[id].slot]));
+      const outfit = { ...v.buddy.outfit, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey)}` : undefined };
+      look = { ...v.buddy, outfit };
+      cls = `playing play-${area.kind} player-${a ? 'a' : 'b'} ${a && area.kind === 'hockey' ? 'face-left' : ''}`;
+    }
     return `
-      <div class="map-visitor ${i === 0 ? 'talking' : ''} ${rod ? `fishing face-${side}` : ''}" data-action="visitor" data-id="${esc(v.id)}" ${rod ? `data-rod="${rod}"` : ''} style="left:${spots[i]}%;--kid:${esc(v.color || '#4dabf7')}">
+      <div class="map-visitor ${i === 0 ? 'talking' : ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
         <div class="visitor-buddy">${buddySvg(look, 'happy', { background: false })}</div>
-        ${rod ? '<div class="fish-line" aria-hidden="true"><span class="bobber"></span></div><div class="fish-catch" aria-hidden="true"></div>' : ''}
+        ${extra}
         <div class="visitor-name">${esc(v.name)}</div>
         <div class="visitor-bubble">${esc(lines[i])}</div>
       </div>`;
   }).join('');
+  // the ball (or puck) goes back and forth between the two players
+  const games = plan.areas.filter((a) => a.kind !== 'pond').map((a) => {
+    const xs = a.members.map((id) => GX[plan.spots[id].side][plan.spots[id].slot]).sort((p, q) => p - q);
+    const tier = Math.max(...a.members.map((id) => gearOf(visitors.find((v) => v.id === id))[a.kind] || 1));
+    return `<div class="map-game game-${a.kind}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" aria-hidden="true"><span class="game-ball">${ballSvg(a.kind, tier)}</span></div>`;
+  }).join('');
+  const areas = plan.areas.map((a) => `${a.side}:${a.kind}`).join(',');
   // they walk in once a day per kid; later redraws show them already there
   const key = `${kid.id}|${today()}`;
   const arrive = !visitorsArrived.has(key);
   visitorsArrived.add(key);
-  return { html: `<div class="map-visitors ${arrive ? 'arrive' : ''}" aria-label="Visiting buddies">${html}</div>`, room: VILLAGE };
+  return { html: `<div class="map-visitors ${arrive ? 'arrive' : ''}" aria-label="Visiting buddies">${games}${html}</div>`, room: VILLAGE, areas };
 }
 /** The map theme follows the kid's Places background. */
 const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
@@ -834,7 +864,7 @@ function questMap(kid, s, entry, mood) {
     </div>`;
 
   return `
-    <section class="quest-map" style="height:${height}px;background:${mapTheme(kidTheme(kid)).ground[0]}" data-theme="${esc(kidTheme(kid))}" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-pond="${visit.room ? 1 : ''}" data-seed="${esc(kid.id)}">
+    <section class="quest-map" style="height:${height}px;background:${mapTheme(kidTheme(kid)).ground[0]}" data-theme="${esc(kidTheme(kid))}" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-areas="${esc(visit.areas)}" data-seed="${esc(kid.id)}">
       <canvas class="map-land" aria-hidden="true"></canvas>
       <div class="map-start" style="left:50%;top:0">🚩 Start</div>
       ${visit.html}

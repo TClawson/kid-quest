@@ -366,8 +366,12 @@ function paintOne(section) {
     }
   }
 
-  // fishing ponds by the village, one each side of the road, when buddies are visiting
-  const ponds = section.dataset.pond ? pondSpots(aw, wall) : [];
+  // a fishing pond or a little playing field each side of the road, only where visitors use one
+  const spots = pondSpots(aw, wall);
+  const ponds = (section.dataset.areas || '').split(',').filter(Boolean).map((a) => {
+    const [side, kind] = a.split(':');
+    return { ...spots[side === 'right' ? 1 : 0], kind };
+  });
   const inPond = (x, y, pad) => ponds.some((p) => x > p.x - pad && x < p.x + p.w + pad && y > p.y - pad && y < p.y + p.h + pad);
 
   // a few clumps of scenery in the open, away from the road
@@ -414,7 +418,7 @@ function paintOne(section) {
     else if (th.road.pebble && rnd() < 0.5) px(r.x + (rnd() < 0.5 ? -2 : 2), r.y, th.road.pebble);
   }
   if (band) drawBridge(px, band, th.bridge);
-  ponds.forEach((p) => drawPond(px, p, th));
+  ponds.forEach((p) => (p.kind === 'pond' ? drawPond(px, p, th) : drawField(px, p)));
 
   // the village at the start: houses on both sides of the road, more on wide screens
   const homes = aw > 140 ? [0.2, 0.33, 0.67, 0.8] : [0.24, 0.76];
@@ -518,6 +522,37 @@ function drawPond(px, { x, y, w, h }, th) {
   }
   const extra = POND_EXTRAS[th.pond] || POND_EXTRAS.lily;
   extra(px, { x, y, w, h, cx, cy });
+}
+
+// Little fields for visitors playing together: grass with white lines and goals,
+// an ice rink with boards and nets, or a football field with end zones.
+const FIELDS = {
+  soccer: { ground: ['#40c057', '#51cf66'], line: '#ffffff', edge: '#2b8a3e', goal: '#ffffff' },
+  hockey: { ground: ['#e7f5ff', '#d0ebff'], line: '#e03131', edge: '#495057', goal: '#e03131', blue: '#4dabf7' },
+  football: { ground: ['#2f9e44', '#37b24d'], line: '#ffffff', edge: '#1b6e2e', ends: ['#e03131', '#1c7ed6'] },
+};
+function drawField(px, { x, y, w, h, kind }) {
+  const f = FIELDS[kind] || FIELDS.soccer;
+  // the edge: boards round a rink, a darker border round grass
+  px(x - 1, y - 1, f.edge, w + 2, h + 2);
+  for (let i = 0; i < w; i += 1) px(x + i, y, f.ground[Math.floor(i / 3) % 2], 1, h);
+  const mid = x + Math.floor(w / 2);
+  if (kind === 'soccer') {
+    px(x, y, f.line, w, 1); px(x, y + h - 1, f.line, w, 1); px(x, y, f.line, 1, h); px(x + w - 1, y, f.line, 1, h);
+    px(mid, y, f.line, 1, h);
+    px(mid - 2, y + 4, f.line, 5, 1); px(mid - 2, y + h - 5, f.line, 5, 1); px(mid - 3, y + 5, f.line, 1, h - 10); px(mid + 3, y + 5, f.line, 1, h - 10);
+    for (const gx of [x - 2, x + w]) { px(gx, y + 4, f.goal, 2, 1); px(gx, y + h - 5, f.goal, 2, 1); px(gx + (gx < x ? 0 : 1), y + 4, f.goal, 1, h - 8); }
+  } else if (kind === 'hockey') {
+    px(x - 1, y - 1, '#ffffff', w + 2, 1); // top of the boards
+    px(mid, y, f.line, 1, h);
+    px(x + Math.floor(w / 3), y, f.blue, 1, h); px(x + Math.ceil((2 * w) / 3), y, f.blue, 1, h);
+    px(mid - 1, y + Math.floor(h / 2) - 1, f.line, 3, 3); px(mid, y + Math.floor(h / 2), '#ffffff');
+    for (const gx of [x + 2, x + w - 4]) { px(gx, y + 4, f.goal, 2, h - 8); px(gx + (gx < mid ? 0 : 1), y + 5, '#ffffff', 1, h - 10); }
+  } else {
+    px(x, y, f.ends[0], 4, h); px(x + w - 4, y, f.ends[1], 4, h);
+    for (let i = 4; i < w - 4; i += 4) px(x + i, y, f.line, 1, h);
+    px(x + 1, y - 3, '#ffd43b', 1, 3); px(x + w - 2, y - 3, '#ffd43b', 1, 3);
+  }
 }
 
 const POND_EXTRAS = {

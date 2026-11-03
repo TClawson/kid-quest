@@ -541,6 +541,18 @@ function gearPixels(kind, tier, dx = 0, dy = 0) {
   return px.svg();
 }
 
+/** A ball (or puck) on its own, for visitors playing a game together. */
+export function ballSvg(kind, tier = 1) {
+  const art = kind === 'hockey' ? [0, 0, PROP_ART.puck[2], PROP_ART.puck[3]] : GEAR_ART[kind];
+  if (!art) return '';
+  const rows = art[2];
+  const pal = kind === 'hockey' ? art[3] : art[3][Math.max(0, Math.min(2, tier - 1))];
+  const w = Math.max(...rows.map((r) => r.length));
+  const px = new Pixels();
+  px.grid(0, 0, rows, pal);
+  return `<svg class="ball-svg pixel" viewBox="0 0 ${w} ${rows.length}" width="${w * 2.4}" height="${rows.length * 2.4}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${px.svg()}</svg>`;
+}
+
 // Small pieces some moves need, drawn at [x, y].
 const PROP_ART = {
   puck: [6, 22, ['KKK', 'KPK'], { P: '#495057' }],
