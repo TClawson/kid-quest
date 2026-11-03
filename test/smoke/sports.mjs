@@ -22,7 +22,7 @@ try {
   // exercised every day for the last 14 days: at least one full week, so jumping jacks are unlocked
   const start = addDays(t, -14);
   for (let i = 1; i <= 14; i += 1) saved.log[addDays(t, -i)] = { kid_ava: { tasks: { task_run: { status: 'done' } }, excused: false } };
-  saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: start, seenUnlocks: [], seenMoves: ['jacks', 'cartwheel'], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } });
+  saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: start, seenUnlocks: [], seenMoves: ['jacks', 'cartwheel'], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow', music: 'music-keyboard' } } });
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
@@ -61,6 +61,7 @@ try {
   assert.equal(ava.gemsSpent, 40);
   assert.equal(ava.spent, 0, 'coins are not touched');
   assert.equal(ava.buddy.outfit.sport, 'sport-soccer-regular');
+  assert.equal(ava.buddy.outfit.music, undefined, 'holding gear puts the piano away');
   assert.ok(ava.exBest >= 2, 'the best exercise streak is kept on the kid for visits');
   // the soccer ball's first move is now unlocked and announced
   await page.waitForTimeout(800);

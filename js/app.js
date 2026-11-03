@@ -771,14 +771,14 @@ function visitorsHtml(kid, s) {
     let data = '';
     if (area?.kind === 'pond') {
       // fishing in the village pond, facing away from the road
-      look = { ...v.buddy, outfit: { ...v.buddy.outfit, sport: `sport-rod-${version(gear.rod)}` } };
+      look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } };
       cls = `fishing face-${spot.side}`;
       data = `data-rod="${gear.rod}"`;
       extra = '<div class="fish-line" aria-hidden="true"><span class="bobber"></span></div><div class="fish-catch" aria-hidden="true"></div>';
     } else if (area) {
       // playing a game: the one nearer the left edge is player a. Sticks are held, balls are shared.
       const a = x === Math.min(...area.members.map((id) => GX[plan.spots[id].side][plan.spots[id].slot]));
-      const outfit = { ...v.buddy.outfit, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey)}` : undefined };
+      const outfit = { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey)}` : undefined };
       look = { ...v.buddy, outfit };
       cls = `playing play-${area.kind} player-${a ? 'a' : 'b'} ${a && area.kind === 'hockey' ? 'face-left' : ''}`;
     }
@@ -1232,6 +1232,17 @@ function changeSpecies(kid, species) {
   switchSpecies(kid, species, (item, sp) => isUnlocked(item, { ...prog, owned: ownedFor(kid, sp) }));
 }
 
+// The buddy can't sit at a piano and play sports at once: picking one puts the other away.
+const ONE_OR_THE_OTHER = { music: 'sport', sport: 'music' };
+function putAwayOther(kid, slot) {
+  const other = ONE_OR_THE_OTHER[slot];
+  const outfit = kid.buddy.outfit;
+  if (!other || !outfit[other]) return;
+  const name = itemById(outfit[other])?.name;
+  delete outfit[other];
+  if (name) setTimeout(() => toast(`${name} put away for now`), 50);
+}
+
 const speciesName = (id) => SPECIES.find((sp) => sp.id === id)?.name || 'buddy';
 
 function buyGear(kid, item, prog) {
@@ -1367,7 +1378,7 @@ const actions = {
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
     const outfit = kid.buddy.outfit;
     if (outfit[item.slot] === item.id && item.slot !== 'background') delete outfit[item.slot];
-    else outfit[item.slot] = item.id;
+    else { outfit[item.slot] = item.id; putAwayOther(kid, item.slot); }
     kid.newItems = (kid.newItems || []).filter((id) => id !== item.id);
     sounds.task(); save(); render();
   },
@@ -1393,6 +1404,7 @@ const actions = {
     }
     addOwned(kid, item);
     kid.buddy.outfit[item.slot] = item.id;
+    putAwayOther(kid, item.slot);
     save();
     closeModal();
     sounds.day();
