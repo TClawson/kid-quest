@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createListener, steadyBpm, buddyState, noteName } from '../js/listen.js';
+import { createListener, buddyState, noteName } from '../js/listen.js';
+import { createBeatFollower } from '../js/beat.js';
 import { RATE, pianoNotes, talking, addNoise, runListener, room, singing, coughs } from './helpers/sound.mjs';
 
 const listen = (samples) => {
@@ -10,11 +11,10 @@ const listen = (samples) => {
 };
 const SCALE = [262, 294, 330, 349, 392, 440, 494, 523];
 
-test('hears each note of a slow scale as piano, with a steady beat', () => {
+test('hears each note of a slow scale as piano', () => {
   const { l } = listen(pianoNotes(SCALE.map((hz, i) => ({ at: 0.3 + i * 0.5, hz })), { length: 5 }));
   assert.equal(l.state.pianoNotes, 8);
   assert.equal(l.state.otherSounds, 0);
-  assert.equal(l.state.bpm, 120);
 });
 
 test('fast notes and chords are still piano', () => {
@@ -63,11 +63,27 @@ test('the buddy is bored at 30 seconds and asleep at 60', () => {
   assert.equal(buddyState(60), 'asleep');
 });
 
-test('a steady beat needs steady gaps; chords count once', () => {
-  assert.equal(steadyBpm([0, 500, 1000, 1500, 2000]), 120);
-  assert.equal(steadyBpm([0, 30, 500, 520, 1000, 1500, 1540, 2000]), 120);
-  assert.equal(steadyBpm([0, 300, 1100, 1300, 2600, 2700]), 0);
-  assert.equal(steadyBpm([0, 500, 1000]), 0);
+test('the onsets the listener hears are enough for the beat follower', () => {
+  // two rounds of the scale at 120 beats a minute, then chords on every other beat
+  const notes = [...SCALE, ...SCALE].map((hz, i) => ({ at: 0.3 + i * 0.5, hz }));
+  for (let i = 0; i < 4; i++) for (const hz of [262, 330, 392]) notes.push({ at: 8.3 + i * 1, hz });
+  const { events } = listen(room(pianoNotes(notes, { length: 13 })));
+  let seed = 3;
+  const beat = createBeatFollower({ rng: () => (seed = (seed * 16807) % 2147483647) / 2147483647 });
+  const moves = [];
+  const onsets = events.filter((e) => e.type === 'onset').map((e) => e.at);
+  let i = 0;
+  for (let now = 0; now < 13000; now += 20) {
+    while (i < onsets.length && onsets[i] <= now) beat.note(onsets[i++]);
+    moves.push(...beat.beats(now));
+  }
+  assert.equal(onsets.length, 20, 'one onset per note or chord');
+  assert.ok(Math.abs(beat.bpm - 120) <= 6 || Math.abs(beat.bpm - 60) <= 4, `${beat.bpm} bpm`);
+  // the analyser hears each note about a frame after it starts; the dance is on time with that
+  const beats = Array.from({ length: 26 }, (_, k) => 300 + k * 500 + 20);
+  const onBeat = moves.filter((m) => beats.some((b) => Math.abs(b - m) < 80));
+  assert.ok(moves.length >= 8, `${moves.length} moves`);
+  assert.ok(onBeat.length / moves.length >= 0.85, `${onBeat.length} of ${moves.length} moves on the beat`);
 });
 
 test('note names', () => {

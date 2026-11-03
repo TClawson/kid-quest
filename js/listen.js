@@ -6,7 +6,8 @@
 //  - after each onset it watches the next ~200 ms. A piano note's pitches stay
 //    put (voices slide and waver), it is made of clean pitches (coughs and claps
 //    are noise), and it only fades (singing holds or swells).
-//  - "seconds since the last piano note" drives the bored and asleep states.
+//  - "seconds since the last piano note" drives the bored and asleep states;
+//  - the onsets also go to the beat follower (beat.js), so the buddy can dance.
 // Google's sound recognizer (hear.js) can also give its verdict on each second of
 // sound. The mode picks who decides: 'builtin', 'google', or 'both' (both agree).
 // The thresholds are kept in TUNING so we can adjust them after real tests.
@@ -50,24 +51,6 @@ function median(xs) {
   const s = [...xs].sort((a, b) => a - b);
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
-
-/**
- * A steady beat from the last few piano notes, or 0. Notes closer than 0.12 s are
- * one chord. Needs 4 gaps that agree within about 20%.
- */
-export function steadyBpm(times) {
-  const onsets = [];
-  for (const t of times) if (!onsets.length || t - onsets[onsets.length - 1] > 120) onsets.push(t);
-  const gaps = onsets.slice(1).map((t, i) => t - onsets[i]).slice(-6);
-  if (gaps.length < 4) return 0;
-  const mid = median(gaps);
-  const spread = median(gaps.map((g) => Math.abs(g - mid)));
-  if (!mid || spread / mid > 0.2 || mid > 2000) return 0;
-  let bpm = 60000 / mid;
-  while (bpm > 180) bpm /= 2;
-  while (bpm < 60) bpm *= 2;
-  return Math.round(bpm);
 }
 
 /** The buddy's state from seconds since the last piano note (heard: any note yet). */
@@ -139,8 +122,8 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
   let lastOnset = -1e9;
   let judging = null;               // the onset being judged
   const s = {
-    start, lastPiano: null, pianoTimes: [], pianoNotes: 0, otherSounds: 0,
-    level: -100, floor: -100, flux: 0, threshold: 0, note: '', bpm: 0, last: null, google: null,
+    start, lastPiano: null, pianoNotes: 0, otherSounds: 0,
+    level: -100, floor: -100, flux: 0, threshold: 0, note: '', last: null, google: null,
   };
 
   function frame(db, wave, now) {
@@ -238,9 +221,6 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
     if (ev.type === 'piano') {
       s.pianoNotes++;
       s.lastPiano = Math.max(s.lastPiano ?? -Infinity, ev.at);
-      s.pianoTimes.push(ev.at);
-      if (s.pianoTimes.length > 16) s.pianoTimes.shift();
-      s.bpm = steadyBpm(s.pianoTimes);
     } else {
       s.otherSounds++;
     }
