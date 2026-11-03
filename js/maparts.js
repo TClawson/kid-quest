@@ -451,7 +451,7 @@ function paintOne(section) {
   startMapLife({
     section, aw, ah, scale: SCALE, life: th.life, wall,
     goal: chest || { x: aw / 2, y: ah - 30 },
-    knightPost: { x: side < 0 ? wall + 2 : aw - wall - 26, y: postY, side },
+    knightPost: { x: side < 0 ? wall + 2 : aw - wall - 28, y: postY, side },
     openSpot: ({ top, bottom }) => {
       for (let tries = 0; tries < 30; tries += 1) {
         const x = wall + 4 + Math.random() * (aw - 2 * wall - 32);
