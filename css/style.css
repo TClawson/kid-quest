@@ -343,7 +343,8 @@ label { color: var(--ink); }
 .map-visitors.arrive .map-visitor.inner { animation-delay: 0.2s; }
 .map-visitors.arrive .map-visitor.playing { animation-delay: 0.4s; }
 .map-visitor.inner { top: 84px; }
-.visitor-buddy { width: 58px; height: 58px; animation: visitor-bob 2.4s ease-in-out infinite; }
+/* live buddies (live.js) breathe and hop by themselves: no floating */
+.visitor-buddy { width: 58px; height: 58px; }
 .visitor-buddy svg { width: 100%; height: 100%; display: block; }
 .visitor-name { margin-top: -4px; font-size: 0.7rem; font-weight: 800; color: #fff; background: var(--kid); border: 2px solid var(--px-ink); border-radius: 4px; padding: 0 5px; line-height: 1.4; }
 .visitor-bubble { position: absolute; top: 100%; left: 50%; width: max-content; max-width: 130px; margin-top: 6px; transform: translateX(-50%) scale(0.6); opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; font-size: 0.8rem; font-weight: 700; line-height: 1.2; text-align: center; background: #fff3d6; color: var(--px-ink); border: 2px solid var(--px-ink); border-radius: 6px; padding: 3px 5px; box-shadow: 2px 2px 0 var(--px-ink); }
@@ -378,7 +379,7 @@ label { color: var(--ink); }
 /* fishing visitors cast into the village pond (see pondSpots in maparts.js) */
 .map-visitor { --line: 98px; }
 .map-visitor.inner { --line: 82px; }
-.map-visitor.face-left .visitor-buddy svg { transform: scaleX(-1); }
+.map-visitor.face-left .visitor-buddy svg, .map-visitor.face-left .visitor-buddy canvas { transform: scaleX(-1); }
 .fish-line { position: absolute; top: 12px; left: 60px; width: 1px; height: var(--line); background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 0.5px rgba(42, 24, 56, 0.35); pointer-events: none; transform-origin: top; }
 .map-visitor.face-left .fish-line { left: 3px; }
 .bobber { position: absolute; bottom: -4px; left: -3px; width: 7px; height: 7px; border-radius: 2px; background: linear-gradient(#e03131 50%, #fff 50%); border: 1px solid var(--px-ink); animation: bobber 1.6s steps(2, end) infinite; }
@@ -434,7 +435,7 @@ label { color: var(--ink); }
 .play-football.player-a .visitor-buddy { animation: player-kick 2.8s steps(1, end) infinite; }
 .play-football.player-b .visitor-buddy { animation: player-kick 2.8s steps(1, end) 1.4s infinite; }
 @keyframes player-kick { 0% { transform: translateY(-5px); } 6% { transform: translateY(-2px); } 12%, 100% { transform: none; } }
-.map-visitor.face-left.playing .visitor-buddy svg { transform: scaleX(-1); }
+.map-visitor.face-left.playing .visitor-buddy svg, .map-visitor.face-left.playing .visitor-buddy canvas { transform: scaleX(-1); }
 @media (prefers-reduced-motion: reduce) { .game-ball { animation: none !important; } }
 /* on a phone the fields are small, so the players are too */
 @media (max-width: 600px) { .map-visitor.playing { top: 126px; } .map-visitor.playing .visitor-buddy { width: 46px; height: 46px; } }
