@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../../css/style.css"><link rel="stylesheet" href="../../css/moves.css">
+<style>body{background:#fff8e7;padding:10px;font-family:sans-serif} .grid{display:grid;grid-template-columns:repeat(var(--cols,4),var(--w,200px));gap:12px} .cell{text-align:center;font-size:14px;font-weight:700} .cell .buddy{width:calc(var(--w,200px) - 10px);height:calc(var(--w,200px) - 10px);margin:auto} .buddy .char{animation:none!important}</style></head>
+<body><div class="grid" id="g"></div>
+<script type="module">
+// Buddy specials: each buddy wearing its own special item. ?mode=bamboo shows the bamboo beside each kind of gear.
+import { buddySvg } from '../../js/avatar.js';
+import { ITEMS } from '../../js/items.js';
+const q = new URLSearchParams(location.search);
+const g = document.getElementById('g');
+if (q.get('w')) document.body.style.setProperty('--w', `${q.get('w')}px`);
+if (q.get('cols')) g.style.setProperty('--cols', q.get('cols'));
+const cell = (svg, label) => `<div class="cell"><div class="buddy" style="--kid:#4dabf7">${svg}</div>${label}</div>`;
+const specials = ITEMS.filter((i) => i.species);
+if (q.get('mode') === 'bamboo') {
+  for (const sport of [undefined, 'sport-soccer-regular', 'sport-hockey-good', 'sport-football-regular', 'sport-shoes-super', 'sport-rod-regular']) {
+    g.innerHTML += cell(buddySvg({ species: 'panda', outfit: { background: 'bg-meadow', neck: 'neck-bamboo', sport } }, 'happy'), sport || 'No gear');
+  }
+} else if (q.get('mode') === 'moods') {
+  for (const it of specials) for (const mood of ['happy', 'excited', 'sleepy', 'sad']) {
+    g.innerHTML += cell(buddySvg({ species: it.species, outfit: { background: 'bg-meadow', [it.slot]: it.id } }, mood), `${it.name} · ${mood}`);
+  }
+} else {
+  for (const it of specials) {
+    g.innerHTML += cell(buddySvg({ species: it.species, outfit: { background: 'bg-meadow', [it.slot]: it.id } }, 'happy'), `${it.name} (${it.species})`);
+  }
+}
+</script></body></html>
