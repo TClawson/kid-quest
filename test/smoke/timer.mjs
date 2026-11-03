@@ -49,7 +49,11 @@ try {
     assert.ok(await page.isVisible('.timer-buddy'), 'buddy on the timer page');
     assert.match(await page.locator('.timer').textContent(), /Note Rush/);
     await page.click('[data-action="timer-start"]');
-    assert.ok(await page.locator('.timer-buddy.bobbing').count(), 'buddy bobs while the timer runs');
+    const drawn = await page.evaluate(() => {
+      const c = document.querySelector('.timer-buddy canvas.live-buddy');
+      return c ? c.getContext('2d').getImageData(0, 0, 24, 24).data.some((v, i) => i % 4 === 3 && v) : false;
+    });
+    assert.ok(drawn, 'the live buddy is drawn on the timer page');
     await page.clock.runFor(2 * MIN);
     await page.click('[data-action="timer-buddy"]');
     await page.waitForTimeout(400);
@@ -73,7 +77,8 @@ try {
     await page.clock.runFor(1500);
     assert.ok(await page.isVisible('#timer-left'), 'timer page comes back after the app was closed');
     rec = await stored(page, 'kid_sam', piano.id);
-    assert.ok(rec.seconds >= 17 * 60 && rec.seconds <= 17 * 60 + 10, `time while closed counted (${rec.seconds})`);
+    // the page clock also runs in real time while the test works (main already landed at +9 s), so allow +20
+    assert.ok(rec.seconds >= 17 * 60 && rec.seconds <= 17 * 60 + 20, `time while closed counted (${rec.seconds})`);
 
     // finish: ask a parent later, then the approval shows time in other apps
     await page.clock.runFor(14 * MIN);

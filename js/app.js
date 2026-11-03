@@ -10,6 +10,7 @@ import {
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
+import { liveHtml, live, liveStart, feel } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { startMusic, stopMusic } from './music.js';
 import {
@@ -137,8 +138,39 @@ function moodFor(kid) {
   return restingMood({ todayDone: s.done, todayComplete: s.complete, missedYesterday: missedYesterday(kid, info) });
 }
 
-/** Animated buddy. size: css class for sizing. */
+/**
+ * How a kid's buddy feels right now (rig.js feelings), from how the day is going:
+ * proud and sparkly once everything is done, sad after a missed day until a task
+ * is done, calm before the first task, a bit bouncier with a long streak, and
+ * drowsy early in the morning and late at night.
+ */
+function feelFor(kid, mood = moodFor(kid)) {
+  const f = {
+    excited: { valence: 0.95, arousal: 0.95 },
+    proud: { valence: 0.9, arousal: 0.7 },
+    happy: { valence: 0.6, arousal: 0.55 },
+    sleepy: { valence: 0.35, arousal: 0.4 },
+    sad: { valence: -0.7, arousal: 0.3 },
+  }[mood] || { valence: 0.6, arousal: 0.55 };
+  const streak = streakInfo(state, kid, today()).streak;
+  if (streak >= 7 && mood !== 'sad') f.arousal = Math.min(1, f.arousal + 0.1);
+  const hour = new Date().getHours();
+  if ((hour < 7 || hour >= 21) && mood !== 'excited') { f.arousal = Math.min(f.arousal, 0.25); f.sleep = 0.3; }
+  return f;
+}
+
+const liveKey = (kid) => `kid:${kid.id}`;
+
+/**
+ * A kid's buddy. size: css class for sizing. opts.live: drawn live by rig.js
+ * (it moves, feels and reacts to taps); otherwise the still picture from avatar.js.
+ * opts.feel: feelings to use instead of feelFor; opts.idle: gets bored when left alone.
+ */
 function buddyHtml(kid, mood, size = 'lg', opts = {}) {
+  if (opts.live) {
+    const html = liveHtml(liveKey(kid), kid.buddy, { background: opts.background !== false, feel: opts.feel || feelFor(kid, mood), idle: opts.idle, label: `${kid.name}'s buddy` });
+    return `<div class="buddy buddy-${size} live">${html}</div>`;
+  }
   return `<div class="buddy buddy-${size} mood-${mood}">${buddySvg(kid.buddy, mood, opts)}</div>`;
 }
 const buddyChip = (kid) => `<span class="avatar xs buddy-chip">${buddySvg(kid.buddy, 'happy', { background: false })}</span>`;
@@ -412,6 +444,7 @@ function markDone(kid, task, by, anchor) {
   floatText([gems && `+${gems} 💎`, xp && `+${xp} XP`, coins && `+${coins} 🪙`].filter(Boolean).join(' · ') || 'Done!', anchor);
   ui.cheerUntil = Date.now() + 2600;
   ui.cheerKid = kid.id;
+  live(liveKey(kid)).cheer();
   render();
   setTimeout(() => celebrateIfDue(kid), 700);
   setTimeout(() => { if (ui.view === 'kid' && Date.now() >= ui.cheerUntil) render(); }, 2700);
@@ -647,6 +680,7 @@ function buddyCheer() {
   const $say = $b?.querySelector('.timer-bubble');
   if (!kid || !$say) return;
   lastCheer = pickCheer(lastCheer);
+  if (!['head', 'silly'].includes($b.querySelector('canvas.live-buddy')?.dataset.zone)) live(liveKey(kid)).giggle();
   $say.textContent = CHEERS[lastCheer](kid.name);
   $b.classList.remove('hop');
   void $b.offsetWidth; // restart the hop
@@ -705,6 +739,12 @@ function stopEars() {
   Object.assign(ears, { run: null, beat: null, loading: false, asleep: false, mood: '' });
 }
 
+/** The timer page's live buddy. */
+function earsBuddy() {
+  const kid = earsTask()?.kid;
+  return kid ? live(liveKey(kid)) : null;
+}
+
 /** The kid tapped Start or Keep going: the quiet clock starts again. */
 function wakeEars() {
   ears.asleep = false;
@@ -722,10 +762,10 @@ function onEarsFrame(listener, events, now) {
   for (const ev of events) {
     if (ev.type === 'onset') {
       beat.note(ev.at);
-      if (!builtin && !dancing && piano && !ears.asleep) buddyStep($b, 'hop');
-    } else if (ev.type === 'piano' && builtin && !dancing) buddyStep($b, 'hop');
+      if (!builtin && !dancing && piano && !ears.asleep) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
+    } else if (ev.type === 'piano' && builtin && !dancing) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
   }
-  if (beat.beats(now).length && piano && !ears.asleep) danceBeat(ears, $b, document.getElementById('ears-metro'), beat.period);
+  if (beat.beats(now).length && piano && !ears.asleep) { danceBeat(ears, $b, document.getElementById('ears-metro'), beat.period); earsBuddy()?.beat(beat.period); }
 
   if (!ears.run.running) {
     // Chrome keeps the sound off until the screen is tapped (after the app reopened)
@@ -734,6 +774,7 @@ function onEarsFrame(listener, events, now) {
     if (piano) {
       // playing again wakes the buddy, and the timer carries on
       Object.assign(ears, { asleep: false, woke: now, from: now, mood: 'playing' });
+      earsBuddy()?.surprise();
       startTimer();
       updateEarsUi(now);
       return;
@@ -757,6 +798,18 @@ function onEarsFrame(listener, events, now) {
     return;
   }
   if (now - ears.lastUi > 100) { ears.lastUi = now; updateEarsUi(now); }
+}
+
+/**
+ * How the timer page's buddy feels: listening for the piano, swaying to playing
+ * with no steady beat, dancing (and humming) on the kid's beat, bored, asleep.
+ */
+function timerFeel(mood, dancing = false) {
+  if (mood === 'playing') return dancing ? { valence: 0.95, arousal: 0.9, dance: 1, sing: 0.6, notes: true } : { valence: 0.85, arousal: 0.6, listen: 1 };
+  if (mood === 'waiting') return { valence: 0.5, arousal: 0.5, curious: 0.35 };
+  if (mood === 'bored') return { valence: -0.3, arousal: 0.2, sleep: 0.3 };
+  if (mood === 'asleep') return { valence: 0.1, arousal: 0.1, sleep: 1 };
+  return timer.running ? { valence: 0.75, arousal: 0.6 } : { valence: 0.6, arousal: 0.5 };
 }
 
 /** The line under the buddy: what it hears. */
@@ -787,10 +840,8 @@ function updateEarsUi(now = performance.now()) {
   if (!$sprite || !kid) return;
   // the page keeps what it shows (a redraw may leave it be), so compare with the page
   const mood = ears.run || ears.asleep ? ears.mood || 'waiting' : '';
-  if (mood !== $sprite.dataset.mood) {
-    $sprite.dataset.mood = mood;
-    $sprite.innerHTML = buddySvg(kid.buddy, mood ? LISTEN_MOODS[mood] : 'happy', { background: false });
-  }
+  if (mood !== $sprite.dataset.mood) $sprite.dataset.mood = mood;
+  feel(liveKey(kid), timerFeel(mood, Boolean(listener && pianoNow(listener, now) && ears.beat.following(now))));
   // what it says (a cheer from a tap stays until it fades)
   const say = now - ears.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';
   const $say = $b.querySelector('.timer-bubble');
@@ -828,7 +879,7 @@ function viewHome() {
     const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
     return `
       <button class="kid-card" data-action="open-kid" data-id="${kid.id}" style="--kid:${kid.color}">
-        ${buddyHtml(kid, moodFor(kid), 'md')}
+        ${buddyHtml(kid, moodFor(kid), 'md', { live: true })}
         <div class="kid-name">${esc(kid.name)}</div>
         <div class="streak ${info.streak ? '' : 'cold'}">🔥 ${info.streak}</div>
         <div class="bar"><span style="width:${pct}%"></span></div>
@@ -1015,7 +1066,7 @@ function questMap(kid, s, entry, mood) {
 
   const hp = pts[here];
   const walker = `<div class="map-buddy ${mood === 'excited' ? 'hop' : ''}" style="left:${hp.x}%;top:${hp.y}px" data-action="buddy-move" data-kid="${kid.id}">
-      ${buddyHtml(kid, mood === 'sad' || mood === 'sleepy' ? mood : mood === 'proud' ? 'proud' : mood === 'excited' ? 'excited' : 'happy', 'mini', { background: false })}
+      ${buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true })}
     </div>`;
 
   return `
@@ -1065,7 +1116,7 @@ function viewKid() {
         </div>
       </header>
       <div class="buddy-panel">
-        <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy to see a move">${buddyHtml(kid, mood, 'lg')}</button>
+        <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, mood, 'lg', { live: true, idle: true })}</button>
         <div class="buddy-side">
           <div class="bubble">${esc(buddyLine(mood, kid.name))}</div>
           <div class="quest-progress">
@@ -1144,9 +1195,9 @@ function viewTimer() {
             <small>${timer.running ? 'Keep playing! 🎶' : ears.asleep ? 'Asleep 💤' : done ? 'Paused' : 'Ready?'}</small>
           </div>
         </div>
-        <button class="timer-buddy ${timer.running ? 'bobbing' : ''}" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
+        <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
           <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite" data-mood="${mood}">${buddySvg(kid.buddy, mood ? LISTEN_MOODS[mood] : 'happy', { background: false })}</span>
+          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), kid.buddy, { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
         </button>
       </div>
       ${task.listen ? `<div class="timer-beat" id="ears">
@@ -1428,7 +1479,7 @@ function viewWardrobe() {
         <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days` : ''}</small></div>
       </header>
       <div class="wardrobe-top">
-        <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap for a move">${buddyHtml(kid, 'happy', 'lg')}</button>
+        <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, 'happy', 'lg', { live: true, feel: { valence: 0.8, arousal: 0.6 } })}</button>
         <div class="buddy-side">
           <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
           ${sportTab ? `<p class="gem-line">💎 <b>${prog.gems}</b> gems to spend</p>
@@ -1887,6 +1938,7 @@ function render() {
   lastView = ui.view;
   $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
   paintQuestMaps($app);
+  liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
 }
@@ -2547,17 +2599,19 @@ const lastMove = new Map();
  */
 function doMove(el, who, pick = null) {
   const svg = el.querySelector('svg.buddy-svg');
-  if (!svg || el.dataset.moving) return false;
+  const canvas = el.querySelector('canvas.live-buddy');
+  if ((!svg && !canvas) || el.dataset.moving) return false;
   const moves = unlockedMoves(who.owned, who.exBest);
   const choice = pick ? moves.find((m) => m.move.id === pick) : pickMove(moves, lastMove.get(el.dataset.id || el.dataset.kid));
   if (!choice) return false;
   lastMove.set(el.dataset.id || el.dataset.kid, choice.move.id);
-  const host = svg.parentElement;
+  const host = (svg || canvas).parentElement;
   const before = host.innerHTML;
-  const opts = { background: Boolean(svg.querySelector('.bg')), trick: { move: choice.move.id, kind: choice.move.kind, tier: choice.tier } };
+  const opts = { background: svg ? Boolean(svg.querySelector('.bg')) : canvas.dataset.bg !== '0', trick: { move: choice.move.id, kind: choice.move.kind, tier: choice.tier } };
   // a fishing visitor keeps facing the pond
   const buddy = el.classList.contains('fishing') ? { ...who.buddy, outfit: { ...who.buddy.outfit, sport: undefined } } : who.buddy;
-  host.innerHTML = buddySvg(buddy, 'excited', opts);
+  // a live buddy steps aside for the move's drawing, then carries on where it was
+  if (canvas) { canvas.hidden = true; host.insertAdjacentHTML('beforeend', buddySvg(buddy, 'excited', opts)); } else host.innerHTML = buddySvg(buddy, 'excited', opts);
   el.dataset.moving = '1';
   el.classList.add('doing-move');
   sounds.move?.(choice.move.kind);
@@ -2565,17 +2619,23 @@ function doMove(el, who, pick = null) {
   setTimeout(() => {
     delete el.dataset.moving;
     el.classList.remove('doing-move');
-    if (host.isConnected) host.innerHTML = before;
+    if (canvas) { host.querySelector('svg.trick')?.remove(); canvas.hidden = false; } else if (host.isConnected) host.innerHTML = before;
   }, MOVE_ART[choice.move.id].ms + 80);
   return true;
 }
 
+let moveHintShown = false;
 actions['buddy-move'] = (el) => {
   const kid = kidById(el.dataset.kid);
   if (!kid) return;
+  // a live buddy reacts to where it was tapped: a pat on the head (or lots of quick taps) is
+  // handled in live.js; a tap on the body does a sports move, or a giggle with no moves yet
+  const zone = el.querySelector('canvas.live-buddy')?.dataset.zone;
+  if (zone === 'head' || zone === 'silly') { sounds.tap(); return; }
   if (doMove(el, mover(kid), el.dataset.move || null)) return;
   if (el.dataset.moving) return;
   sounds.tap();
+  if (zone) { live(liveKey(kid)).giggle(); if (moveHintShown) return; moveHintShown = true; }
   const ex = exerciseInfo(kid);
   toast(`Exercise ${ex.goal} days in one week to learn your first move! 💪`);
 };

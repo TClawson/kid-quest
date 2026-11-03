@@ -220,7 +220,7 @@ try {
     await page.waitForSelector('[data-action="timer-start"]');
     assert.match(await page.textContent('#ears-text'), /Asleep/);
     assert.match(await page.textContent('.ring-inner small'), /Asleep/);
-    assert.ok(await page.locator('.timer .timer-sprite .zzz').count(), 'the buddy sleeps');
+    assert.ok(await page.locator('.timer .timer-sprite[data-mood="asleep"]').count(), 'the buddy sleeps');
     const left = await page.textContent('#timer-left');
     await page.clock.fastForward(5_000);
     assert.equal(await page.textContent('#timer-left'), left, 'the timer is paused');
@@ -228,7 +228,7 @@ try {
     // the piano starts (after the quiet part of the sound file): the buddy wakes and the timer carries on
     await page.waitForSelector('[data-action="timer-pause"]', { timeout: 60000 });
     await page.waitForFunction(() => /I’m up/.test(document.querySelector('.timer-bubble').textContent), null, { timeout: 2000 });
-    assert.equal(await page.locator('.timer .timer-sprite .zzz').count(), 0);
+    assert.equal(await page.locator('.timer .timer-sprite[data-mood="asleep"]').count(), 0);
     if (shots) await page.screenshot({ path: `${shots}/timer-awake-phone.png` });
   });
 

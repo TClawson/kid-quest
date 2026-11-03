@@ -522,19 +522,20 @@ const MUSIC_ART = {
   },
 };
 
+/** A piano's pixels: part is 'behind' or 'front', or a flame frame index for the rock piano. */
+function musicPx(id, part) {
+  const art = MUSIC_ART[id];
+  const px = new Pixels();
+  const pieces = typeof part === 'number' ? art?.flames?.[part] : art?.[part];
+  (pieces || []).forEach(([x, y, rows, pal]) => px.grid(x, y, rows, pal));
+  return px;
+}
+
 function musicLayer(id, part) {
   const art = MUSIC_ART[id];
   if (!art) return '';
-  if (part === 'flames') {
-    return (art.flames || []).map((frame, i) => {
-      const px = new Pixels();
-      frame.forEach(([x, y, rows, pal]) => px.grid(x, y, rows, pal));
-      return `<g class="flame flame-${i}">${px.svg()}</g>`;
-    }).join('');
-  }
-  const px = new Pixels();
-  (art[part] || []).forEach(([x, y, rows, pal]) => px.grid(x, y, rows, pal));
-  return px.svg();
+  if (part === 'flames') return (art.flames || []).map((_, i) => `<g class="flame flame-${i}">${musicPx(id, i).svg()}</g>`).join('');
+  return musicPx(id, part).svg();
 }
 
 // ---------- sports gear ----------
@@ -615,8 +616,11 @@ const WING = ['W.', 'WW'];
 
 /** The gear's pixels. dx/dy move it from where it is held. */
 function gearPixels(kind, tier, dx = 0, dy = 0) {
+  return GEAR_ART[kind] ? gearPx(kind, tier, dx, dy).svg() : '';
+}
+
+function gearPx(kind, tier, dx = 0, dy = 0) {
   const art = GEAR_ART[kind];
-  if (!art) return '';
   const pal = art[3][Math.max(0, Math.min(2, tier - 1))];
   const px = new Pixels();
   if (kind === 'shoes') {
@@ -626,7 +630,7 @@ function gearPixels(kind, tier, dx = 0, dy = 0) {
   } else {
     px.grid(art[0] + dx, art[1] + dy, art[2], pal);
   }
-  return px.svg();
+  return px;
 }
 
 /** A ball (or puck) on its own, for visitors playing a game together. */
@@ -1020,6 +1024,59 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
     <g class="fx ${mood === 'sleepy' ? 'zzz' : 'sparkles'}">${extras(mood)}</g>
   </svg>`;
 }
+
+// ---------- for the live (animated) buddy in rig.js ----------
+
+/** A Pixels layer as a 24 x 24 grid of colors (null where empty). */
+const toCells = (px) => Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => px.cells.get(`${x},${y}`) || null));
+
+/** An outfit item's art: its top-left corner, its colors, and whether it is drawn behind the buddy. */
+export function itemArt(id) {
+  const art = ITEM_ART[id];
+  if (!art) return null;
+  const [x, y, rows, pal, behind] = art;
+  const px = new Pixels();
+  px.grid(x, y, rows, pal);
+  const cells = toCells(px);
+  return { x: 0, y: 0, c: cells, behind: Boolean(behind) };
+}
+
+/** A background's colors. */
+export function backgroundCells(id) {
+  const px = new Pixels();
+  (BACKGROUNDS[id] || BACKGROUNDS['bg-meadow'])(px);
+  return toCells(px);
+}
+
+/**
+ * What a live buddy wears and holds, by the same rules as buddySvg: specials only
+ * on their own kind of buddy, a piano or sports gear (not both), the bamboo on the
+ * side away from a fishing rod.
+ */
+export function liveLook(buddy) {
+  const species = SPECIES[buddy?.species] ? buddy.species : 'bear';
+  const o = buddy?.outfit || {};
+  const worn = (id) => (fitsSpecies(itemById(id), species) ? id : undefined);
+  const gear = gearOf(o.sport);
+  let neck = worn(o.neck);
+  if (neck === 'neck-bamboo' && gear?.kind === 'rod') neck = 'neck-bamboo-left';
+  const music = gear ? undefined : o.music;
+  return {
+    species,
+    background: o.background || 'bg-meadow',
+    hat: worn(o.hat),
+    face: worn(o.face),
+    neck,
+    music: music && MUSIC_ART[music] ? {
+      behind: toCells(musicPx(music, 'behind')),
+      front: toCells(musicPx(music, 'front')),
+      flames: (MUSIC_ART[music].flames || []).map((_, i) => toCells(musicPx(music, i))),
+    } : null,
+    gear: gear && GEAR_ART[gear.kind] ? { kind: gear.kind, held: ['shoes', 'rod', 'hockey'].includes(gear.kind), c: toCells(gearPx(gear.kind, gear.tier)) } : null,
+  };
+}
+
+export { speciesGrid, OUT, SIZE, SPRITE_X, SPRITE_Y };
 
 /** What the buddy says, by mood. */
 export function buddyLine(mood, name) {
