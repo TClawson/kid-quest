@@ -28,6 +28,7 @@ export const isWorn = (item) => WORN_SLOTS.includes(item?.slot);
 // need: { streak: n } uses the kid's BEST streak ever, so a broken streak never takes items away.
 // price: n is a shop item: the kid buys it with coins (each task earns coins; parents can set how many) and keeps it.
 // Items with neither are free from the start.
+// species: 'fox' is a buddy special: only that kind of buddy sees it in the shop and can wear it.
 // need: { pianoWeeks: n } uses the BEST piano streak: n weeks of piano days in a row
 // (n x the kid's piano days per week, so 10 piano days for 2 weeks of Mon–Fri).
 const BASE_ITEMS = [
@@ -60,6 +61,15 @@ const BASE_ITEMS = [
   { id: 'neck-medal', slot: 'neck', name: 'Gold medal', need: { streak: 7 } },
   { id: 'neck-cape', slot: 'neck', name: 'Hero cape', need: { streak: 14 } },
   { id: 'neck-necklace', slot: 'neck', name: 'Gem necklace', price: 400 },
+
+  // Buddy specials: each is made for one kind of buddy and only sold to it.
+  { id: 'hat-coonskin', slot: 'hat', name: 'Raccoon hat', price: 1000, species: 'fox' },
+  { id: 'hat-beehive', slot: 'hat', name: 'Beehive hat', price: 1000, species: 'bear' },
+  { id: 'neck-bamboo', slot: 'neck', name: 'Bamboo stick', price: 1000, species: 'panda' },
+  { id: 'neck-yarn', slot: 'neck', name: 'Yarn ball necklace', price: 1000, species: 'cat' },
+  { id: 'neck-jersey', slot: 'neck', name: 'Basketball jersey', price: 1000, species: 'dino' },
+  { id: 'neck-bone', slot: 'neck', name: 'Chew bone', price: 1000, species: 'puppy' },
+  { id: 'face-ninja', slot: 'face', name: 'Ninja mask', price: 1000, species: 'turtle' },
 
   { id: 'music-keyboard', slot: 'music', name: 'Little keyboard', need: { pianoWeeks: 2 } },
   { id: 'music-upright', slot: 'music', name: 'Upright piano', need: { pianoWeeks: 4 } },
@@ -190,7 +200,11 @@ export function isUnlocked(item, progress) {
 
 /** Old level-based items a kid had already reached before the shop existed. They keep them free. */
 // Color versions came later, so they were never level items.
-export const LEGACY_LEVEL = (item) => (item.price && !item.base ? item.price / 20 : Infinity);
+// Buddy specials came later too.
+export const LEGACY_LEVEL = (item) => (item.price && !item.base && !item.species ? item.price / 20 : Infinity);
+
+/** Whether a buddy of this species can have this item: buddy specials are for their own species only. */
+export const fitsSpecies = (item, species) => !item?.species || item.species === species;
 
 /** Piano days in a row an item needs, for this kid's piano schedule (Mon–Fri if none is set). */
 export function pianoDaysNeeded(item, progress) {

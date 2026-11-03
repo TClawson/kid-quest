@@ -436,3 +436,8 @@ label { color: var(--ink); }
 .map-visitor.edge-right .visitor-bubble { left: auto; right: 0; transform: scale(0.6); transform-origin: top right; }
 .map-visitor.edge-right.talking .visitor-bubble { transform: none; }
 .map-visitor.edge-right .visitor-bubble::before { left: auto; right: 19px; }
+
+/* buddy specials: one-of-a-kind items for one kind of buddy */
+.item.special { background: linear-gradient(180deg, #fff9db, var(--card) 45%); box-shadow: 0 0 0 3px #f0c040, 0 4px 0 var(--line); }
+.item.special.on { box-shadow: 0 0 0 4px var(--brand), 0 4px 0 var(--line); }
+.item .special-tag { font-size: 0.75rem; font-weight: 800; color: #8a5a00; background: #ffe066; border-radius: 4px; padding: 0 6px; }
