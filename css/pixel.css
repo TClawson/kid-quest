@@ -25,7 +25,7 @@ html, body { background-color: var(--bg); }
 body { background-image: repeating-conic-gradient(#efeaff 0 25%, transparent 0 50%); background-size: 16px 16px; }
 /* nothing may push the page sideways on a phone */
 html, body { overflow-x: clip; }
-.screen { overflow-wrap: anywhere; }
+.screen { overflow-wrap: break-word; }
 
 h1, h2, .kid-name, .streak, .tile-text b, .item-name, .timer-left, .join-code, .celebrate h1 { font-family: var(--px-font); font-weight: 700; letter-spacing: 0.01em; }
 h1 { font-size: 2rem; text-shadow: 2px 2px 0 var(--px-line); }
@@ -136,9 +136,9 @@ input[type=checkbox] { accent-color: var(--brand); }
   .kid-head .chips { order: 3; flex: 1 1 100%; flex-wrap: wrap; gap: 6px; }
   .kid-head .chips .chip { padding: 4px 8px; font-size: 1rem; }
   /* the parent's approvals: name and chore on top, the two buttons share the row below */
-  .list-row:has([data-action="approve"]) { flex-wrap: wrap; }
-  .list-row:has([data-action="approve"]) > .grow { flex: 1 1 calc(100% - 70px); }
-  .list-row:has([data-action="approve"]) > .btn { flex: 1 1 0; }
+  .list-row:has(> .btn ~ .btn) { flex-wrap: wrap; }
+  .list-row:has(> .btn ~ .btn) > .grow { flex: 1 1 calc(100% - 70px); }
+  .list-row:has(> .btn ~ .btn) > .btn { flex: 1 1 0; }
   /* task editor: icon and name get a full line, the move and delete buttons go below */
   .task-edit > .row:first-child { flex-wrap: wrap; }
   .task-edit > .row:first-child .grow { flex: 1 1 calc(100% - 80px); }

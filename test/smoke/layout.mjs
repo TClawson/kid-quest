@@ -109,6 +109,10 @@ try {
       await check(`parent-${tab}`);
     }
     await go('[data-action="tab"][data-tab="kids"]');
+    await go('[data-action="bonus"][data-kid="kid_ava"]');
+    await page.waitForSelector('#modal:not([hidden])');
+    await check('bonus-modal');
+    await go('#modal [data-action="modal-close"]');
     await go('[data-action="edit-kid"][data-id="kid_ava"]');
     await check('parent-edit-kid');
     assert.deepEqual(errors, [], `no page errors at ${size.name}`);
