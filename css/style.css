@@ -116,7 +116,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 24px 0; }
 .timer-buddy.talking .timer-bubble { opacity: 1; transform: none; }
 @keyframes timer-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 @keyframes timer-hop { 0% { transform: translateY(0); } 40% { transform: translateY(-16px); } 100% { transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .timer-buddy .timer-sprite, .timer-buddy.bobbing .timer-sprite, .timer-buddy.hop .timer-sprite { animation: none; } }
+/* dancing to the kid's beat: a squash on the beat, then a bounce and a lean to one side, held until the next beat */
+.timer-buddy.dance-l .timer-sprite { animation: dance-l var(--move, 0.4s) ease-out forwards; }
+.timer-buddy.dance-r .timer-sprite { animation: dance-r var(--move, 0.4s) ease-out forwards; }
+@keyframes dance-l { 0% { transform: translateY(3px) scale(1.08, 0.9); } 35% { transform: translate(-6px, -14px) rotate(-10deg); } 100% { transform: translate(-3px, 0) rotate(-5deg); } }
+@keyframes dance-r { 0% { transform: translateY(3px) scale(1.08, 0.9); } 35% { transform: translate(6px, -14px) rotate(10deg); } 100% { transform: translate(3px, 0) rotate(5deg); } }
+@media (prefers-reduced-motion: reduce) { .timer-buddy .timer-sprite, .timer-buddy.bobbing .timer-sprite, .timer-buddy.hop .timer-sprite, .timer-buddy.dance-l .timer-sprite, .timer-buddy.dance-r .timer-sprite { animation: none; } }
 
 /* parent */
 .tabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 16px; padding-bottom: 4px; }
@@ -478,3 +483,15 @@ label { color: var(--ink); }
 .listen-actions { display: flex; justify-content: center; margin: 8px 0; }
 .listen-modes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 4px 0 8px; }
 .listen-modes .btn { min-height: 40px; padding: 6px 14px; }
+/* the follow-along metronome: its arm swings to one side on each beat the buddy dances to */
+.listen-beat { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.listen-beat b { font-size: 1rem; display: block; }
+.listen-beat small { display: block; }
+.listen-metro { position: relative; flex: none; width: 56px; height: 64px; background: #f3d9a4; border: 3px solid var(--px-ink); border-radius: 10px 10px 4px 4px; overflow: hidden; }
+.listen-metro::before { content: ''; position: absolute; left: 8px; right: 8px; bottom: 6px; height: 4px; background: var(--px-ink); opacity: 0.25; }
+.listen-metro i { position: absolute; left: 50%; bottom: 6px; width: 4px; height: 50px; margin-left: -2px; background: var(--px-ink); transform-origin: 50% 100%; transition: transform 0.6s ease-in-out; }
+.listen-metro i::after { content: ''; position: absolute; left: -5px; top: 10px; width: 14px; height: 10px; background: #868e96; border: 2px solid var(--px-ink); }
+.listen-metro.on i::after { background: #40c057; }
+.listen-metro.tick { animation: metro-tick 0.18s ease-out; }
+@keyframes metro-tick { 0% { background: #ffe066; } 100% { background: #f3d9a4; } }
+@media (prefers-reduced-motion: reduce) { .listen-metro i { transition: none; } .listen-metro.tick { animation: none; } }

@@ -19,6 +19,7 @@ import {
 import { pickVisitors, visitorLines, planVisits } from './visits.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
 import { startListening, buddyState, TUNING } from './listen.js';
+import { createBeatFollower } from './beat.js';
 import { loadRecognizer } from './hear.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
@@ -1002,7 +1003,9 @@ function viewTimer() {
 // A test page to see how well the tablet hears piano playing, before the timer
 // uses it. It shows what the engine in listen.js hears, live. A switch picks who
 // decides what is piano: the built-in engine, Google's recognizer, or both.
-const listenTest = { run: null, events: [], error: '', settings: null, lastUi: 0, woke: 0, loading: false };
+// Every new sound also goes to the beat follower (beat.js): while piano is playing
+// and it finds a beat, the buddy dances on it and a little metronome swings along.
+const listenTest = { run: null, events: [], error: '', settings: null, lastUi: 0, woke: 0, loading: false, beat: null, side: 1 };
 const LISTEN_MODE_KEY = 'kidquest.listenMode';
 const LISTEN_MODES = [['builtin', 'Built-in'], ['google', 'Google'], ['both', 'Both agree']];
 function listenMode() {
@@ -1016,6 +1019,7 @@ let lastListenMood = '';
 const LISTEN_MOODS = { playing: 'excited', waiting: 'happy', bored: 'sad', asleep: 'sleepy' };
 const LISTEN_LABELS = { playing: '🎹 Hearing piano', waiting: '👂 Listening…', bored: '😐 Bored (no piano for 30 s)', asleep: '😴 Asleep (the timer would pause)' };
 const LISTEN_SAY = { bored: 'I’m bored… play something!', asleep: 'Zzz…' };
+const LISTEN_BEAT = { none: 'Listening for a beat', free: 'No steady beat (that’s ok)' };
 
 function viewListen() {
   const kid = kidById(ui.listenKid) || state.kids[0];
@@ -1040,6 +1044,10 @@ function viewListen() {
           <div class="listen-clock"><span id="ls-since">–</span> s since the last piano note</div>
           <div class="listen-bar" aria-hidden="true"><i id="ls-since-bar"></i><em style="left:50%"></em><em style="left:100%"></em></div>
           <small class="muted">Bored at ${TUNING.boredAfter} s · asleep at ${TUNING.asleepAfter} s</small>
+          <div class="listen-beat">
+            <div class="listen-metro" id="ls-metro" aria-hidden="true"><i id="ls-arm"></i></div>
+            <div><b id="ls-beat">${on ? LISTEN_BEAT.none : '–'}</b><small class="muted">The buddy dances when it finds your beat</small></div>
+          </div>
         </div>
       </div>
       <div class="listen-modes" role="group" aria-label="Who decides what is piano">
@@ -1058,7 +1066,6 @@ function viewListen() {
         <div class="listen-row"><span>Piano score</span><div class="listen-meter"><i id="ls-gpiano"></i><em style="left:${TUNING.googlePiano * 100}%"></em></div></div>`}
         <div class="listen-row"><span>Piano notes</span><b id="ls-piano">0</b></div>
         <div class="listen-row"><span>Other sounds</span><b id="ls-other">0</b></div>
-        <div class="listen-row"><span>Steady beat</span><b id="ls-bpm">–</b></div>
         <div class="listen-row"><span>Last 60 s</span><div class="listen-line" id="ls-line"></div></div>
         <small class="muted"><span class="dot piano"></span> piano &nbsp; <span class="dot other"></span> talking or other noise</small>
         <p class="muted small" id="ls-mic">${listenTest.settings ? micNote(listenTest.settings) : ''}</p>
@@ -1069,7 +1076,8 @@ function viewListen() {
           <li>Put the tablet on the piano, where it sits during practice, and tap Start.</li>
           <li>Try each “Who decides” choice: Built-in hears each note at once, Google knows piano from voices best but decides about half a second later, and Both agree counts a note only when both say piano.</li>
           <li>Play slowly, then fast, then chords. Each note should add a green dot and make the buddy hop.</li>
-          <li>Play something with a steady beat for a few seconds and see if the beat shows up.</li>
+          <li>Play a song with a steady beat. After a few notes the buddy should dance on the beat and the metronome should swing with you, sometimes on every other beat. Speed up, slow down, switch songs, or stop for a moment, and see how fast it follows.</li>
+          <li>Noodle around with no beat. The buddy should hop on your notes but not dance (that’s fine).</li>
           <li>Stop playing and talk near the tablet. Talking should add orange dots and not reset the clock.</li>
           <li>Have a kid practice while others talk in the room.</li>
           <li>Stop for 30 seconds (bored), then 60 (asleep), then play one note to wake the buddy.</li>
@@ -1091,6 +1099,7 @@ async function startListenTest() {
   if (listenTest.run) return;
   listenTest.error = '';
   listenTest.events = [];
+  listenTest.beat = createBeatFollower();
   const mode = listenMode();
   let recognizer = null;
   if (mode !== 'builtin') {
@@ -1125,23 +1134,60 @@ function stopListenTest() {
   if (!timer.running) { timer.wakeLock?.release?.().catch(() => {}); timer.wakeLock = null; }
 }
 
+/** Piano is playing now: Google heard piano in the last moment (or, built-in, a piano note did). */
+function pianoNow(listener, now) {
+  if (listener.mode !== 'builtin') return listener.hearingPiano(now);
+  return listener.state.lastPiano != null && now - listener.state.lastPiano < 1500;
+}
+
+/** Restarts one of the buddy's moves: a hop on a note, or a dance step on a beat. */
+function listenMove(cls, ms) {
+  const $b = document.querySelector('.listen-buddy');
+  if (!$b) return;
+  $b.classList.remove('hop', 'dance-l', 'dance-r');
+  void $b.offsetWidth;
+  if (ms) $b.style.setProperty('--move', `${Math.round(ms)}ms`);
+  $b.classList.add(cls);
+}
+
+/** A beat: the buddy steps to the other side, and the metronome ticks and swings back over. */
+function listenBeat(p) {
+  listenTest.side = -listenTest.side;
+  listenMove(listenTest.side < 0 ? 'dance-l' : 'dance-r', Math.min(450, p * 0.85));
+  const $m = document.getElementById('ls-metro');
+  const $arm = document.getElementById('ls-arm');
+  if (!$m || !$arm) return;
+  $m.classList.remove('tick');
+  void $m.offsetWidth;
+  $m.classList.add('tick', 'on');
+  // it reaches the far side right on the next beat
+  $arm.style.transitionDuration = `${Math.round(p)}ms`;
+  $arm.style.transform = `rotate(${listenTest.side * -26}deg)`;
+}
+
 function onListenFrame(listener, events, now) {
   const wasAsleep = lastListenMood === 'asleep';
-  const hop = () => {
-    const $b = document.querySelector('.listen-buddy');
-    if ($b) { $b.classList.remove('hop'); void $b.offsetWidth; $b.classList.add('hop'); }
-  };
   const builtin = listener.mode === 'builtin';
+  const beat = listenTest.beat;
+  const piano = pianoNow(listener, now);
+  // with a beat to follow, the buddy dances on the beat; without one, it hops on each note
+  const dancing = piano && !!beat?.following(now);
   for (const ev of events) {
-    // Google decides about half a second late, so with it the buddy hops on each new
-    // sound while Google is hearing piano
-    if (ev.type === 'onset') { if (!builtin && listener.hearingPiano(now)) hop(); continue; }
+    if (ev.type === 'onset') {
+      beat?.note(ev.at);
+      // Google decides about half a second late, so with it the buddy hops on each
+      // new sound while Google is hearing piano
+      if (!builtin && !dancing && listener.hearingPiano(now)) listenMove('hop');
+      continue;
+    }
     listenTest.events.push(ev);
     if (ev.type === 'piano') {
-      if (builtin) hop();
+      if (builtin && !dancing) listenMove('hop');
       if (wasAsleep) listenTest.woke = now;
     }
   }
+  // beats come due between frames; one step per frame, and only while piano is playing
+  if (beat?.beats(now).length && pianoNow(listener, now)) listenBeat(beat.period);
   if (!builtin && wasAsleep && listener.hearingPiano(now)) listenTest.woke = now;
   while (listenTest.events.length && now - listenTest.events[0].at > 60000) listenTest.events.shift();
   if (now - listenTest.lastUi > 100) { listenTest.lastUi = now; updateListenUi(listener, now); }
@@ -1175,7 +1221,16 @@ function updateListenUi(listener, now) {
   }
   $('ls-piano').textContent = st.pianoNotes;
   $('ls-other').textContent = st.otherSounds;
-  $('ls-bpm').textContent = st.bpm && since < 4 ? `about ${st.bpm} beats a minute` : '–';
+  const beat = listenTest.beat;
+  const piano = pianoNow(listener, now);
+  const dancing = piano && !!beat?.following(now);
+  $('ls-beat').textContent = dancing ? `Dancing at about ${beat.bpm} beats a minute` : piano ? LISTEN_BEAT.free : LISTEN_BEAT.none;
+  if (!dancing && $('ls-metro')?.classList.contains('on')) {
+    // no beat: the metronome comes to rest in the middle
+    $('ls-metro').classList.remove('on');
+    $('ls-arm').style.transitionDuration = '600ms';
+    $('ls-arm').style.transform = 'rotate(0deg)';
+  }
   $('ls-line').innerHTML = listenTest.events
     .map((e) => `<span class="dot ${e.type}" style="left:${100 - ((now - e.at) / 60000) * 100}%"></span>`).join('');
   const say = now - listenTest.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';

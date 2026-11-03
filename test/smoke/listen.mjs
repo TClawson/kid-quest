@@ -1,6 +1,7 @@
 // Browser test for the piano listening test page, with a sound file as the
 // microphone: real grand-piano notes (Salamander piano samples), made-up talking,
-// and a quiet room. It tries the built-in listener, Google's recognizer, and both.
+// and a quiet room. It tries the built-in listener, Google's recognizer, and both,
+// and checks that the buddy dances to the melody's beat (and not to talking).
 // Run: node test/smoke/listen.mjs   (SHOTS=dir also saves screenshots;
 // YAMNET_FILE=path uses a saved copy of Google's model instead of downloading it)
 import assert from 'node:assert/strict';
@@ -90,6 +91,18 @@ async function withMic(samples, { mode = 'builtin', viewport = { width: 1280, he
 }
 
 const num = (page, id) => page.textContent(`#${id}`).then(Number);
+/** The buddy finds the melody's beat (a note every 0.45 s: 133 a minute, or every other note) and dances on it. */
+async function dancesToMelody(page, timeout = 30000) {
+  await page.waitForFunction(() => /Dancing at about \d+/.test(document.getElementById('ls-beat').textContent), null, { timeout });
+  const bpm = Number((await page.textContent('#ls-beat')).match(/(\d+)/)[1]);
+  assert.ok(Math.abs(bpm - 133) <= 8 || Math.abs(bpm - 67) <= 5, `dancing at ${bpm} a minute`);
+  await page.waitForFunction(() => /dance-[lr]/.test(document.querySelector('.listen-buddy').className), null, { timeout: 5000 });
+  assert.ok(await page.locator('#ls-metro.on').count(), 'the metronome swings along');
+}
+const neverDanced = async (page) => {
+  assert.doesNotMatch(await page.getAttribute('.listen-buddy', 'class'), /dance/);
+  assert.doesNotMatch(await page.textContent('#ls-beat'), /Dancing/);
+};
 const waitNum = (page, id, atLeast, timeout = 20000) => page.waitForFunction(([i, n]) => Number(document.getElementById(i).textContent) >= n, [id, atLeast], { timeout });
 
 try {
@@ -105,7 +118,8 @@ try {
     const [p, o] = [await num(page, 'ls-piano'), await num(page, 'ls-other')];
     assert.ok(o * 4 <= p, `piano ${p}, other sounds ${o}`);
     assert.equal(await page.locator('#ls-google').count(), 0, 'no Google row in built-in mode');
-    if (shots) await page.screenshot({ path: `${shots}/listen-builtin-piano.png` });
+    await dancesToMelody(page);
+    if (shots) await page.screenshot({ path: `${shots}/listen-builtin-dancing.png` });
   });
 
   // built-in: talking in a room with an echo is not piano
@@ -114,6 +128,7 @@ try {
     assert.equal(await num(page, 'ls-piano'), 0);
     assert.match(await page.textContent('#ls-last'), /Not piano/);
     assert.doesNotMatch(await page.textContent('#ls-state'), /Hearing piano/);
+    await neverDanced(page);
   });
 
   // Google: real piano is piano, and the page shows what Google hears
@@ -121,7 +136,8 @@ try {
     await waitNum(page, 'ls-piano', 8, 40000);
     assert.match(await page.textContent('#ls-google'), /Music|Piano/);
     assert.match(await page.textContent('#ls-state'), /Hearing piano/);
-    if (shots) await page.screenshot({ path: `${shots}/listen-google-piano.png` });
+    await dancesToMelody(page);
+    if (shots) await page.screenshot({ path: `${shots}/listen-google-dancing.png` });
     // switching to "both agree" restarts listening and still hears the piano
     await page.click('[data-action="listen-mode"][data-mode="both"]');
     await page.waitForSelector('[data-action="listen-stop"]', { timeout: 60000 });
@@ -133,6 +149,7 @@ try {
     await waitNum(page, 'ls-other', 6, 40000);
     assert.equal(await num(page, 'ls-piano'), 0);
     assert.match(await page.textContent('#ls-google'), /Speech/);
+    await neverDanced(page);
     if (shots) await page.screenshot({ path: `${shots}/listen-google-talking-phone.png`, fullPage: true });
   });
 
