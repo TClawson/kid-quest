@@ -18,6 +18,7 @@ import {
 } from './items.js';
 import { pickVisitors, visitorLines, planVisits } from './visits.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
+import { startListening, buddyState, TUNING } from './listen.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
@@ -621,7 +622,7 @@ function restoreTimer() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') { leaveTimer(); stopMusic(); }
+  if (document.visibilityState !== 'visible') { leaveTimer(); stopMusic(); if (listenTest.run) { stopListenTest(); render(); } }
   if (document.visibilityState === 'visible') { returnToTimer(); render(); }
 });
 
@@ -996,6 +997,153 @@ function viewTimer() {
     </div>`;
 }
 
+// ---------- piano listening test (parents) ----------
+// A test page to see how well the tablet hears piano playing, before the timer
+// uses it. It shows what the engine in listen.js hears, live.
+const listenTest = { run: null, events: [], error: '', settings: null, lastUi: 0, woke: 0 };
+let lastListenMood = '';
+const LISTEN_MOODS = { playing: 'excited', waiting: 'happy', bored: 'sad', asleep: 'sleepy' };
+const LISTEN_LABELS = { playing: '🎹 Hearing piano', waiting: '👂 Listening…', bored: '😐 Bored (no piano for 30 s)', asleep: '😴 Asleep (the timer would pause)' };
+const LISTEN_SAY = { bored: 'I’m bored… play something!', asleep: 'Zzz…' };
+
+function viewListen() {
+  const kid = kidById(ui.listenKid) || state.kids[0];
+  const buddy = kid?.buddy || { species: 'fox', outfit: {} };
+  const on = !!listenTest.run;
+  lastListenMood = '';
+  return `
+    <div class="screen listen">
+      <header class="top row">
+        <button class="btn ghost round" data-action="listen-back" aria-label="Back">←</button>
+        <h1 class="grow">Piano listening test</h1>
+      </header>
+      ${state.kids.length > 1 ? `<div class="row wrap listen-kids">${state.kids.map((k) => `<button class="btn ${k.id === kid?.id ? '' : 'ghost'}" data-action="listen-kid" data-id="${k.id}">${esc(k.name)}</button>`).join('')}</div>` : ''}
+      <div class="listen-stage">
+        <button class="timer-buddy listen-buddy" aria-label="Buddy">
+          <span class="timer-bubble" id="ls-say" aria-live="polite"></span>
+          <span class="timer-sprite" id="ls-sprite">${buddySvg(buddy, 'happy', { background: false })}</span>
+        </button>
+        <div class="listen-status">
+          <b id="ls-state">${on ? LISTEN_LABELS.waiting : 'Not listening'}</b>
+          <div class="listen-clock"><span id="ls-since">–</span> s since the last piano note</div>
+          <div class="listen-bar" aria-hidden="true"><i id="ls-since-bar"></i><em style="left:50%"></em><em style="left:100%"></em></div>
+          <small class="muted">Bored at ${TUNING.boredAfter} s · asleep at ${TUNING.asleepAfter} s</small>
+        </div>
+      </div>
+      <div class="listen-actions">
+        <button class="btn huge" data-action="${on ? 'listen-stop' : 'listen-start'}">${on ? 'Stop listening' : 'Start listening'}</button>
+      </div>
+      ${listenTest.error ? `<p class="listen-error">${esc(listenTest.error)}</p>` : ''}
+      <div class="card listen-live">
+        <div class="listen-row"><span>Loudness</span><div class="listen-meter"><i id="ls-level"></i><em id="ls-gate"></em></div></div>
+        <div class="listen-row"><span>Last sound</span><b id="ls-last">–</b></div>
+        <div class="listen-row"><span>Piano notes</span><b id="ls-piano">0</b></div>
+        <div class="listen-row"><span>Other sounds</span><b id="ls-other">0</b></div>
+        <div class="listen-row"><span>Steady beat</span><b id="ls-bpm">–</b></div>
+        <div class="listen-row"><span>Last 60 s</span><div class="listen-line" id="ls-line"></div></div>
+        <small class="muted"><span class="dot piano"></span> piano &nbsp; <span class="dot other"></span> talking or other noise</small>
+        <p class="muted small" id="ls-mic">${listenTest.settings ? micNote(listenTest.settings) : ''}</p>
+      </div>
+      <div class="card">
+        <h2>Things to try</h2>
+        <ol class="small listen-tries">
+          <li>Put the tablet on the piano, where it sits during practice, and tap Start.</li>
+          <li>Play slowly, then fast, then chords. Each note should add a green dot and make the buddy hop.</li>
+          <li>Play something with a steady beat for a few seconds and see if the beat shows up.</li>
+          <li>Stop playing and talk near the tablet. Talking should add orange dots and not reset the clock.</li>
+          <li>Have a kid practice while others talk in the room.</li>
+          <li>Stop for 30 seconds (bored), then 60 (asleep), then play one note to wake the buddy.</li>
+          <li>Try very soft playing.</li>
+        </ol>
+        <p class="muted small">Nothing is recorded or saved. Listening stops when you leave this page or the app.</p>
+      </div>
+    </div>`;
+}
+
+function micNote(st) {
+  const on = ['echoCancellation', 'noiseSuppression', 'autoGainControl'].filter((k) => st[k] === true);
+  return on.length
+    ? `⚠️ Chrome kept these voice filters on: ${on.join(', ')}. They can hide held piano notes.`
+    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}.`;
+}
+
+async function startListenTest() {
+  if (listenTest.run) return;
+  listenTest.error = '';
+  listenTest.events = [];
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
+    listenTest.run = await startListening(onListenFrame);
+    listenTest.settings = { ...listenTest.run.settings, sampleRate: listenTest.run.sampleRate };
+    grabWakeLock();
+  } catch (e) {
+    listenTest.run = null;
+    listenTest.error = e?.name === 'NotAllowedError'
+      ? 'The microphone is blocked. In Chrome, tap the icon left of the web address, then Permissions, and allow the microphone.'
+      : e?.name === 'NotFoundError' || e?.name === 'NoMic' ? 'No microphone was found on this device.'
+        : `Could not start the microphone (${e?.message || e}).`;
+  }
+  render();
+}
+
+function stopListenTest() {
+  listenTest.run?.stop();
+  listenTest.run = null;
+  if (!timer.running) { timer.wakeLock?.release?.().catch(() => {}); timer.wakeLock = null; }
+}
+
+function onListenFrame(listener, events, now) {
+  const wasAsleep = lastListenMood === 'asleep';
+  for (const ev of events) {
+    if (ev.type === 'onset') continue;
+    listenTest.events.push(ev);
+    if (ev.type === 'piano') {
+      const $b = document.querySelector('.listen-buddy');
+      if ($b) { $b.classList.remove('hop'); void $b.offsetWidth; $b.classList.add('hop'); }
+      if (wasAsleep) listenTest.woke = now;
+    }
+  }
+  while (listenTest.events.length && now - listenTest.events[0].at > 60000) listenTest.events.shift();
+  if (now - listenTest.lastUi > 100) { listenTest.lastUi = now; updateListenUi(listener, now); }
+}
+
+function updateListenUi(listener, now) {
+  const $ = (id) => document.getElementById(id);
+  if (!$('ls-state')) return;
+  const st = listener.state;
+  const since = listener.since(now);
+  const mood = buddyState(since, st.lastPiano != null);
+  $('ls-state').textContent = LISTEN_LABELS[mood];
+  $('ls-since').textContent = Math.floor(since);
+  $('ls-since-bar').style.width = `${Math.min(100, (since / TUNING.asleepAfter) * 100)}%`;
+  const pct = (dbv) => Math.max(0, Math.min(100, (dbv + 80) * 1.25));
+  $('ls-level').style.width = `${pct(st.level)}%`;
+  $('ls-level').classList.toggle('loud', !!st.loud);
+  $('ls-gate').style.left = `${pct(st.floor + TUNING.gate)}%`;
+  if (st.last) {
+    $('ls-last').textContent = st.last.type === 'piano'
+      ? `Piano${st.last.note ? ` · ${st.last.note}` : ''}`
+      : 'Not piano (talking or noise)';
+    $('ls-last').title = `steady ${st.last.steady?.toFixed(2) ?? '–'}, growth ${st.last.growth.toFixed(1)} dB`;
+  }
+  $('ls-piano').textContent = st.pianoNotes;
+  $('ls-other').textContent = st.otherSounds;
+  $('ls-bpm').textContent = st.bpm && since < 4 ? `about ${st.bpm} beats a minute` : '–';
+  $('ls-line').innerHTML = listenTest.events
+    .map((e) => `<span class="dot ${e.type}" style="left:${100 - ((now - e.at) / 60000) * 100}%"></span>`).join('');
+  const say = now - listenTest.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';
+  const $say = $('ls-say');
+  if ($say.textContent !== say) $say.textContent = say;
+  $say.parentElement.classList.toggle('talking', !!say);
+  if (mood !== lastListenMood) {
+    lastListenMood = mood;
+    const kid = kidById(ui.listenKid) || state.kids[0];
+    $('ls-sprite').innerHTML = buddySvg(kid?.buddy || { species: 'fox', outfit: {} }, LISTEN_MOODS[mood], { background: false });
+    $('ls-sprite').parentElement.classList.toggle('bobbing', mood === 'playing' || mood === 'waiting');
+  }
+  if (listenTest.settings && $('ls-mic') && !$('ls-mic').textContent) $('ls-mic').textContent = micNote(listenTest.settings);
+}
+
 function viewWardrobe() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
@@ -1300,6 +1448,11 @@ function parentSettings() {
     </div>
 ${allowanceCard()}
     <div class="card">
+      <h2>🎹 Piano listening test</h2>
+      <p class="muted small">Try whether the tablet can hear piano playing, before the timer uses it. Nothing is recorded or saved.</p>
+      <button class="btn ghost" data-action="listen-open">Open the listening test</button>
+    </div>
+    <div class="card">
       <h2>Parent PIN</h2>
       <button class="btn ghost" data-action="change-pin">Change PIN</button>
     </div>
@@ -1425,7 +1578,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent, wardrobe: viewWardrobe };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -1498,6 +1651,11 @@ const actions = {
   'timer-buddy': () => buddyCheer(),
   'timer-back': () => { stopTimer(false); ui.view = 'kid'; render(); },
   parent: () => pinPad({ title: 'Parents only', subtitle: 'Type the parent PIN', onSuccess: () => { ui.view = 'parent'; ui.tab = pendingApprovals(state, today()).length ? 'approvals' : ui.tab; render(); } }),
+  'listen-open': () => { ui.view = 'listen'; ui.listenKid = ui.listenKid || state.kids[0]?.id; render(); window.scrollTo(0, 0); },
+  'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; render(); },
+  'listen-start': () => startListenTest(),
+  'listen-stop': () => { stopListenTest(); render(); },
+  'listen-kid': (el) => { ui.listenKid = el.dataset.id; lastListenMood = ''; render(); },
   'parent-exit': () => { ui.view = 'home'; ui.editKidId = null; render(); },
   tab: (el) => { ui.tab = el.dataset.tab; ui.editKidId = null; render(); },
   approve: (el) => approve(el.dataset.kid, el.dataset.key, el.dataset.task),
