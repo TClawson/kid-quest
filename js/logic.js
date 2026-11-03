@@ -324,10 +324,13 @@ export function exercisedOn(state, kid, key, today) {
 
 /**
  * The exercise streak counts weeks (Monday to Sunday) in a row with exercise on
- * at least 5 days. An excused day counts as an exercise day, so a sick day
- * doesn't cost a week. This week adds as soon as its 5th day is done, and it
- * can't break the streak until it is over. best is the longest run ever: moves
- * it unlocked are never taken away.
+ * at least 5 days. A day a parent excuses (sick, travel) counts neither for nor
+ * against it: each excused day lowers that week's goal by one, and a week with
+ * 5 or more excused days is skipped, keeping the streak without adding to it.
+ * Excusing works on past days too, since everything is worked out again from
+ * the history. This week adds as soon as its goal is reached, and it can't
+ * break the streak until it is over. best is the longest run ever: moves it
+ * unlocked are never taken away.
  */
 export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
   const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
@@ -335,16 +338,22 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
   let weeks = 0;
   let best = 0;
   let days = 0;
+  let need = goal;
   for (let wk = weekStart(start); wk <= thisWeek; wk = addDays(wk, 7)) {
     days = 0;
+    let excused = 0;
     for (let i = 0; i < 7; i += 1) {
       const key = addDays(wk, i);
       if (key > today) break;
-      if (exercisedOn(state, kid, key, today) || (key < today && entryFor(state, kid.id, key)?.excused)) days += 1;
+      if (entryFor(state, kid.id, key)?.excused) excused += 1;
+      else if (exercisedOn(state, kid, key, today)) days += 1;
     }
-    if (days >= goal) weeks += 1;
+    need = goal - excused;
+    if (need <= 0) {
+      // excused nearly all week: the streak waits
+    } else if (days >= need) weeks += 1;
     else if (wk !== thisWeek) weeks = 0;
     best = Math.max(best, weeks);
   }
-  return { weeks, best, thisWeek: days, goal, today: exercisedOn(state, kid, today, today) };
+  return { weeks, best, thisWeek: days, goal: Math.max(0, need), today: exercisedOn(state, kid, today, today) };
 }

@@ -223,9 +223,20 @@ test('the exercise streak counts weeks with 5 exercise days, and keeps the best'
   info = exerciseStreakInfo(state, kid, '2026-11-03');
   assert.equal(info.weeks, 0);
   assert.equal(info.best, 3);
-  // an excused day counts as an exercise day
+  // an excused day lowers the week's goal: 4 exercise days + 1 sick day counts
   exDays('2026-11-02', 4);
   state.log['2026-11-06'] = { kid_ex: { tasks: {}, excused: true } };
   info = exerciseStreakInfo(state, kid, '2026-11-08');
   assert.equal(info.weeks, 1);
+  assert.equal(info.goal, 4);
+  // a week excused (5+ days) keeps the streak without adding to it, even when excused later
+  for (let i = 0; i < 7; i += 1) state.log[addDays('2026-11-09', i)] = { kid_ex: { tasks: {}, excused: true } };
+  exDays('2026-11-16', 5);
+  info = exerciseStreakInfo(state, kid, '2026-11-22');
+  assert.equal(info.weeks, 2);
+  // excusing past days later fixes an old week that fell short (3 exercise days + 2 sick days)
+  for (const key of ['2026-10-28', '2026-10-29']) state.log[key] = { kid_ex: { tasks: {}, excused: true } };
+  info = exerciseStreakInfo(state, kid, '2026-11-22');
+  assert.equal(info.weeks, 6); // 3 weeks, the fixed week, the sick-day week, a skipped week, then one more
+  assert.equal(info.best, 6);
 });
