@@ -770,7 +770,7 @@ function onEarsFrame(listener, events, now) {
       if (!builtin && !dancing && piano && !ears.asleep) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
     } else if (ev.type === 'piano' && builtin && !dancing) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
   }
-  if (beat.beats(now, listener.state.loud).length && piano && !ears.asleep) { danceBeat(ears, $b, document.getElementById('ears-metro'), beat.period); earsBuddy()?.beat(beat.period); }
+  if (beat.beats(now, listener.state.loud).length && piano && !ears.asleep) { danceBeat(ears, $b, null, beat.period); earsBuddy()?.beat(beat.period); }
 
   if (!ears.run.running) {
     // Chrome keeps the sound off until the screen is tapped (after the app reopened)
@@ -817,29 +817,29 @@ function timerFeel(mood, dancing = false) {
   return timer.running ? { valence: 0.75, arousal: 0.6 } : { valence: 0.6, arousal: 0.5 };
 }
 
-/** The line under the buddy: what it hears. */
-function earsText(now = performance.now()) {
+/**
+ * The line under the buddy. It stays empty while the buddy listens or dances: it
+ * only speaks up when the buddy is bored or asleep, or can't hear at all.
+ */
+function earsText() {
   if (ears.error === 'blocked') return 'I can’t hear you: the microphone is blocked. Ask a parent.';
   if (ears.error === 'nomic') return 'I can’t hear you: no microphone was found.';
   if (ears.error) return 'I can’t hear you right now. Try Pause, then Keep going.';
-  if (ears.asleep) return 'Asleep… play to wake me up!';
-  if (ears.loading) return 'Getting my ears ready…';
-  const listener = ears.run?.listener;
-  if (!listener) return timer.running ? 'Getting my ears ready…' : 'Start, then play. I’ll dance to your beat!';
-  if (!ears.run.running) return 'Tap the screen so I can hear you!';
-  const piano = pianoNow(listener, now);
-  if (piano && ears.beat.following(now)) return `Dancing to your beat! About ${ears.beat.bpm} a minute`;
-  return piano ? 'Playing! 🎵' : 'Listening for the piano…';
+  if (ears.asleep) return 'Asleep, so the timer is paused. Play to wake me up!';
+  if (ears.run && !ears.run.running) return 'Tap the screen so I can hear you!';
+  if (ears.run && ears.mood === 'bored') return 'I haven’t heard the piano in a while…';
+  return '';
 }
 
 function updateEarsUi(now = performance.now()) {
   const $text = document.getElementById('ears-text');
   if (!$text) return;
-  const text = earsText(now);
+  const text = earsText();
   if ($text.textContent !== text) $text.textContent = text;
+  $text.hidden = !text;
   const listener = ears.run?.listener;
   const $b = document.querySelector('.timer .timer-buddy');
-  if (!(listener && pianoNow(listener, now) && ears.beat.following(now))) danceRest($b, document.getElementById('ears-metro'));
+  if (!(listener && pianoNow(listener, now) && ears.beat.following(now))) danceRest($b);
   const kid = earsTask()?.kid;
   const $sprite = $b?.querySelector('.timer-sprite');
   if (!$sprite || !kid) return;
@@ -1218,10 +1218,7 @@ function viewTimer() {
           <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), kid.buddy, { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
         </button>
       </div>
-      ${task.listen ? `<div class="timer-beat" id="ears">
-        <div class="listen-metro" id="ears-metro" aria-hidden="true"><i></i></div>
-        <b id="ears-text" aria-live="polite">${esc(earsText())}</b>
-      </div>` : ''}
+      ${task.listen ? `<p class="timer-ears" id="ears"><b id="ears-text" aria-live="polite"${earsText() ? '' : ' hidden'}>${esc(earsText())}</b></p>` : ''}
       <button class="btn huge" data-action="${timer.running ? 'timer-pause' : 'timer-start'}">${timer.running ? 'Pause' : done ? 'Keep going' : 'Start practice'}</button>
       <p class="muted small">${tip}</p>
     </div>`;
