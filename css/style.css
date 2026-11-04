@@ -160,6 +160,9 @@ label { color: var(--ink); }
 /* modal */
 .modal { position: fixed; inset: 0; background: rgba(25, 20, 60, 0.55); display: grid; place-items: center; padding: 16px; z-index: 20; }
 .modal[hidden] { display: none; }
+.game-pick { display: grid; gap: 10px; margin: 14px 0; }
+.game-pick .btn { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.game-pick .btn small { font-size: 0.75em; opacity: 0.85; }
 .modal-card { background: var(--card); border-radius: 26px; padding: 24px; width: min(440px, 100%); max-height: 92vh; overflow: auto; animation: rise 0.25s ease-out; }
 .big-emoji { font-size: 4rem; }
 .pin { text-align: center; }
@@ -436,6 +439,22 @@ label { color: var(--ink); }
 .play-football.player-b .visitor-buddy { animation: player-kick 2.8s steps(1, end) 1.4s infinite; }
 @keyframes player-kick { 0% { transform: translateY(-5px); } 6% { transform: translateY(-2px); } 12%, 100% { transform: none; } }
 .map-visitor.face-left.playing .visitor-buddy svg, .map-visitor.face-left.playing .visitor-buddy canvas { transform: scaleX(-1); }
+/* a player on their own juggles in place, shoots at the far goal, or throws it up and catches it */
+.map-game.solo.from-left .game-ball { left: 6%; }
+.map-game.solo.from-right .game-ball { left: 94%; }
+.game-soccer.solo .game-ball { animation: ball-juggle 1.2s steps(6, end) infinite; }
+.game-hockey.solo.from-left .game-ball { animation: puck-shot-left 1.6s steps(16, end) infinite; }
+.game-hockey.solo.from-right .game-ball { animation: puck-shot-right 1.6s steps(16, end) infinite; }
+.game-football.solo .game-ball { animation: ball-arc 1.4s steps(7, end) infinite; }
+@keyframes ball-juggle { 0%, 100% { margin-top: 0; } 50% { margin-top: -22px; } }
+@keyframes puck-shot-left { 0%, 10% { left: 6%; } 50%, 70% { left: 92%; opacity: 1; } 75% { opacity: 0; } 80% { left: 6%; opacity: 0; } 90%, 100% { left: 6%; opacity: 1; } }
+@keyframes puck-shot-right { 0%, 10% { left: 94%; } 50%, 70% { left: 8%; opacity: 1; } 75% { opacity: 0; } 80% { left: 94%; opacity: 0; } 90%, 100% { left: 94%; opacity: 1; } }
+.play-soccer.solo .visitor-buddy { animation: player-kick 1.2s steps(1, end) infinite; }
+.play-hockey.solo .visitor-buddy { animation: player-kick 1.6s steps(1, end) infinite; }
+.play-football.solo .visitor-buddy { animation: player-kick 1.4s steps(1, end) infinite; }
+/* the kid's own field (they're holding the gear for it) can be tapped to play */
+.map-game.host-field { pointer-events: auto; cursor: pointer; }
+.map-game.host-field::before { content: ''; position: absolute; left: 0; right: 0; top: -24px; height: 44px; }
 @media (prefers-reduced-motion: reduce) { .game-ball { animation: none !important; } }
 /* on a phone the fields are small, so the players are too */
 @media (max-width: 600px) { .map-visitor.playing { top: 126px; } .map-visitor.playing .visitor-buddy { width: 46px; height: 46px; } }

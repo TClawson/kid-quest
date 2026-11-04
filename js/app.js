@@ -19,7 +19,7 @@ import {
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
 import { pickVisitors, visitorLines, planVisits } from './visits.js';
-import { gameFor } from './play.js';
+import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
 import { startListening, buddyState, TUNING } from './listen.js';
@@ -976,7 +976,8 @@ function visitorsHtml(kid, s) {
   if (s.complete) {
     const left = gamesLeftFor(kid);
     const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', tag: 'Wanna play tag? Tap me!' };
-    visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[visitGame(v)] : "That's all our games today! See you tomorrow"; });
+    const plan = visitPlan(kid, visitors);
+    visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[gamesWith(kid, v, plan)[0]] : "That's all our games today! See you tomorrow"; });
   }
   // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
@@ -984,13 +985,14 @@ function visitorsHtml(kid, s) {
   // players stand at the two ends of their field (see pondSpots in maparts.js)
   const GX = wide ? { left: [16, 42], right: [84, 58] } : { left: [16, 41], right: [84, 59] };
   const gearOf = (v) => bestGear(v.owned);
-  const plan = planVisits(kid.id, visitors.map((v) => ({ id: v.id, gear: gearOf(v) })), today());
+  const plan = visitPlan(kid, visitors);
   const areaOf = (id) => plan.areas.find((a) => a.members.includes(id));
   const version = (tier) => ['regular', 'good', 'super'][tier - 1];
   const html = visitors.map((v, i) => {
     const spot = plan.spots[v.id];
     const area = areaOf(v.id);
     const x = (area && area.kind !== 'pond' ? GX : X)[spot.side][spot.slot];
+    const solo = area && area.kind !== 'pond' && area.members.length === 1;
     const gear = gearOf(v);
     let look = v.buddy;
     let cls = '';
@@ -1004,10 +1006,12 @@ function visitorsHtml(kid, s) {
       extra = '<div class="fish-line" aria-hidden="true"><span class="bobber"></span></div><div class="fish-catch" aria-hidden="true"></div>';
     } else if (area) {
       // playing a game: the one nearer the left edge is player a. Sticks are held, balls are shared.
+      // on their own, they practice from the outer end (a borrowed stick if they have none)
       const a = x === Math.min(...area.members.map((id) => GX[plan.spots[id].side][plan.spots[id].slot]));
-      const outfit = { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey)}` : undefined };
+      const outfit = { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined };
       look = { ...v.buddy, outfit };
-      cls = `playing play-${area.kind} player-${a ? 'a' : 'b'} ${a && area.kind === 'hockey' ? 'face-left' : ''}`;
+      const facesIn = solo ? spot.side === 'right' : a && area.kind === 'hockey';
+      cls = `playing play-${area.kind} ${solo ? 'solo' : `player-${a ? 'a' : 'b'}`} ${facesIn ? 'face-left' : ''}`;
     }
     return `
       <div class="map-visitor ${i === 0 ? 'talking' : ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
@@ -1018,10 +1022,15 @@ function visitorsHtml(kid, s) {
       </div>`;
   }).join('');
   // the ball (or puck) goes back and forth between the two players
+  // on their own, a player juggles, shoots at the far goal or throws it up and catches it.
+  // The kid's own field can be tapped to play right away.
   const games = plan.areas.filter((a) => a.kind !== 'pond').map((a) => {
-    const xs = a.members.map((id) => GX[plan.spots[id].side][plan.spots[id].slot]).sort((p, q) => p - q);
-    const tier = Math.max(...a.members.map((id) => gearOf(visitors.find((v) => v.id === id))[a.kind] || 1));
-    return `<div class="map-game game-${a.kind}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" aria-hidden="true"><span class="game-ball">${ballSvg(a.kind, tier)}</span></div>`;
+    const xs = [...GX[a.side]].sort((p, q) => p - q);
+    const tiers = a.members.map((id) => gearOf(visitors.find((v) => v.id === id))[a.kind] || 1);
+    if (a.host) tiers.push(bestGear(kid.owned || [])[a.kind] || 1);
+    const solo = a.members.length === 1 ? `solo from-${a.side}` : '';
+    const tap = a.host && s.complete ? `data-action="visitor" data-id="${esc(a.members[0])}" data-pick="${a.kind}" role="button" aria-label="Play ${GAME_NAMES[a.kind]}"` : 'aria-hidden="true"';
+    return `<div class="map-game game-${a.kind} ${solo} ${a.host ? 'host-field' : ''}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" ${tap}><span class="game-ball">${ballSvg(a.kind, Math.max(...tiers))}</span></div>`;
   }).join('');
   const areas = plan.areas.map((a) => `${a.side}:${a.kind}`).join(',');
   // they walk in once a day per kid; later redraws show them already there
@@ -2594,7 +2603,15 @@ actions.visitor = (el) => {
   // once the day's quest is done, visitors want to play
   if (v && kid) {
     const s = dayStatus(state, kid, today(), today());
-    if (s.complete && gamesLeftFor(kid) > 0) { sounds.tap(); playWith(kid, v); return; }
+    if (s.complete && gamesLeftFor(kid) > 0) {
+      sounds.tap();
+      // the kid's own field starts its game; a visitor offers what there is to play
+      const games = gamesWith(kid, v, visitPlan(kid, pickVisitors(kid.id, familyBuddies(), today())));
+      if (el.dataset.pick) playWith(kid, v, el.dataset.pick);
+      else if (games.length === 1) playWith(kid, v, games[0]);
+      else pickGame(kid, v, games);
+      return;
+    }
     if (s.complete) el.querySelector('.visitor-bubble').textContent = "That's all our games today! See you tomorrow";
     else {
       const left = s.total - s.done;
@@ -2606,15 +2623,53 @@ actions.visitor = (el) => {
 };
 
 // ---------- playing with a visitor ----------
-// A ball game when the visitor owns a ball (the same one all day), tag when not.
-// Best scores live on the kid (kid.playBest). A kid gets gamesLeft() games a day:
-// 8, plus 2 a week of the current exercise streak (up to 3 weeks).
+// What there is to play with a visitor: the game for the ball or stick the
+// kid's buddy is holding, the visitor's own game (the one on their field, or a
+// ball game they own, the same one all day), and always tag. More than one
+// and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
+// gamesLeft() games a day: 8, plus 2 a week of the current exercise streak (up to 3 weeks).
+const PLAY_KINDS = ['soccer', 'hockey'];
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick' };
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
 const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks);
 
-function playWith(kid, v) {
+/** The game the kid's buddy is holding a ball or stick for, if any. */
+function heldGame(kid) {
+  const item = itemById(kid.buddy?.outfit?.sport);
+  return item && PLAY_KINDS.includes(item.kind) ? item.kind : null;
+}
+
+/** Who does what on the kid's map today (see planVisits): the kid's held gear gets its own field. */
+function visitPlan(kid, visitors) {
+  return planVisits(kid.id, visitors.map((v) => ({ id: v.id, gear: bestGear(v.owned) })), today(), heldGame(kid));
+}
+
+function gamesWith(kid, v, plan) {
+  const area = plan.areas.find((a) => a.members.includes(v.id));
+  const theirs = area && PLAY_KINDS.includes(area.kind) ? area.kind : visitGame(v);
+  return [...new Set([heldGame(kid), theirs, 'tag'].filter(Boolean))];
+}
+
+function pickGame(kid, v, games) {
+  const held = heldGame(kid);
+  const note = (k) => (k === 'tag' ? 'No gear needed' : k === held ? `With your ${GEAR_WORD[k]}` : `With ${esc(v.name)}'s ${GEAR_WORD[k]}`);
+  openModal(`
+    <h2>Play with ${esc(v.name)}</h2>
+    <div class="game-pick">
+      ${games.map((k) => `<button class="btn" data-action="play-pick" data-kind="${k}" data-id="${esc(v.id)}" data-host="${esc(kid.id)}">${GAME_NAMES[k]}<small>${note(k)}</small></button>`).join('')}
+    </div>
+    <button class="btn ghost" data-action="modal-close">Not now</button>`);
+}
+
+actions['play-pick'] = (el) => {
+  const v = familyBuddies().find((b) => b.id === el.dataset.id);
+  const kid = kidById(el.dataset.host);
+  closeModal();
+  if (v && kid && GAME_NAMES[el.dataset.kind]) playWith(kid, v, el.dataset.kind);
+};
+
+function playWith(kid, v, kind) {
   const gear = bestGear(v.owned);
-  const kind = visitGame(v);
   const best = kid.playBest?.[kind] || 0;
   openPlay({
     kind,

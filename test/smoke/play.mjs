@@ -11,13 +11,18 @@ const site = await serve('.');
 const browser = await chromium.launch();
 const shots = process.env.SHOTS;
 
-// which family buddies visit is random per day: point the first visitor at the one we want
-async function visit(page, id) {
+// which family buddies visit is random per day: point the first visitor at the one we want.
+// With more than one game to play, a menu asks which: pick `kind`.
+async function visit(page, id, kind) {
   await page.evaluate((v) => { if (!document.querySelector(`.map-visitor[data-id="${v}"]`)) document.querySelector('.map-visitor').dataset.id = v; }, id);
   await page.click(`.map-visitor[data-id="${id}"]`);
+  if (kind) {
+    await page.waitForSelector('.game-pick');
+    await page.click(`.game-pick [data-kind="${kind}"]`);
+  }
 }
 
-async function open(device, done, played = 0) {
+async function open(device, done, played = 0, held = null) {
   const ctx = await browser.newContext(device);
   const page = await ctx.newPage();
   const errors = [];
@@ -29,6 +34,7 @@ async function open(device, done, played = 0) {
   const tasks = defaultTasks();
   s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: ['sport-shoes-regular'], buddy: { species: 'fox', outfit: { background: 'bg-meadow', hat: 'hat-cap' } } });
   if (played) s.kids[0].playLog = { day: dateKey(), n: played };
+  if (held) { s.kids[0].owned.push(held); s.kids[0].buddy.outfit.sport = held; }
   if (done) s.log[dateKey()] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
   await page.evaluate((st) => {
     localStorage.setItem('kidquest.v1', JSON.stringify(st));
@@ -75,8 +81,13 @@ try {
   for (const [name, device] of [['tablet', { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, hasTouch: true }], ['phone', devices['Pixel 7']]]) {
     const { page, ctx, errors } = await open(device, true);
 
-    // soccer with Ava's cat
-    await visit(page, 'kid_ava');
+    // soccer with Ava's cat (her ball, or tag)
+    await page.evaluate(() => { if (!document.querySelector('.map-visitor[data-id="kid_ava"]')) document.querySelector('.map-visitor').dataset.id = 'kid_ava'; });
+    await page.click('.map-visitor[data-id="kid_ava"]');
+    await page.waitForSelector('.game-pick');
+    assert.deepEqual(await page.locator('.game-pick .btn').allInnerTexts(), ["Keepy-uppy\nWith Ava's ball", 'Tag\nNo gear needed']);
+    if (shots) await page.screenshot({ path: `${shots}/play-menu-${name}.png` });
+    await page.click('.game-pick [data-kind="soccer"]');
     await page.waitForSelector('.playground');
     assert.match(await page.locator('.play-top').innerText(), /Keepy-uppy with Ava/);
     const field = page.locator('.play-field');
@@ -115,7 +126,7 @@ try {
     await page.click('.play-close');
 
     // hockey with Lu's panda (a hockey stick)
-    await visit(page, 'kid_lu');
+    await visit(page, 'kid_lu', 'hockey');
     await page.waitForSelector('.playground');
     assert.match(await page.locator('.play-top').innerText(), /Hockey with Lu/);
     assert.match(await page.locator('.play-left').innerText(), /6 games left today/);
@@ -132,6 +143,26 @@ try {
     const after = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud.cache')));
     assert.equal(after.kids[0].playLog.n, 3, 'each game started counts toward the day');
 
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+  // holding a hockey stick: a rink waits on the map, tapping it plays hockey,
+  // and every visitor offers hockey first
+  {
+    const { page, ctx, errors } = await open({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, hasTouch: true }, true, 0, 'sport-hockey-regular');
+    assert.ok(await page.locator('.map-game.host-field.game-hockey').count(), 'a rink for the kid');
+    if (shots) await page.screenshot({ path: `${shots}/play-host-field.png` });
+    await visit(page, 'kid_max');
+    await page.waitForSelector('.game-pick');
+    assert.deepEqual(await page.locator('.game-pick .btn').allInnerTexts(), ['Hockey\nWith your stick', 'Tag\nNo gear needed']);
+    await page.click('#modal [data-action="modal-close"]');
+    // the rink itself has no height (the map draws it): tap the middle of it
+    const rink = await page.locator('.map-game.host-field').boundingBox();
+    assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('.map-game')?.classList.contains('host-field'), [rink.x + rink.width / 2, rink.y]), true, 'the rink is tappable');
+    await page.mouse.click(rink.x + rink.width / 2, rink.y);
+    await page.waitForSelector('.playground');
+    assert.match(await page.locator('.play-top').innerText(), /^Hockey with /);
+    await page.click('.play-close');
     assert.deepEqual(errors, []);
     await ctx.close();
   }

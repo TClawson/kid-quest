@@ -61,19 +61,24 @@ export function visitorLines(visitors, host, date) {
 }
 
 // ---------- what visitors get up to ----------
-// Visitors who own the same sports gear play together on a small field or rink,
-// and visitors with a fishing rod fish in a pond. There is room for two such
-// spots, one each side of the road. Who does what is random but fixed for the
+// Visitors with sports gear play on a small field or rink: two who own the
+// same gear play each other, and one on their own practices. Visitors with a
+// fishing rod fish in a pond. There is room for two such spots, one each side
+// of the road. When the host kid holds a ball or stick, their field comes
+// first: a visitor who owns that gear waits there to play (anyone else, with
+// borrowed gear, when nobody does). Who does what is random but fixed for the
 // day, like who visits. Each visitor: { id, gear: { kind: best version 1-3 } }.
 export const GAMES = ['soccer', 'hockey', 'football'];
 export const SIDES = ['left', 'right'];
 
 /**
- * Returns { areas: [{ side, kind: 'pond' | game, members: [id] }], spots: { id: { side, slot } } }.
+ * Returns { areas: [{ side, kind: 'pond' | game, members: [id], host? }], spots: { id: { side, slot } } }.
  * slot 0 is the outer spot on that side, 1 the inner one (nearer the road).
- * Visitors with nothing to do stand in whatever spots are left.
+ * hostKind: the game the host kid's buddy is holding gear for, if any; that
+ * area has host: true and one member. Visitors with nothing to do stand in
+ * whatever spots are left.
  */
-export function planVisits(hostId, visitors, date) {
+export function planVisits(hostId, visitors, date, hostKind = null) {
   const rnd = rng(`${date}|${hostId}|play`);
   const free = new Set(visitors.map((v) => v.id));
   const owners = (kind) => visitors.filter((v) => free.has(v.id) && v.gear?.[kind]).map((v) => v.id);
@@ -83,11 +88,19 @@ export function planVisits(hostId, visitors, date) {
     [order[i], order[j]] = [order[j], order[i]];
   }
   const areas = [];
+  if (hostKind && visitors.length) {
+    const who = owners(hostKind);
+    const pool = who.length ? who : visitors.map((v) => v.id);
+    const id = pool[Math.floor(rnd() * pool.length)];
+    free.delete(id);
+    areas.push({ kind: hostKind, members: [id], host: true });
+  }
   for (const kind of order) {
     if (areas.length >= SIDES.length) break;
+    if (kind === hostKind) continue;
     const who = owners(kind);
-    // a game needs two players; one fisher is enough for a pond. Now and then they do something else.
-    if (who.length < (kind === 'rod' ? 1 : 2) || rnd() < 0.15) continue;
+    // one is enough: a lone player practices. Now and then they do something else.
+    if (!who.length || rnd() < 0.15) continue;
     const members = who.slice(0, 2);
     members.forEach((id) => free.delete(id));
     areas.push({ kind: kind === 'rod' ? 'pond' : kind, members });
