@@ -55,8 +55,9 @@ test('8 games a day, plus 2 for each exercise-streak week up to 3', () => {
 test('keepy-uppy gets harder: Perfect narrows most, and kick heights vary more', () => {
   const start = kickWindows(0, 1);
   const later = kickWindows(50, 1);
-  assert.ok(Math.abs(start.perfect - 0.07) < 1e-9);
-  assert.ok(Math.abs(later.perfect - 0.028) < 1e-9, 'Perfect is down to 40%');
+  assert.ok(Math.abs(start.perfect - 0.049) < 1e-9);
+  assert.ok(Math.abs(start.good - 0.091) < 1e-9);
+  assert.ok(Math.abs(later.perfect - 0.0196) < 1e-9, 'Perfect is down to 40%');
   assert.ok(later.perfect / start.perfect < later.good / start.good, 'Perfect narrows faster than Good');
   assert.ok(later.good / start.good < later.early / start.early);
   for (let n = 1; n < 100; n += 1) assert.ok(kickWindows(n, 2).perfect <= kickWindows(n - 1, 2).perfect);

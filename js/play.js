@@ -46,7 +46,8 @@ export function gameFor(gear = {}, seed = '') {
 export function kickWindows(count, tier = 1) {
   const tight = (rate, floor) => Math.max(floor, 1 - count * rate);
   const edge = (0.19 + 0.03 * tier) * tight(0.008, 0.65);
-  return { perfect: (0.05 + 0.02 * tier) * tight(0.012, 0.4), good: (0.1 + 0.03 * tier) * tight(0.009, 0.55), early: edge, late: edge };
+  // Perfect and Good are 30% narrower than they first were (Taylor, 2026-11-04)
+  return { perfect: 0.7 * (0.05 + 0.02 * tier) * tight(0.012, 0.4), good: 0.7 * (0.1 + 0.03 * tier) * tight(0.009, 0.55), early: edge, late: edge };
 }
 
 /** How much higher or lower than usual a kick can go (0.15 = up to 15% more or less air time). */
