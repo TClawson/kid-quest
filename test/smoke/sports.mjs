@@ -23,6 +23,7 @@ try {
   const start = addDays(t, -14);
   for (let i = 1; i <= 14; i += 1) saved.log[addDays(t, -i)] = { kid_ava: { tasks: { task_run: { status: 'done' } }, excused: false } };
   saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: start, seenUnlocks: [], seenMoves: ['jacks', 'cartwheel'], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow', music: 'music-keyboard' } } });
+  saved.log[t] = { kid_ava: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();

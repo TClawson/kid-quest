@@ -1,6 +1,6 @@
 import {
   DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
-  tasksForDay, snapshotToday, dayStatus, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
+  tasksForDay, snapshotToday, dayStatus, storeOpen, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
@@ -368,8 +368,11 @@ function showUnlocks(kid) {
       <h1>New stuff unlocked!</h1>
       <p>${items.map((i) => `<b>${esc(i.name)}</b>`).join(', ')}</p>
       <div class="stack">
-        <button class="btn huge" data-action="unlock-try" data-slot="${items[0].slot}">Try it on!</button>
-        <button class="btn ghost" data-action="modal-close">Later</button>
+        ${storeOpen(state, kid, today()).open
+          ? `<button class="btn huge" data-action="unlock-try" data-slot="${items[0].slot}">Try it on!</button>
+        <button class="btn ghost" data-action="modal-close">Later</button>`
+          : `<p class="muted">Try it on once today's chores are done.</p>
+        <button class="btn huge" data-action="modal-close">OK</button>`}
       </div>
     </div>`);
   return true;
@@ -1150,7 +1153,9 @@ function viewKid() {
             <div class="bar big"><span style="width:${pct}%"></span></div>
             <div>${s.complete ? '<b>Quest complete! 🌟</b>' : `<b>${s.done} of ${s.total}</b> done${s.pending ? ` · ${s.pending} waiting for a parent` : ''}`}</div>
           </div>
-          <button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>
+          ${storeOpen(state, kid, t).open
+            ? `<button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>`
+            : `<button class="btn ghost store-locked" data-action="wardrobe">🔒 Buddy store opens when today's chores are done</button>`}
         </div>
       </div>
       ${exerciseSection(kid, exTasks, entry)}
@@ -1947,6 +1952,8 @@ function stampAllowance() {
 function render() {
   stampAllowance();
   const scrollY = window.scrollY;
+  // the store closes again on a new day, even if the wardrobe was left open overnight
+  if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
   const html = (views[ui.view] || viewHome)();
   // load the sign-in code early, so a sign-in popup opens straight from the tap
@@ -2031,7 +2038,11 @@ const actions = {
   'edit-kid': (el) => { ui.editKidId = el.dataset.id; render(); window.scrollTo(0, 0); },
   'edit-kid-done': () => { ui.editKidId = null; render(); },
   'kid-species': (el) => { changeSpecies(kidById(ui.editKidId), el.dataset.val); save(); render(); },
-  wardrobe: () => { ui.view = 'wardrobe'; render(); window.scrollTo(0, 0); },
+  wardrobe: () => {
+    const lock = storeOpen(state, kidById(ui.kidId), today());
+    if (!lock.open) { sounds.error(); toast(lock.left ? `🔒 Finish today's chores first (${lock.left} to go)` : `🔒 Opens when a parent approves your chores (${lock.waiting} waiting)`); return; }
+    ui.view = 'wardrobe'; render(); window.scrollTo(0, 0);
+  },
   'wardrobe-back': () => { ui.view = 'kid'; render(); },
   'wardrobe-slot': (el) => { ui.slot = el.dataset.slot; render(); },
   'wardrobe-species': (el) => { changeSpecies(kidById(ui.kidId), el.dataset.val); sounds.tap(); save(); render(); },
@@ -2085,7 +2096,7 @@ const actions = {
     if (kid && tap) { tap.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); doMove(tap, mover(kid), el.dataset.move); }
   },
   'move-locked': (el) => { sounds.error(); toast(`🔒 ${el.dataset.need}`); },
-  'unlock-try': (el) => { closeModal(); ui.slot = el.dataset.slot; ui.view = 'wardrobe'; render(); window.scrollTo(0, 0); },
+  'unlock-try': (el) => { closeModal(); ui.slot = el.dataset.slot; actions.wardrobe(); },
   'kid-color': (el) => { kidById(ui.editKidId).color = el.dataset.val; save(); render(); },
   'toggle-day': (el) => {
     const task = kidById(ui.editKidId).tasks.find((t) => t.id === el.dataset.task);
