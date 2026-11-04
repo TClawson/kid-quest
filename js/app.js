@@ -763,11 +763,11 @@ function onEarsFrame(listener, events, now) {
   const dancing = piano && beat.following(now);
   for (const ev of events) {
     if (ev.type === 'onset') {
-      beat.note(ev.at);
+      beat.note(ev.at, ev);
       if (!builtin && !dancing && piano && !ears.asleep) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
     } else if (ev.type === 'piano' && builtin && !dancing) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
   }
-  if (beat.beats(now).length && piano && !ears.asleep) { danceBeat(ears, $b, document.getElementById('ears-metro'), beat.period); earsBuddy()?.beat(beat.period); }
+  if (beat.beats(now, listener.state.loud).length && piano && !ears.asleep) { danceBeat(ears, $b, document.getElementById('ears-metro'), beat.period); earsBuddy()?.beat(beat.period); }
 
   if (!ears.run.running) {
     // Chrome keeps the sound off until the screen is tapped (after the app reopened)
@@ -1315,7 +1315,7 @@ function micNote(st) {
   const on = ['echoCancellation', 'noiseSuppression', 'autoGainControl'].filter((k) => st[k] === true);
   return on.length
     ? `⚠️ Chrome kept these voice filters on: ${on.join(', ')}. They can hide held piano notes.`
-    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}.`;
+    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}${st.notesFrom ? ` · notes from ${st.notesFrom}` : ''}.`;
 }
 
 async function startListenTest() {
@@ -1339,7 +1339,7 @@ async function startListenTest() {
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
     listenTest.run = await startListening(onListenFrame, { mode, recognizer });
-    listenTest.settings = { ...listenTest.run.settings, sampleRate: listenTest.run.sampleRate };
+    listenTest.settings = { ...listenTest.run.settings, sampleRate: listenTest.run.sampleRate, notesFrom: listenTest.run.notesFrom };
     grabWakeLock();
   } catch (e) {
     listenTest.run = null;
@@ -1408,7 +1408,7 @@ function onListenFrame(listener, events, now) {
   const dancing = piano && !!beat?.following(now);
   for (const ev of events) {
     if (ev.type === 'onset') {
-      beat?.note(ev.at);
+      beat?.note(ev.at, ev);
       // Google decides about half a second late, so with it the buddy hops on each
       // new sound while Google is hearing piano
       if (!builtin && !dancing && listener.hearingPiano(now)) buddyStep(document.querySelector('.listen-buddy'), 'hop');
@@ -1421,7 +1421,7 @@ function onListenFrame(listener, events, now) {
     }
   }
   // beats come due between frames; one step per frame, and only while piano is playing
-  if (beat?.beats(now).length && pianoNow(listener, now)) danceBeat(listenTest, document.querySelector('.listen-buddy'), document.getElementById('ls-metro'), beat.period);
+  if (beat?.beats(now, listener.state.loud).length && pianoNow(listener, now)) danceBeat(listenTest, document.querySelector('.listen-buddy'), document.getElementById('ls-metro'), beat.period);
   if (!builtin && wasAsleep && listener.hearingPiano(now)) listenTest.woke = now;
   while (listenTest.events.length && now - listenTest.events[0].at > 60000) listenTest.events.shift();
   if (now - listenTest.lastUi > 100) { listenTest.lastUi = now; updateListenUi(listener, now); }

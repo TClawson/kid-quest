@@ -131,7 +131,7 @@ try {
   // built-in: real piano notes are piano, the buddy hears them
   await withMic(melody, {}, async (page) => {
     await waitNum(page, 'ls-piano', 8);
-    assert.match(await page.textContent('#ls-mic'), /voice filters off/);
+    assert.match(await page.textContent('#ls-mic'), /voice filters off.*notes from every sample/);
     assert.ok(await num(page, 'ls-since') < 3);
     // the end of the file (one fading echo per loop) may count as another sound
     const [p, o] = [await num(page, 'ls-piano'), await num(page, 'ls-other')];

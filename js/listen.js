@@ -1,8 +1,9 @@
 // Piano listening (test version). Everything here runs on the device; no sound is
 // recorded, saved or sent anywhere.
 //
-// The built-in engine looks at the microphone's spectrum about 50 times a second:
-//  - a new note shows up as a sudden rise across many pitches (an "onset");
+// Notes are found in the microphone's samples by onsets.js (a rise across many pitches,
+// the published "spectral flux" method), each with an exact time and a strength.
+// The built-in engine also looks at the spectrum about 50 times a second:
 //  - after each onset it watches the next ~200 ms. A piano note's pitches stay
 //    put (voices slide and waver), it is made of clean pitches (coughs and claps
 //    are noise), and it only fades (singing holds or swells).
@@ -12,15 +13,14 @@
 // sound. The mode picks who decides: 'builtin', 'google', or 'both' (both agree).
 // The thresholds are kept in TUNING so we can adjust them after real tests.
 
+import { createOnsetDetector, ONSET } from './onsets.js';
+
 export const TUNING = {
   low: 80, high: 5000,      // Hz range the engine looks at
   gate: 6,                  // dB above the room's noise floor before a sound counts
   creep: 0.02,              // dB per frame (~1 dB a second) the noise floor may rise: slow, so
                             // a pedalled piece ringing on doesn't become the "quiet room"
   minLevel: -75,            // dB (full scale): anything quieter is silence
-  fluxK: 2.0,               // how far above recent "change" an onset must be (fast runs keep it high)
-  fluxMin: 2.5,             // dB, the smallest change that can be an onset
-  refractory: 100,          // ms between two onsets (a note's echo and ring ~80 ms later is not a new note)
   judgeFrames: 10,          // frames watched after an onset (~200 ms at 20 ms a frame)
   settle: 3,                // skip the frames that still hold the sound before the onset
   lag: 3,                   // compare frames this far apart (~60 ms)
@@ -32,6 +32,7 @@ export const TUNING = {
   googlePiano: 0.1,         // Google's piano score that counts as piano
   boredAfter: 30,           // seconds without a piano note
   asleepAfter: 60,
+  onset: ONSET,             // the note finder's settings (onsets.js)
 };
 
 /** The piano decision, from the numbers features() measured. */
@@ -105,28 +106,35 @@ function tonality(db, pk, binHz, lo, hi) {
 }
 
 /**
- * Listens to the microphone a frame at a time. Call frame(db, wave, nowMs) with the
- * analyser's getFloatFrequencyData output (dB per bin) and getFloatTimeDomainData
- * output (the samples of the same moment), and heard(score, nowMs) with each of
- * Google's verdicts. Both return the events they finished: { type: 'onset' } right
- * away, then { type: 'piano' | 'other', local, f } once the sound has been judged.
+ * Listens to the microphone. Call samples(block, endMs) with every block of samples as
+ * it comes (endMs = the time of its last sample): it returns the notes that started,
+ * { type: 'onset', at, strength, low }. Call frame(db, wave, nowMs) about every 20 ms
+ * with the analyser's getFloatFrequencyData output (dB per bin) and
+ * getFloatTimeDomainData output, and heard(score, nowMs) with each of Google's verdicts:
+ * they return the sounds they finished judging, { type: 'piano' | 'other', local, f }.
  */
 export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, mode = 'builtin' }) {
   const binHz = sampleRate / fftSize;
   const lo = Math.max(1, Math.floor(tune.low / binHz));
   const hi = Math.min(fftSize / 2 - 1, Math.ceil(tune.high / binHz));
-  const n = hi - lo;
-  let prevLog = null;
+  const notes = createOnsetDetector({ sampleRate, tune: tune.onset ?? ONSET });
+  const started = [];               // notes found, waiting for the next frame to be judged
   const pending = [];               // sounds waiting for Google's verdict
   const levels = [];                // loudness of the last few frames
   let floor = null;                 // the room's noise floor, in dB
-  const fluxHist = [];              // recent flux values (about 1 s)
-  let lastOnset = -1e9;
   let judging = null;               // the onset being judged
   const s = {
     start, lastPiano: null, pianoNotes: 0, otherSounds: 0,
     level: -100, floor: -100, flux: 0, threshold: 0, note: '', last: null, google: null,
   };
+
+  function samples(block, endMs) {
+    const found = notes.push(block, endMs);
+    started.push(...found);
+    s.flux = notes.state.flux;
+    s.threshold = notes.state.threshold;
+    return found;
+  }
 
   function frame(db, wave, now) {
     const events = [];
@@ -141,29 +149,16 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
     }
     const loud = floor != null && level > floor + tune.gate && level > tune.minLevel;
 
-    const lg = new Float32Array(n);
     let peak = -200, peakBin = 0;
-    for (let i = 0; i < n; i++) {
-      const d = Number.isFinite(db[lo + i]) ? db[lo + i] : -140;
-      lg[i] = Math.max(d, -100);
-      if (d > peak) { peak = d; peakBin = lo + i; }
-    }
-    let flux = 0;
-    if (prevLog) {
-      for (let i = 0; i < n; i++) { const up = lg[i] - prevLog[i]; if (up > 0) flux += up; }
-      flux /= n;
-    }
-    prevLog = lg;
-    const typical = median(fluxHist);
-    const threshold = Math.max(tune.fluxMin, typical * tune.fluxK);
-    fluxHist.push(flux);
-    if (fluxHist.length > 50) fluxHist.shift();
+    for (let i = lo; i < hi; i++) if (Number.isFinite(db[i]) && db[i] > peak) { peak = db[i]; peakBin = i; }
 
     const fr = { db: Float32Array.from(db), level };
     const before = levels.length ? Math.min(...levels) : level;
     levels.push(level);
     if (levels.length > 3) levels.shift();
-    const onset = loud && flux > threshold && now - lastOnset > tune.refractory;
+    // the newest note found since the last frame (two in one frame: the later one is judged)
+    let onset = null;
+    while (started.length && started[0].at <= now) onset = started.shift();
     if (judging && onset) {
       // a new note before this one was fully judged (fast playing): judge it on what we have
       events.push(...judge(judging));
@@ -175,13 +170,10 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
         events.push(...judge(judging));
         judging = null;
       }
-    } else if (onset) {
-      lastOnset = now;
-      judging = { at: now, frames: [fr], hz: peakBin * binHz, before };
-      events.push({ type: 'onset', at: now });
     }
+    if (onset && !judging) judging = { at: onset.at, strength: onset.strength, low: onset.low, frames: [fr], hz: peakBin * binHz, before };
 
-    Object.assign(s, { level, floor: floor ?? -100, flux, threshold, loud });
+    Object.assign(s, { level, floor: floor ?? -100, loud });
     if (loud) s.note = noteName(peakBin * binHz);
     return events;
   }
@@ -213,7 +205,7 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
       : isPiano(f, tune);
     // only a clear piano note (pitches very still) vouches for a quick one after it
     if (local && f.wobble != null && f.wobble <= tune.wobble / 2) s.lastLocal = j.at;
-    const ev = { type: local ? 'piano' : 'other', local, at: j.at, f, note: noteName(j.hz) };
+    const ev = { type: local ? 'piano' : 'other', local, at: j.at, strength: j.strength, low: j.low, f, note: noteName(j.hz) };
     if (mode === 'builtin') return [count(ev)];
     pending.push(ev);
     return [];
@@ -259,7 +251,7 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
     return Math.max(0, (now - (s.lastPiano ?? s.start)) / 1000);
   }
 
-  return { frame, heard, hearingPiano, since, mode, state: s, binHz, range: [lo, hi] };
+  return { samples, frame, heard, hearingPiano, since, mode, state: s, binHz, range: [lo, hi] };
 }
 
 /**
@@ -288,16 +280,45 @@ export async function startListening(onFrame, { tune = TUNING, mode = 'builtin',
   const wave = new Float32Array(analyser.fftSize);
   const t0 = performance.now();
   const listener = createListener({ sampleRate: ctx.sampleRate, fftSize: analyser.fftSize, tune, start: t0, mode: recognizer ? mode : 'builtin' });
+
+  // every sample goes to the note finder, 10 ms at a time, timed by the audio clock
+  let tap = null, mute = null, offset = Infinity;
+  try {
+    await ctx.audioWorklet.addModule(new URL('./listen-tap.js', import.meta.url));
+    tap = new AudioWorkletNode(ctx, 'kq-tap', { processorOptions: { size: Math.round(ctx.sampleRate / 100), stamp: true } });
+    mute = ctx.createGain();
+    mute.gain.value = 0;
+    src.connect(tap).connect(mute).connect(ctx.destination);
+    tap.port.onmessage = ({ data }) => {
+      const now = performance.now(), audioMs = (data.end / ctx.sampleRate) * 1000;
+      // the block that arrived quickest tells how the audio clock lines up with the page's
+      // (creeping by 0.05 ms a second in case the two clocks drift)
+      offset = Math.min(offset + 0.0005, now - audioMs);
+      const found = listener.samples(data.samples, audioMs + offset);
+      if (found.length) onFrame(listener, found, now);
+    };
+  } catch {
+    tap = null;   // no audio worklet: the analyser's newest samples feed the note finder instead
+  }
+  let lastCtx = null;
   const tick = () => {
     analyser.getFloatFrequencyData(db);
     analyser.getFloatTimeDomainData(wave);
     const now = performance.now();
-    onFrame(listener, listener.frame(db, wave, now), now);
+    const events = [];
+    if (!tap) {
+      const fresh = lastCtx == null ? 0 : Math.min(wave.length, Math.round((ctx.currentTime - lastCtx) * ctx.sampleRate));
+      lastCtx = ctx.currentTime;
+      if (fresh > 0) events.push(...listener.samples(wave.subarray(wave.length - fresh), now));
+    }
+    events.push(...listener.frame(db, wave, now));
+    onFrame(listener, events, now);
   };
   const timer = setInterval(tick, 20);
   const closeAll = () => {
     document.removeEventListener('pointerdown', wake);
     clearInterval(timer);
+    if (tap) { tap.port.onmessage = null; try { src.disconnect(tap); tap.disconnect(); mute.disconnect(); } catch { /* already gone */ } }
     stream.getTracks().forEach((t) => t.stop());
     ctx.close().catch(() => {});
   };
@@ -318,6 +339,8 @@ export async function startListening(onFrame, { tune = TUNING, mode = 'builtin',
     listener,
     settings: track?.getSettings?.() || {},
     sampleRate: ctx.sampleRate,
+    /** 'every sample' when the note finder hears every sample (an audio worklet), else 'analyser'. */
+    notesFrom: tap ? 'every sample' : 'analyser',
     /** False while Chrome waits for a tap before it lets the page hear. */
     get running() { return ctx.state === 'running'; },
     stop() {
