@@ -61,7 +61,7 @@ test('visitors with the same gear play together, rod owners fish, and the plan i
     assert.ok(plan.areas.length <= 2);
     assert.equal(new Set(plan.areas.map((a) => a.side)).size, plan.areas.length, 'one area a side');
     for (const a of plan.areas) {
-      if (a.kind === 'soccer') { assert.deepEqual([...a.members].sort(), ['a', 'b']); games += 1; }
+      if (a.kind === 'soccer') { assert.ok(a.members.every((id) => ['a', 'b'].includes(id))); if (a.members.length === 2) games += 1; }
       if (a.kind === 'pond') assert.ok(a.members.every((id) => vs.find((v) => v.id === id).gear.rod));
     }
     // everyone gets a spot, no two share one
@@ -70,5 +70,34 @@ test('visitors with the same gear play together, rod owners fish, and the plan i
     assert.equal(new Set(spots).size, 4);
   }
   assert.ok(games > 20, 'soccer happens on most days');
-  assert.deepEqual(planVisits('host', [{ id: 'x', gear: { hockey: 1 } }], '2026-11-01').areas, [], 'one player is not a game');
+  // one player practices on their own field
+  let solo = 0;
+  for (let d = 0; d < 40; d += 1) {
+    const { areas } = planVisits('host', [{ id: 'x', gear: { hockey: 1 } }], addDays('2026-11-01', d));
+    if (areas.length) { assert.deepEqual(areas.map((a) => [a.kind, a.members]), [['hockey', ['x']]]); solo += 1; }
+  }
+  assert.ok(solo > 25, 'a lone player is out on most days');
+});
+
+test("the host kid's held gear gets a field first, with a visitor who owns it or borrows it", () => {
+  const vs = [{ id: 'a', gear: { soccer: 1 } }, { id: 'b', gear: { hockey: 2 } }, { id: 'c', gear: {} }];
+  for (let d = 0; d < 30; d += 1) {
+    const date = addDays('2026-11-01', d);
+    const plan = planVisits('host', vs, date, 'hockey');
+    const host = plan.areas.find((a) => a.host);
+    assert.deepEqual([host.kind, host.members], ['hockey', ['b']], 'the stick owner waits on the rink');
+    assert.equal(plan.areas.filter((a) => a.kind === 'hockey').length, 1, 'one rink');
+    assert.ok(plan.areas.length <= 2);
+    const spots = Object.values(plan.spots).map((s) => `${s.side}${s.slot}`);
+    assert.equal(new Set(spots).size, 3);
+  }
+  // nobody owns a ball: someone borrows one
+  const seen = new Set();
+  for (let d = 0; d < 30; d += 1) {
+    const host = planVisits('host', [{ id: 'c', gear: {} }, { id: 'd', gear: { rod: 1 } }], addDays('2026-11-01', d), 'soccer').areas.find((a) => a.host);
+    assert.equal(host.kind, 'soccer');
+    seen.add(host.members[0]);
+  }
+  assert.deepEqual([...seen].sort(), ['c', 'd']);
+  assert.deepEqual(planVisits('host', [], '2026-11-01', 'soccer').areas, []);
 });
