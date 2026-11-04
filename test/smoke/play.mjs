@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -163,6 +163,39 @@ try {
     await page.waitForSelector('.playground');
     assert.match(await page.locator('.play-top').innerText(), /^Hockey with /);
     await page.click('.play-close');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+  // a parent tries the games from Settings: any gear, no limit, no records
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(site.url);
+    const s = emptyState();
+    s.settings.pinHash = fallbackHash('kidquest:1234');
+    s.settings.sound = false;
+    s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: {} } });
+    s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'cat', outfit: {} }, playLog: { day: dateKey(), n: 99 } });
+    await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), s);
+    await page.reload();
+    await page.click('[data-action="parent"]');
+    for (const d of '1234') await page.click(`[data-pin="${d}"]`);
+    await page.click('[data-action="tab"][data-tab="settings"]');
+    await page.selectOption('#gt-kid', 'kid_ava');
+    await page.selectOption('#gt-vis', 'kid_sam');
+    await page.selectOption('#gt-vis-gear', '3');
+    for (const [kind, title] of [['hockey', /^Hockey with Sam/], ['tag', /^Tag with Sam/], ['soccer', /^Keepy-uppy with Sam/]]) {
+      await page.click(`[data-action="game-test"][data-kind="${kind}"]`);
+      await page.waitForSelector('.playground');
+      assert.match(await page.locator('.play-top').innerText(), title);
+      assert.equal(await page.locator('.play-left').innerText(), '', 'no daily limit here');
+      await page.click('.play-close');
+    }
+    const after = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
+    assert.equal(after.kids[1].playLog.n, 99, 'test games are not counted');
+    assert.equal(after.kids[1].playBest, undefined);
     assert.deepEqual(errors, []);
     await ctx.close();
   }
