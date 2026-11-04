@@ -1,6 +1,6 @@
 // Beat follower: a fun metronome that follows the kid's playing instead of setting
-// the beat for them. Feed it the time of each new note; it says when the next beats
-// are, so the buddy can dance on them, and whether there is a beat at all.
+// the beat for them. Feed it each new note (its time and strength); it says when the next
+// beats are, so the buddy can dance on them, and whether there is a beat at all.
 //
 // It is a small particle filter. Each particle is one guess: "the next beat is at
 // time b, and a beat lasts p ms". At each note:
@@ -21,6 +21,17 @@
 // It leans towards dancing: a buddy dancing a little too often is fine,
 // a buddy that won't dance to steady playing makes kids think they are doing badly.
 // Once dancing it takes a few stray notes to stop.
+// Like a person dancing along, it follows the strong notes more than every note, and
+// keeps going on what it foresees:
+//  - each note counts by its strength (onsets.js): an accent, a chord or a bass note moves
+//    the guesses more than a soft passing note (the square root of how much stronger
+//    than usual, between 0.3 and 2 times);
+//  - told whether the piano is still sounding, it keeps dancing through a held note (up
+//    to 4 beats) and stops within about half a beat once the piano goes quiet;
+//  - when the kid starts again after a stop, most guesses keep the tempo they had and
+//    only line the beat up with the new start.
+// Tested on made-up kid practice (test/bench/kid-pieces.mjs), MAESTRO concert recordings
+// with marked beats, and clips from the tablet; see test/bench/beats.mjs.
 // About 0.15 ms of work per note, so it is light enough to run all through practice.
 
 export const BEAT = {
@@ -47,6 +58,15 @@ export const BEAT = {
   chord: 80,                         // ms: notes this close are one chord
   stop: 2500,                        // ms of silence (or 3 beats) that ends the beat
   tail: 2.5, tailMs: 1500,           // keep dancing up to 2.5 beats (but at most ~1.5 s) after the last note
+  late: 60,                          // ms: a beat noticed later than this is skipped, not danced late
+  salience: 0.5,                     // how much a note's strength counts (0: every note the same)
+  minWeight: 0.3, maxWeight: 2,      // a weak note still counts this much, a strong one at most this
+  keepTempo: 0.7,                    // after a stop, share of guesses that keep their tempo
+  // when told whether the piano is still sounding (beats(now, sounding)):
+  heldTail: 4, heldMs: 4000,         // while it sounds (a held note), keep dancing this many beats after the last note
+  quietTail: 0.5,                    // once it's quiet, dance at most this share of a beat more
+  noteTail: 1.05,                    // ...but the next beat after a note is always danced
+  quietMs: 1500,                     // a note after this much quiet is a fresh start (the tempo may be kept)
 };
 
 const SQRT2PI = Math.sqrt(2 * Math.PI);
@@ -73,16 +93,28 @@ export function createBeatFollower({ tune = BEAT, rng = Math.random } = {}) {
   const B = new Float64Array(n), P = new Float64Array(n), W = new Float64Array(n);
   const nb = new Float64Array(n), np = new Float64Array(n);
   const notes = [];            // recent note times
+  const weights = [];          // how much each of them counts (strong notes more)
+  const strengths = [];        // recent note strengths, for what "strong" means right now
   let steady = 0;              // share of the latest notes on the beat grid
   let evidence = 0;            // log evidence for a beat, older notes fading
   let last = -Infinity;        // the last note
   let est = null;              // { b, p, share }: the best guess, its next beat and how much weight agrees
   let nextBeat = null, lastBeat = -Infinity;
   let live = false;
+  let lastSound = null;        // when the piano was last heard sounding (null: never told)
 
   const clampP = (p) => Math.min(maxP, Math.max(minP, p));
   // after the last note, keep dancing through a held note or a short rest, then stop
-  const tail = (p) => Math.min(tune.tail * p, Math.max(p * 1.1, tune.tailMs));
+  const tail = (p) => (lastSound != null && tune.heldTail
+    ? Math.min(tune.heldTail * p, Math.max(p * 1.1, tune.heldMs))
+    : Math.min(tune.tail * p, Math.max(p * 1.1, tune.tailMs)));
+  // the beat at time b is danced: there is a beat, the last note isn't long gone, and the piano
+  // was still sounding a moment before (a stop is noticed within about half a beat). The beat
+  // right after a note is always danced: the loudness can be wrong (a noisy room, the floor
+  // creeping up through a long pedalled piece), the notes can't.
+  const danceable = (b) => live && !!est && b - last < tail(est.p)
+    && (lastSound == null || !tune.heldTail || b - last < tune.noteTail * est.p
+      || b - Math.max(last, lastSound) < tune.quietTail * est.p);
   const preferred = (p) => Math.exp(-0.5 * (Math.log2(p / prefP) / tune.preferOctaves) ** 2);
 
   /** A fresh guess from the notes: the gap from an earlier note, as 1/4 to 4 beats. */
@@ -106,8 +138,12 @@ export function createBeatFollower({ tune = BEAT, rng = Math.random } = {}) {
     return [t + p * (1 - at), p];
   }
 
-  function reset(t) {
-    for (let i = 0; i < n; i++) { [B[i], P[i]] = freshGuess(t); W[i] = 1 / n; }
+  function reset(t, keep = 0) {
+    for (let i = 0; i < n; i++) {
+      // after a stop, most guesses keep their tempo and start again on this note
+      if (keep && rng() < keep) { P[i] = clampP(P[i] * (1 + 0.02 * normal(rng))); B[i] = t + P[i]; } else [B[i], P[i]] = freshGuess(t);
+      W[i] = 1 / n;
+    }
     steady = 0;
     evidence = 0;
     est = null;
@@ -163,22 +199,48 @@ export function createBeatFollower({ tune = BEAT, rng = Math.random } = {}) {
     for (const k of tune.splits) {
       const sub = e.p / k;
       const tol = Math.min(tune.nearMax * sub, Math.max(tune.near * sub, tune.nearMs));
-      let hit = 0;
-      for (const t of recent) if (Math.abs(wrap((t - e.b) / sub)) * sub <= tol) hit++;
+      let hit = 0, all = 0;
+      recent.forEach((t, j) => {
+        const w = weights[weights.length - recent.length + j];
+        all += w;
+        if (Math.abs(wrap((t - e.b) / sub)) * sub <= tol) hit += w;
+      });
       // the newest note helped place the guess, so it doesn't count for it
-      best = Math.max(best, (hit - 1) / (recent.length - 1) - tune.splitCost * (k - 1));
+      const newest = weights[weights.length - 1];
+      best = Math.max(best, (hit - newest) / (all - newest) - tune.splitCost * (k - 1));
     }
     return best;
   }
 
-  /** A new note was heard at time t (ms). */
-  function note(t) {
+  /** How much a note counts: strong notes (accents, chords, bass) more than weak ones. */
+  function weightOf(strength) {
+    if (!tune.salience || !(strength > 0)) return 1;
+    strengths.push(strength);
+    if (strengths.length > 16) strengths.shift();
+    const sorted = [...strengths].sort((a, b) => a - b);
+    const typical = sorted[sorted.length >> 1];
+    return Math.min(tune.maxWeight, Math.max(tune.minWeight, (strength / typical) ** tune.salience));
+  }
+
+  /** A new note was heard at time t (ms), with its strength if known ({ strength }). */
+  function note(t, info) {
     if (t - last < tune.chord) return;
-    const quiet = t - last > Math.max(tune.stop, est ? 3 * est.p : 0);
-    if (quiet || !notes.length) { notes.length = 0; reset(t); }   // a new start: forget the old song
+    // a fresh start: a long time with no note, or (when we know) the piano went quiet first
+    const quiet = lastSound != null && tune.heldTail
+      ? t - Math.max(last, lastSound) > tune.quietMs || t - last > Math.max(tune.stop, est ? 3 * est.p : 0) * 2
+      : t - last > Math.max(tune.stop, est ? 3 * est.p : 0);
+    if (quiet || !notes.length) {
+      // a new start: forget the old song (or, after a stop, keep its tempo)
+      const keep = notes.length ? tune.keepTempo : 0;
+      notes.length = 0;
+      weights.length = 0;
+      reset(t, keep);
+    }
+    const w = weightOf(info?.strength);
     last = t;
     notes.push(t);
-    if (notes.length > 8) notes.shift();
+    weights.push(w);
+    if (notes.length > 8) { notes.shift(); weights.shift(); }
     if (notes.length < 2) return;
 
     // how well the best guess so far foretold this note, against "anywhere"
@@ -186,7 +248,7 @@ export function createBeatFollower({ tune = BEAT, rng = Math.random } = {}) {
       let b = est.b, passed = 0;
       while (b + est.p / 2 < t) { b += est.p; passed++; }
       const fit = Math.log(noteLikelihood(wrap((t - b) / est.p), tune) * tune.rest ** Math.max(0, passed - 1));
-      evidence = tune.forget * evidence + Math.max(tune.stray, fit);
+      evidence = tune.forget * evidence + Math.max(tune.stray, fit) * w;
     }
 
     let total = 0;
@@ -200,7 +262,7 @@ export function createBeatFollower({ tune = BEAT, rng = Math.random } = {}) {
       }
       const l = noteLikelihood(wrap((t - B[i]) / P[i]), tune) * tune.rest ** Math.max(0, passed - 1)
         * (0.7 + 0.3 * preferred(P[i]));
-      W[i] *= l;
+      W[i] *= w === 1 ? l : l ** w;
       total += W[i];
     }
     let ess = 0;
@@ -228,12 +290,18 @@ export function createBeatFollower({ tune = BEAT, rng = Math.random } = {}) {
     nextBeat = b;
   }
 
-  /** The beats that have come by now (ms), while there is a beat to follow. */
-  function beats(now) {
+  /**
+   * The beats that have come by now (ms), while there is a beat to follow. sounding: whether
+   * the piano is still sounding (a held note); left out, the buddy keeps dancing a short
+   * while after each note.
+   */
+  function beats(now, sounding) {
+    if (sounding) lastSound = now;
+    else if (sounding === false && lastSound == null) lastSound = -Infinity;
     const out = [];
     if (!est || nextBeat == null) return out;
     while (now >= nextBeat) {
-      if (live && nextBeat - last < tail(est.p)) { out.push(nextBeat); lastBeat = nextBeat; }
+      if (danceable(nextBeat) && now - nextBeat <= tune.late) { out.push(nextBeat); lastBeat = nextBeat; }
       nextBeat += est.p;
     }
     return out;
@@ -243,7 +311,7 @@ export function createBeatFollower({ tune = BEAT, rng = Math.random } = {}) {
     note,
     beats,
     /** True while there is a beat to follow (and the kid hasn't stopped). */
-    following: (now) => live && !!est && now - last < tail(est.p),
+    following: (now) => danceable(now),
     get bpm() { return est ? Math.round(60000 / est.p) : 0; },
     /** ms between beats (0 before there is a guess). */
     get period() { return est ? est.p : 0; },

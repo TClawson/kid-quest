@@ -171,7 +171,7 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
         judging = null;
       }
     }
-    if (onset && !judging) judging = { at: onset.at, frames: [fr], hz: peakBin * binHz, before };
+    if (onset && !judging) judging = { at: onset.at, strength: onset.strength, low: onset.low, frames: [fr], hz: peakBin * binHz, before };
 
     Object.assign(s, { level, floor: floor ?? -100, loud });
     if (loud) s.note = noteName(peakBin * binHz);
@@ -205,7 +205,7 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
       : isPiano(f, tune);
     // only a clear piano note (pitches very still) vouches for a quick one after it
     if (local && f.wobble != null && f.wobble <= tune.wobble / 2) s.lastLocal = j.at;
-    const ev = { type: local ? 'piano' : 'other', local, at: j.at, f, note: noteName(j.hz) };
+    const ev = { type: local ? 'piano' : 'other', local, at: j.at, strength: j.strength, low: j.low, f, note: noteName(j.hz) };
     if (mode === 'builtin') return [count(ev)];
     pending.push(ev);
     return [];

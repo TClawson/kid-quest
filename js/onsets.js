@@ -96,9 +96,10 @@ export function pitchBands(sampleRate, size, lowHz, highHz, perOctave = 12) {
  * Feed it the microphone's samples as they come: push(samples, endMs), where endMs is
  * the time of the last sample. Returns the notes that started, as
  * { type: 'onset', at, strength, low }: at in ms, strength = how big the rise was,
- * low = the part of it below middle C (bass notes and chords).
+ * low = the part of it below middle C (bass notes and chords). onFlux(flux, at), if
+ * given, hears the rise every 10 ms, note or not (0 in silence).
  */
-export function createOnsetDetector({ sampleRate, tune = ONSET }) {
+export function createOnsetDetector({ sampleRate, tune = ONSET, onFlux = null }) {
   const N = tune.size;
   const hop = Math.max(1, Math.round(sampleRate * tune.hopMs / 1000));
   const fft = makeFft(N);
@@ -152,6 +153,7 @@ export function createOnsetDetector({ sampleRate, tune = ONSET }) {
     avg /= t - from + 1;
     state.flux = flux;
     state.threshold = Math.max(max, avg + tune.delta);
+    onFlux?.(state.level > tune.minLevel ? flux : 0, at);
     if (flux >= max && flux >= avg + tune.delta && at - lastOnset >= gap && state.level > tune.minLevel) {
       lastOnset = at;
       return { type: 'onset', at, strength: flux, low };

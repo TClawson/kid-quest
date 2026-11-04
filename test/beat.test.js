@@ -54,6 +54,65 @@ test('stops dancing when the kid stops', () => {
   assert.equal(moves.filter((m) => m > perf.end + 1500).length, 0);
 });
 
+/** Like follow(), but the piano sounds from each note until `ring` ms later, and notes carry a strength. */
+function followSounding(notes, { seed = 1, ring = 400, end } = {}) {
+  const f = createBeatFollower({ rng: rng(seed * 104729) });
+  const moves = [];
+  let i = 0, ringing = -Infinity;
+  for (let now = 0; now < (end ?? notes.at(-1).at + 4000); now += 20) {
+    while (i < notes.length && notes[i].at <= now) { f.note(notes[i].at, notes[i]); ringing = notes[i].at + (notes[i].ring ?? ring); i++; }
+    moves.push(...f.beats(now, now < ringing));
+  }
+  return { f, moves };
+}
+const steadyNotes = (from, count, p, extra = {}) => Array.from({ length: count }, (_, k) => ({ at: from + k * p, strength: 5, ...extra }));
+
+test('keeps dancing through a held note, and stops within about half a beat once the piano is quiet', () => {
+  // 16 beats at 100 bpm, the last note held for 4 beats, then quiet
+  const notes = steadyNotes(500, 16, 600);
+  notes.at(-1).ring = 2400;
+  const { moves } = followSounding(notes);
+  const held = moves.filter((m) => m > notes.at(-1).at + 300);
+  assert.ok(held.length >= 3, `${held.length} moves through the held note`);
+  const quietAt = notes.at(-1).at + 2400;
+  assert.equal(moves.filter((m) => m > quietAt + 400).length, 0, 'no dancing once it is quiet');
+  // the same piece cut short with no held note: at most the next beat, then it stops
+  const cut = followSounding(steadyNotes(500, 16, 600), { ring: 200 });
+  assert.equal(cut.moves.filter((m) => m > 500 + 15 * 600 + 700).length, 0);
+});
+
+test('after a stop to think, the buddy picks the same tempo up again within a few notes', () => {
+  for (const seed of [1, 2, 3]) {
+    const p = 750;   // 80 bpm
+    const before = steadyNotes(500, 16, p);
+    const again = 500 + 16 * p + 2200;   // a 2 s stop, then the same piece again, off the old grid
+    const after = steadyNotes(again, 12, p);
+    const { moves, f } = followSounding([...before, ...after], { seed, ring: 500 });
+    const early = moves.filter((m) => m > again && m < again + 4 * p + 100);
+    assert.ok(early.length >= 1, `seed ${seed}: no dancing in the first 4 beats after the stop`);
+    const onBeat = moves.filter((m) => m > again).filter((m) => after.some((n) => Math.abs(n.at - m) < 80));
+    assert.ok(onBeat.length / moves.filter((m) => m > again).length >= 0.85, `seed ${seed}: off the new beat`);
+    assert.ok(Math.abs(f.bpm - 80) <= 5 || Math.abs(f.bpm - 160) <= 10, `seed ${seed}: ${f.bpm} bpm`);
+  }
+});
+
+test('strong notes count more than soft ones in between', () => {
+  // a strong note on every beat (100 bpm) and soft notes at random places in between
+  for (const seed of [1, 2, 3]) {
+    const r = rng(seed * 31);
+    const notes = [];
+    for (let k = 0; k < 32; k++) {
+      notes.push({ at: 500 + k * 600, strength: 8 });
+      if (r() < 0.7) notes.push({ at: 500 + k * 600 + 120 + r() * 360, strength: 2 });
+    }
+    const { moves } = followSounding(notes, { seed });
+    const onBeat = moves.filter((m) => m > 4000 && notes.some((n) => n.strength === 8 && Math.abs(n.at - m) < 80));
+    const all = moves.filter((m) => m > 4000);
+    assert.ok(all.length >= 16, `seed ${seed}: ${all.length} moves`);
+    assert.ok(onBeat.length / all.length >= 0.85, `seed ${seed}: ${onBeat.length} of ${all.length} on the strong beats`);
+  }
+});
+
 test('playing with no beat: the buddy dances much less than to a steady piece', () => {
   // it leans towards dancing (a kid playing steadily must not be told otherwise), so
   // random notes get some dancing, but far less than real playing
