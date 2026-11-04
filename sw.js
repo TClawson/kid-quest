@@ -1,5 +1,5 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
-const CACHE = 'kid-quest-v43';
+const CACHE = 'kid-quest-v44';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'css/moves.css', 'css/pixel.css', 'fonts/jersey-10-latin-400-normal.woff2', 'js/app.js', 'js/logic.js', 'js/fx.js', 'js/avatar.js', 'js/items.js', 'js/maparts.js', 'js/music.js', 'js/songs.js', 'js/maplife.js', 'js/store.js', 'js/visits.js', 'js/practice.js', 'js/listen.js', 'js/onsets.js', 'js/listen-tap.js', 'js/hear.js', 'js/beat.js', 'js/rig.js', 'js/live.js', 'js/play.js', 'js/hockey.js', 'js/playground.js', 'js/cloud.js', 'js/firebase-config.js', 'js/vendor/firebase.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
