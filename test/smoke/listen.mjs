@@ -70,9 +70,11 @@ async function openTest(page, mode) {
 async function openTimer(page) {
   await page.click('[data-action="open-kid"][data-id="kid_sam"]');
   await page.click(`[data-action="task"][data-id="${PIANO}"]`);
-  assert.match(await page.textContent('#ears-text'), /dance to your beat/);
+  // no line under the buddy while all is well, and no metronome
+  assert.equal(await page.isVisible('#ears-text'), false, 'no text before the timer starts');
+  assert.equal(await page.locator('.listen-metro').count(), 0, 'no metronome on the timer');
   await page.click('[data-action="timer-start"]');
-  await page.waitForFunction(() => /Listening|Playing|Dancing/.test(document.getElementById('ears-text')?.textContent), null, { timeout: 60000 });
+  await page.waitForSelector('.timer .timer-sprite[data-mood="waiting"], .timer .timer-sprite[data-mood="playing"]', { timeout: 60000 });
 }
 
 async function withMic(samples, { mode = 'builtin', viewport = { width: 1280, height: 800 }, clock = false, open = openTest }, check) {
@@ -194,26 +196,24 @@ try {
 
   // the piano timer listens: the buddy dances to the playing while the timer runs
   await withMic(melody, { mode: 'google', open: openTimer }, async (page) => {
-    await page.waitForFunction(() => /Dancing to your beat! About \d+/.test(document.getElementById('ears-text').textContent), null, { timeout: 40000 });
-    const bpm = Number((await page.textContent('#ears-text')).match(/About (\d+)/)[1]);
-    assert.ok(Math.abs(bpm - 133) <= 8 || Math.abs(bpm - 67) <= 5, `dancing at ${bpm} a minute`);
-    await page.waitForFunction(() => /dance-[lr]/.test(document.querySelector('.timer .timer-buddy').className), null, { timeout: 5000 });
-    assert.ok(await page.locator('#ears-metro.on').count(), 'the metronome swings along');
+    await page.waitForFunction(() => /dance-[lr]/.test(document.querySelector('.timer .timer-buddy').className), null, { timeout: 40000 });
+    assert.equal(await page.isVisible('#ears-text'), false, 'no text while it listens and dances');
     assert.ok(await page.isVisible('[data-action="timer-pause"]'), 'the timer runs');
     assert.doesNotMatch(await page.textContent('.timer-bubble'), /I’m up/, 'it never fell asleep');
     if (shots) await page.screenshot({ path: `${shots}/timer-dancing.png` });
     // pausing stops listening
     await page.click('[data-action="timer-pause"]');
-    assert.match(await page.textContent('#ears-text'), /Start, then play/);
+    assert.equal(await page.isVisible('#ears-text'), false, 'no text when paused');
   });
 
   // no piano: bored at 30 s, asleep at 60 s with the timer paused; playing wakes it
   const quietThenPiano = concat(new Float32Array(RATE * 30), melody, melody);
   await withMic(quietThenPiano, { mode: 'google', open: openTimer, clock: true, viewport: { width: 390, height: 844 } }, async (page) => {
-    assert.match(await page.textContent('#ears-text'), /Listening for the piano/);
+    assert.equal(await page.isVisible('#ears-text'), false, 'no text while it listens');
     await page.clock.fastForward(31_000);
     await page.clock.runFor(500);
     assert.match(await page.textContent('.timer-bubble'), /bored/);
+    assert.match(await page.textContent('#ears-text'), /haven’t heard the piano/);
     assert.ok(await page.isVisible('[data-action="timer-pause"]'), 'bored, but the timer still runs');
     await page.clock.fastForward(30_000);
     await page.clock.runFor(500);
