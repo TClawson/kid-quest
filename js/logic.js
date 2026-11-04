@@ -369,14 +369,14 @@ export function dayStatus(state, kid, key, today) {
 }
 
 /**
- * The buddy store (dress-up and shop) opens once today's chores are finished.
- * A task the kid finished that is waiting for a parent counts, so the kid isn't
- * kept waiting on a parent's phone. Off-week tasks aren't scheduled, exercise is
- * optional, and an excused day opens the store straight away.
+ * The buddy store (dress-up and shop) opens once every one of today's chores is
+ * done and approved: a task still waiting for a parent keeps it shut. Off-week
+ * tasks aren't scheduled, exercise is optional, and an excused day opens the
+ * store straight away.
  */
 export function storeOpen(state, kid, today) {
   const s = dayStatus(state, kid, today, today);
-  return { open: s.excused || s.done + s.pending >= s.total, left: Math.max(0, s.total - s.done - s.pending) };
+  return { open: s.excused || s.done >= s.total, left: Math.max(0, s.total - s.done - s.pending), waiting: s.pending };
 }
 
 /**

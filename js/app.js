@@ -2029,7 +2029,7 @@ const actions = {
   'kid-species': (el) => { changeSpecies(kidById(ui.editKidId), el.dataset.val); save(); render(); },
   wardrobe: () => {
     const lock = storeOpen(state, kidById(ui.kidId), today());
-    if (!lock.open) { sounds.error(); toast(`🔒 Finish today's chores first (${lock.left} to go)`); return; }
+    if (!lock.open) { sounds.error(); toast(lock.left ? `🔒 Finish today's chores first (${lock.left} to go)` : `🔒 Opens when a parent approves your chores (${lock.waiting} waiting)`); return; }
     ui.view = 'wardrobe'; render(); window.scrollTo(0, 0);
   },
   'wardrobe-back': () => { ui.view = 'kid'; render(); },

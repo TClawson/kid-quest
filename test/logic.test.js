@@ -407,11 +407,11 @@ test('repair: an allowance stamped on a day that already had chores done gives t
   assert.equal(state.settings.allowance.since, tue);
 });
 
-test('buddy store opens when today\'s chores are done, waiting-for-parent counts, excused days open it', async () => {
+test('buddy store opens when today\'s chores are done and approved, excused days open it', async () => {
   const { storeOpen } = await import('../js/logic.js');
   const { state, kid } = setup();
   const tasks = tasksForDay(state, kid, MONDAY, MONDAY);
-  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: tasks.length });
+  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: tasks.length, waiting: 0 });
   // optional exercise doesn't need doing
   kid.tasks.push({ id: 'run', name: 'Run', icon: '🏃', period: 'exercise', days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0 });
   // an off-week chore isn't scheduled, so it doesn't block
@@ -420,10 +420,12 @@ test('buddy store opens when today\'s chores are done, waiting-for-parent counts
   finishDay(state, kid, MONDAY, MONDAY);
   const entry = entryFor(state, kid.id, MONDAY);
   delete entry.tasks.run;
-  entry.tasks[tasks[3].id] = { status: 'pending' };
   assert.equal(storeOpen(state, kid, MONDAY).open, true);
+  // waiting for a parent keeps it shut
+  entry.tasks[tasks[3].id] = { status: 'pending' };
+  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: 0, waiting: 1 });
   delete entry.tasks[tasks[0].id];
-  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: 1 });
+  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: 1, waiting: 1 });
   entry.excused = true;
   assert.equal(storeOpen(state, kid, MONDAY).open, true);
 });

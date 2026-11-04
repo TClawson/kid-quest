@@ -33,15 +33,12 @@ try {
   await page.click('[data-action="wardrobe"]');
   await page.waitForTimeout(300);
   if (await page.$('.screen.wardrobe')) throw new Error('store opened with chores left');
-  // all chores done (or waiting for a parent): it opens
+  // an excused day opens it (done-and-approved days are covered by the unit test)
   await page.evaluate(() => {
     const st = JSON.parse(localStorage.getItem('kidquest.v1'));
     const day = new Date();
     const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-    const kid = st.kids[0];
-    const tasks = {};
-    for (const t of kid.tasks) tasks[t.id] = { status: t.verify === 'parent' ? 'pending' : 'done' };
-    st.log[key] = { [kid.id]: { tasks } };
+    st.log[key] = { [st.kids[0].id]: { tasks: {}, excused: true } };
     localStorage.setItem('kidquest.v1', JSON.stringify(st));
   });
   await page.reload();
