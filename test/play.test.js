@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gameFor, levelObstacles, rng } from '../js/play.js';
+import { gameFor, levelObstacles, rng, kickWindows, heightSpread } from '../js/play.js';
 import { needle, zoneAt, SHOT_ODDS, STEAL_ODDS } from '../js/hockey.js';
 import { gamesPerDay, gamesLeft } from '../js/logic.js';
 
@@ -47,4 +47,17 @@ test('8 games a day, plus 2 for each exercise-streak week up to 3', () => {
   assert.equal(gamesLeft(kid, '2026-11-05', 0), 8, 'a new day starts fresh');
   assert.equal(gamesLeft({ playLog: { day: '2026-11-04', n: 12 } }, '2026-11-04', 1), 0);
   assert.equal(gamesLeft({}, '2026-11-04'), 8);
+});
+
+test('keepy-uppy gets harder: Perfect narrows most, and kick heights vary more', () => {
+  const start = kickWindows(0, 1);
+  const later = kickWindows(50, 1);
+  assert.ok(Math.abs(start.perfect - 0.07) < 1e-9);
+  assert.ok(Math.abs(later.perfect - 0.028) < 1e-9, 'Perfect is down to 40%');
+  assert.ok(later.perfect / start.perfect < later.good / start.good, 'Perfect narrows faster than Good');
+  assert.ok(later.good / start.good < later.early / start.early);
+  for (let n = 1; n < 100; n += 1) assert.ok(kickWindows(n, 2).perfect <= kickWindows(n - 1, 2).perfect);
+  assert.ok(kickWindows(20, 3).perfect > kickWindows(20, 1).perfect, 'a better ball is easier');
+  assert.equal(heightSpread(0), 0.12);
+  assert.equal(heightSpread(100), 0.3);
 });

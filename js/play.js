@@ -35,6 +35,21 @@ export function gameFor(gear = {}, seed = '') {
   return games[h % games.length];
 }
 
+/**
+ * Keepy-uppy timing windows in seconds either side of the moment the ball
+ * lands, after `count` kicks with a ball of `tier` (1-3). Perfect narrows the
+ * most as the count goes up, Good a little less, and the earliest and latest
+ * taps that still count the least.
+ */
+export function kickWindows(count, tier = 1) {
+  const tight = (rate, floor) => Math.max(floor, 1 - count * rate);
+  const edge = (0.19 + 0.03 * tier) * tight(0.008, 0.65);
+  return { perfect: (0.05 + 0.02 * tier) * tight(0.012, 0.4), good: (0.1 + 0.03 * tier) * tight(0.009, 0.55), early: edge, late: edge };
+}
+
+/** How much higher or lower than usual a kick can go (0.15 = up to 15% more or less air time). */
+export const heightSpread = (count) => Math.min(0.3, 0.12 + count * 0.004);
+
 export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag', hockey: 'Hockey' };
 
 // ---------- tag levels ----------
@@ -282,11 +297,7 @@ export class Play {
   }
 
   // ---------- soccer ----------
-  windows() {
-    const harder = Math.max(0.65, 1 - this.count * 0.008);
-    const k = this.tier;
-    return { perfect: (0.05 + 0.02 * k) * harder, good: (0.1 + 0.03 * k) * harder, early: (0.19 + 0.03 * k) * harder, late: (0.19 + 0.03 * k) * harder };
-  }
+  windows() { return kickWindows(this.count, this.tier); }
 
   /** Seconds the ball is in the air for a straight-up juggle: a little quicker as the count goes up. */
   beat() { return Math.max(0.62, 1.0 - this.count * 0.01); }
@@ -336,7 +347,8 @@ export class Play {
     if (q !== 'start' && q !== 'off' && this.count % 10 === 0) to.brain.impulse('cheer', 1);
 
     const pass = to !== from;
-    let T = this.beat() * (pass ? 1.25 : 1);
+    // each kick goes a little higher or lower than the last, so the timing changes
+    let T = this.beat() * (pass ? 1.25 : 1) * (1 + (this.r() * 2 - 1) * heightSpread(this.count));
     const side = (this.r() < 0.5 ? -1 : 1) * (wild ? 64 : this.wob * 24 + (q === 'off' ? 6 : 0));
     T *= 1 - 0.3 * Math.min(1, this.wob);
     const bd = this.bounds;
@@ -346,6 +358,8 @@ export class Play {
       if (tx < bd.x0 + 4 || tx > bd.x1 - 4) tx = to.home[0] - side;
       tx = clamp(tx, bd.x0 + 4, bd.x1 - 4); ty = clamp(ty, bd.y0 + 8, bd.y1 - 2);
     }
+    // never higher than the top of the field, never so low it can't be read
+    T = clamp(T, 0.42, Math.sqrt((8 * Math.max(20, ty - this.top)) / GRAV));
     if (wild) this.pop('Whoa!', from.x, from.y - 28, '#ffa8a8');
     Object.assign(b, {
       state: 'air', owner: from, to, fx: b.x, fy: b.y, fh: b.h, tx, ty,
@@ -590,8 +604,10 @@ export class Play {
       // the timing ring, shrinking onto the landing spot
       if (b.state === 'air') {
         const left = b.contact - this.t;
-        if (left < 0.75) {
-          const rad = Math.max(2, 2 + 12 * Math.max(0, left) / 0.75);
+        // the ring shows up a little later as the count goes up
+        const lead = Math.max(0.5, 0.75 - this.count * 0.004);
+        if (left < lead) {
+          const rad = Math.max(2, 2 + 12 * Math.max(0, left) / lead);
           const near = Math.abs(left) <= this.windows().perfect;
           ctx.fillStyle = near ? '#ffd43b' : 'rgba(255,255,255,0.85)';
           const n = Math.max(10, Math.round(rad * 5));
