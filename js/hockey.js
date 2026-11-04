@@ -4,7 +4,8 @@
 // skates 15% slower. Press and hold the round button: a needle sweeps over red,
 // yellow and a thin green band; let go to shoot (if you have the puck) or to
 // steal (if you're close to the buddy who has it). The color decides the odds:
-//   shot:  red 5%, yellow 25%, green 55% to score (the aim is a random angle)
+//   shot:  red 5%, yellow 25%, green 55% to score from close in (the aim is a
+//          random angle, so from farther away the goal is a smaller target)
 //   steal: green 80% steal / 20% knocked loose / 0% kept,
 //          yellow 50 / 40 / 10, red 20 / 30 / 50.
 // A shot that runs into the other buddy is theirs. A missed shot bounces off the
@@ -35,6 +36,7 @@ const PICKUP = 7;
 const STEAL_REACH = 17;
 const MOUTH = 9; // half the goal's width
 const SWEEP = 0.65; // seconds for the needle to cross the meter once
+export const CLOSE = 45; // shots from this close (pixels) or closer get the full SHOT_ODDS
 const RINK_LENGTH = 1.6; // the rink is this many screens long
 const AI_SKILL = { green: 0.18, yellow: 0.42, red: 0.4 };
 
@@ -181,7 +183,10 @@ export class Hockey {
     const dx = gx - pk.x; const dy = this.cy - pk.y;
     const dist = Math.hypot(dx, dy);
     const half = Math.atan2(MOUTH - 1.5, Math.max(4, Math.abs(dx))) * (Math.abs(dx) / Math.max(dist, 1));
-    const aim = Math.atan2(dy, dx) + gauss(this.r) * (Math.max(0.02, half) / Z[zone]);
+    // the aim spread is sized so the odds hold from CLOSE in; farther out the
+    // same spread misses more often, since the goal looks smaller
+    const spread = (Math.max(0.02, half) * Math.max(1, dist / CLOSE)) / Z[zone];
+    const aim = Math.atan2(dy, dx) + gauss(this.r) * spread;
     pk.owner = null; pk.vx = Math.cos(aim) * SHOT_SPEED; pk.vy = Math.sin(aim) * SHOT_SPEED;
     p.noPick = this.t + 0.35;
     p.face = dx > 0 ? 1 : -1;
