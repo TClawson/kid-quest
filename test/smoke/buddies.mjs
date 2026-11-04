@@ -28,6 +28,24 @@ try {
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
   await page.click('[data-action="open-kid"]');
+  // chores left: the buddy store stays shut
+  if (!(await page.textContent('[data-action="wardrobe"]')).includes('🔒')) throw new Error('store button should show the lock');
+  await page.click('[data-action="wardrobe"]');
+  await page.waitForTimeout(300);
+  if (await page.$('.screen.wardrobe')) throw new Error('store opened with chores left');
+  // all chores done (or waiting for a parent): it opens
+  await page.evaluate(() => {
+    const st = JSON.parse(localStorage.getItem('kidquest.v1'));
+    const day = new Date();
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    const kid = st.kids[0];
+    const tasks = {};
+    for (const t of kid.tasks) tasks[t.id] = { status: t.verify === 'parent' ? 'pending' : 'done' };
+    st.log[key] = { [kid.id]: { tasks } };
+    localStorage.setItem('kidquest.v1', JSON.stringify(st));
+  });
+  await page.reload();
+  await page.click('[data-action="open-kid"]');
   await page.click('[data-action="wardrobe"]');
   await page.click('[data-action="wardrobe-slot"][data-slot="hat"]');
   const cap = '[data-action="wardrobe-item"][data-id="hat-cap"]';

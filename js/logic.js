@@ -369,6 +369,17 @@ export function dayStatus(state, kid, key, today) {
 }
 
 /**
+ * The buddy store (dress-up and shop) opens once today's chores are finished.
+ * A task the kid finished that is waiting for a parent counts, so the kid isn't
+ * kept waiting on a parent's phone. Off-week tasks aren't scheduled, exercise is
+ * optional, and an excused day opens the store straight away.
+ */
+export function storeOpen(state, kid, today) {
+  const s = dayStatus(state, kid, today, today);
+  return { open: s.excused || s.done + s.pending >= s.total, left: Math.max(0, s.total - s.done - s.pending) };
+}
+
+/**
  * Replays every day from the kid's start date to today.
  * - A complete day adds 1 to the streak. Every 7 complete days in a row earn a freeze (max 2).
  * - An excused day keeps the streak as it is.
