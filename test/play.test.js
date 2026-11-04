@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gameFor, levelObstacles, rng, kickWindows, heightSpread } from '../js/play.js';
-import { needle, zoneAt, SHOT_ODDS, STEAL_ODDS } from '../js/hockey.js';
+import { needle, zoneAt, SHOT_ODDS, STEAL_ODDS, Z } from '../js/hockey.js';
 import { gamesPerDay, gamesLeft } from '../js/logic.js';
 
 test('visitors play their ball game, the same one all day, or tag', () => {
@@ -35,7 +35,10 @@ test('the hockey meter sweeps back and forth over red, yellow and a thin green',
   // a better stick widens green a little
   assert.equal(zoneAt(0.545, 1), 'yellow');
   assert.equal(zoneAt(0.545, 3), 'green');
-  assert.deepEqual(SHOT_ODDS, { red: 0.15, yellow: 0.4, green: 0.75 });
+  assert.deepEqual(SHOT_ODDS, { red: 0.05, yellow: 0.25, green: 0.55 });
+  // the aim spread for each color gives those odds: P(|normal| < Z) = odds
+  const within = (z) => { let sum = 0; const n = 20000; for (let i = 0; i < n; i += 1) { const x = ((i + 0.5) / n) * z; sum += Math.exp(-x * x / 2); } return (2 * sum * (z / n)) / Math.sqrt(2 * Math.PI); };
+  for (const zone of ['red', 'yellow', 'green']) assert.ok(Math.abs(within(Z[zone]) - SHOT_ODDS[zone]) < 0.002, zone);
   for (const odds of Object.values(STEAL_ODDS)) assert.ok(Math.abs(odds.reduce((a, b) => a + b) - 1) < 1e-9);
 });
 
