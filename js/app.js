@@ -826,7 +826,7 @@ function earsText(now = performance.now()) {
   if (!ears.run.running) return 'Tap the screen so I can hear you!';
   const piano = pianoNow(listener, now);
   if (piano && ears.beat.following(now)) return `Dancing to your beat! About ${ears.beat.bpm} a minute`;
-  return piano ? 'Playing! No steady beat yet (that’s ok)' : 'Listening for the piano…';
+  return piano ? 'Playing! 🎵' : 'Listening for the piano…';
 }
 
 function updateEarsUi(now = performance.now()) {

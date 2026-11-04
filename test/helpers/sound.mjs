@@ -4,15 +4,16 @@
 export const RATE = 48000;
 
 /** Piano-like: a sharp attack, harmonics (slightly stretched), fading out. */
-export function pianoNotes(notes, { rate = RATE, length, gain = 0.25 } = {}) {
+export function pianoNotes(notes, { rate = RATE, length, gain = 0.25, ring = 0 } = {}) {
   const total = Math.ceil((length ?? Math.max(...notes.map((n) => n.at + 1.5))) * rate);
   const out = new Float32Array(total);
-  for (const { at, hz, dur = 1.2 } of notes) {
+  for (const { at, hz, dur = 1.2, g = 1 } of notes) {
     const s0 = Math.floor(at * rate);
     const len = Math.min(total - s0, Math.floor(dur * rate));
     for (let i = 0; i < len; i++) {
       const t = i / rate;
-      const env = Math.min(1, t / 0.004) * Math.exp(-t * 3);
+      // ring: the share that fades slowly (the pedal down, or a big piano)
+      const env = g * Math.min(1, t / 0.004) * ((1 - ring) * Math.exp(-t * 3) + ring * Math.exp(-t * 0.5));
       let v = 0;
       for (let k = 1; k <= 8; k++) v += Math.sin(2 * Math.PI * hz * k * Math.sqrt(1 + 0.0004 * k * k) * t) * Math.exp(-t * k * 0.8) / k;
       out[s0 + i] += gain * env * v;

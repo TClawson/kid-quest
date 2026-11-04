@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createListener, buddyState, noteName } from '../js/listen.js';
 import { createBeatFollower } from '../js/beat.js';
+import { rng } from './helpers/playing.mjs';
 import { RATE, pianoNotes, talking, addNoise, runListener, room, singing, coughs } from './helpers/sound.mjs';
 
 const listen = (samples) => {
@@ -25,6 +26,17 @@ test('fast notes and chords are still piano', () => {
   assert.equal(chords.l.state.pianoNotes, 4);
   const low = listen(pianoNotes([65, 73, 82, 98].map((hz, i) => ({ at: 0.3 + i * 0.6, hz })), { length: 4 }));
   assert.equal(low.l.state.pianoNotes, 4);
+});
+
+test('with the pedal down, every note of a quick piece still starts a new note', () => {
+  // the notes ring on, so the room never gets quiet; soft notes must still count
+  const r = rng(3);
+  const notes = Array.from({ length: 32 }, (_, i) => ({ at: 0.3 + i * 60 / 140, hz: SCALE[Math.floor(r() * 8)], dur: 4, g: 1 - 0.5 * r() }));
+  const { events } = listen(pianoNotes(notes, { length: 15, ring: 0.4 }));
+  const onsets = events.filter((e) => e.type === 'onset').map((e) => e.at);
+  const caught = notes.filter((n) => onsets.some((o) => o - n.at * 1000 > -30 && o - n.at * 1000 < 80)).length;
+  assert.ok(caught >= 31, `${caught} of 32 notes`);
+  assert.ok(onsets.length <= 33, `${onsets.length} onsets: a note counted twice`);
 });
 
 test('talking is not piano', () => {

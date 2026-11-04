@@ -14,11 +14,13 @@
 
 export const TUNING = {
   low: 80, high: 5000,      // Hz range the engine looks at
-  gate: 9,                  // dB above the room's noise floor before a sound counts
+  gate: 6,                  // dB above the room's noise floor before a sound counts
+  creep: 0.02,              // dB per frame (~1 dB a second) the noise floor may rise: slow, so
+                            // a pedalled piece ringing on doesn't become the "quiet room"
   minLevel: -75,            // dB (full scale): anything quieter is silence
-  fluxK: 2.2,               // how far above recent "change" an onset must be
+  fluxK: 2.0,               // how far above recent "change" an onset must be (fast runs keep it high)
   fluxMin: 2.5,             // dB, the smallest change that can be an onset
-  refractory: 70,           // ms between two onsets
+  refractory: 100,          // ms between two onsets (a note's echo and ring ~80 ms later is not a new note)
   judgeFrames: 10,          // frames watched after an onset (~200 ms at 20 ms a frame)
   settle: 3,                // skip the frames that still hold the sound before the onset
   lag: 3,                   // compare frames this far apart (~60 ms)
@@ -131,11 +133,11 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
     let sum = 0;
     for (let i = 0; i < wave.length; i++) sum += wave[i] * wave[i];
     const level = 10 * Math.log10(sum / wave.length || 1e-12);
-    // the noise floor drops at once and creeps up slowly (5 dB a second); digital
+    // the noise floor drops at once and creeps up slowly (about 1 dB a second); digital
     // silence (the mic still starting up) doesn't count
     if (level > -100) {
       if (floor == null || level < floor) floor = level;
-      else floor += Math.min(level - floor, 0.1);
+      else floor += Math.min(level - floor, tune.creep);
     }
     const loud = floor != null && level > floor + tune.gate && level > tune.minLevel;
 

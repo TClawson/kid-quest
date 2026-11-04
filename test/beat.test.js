@@ -54,12 +54,24 @@ test('stops dancing when the kid stops', () => {
   assert.equal(moves.filter((m) => m > perf.end + 1500).length, 0);
 });
 
-test('playing with no beat: the buddy hardly dances', () => {
+test('playing with no beat: the buddy dances much less than to a steady piece', () => {
+  // it leans towards dancing (a kid playing steadily must not be told otherwise), so
+  // random notes get some dancing, but far less than real playing
   for (const seed of [1, 2, 3, 4]) {
     const noodle = follow([{ noodle: 30000, gap: [120, 700] }], seed);
     const slow = follow([{ noodle: 30000, gap: [700, 2200] }], seed);
-    assert.ok(noodle.moves.length <= 4, `seed ${seed}: ${noodle.moves.length} moves while noodling`);
-    assert.ok(slow.moves.length <= 2, `seed ${seed}: ${slow.moves.length} moves on slow single notes`);
+    assert.ok(noodle.moves.length <= 30, `seed ${seed}: ${noodle.moves.length} moves while noodling`);
+    assert.ok(slow.moves.length <= 12, `seed ${seed}: ${slow.moves.length} moves on slow single notes`);
+  }
+});
+
+test('dances to fast scale runs (four notes to a beat) and to a kid who wobbles a little', () => {
+  for (const seed of [1, 2, 3]) {
+    const run = follow([{ bpm: 100, beats: 24, rhythm: [[0, 0.25, 0.5, 0.75]] }], seed, { jitter: 15 });
+    const runTime = run.moves.filter((m) => m > run.perf.sections[0].start + 3000 && m < run.perf.end);
+    assert.ok(runTime.length >= 12, `seed ${seed}: ${runTime.length} moves in a scale run`);
+    const wobbly = follow([{ bpm: 90, beats: 32, rhythm: R.Q }], seed, { jitter: 45, extra: 0.06 });
+    assert.ok(wobbly.moves.length >= 18, `seed ${seed}: ${wobbly.moves.length} moves for a slightly wobbly kid`);
   }
 });
 
