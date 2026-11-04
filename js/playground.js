@@ -60,7 +60,7 @@ export function openPlay(opts) {
     const pops = game.pops.length ? game.pops[game.pops.length - 1].at : 0;
     if (pops !== seen.pops && game.kind === 'tag' && game.it !== seen.it && game.it) snd.tag?.();
     if (game.phase === 'play' && seen.phase !== 'play') { opts.onStart?.(); showLeft(); }
-    if (game.kind === 'hockey' && game.sound) { snd[game.sound]?.(); game.sound = null; }
+    if (game.sound) { snd[game.sound]?.(); game.sound = null; }
     if (game.phase === 'over' && seen.phase !== 'over') {
       snd.over?.(game.newBest);
       if (game.newBest) opts.onScore?.(game.score);
