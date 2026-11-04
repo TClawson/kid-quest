@@ -8,7 +8,10 @@
 // make the ball wobble: the next one lands to the side and comes sooner, and
 // the buddy chases it. Good taps steady it again; too much wobble and it drops.
 // Better balls make the timing a little easier; it gets a little faster the
-// longer it goes.
+// longer it goes. The game says whose turn it is: an arrow bobs over the buddy
+// to tap. Each kick by the same buddy makes a pass 10% likelier (10% after its
+// first kick, 20% after its second...). Kicking with the other buddy still
+// works, but takes 2 off the count instead of adding 1.
 //
 // Tag (a visitor with no ball): tap the visitor and they're IT. Tap the field
 // and your buddy runs there. Running shoes run faster; everybody slows down
@@ -52,6 +55,11 @@ export function kickWindows(count, tier = 1) {
 
 /** How much higher or lower than usual a kick can go (0.15 = up to 15% more or less air time). */
 export const heightSpread = (count) => Math.min(0.3, 0.12 + count * 0.004);
+
+/** Keepy-uppy turns: the chance the game asks for a pass grows by this much with each kick by the same buddy. */
+export const SWITCH_STEP = 0.1;
+/** Points taken off for a kick with the buddy it isn't the turn of. */
+export const WRONG_BUDDY = 2;
 
 export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag', hockey: 'Hockey' };
 
@@ -245,6 +253,7 @@ export class Play {
     for (const p of [this.kid, this.vis]) { p.goTo(...p.home); p.brain.set(HAPPY); }
     if (this.kind === 'soccer') {
       this.count = 0; this.wob = 0;
+      this.want = null; this.holderKicks = 0; this.wrong = 0;
       this.ball = { state: 'held', owner: this.vis, x: this.vis.home[0], y: this.vis.home[1] + 1, h: FOOT };
     } else {
       this.it = null; this.tags = 0; this.free = 0; this.frozen = 0; this.wander = 0; this.itSince = 0;
@@ -334,7 +343,10 @@ export class Play {
       return;
     }
     const q = Math.abs(e) <= w.perfect ? 'perfect' : Math.abs(e) <= w.good ? 'good' : 'off';
-    this.count += 1;
+    // the wrong buddy still keeps it going, but costs points
+    const right = !this.want || who === this.want;
+    if (right) this.count += 1;
+    else { this.count = Math.max(0, this.count - WRONG_BUDDY); this.wrong += 1; this.pop(`Wrong buddy! −${WRONG_BUDDY}`, who.x, who.y - 38, '#ff8787', true); }
     this.kick(keeper, who, q, e);
   }
 
@@ -353,6 +365,11 @@ export class Play {
     if (q !== 'start' && q !== 'off' && this.count % 10 === 0) to.brain.impulse('cheer', 1);
 
     const pass = to !== from;
+    // whose turn it is next: the longer one buddy keeps it, the likelier a pass
+    this.holderKicks = pass || q === 'start' ? 1 : this.holderKicks + 1;
+    const callPass = this.r() < Math.min(1, SWITCH_STEP * this.holderKicks);
+    this.want = callPass ? this.other(to) : to;
+    if (callPass) this.pop('Pass!', this.want.home[0], this.want.home[1] - 34, '#ffd43b');
     // each kick goes a little higher or lower than the last, so the timing changes
     let T = this.beat() * (pass ? 1.25 : 1) * (1 + (this.r() * 2 - 1) * heightSpread(this.count));
     const side = (this.r() < 0.5 ? -1 : 1) * (wild ? 64 : this.wob * 24 + (q === 'off' ? 6 : 0));
@@ -680,6 +697,13 @@ export class Play {
     if (this.kind === 'soccer') {
       text(String(this.count), W / 2, u * 2.6, u * 4.2, '#ffd43b');
       if (this.best) text(`Best ${this.best}`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
+      // an arrow bobs over the buddy to tap next
+      if (this.phase === 'play' && this.want && this.ball.state === 'air') {
+        const p = this.want; const bob = Math.round(Math.sin(this.t * 8) * 1.5);
+        const ax = p.x * S; const ay = (p.y - 44 + bob) * S;
+        ctx.beginPath(); ctx.moveTo(ax - u * 1.1, ay - u * 1.2); ctx.lineTo(ax + u * 1.1, ay - u * 1.2); ctx.lineTo(ax, ay); ctx.closePath();
+        ctx.fillStyle = '#ffd43b'; ctx.fill(); ctx.lineWidth = Math.max(2, S * 0.7); ctx.strokeStyle = '#1b1430'; ctx.stroke();
+      }
     } else {
       const free = this.phase === 'over' ? this.score : this.free;
       text(`${free.toFixed(1)} s`, W / 2, u * 2.6, u * 3.6, this.phase === 'play' && this.it === 'kid' ? '#ffa8a8' : '#ffd43b');

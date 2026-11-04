@@ -71,6 +71,9 @@ export function openPlay(opts) {
     root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.free.toFixed(1);
     const n = game.kind === 'soccer' && game.next();
     root.dataset.next = n ? String(Math.round((n.at - game.t) * 1000)) : '';
+    // whose turn it is in keepy-uppy, and where they are across the field (0-1)
+    root.dataset.want = game.want ? (game.want === game.kid ? 'kid' : 'vis') : '';
+    root.dataset.wantx = game.want ? (game.want.x / game.W).toFixed(3) : '';
     seen = { count: game.kind === 'soccer' ? game.count : 0, pops, phase: game.phase, it: game.it };
   };
 

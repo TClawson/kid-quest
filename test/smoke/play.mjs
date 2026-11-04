@@ -98,7 +98,11 @@ try {
     let kicks = 0;
     for (let i = 0; i < 3; i += 1) {
       await page.waitForFunction(() => { const n = document.querySelector('.playground')?.dataset.next; return n && Number(n) < 40; }, null, { timeout: 4000 });
-      await page.mouse.click(box.x + box.width * (i % 2 ? 0.34 : 0.66), box.y + box.height * 0.55);
+      // tap the buddy the arrow is over
+      const want = await page.locator('.playground').getAttribute('data-want');
+      assert.ok(['kid', 'vis'].includes(want), 'the game shows whose turn it is');
+      const wx = Number(await page.locator('.playground').getAttribute('data-wantx'));
+      await page.mouse.click(box.x + box.width * wx, box.y + box.height * 0.55);
       kicks += 1;
       if (i === 1 && shots) await page.screenshot({ path: `${shots}/play-soccer-${name}.png` });
     }
