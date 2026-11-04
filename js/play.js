@@ -13,7 +13,7 @@
 // Tag (a visitor with no ball): tap the visitor and they're IT. Tap the field
 // and your buddy runs there. Running shoes run faster; everybody slows down
 // as they tire. The score is the time your buddy wasn't IT, until it's tagged
-// for the second time.
+// for the third time.
 //
 // No coins: play is just for fun. Each game keeps a best score.
 //
@@ -81,6 +81,7 @@ export const HAPPY = { ...CALM, valence: 0.7, arousal: 0.6 };
 const FOOT = 4; // how high the ball is when it meets a foot
 const GRAV = 272; // pixels a second, squared: a 1 second hop goes 34 pixels up
 const TAG_REACH = 9;
+export const TAG_OUTS = 3; // tag ends when your buddy is tagged this many times
 const FEET = SPRITE_Y + 16; // from a buddy's feet to the top of its picture
 
 export function rng(seed) {
@@ -449,7 +450,7 @@ export class Play {
         this.steer(v, clamp(k.x + k.vx * lead + Math.sin(this.t * 1.7) * 4, bd.x0, bd.x1), clamp(k.y + k.vy * lead, bd.y0, bd.y1));
         if (Math.hypot(k.x - v.x, k.y - v.y) < TAG_REACH) {
           this.tags += 1;
-          if (this.tags >= 2) {
+          if (this.tags >= TAG_OUTS) {
             k.brain.impulse('surprise', 1); v.brain.impulse('cheer', 1);
             k.goTo(k.x, k.y); v.goTo(v.x, v.y);
             this.finish(Math.round(this.free * 10) / 10);
