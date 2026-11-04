@@ -513,3 +513,4 @@ label { color: var(--ink); }
 .play-top { position: absolute; top: max(8px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; pointer-events: none; color: #fff; text-shadow: 2px 2px 0 #1b1430; font-size: 1.1rem; }
 .play-top b { flex: 1; }
 .play-close { pointer-events: auto; }
+.btn.store-locked { opacity: 0.7; font-size: 0.9em; }

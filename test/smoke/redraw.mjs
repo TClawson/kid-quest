@@ -18,6 +18,7 @@ try {
   s.settings.pinHash = 'sha256:test';
   s.settings.sound = false;
   s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: { background: 'bg-ocean' } } });
+  s.log[dateKey()] = { kid_sam: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
   // a kid's tablet in a family, with two other kids' buddies cached for visiting
   await page.evaluate((st) => {
     localStorage.setItem('kidquest.v1', JSON.stringify(st));

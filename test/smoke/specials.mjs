@@ -24,6 +24,7 @@ try {
       id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), seenUnlocks: [],
       owned: [], spent: -1200, buddy: { species: 'panda', outfit: { background: 'bg-meadow' } },
     });
+    saved.log[dateKey()] = { kid_ava: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
     await page.goto(site.url);
     await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
     await page.reload();

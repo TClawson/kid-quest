@@ -28,6 +28,21 @@ try {
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
   await page.click('[data-action="open-kid"]');
+  // chores left: the buddy store stays shut
+  if (!(await page.textContent('[data-action="wardrobe"]')).includes('🔒')) throw new Error('store button should show the lock');
+  await page.click('[data-action="wardrobe"]');
+  await page.waitForTimeout(300);
+  if (await page.$('.screen.wardrobe')) throw new Error('store opened with chores left');
+  // an excused day opens it (done-and-approved days are covered by the unit test)
+  await page.evaluate(() => {
+    const st = JSON.parse(localStorage.getItem('kidquest.v1'));
+    const day = new Date();
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    st.log[key] = { [st.kids[0].id]: { tasks: {}, excused: true } };
+    localStorage.setItem('kidquest.v1', JSON.stringify(st));
+  });
+  await page.reload();
+  await page.click('[data-action="open-kid"]');
   await page.click('[data-action="wardrobe"]');
   await page.click('[data-action="wardrobe-slot"][data-slot="hat"]');
   const cap = '[data-action="wardrobe-item"][data-id="hat-cap"]';

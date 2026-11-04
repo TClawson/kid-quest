@@ -23,8 +23,9 @@ function seed() {
   const ava = defaultTasks();
   ava.push({ id: 'task_bath', name: 'Clean the bathroom with a really long chore name', icon: '🛁', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'parent', minutes: 0 });
   s.kids.push({ id: 'kid_ava', name: 'Annabelle', color: '#ff6b6b', tasks: ava, startDate: today, owned: [], spent: -2400, buddy: { species: 'fox', outfit: {} } });
-  s.kids.push({ id: 'kid_ben', name: 'Ben', color: '#4dabf7', tasks: defaultTasks(), startDate: today, buddy: { species: 'panda', outfit: {} } });
+  s.kids.push({ id: 'kid_ben', name: 'Ben', color: '#4dabf7', tasks: defaultTasks(), startDate: today, owned: [], spent: -2400, buddy: { species: 'panda', outfit: {} } });
   s.log[today] = { kid_ava: { tasks: { task_bath: { status: 'pending', at: Date.now() } } } };
+  s.log[today].kid_ben = { tasks: {}, excused: true }; // the buddy store opens once the day's chores are done
   return s;
 }
 
@@ -84,6 +85,11 @@ try {
     await check('kid-map');
     await go('[data-action="quest-mode"][data-mode="list"]');
     await check('kid-list');
+    const piano = await page.$('[data-action="task"]:has-text("Piano")');
+    if (piano) { await piano.click(); await page.waitForSelector('.timer'); await check('timer'); await go('[data-action="timer-back"]'); }
+    await go('[data-action="home"]');
+    // Annabelle still has chores, so her buddy store is locked; Ben's day is excused, so his is open
+    await go('[data-action="open-kid"][data-id="kid_ben"]');
     await go('[data-action="wardrobe"]');
     for (const slot of ['background', 'hat', 'face', 'neck', 'music', 'sport']) {
       await go(`[data-action="wardrobe-slot"][data-slot="${slot}"]`);
@@ -96,8 +102,6 @@ try {
       }
     }
     await go('[data-action="wardrobe-back"]');
-    const piano = await page.$('[data-action="task"]:has-text("Piano")');
-    if (piano) { await piano.click(); await page.waitForSelector('.timer'); await check('timer'); await go('[data-action="timer-back"]'); }
     await go('[data-action="home"]');
     await go('[data-action="parent"]');
     await check('pin-pad');
