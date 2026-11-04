@@ -12,8 +12,10 @@
 //
 // Tag (a visitor with no ball): tap the visitor and they're IT. Tap the field
 // and your buddy runs there. Running shoes run faster; everybody slows down
-// as they tire. The score is the time your buddy wasn't IT, until it's tagged
-// for the third time.
+// as they tire. The score counts up while your buddy isn't IT and down at
+// half speed while it is (never below 0), until it's tagged for the third
+// time. Bumping into a moving obstacle knocks a buddy back and stops it for
+// half a second.
 //
 // No coins: play is just for fun. Each game keeps a best score.
 //
@@ -34,6 +36,21 @@ export function gameFor(gear = {}, seed = '') {
   for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return games[h % games.length];
 }
+
+/**
+ * Keepy-uppy timing windows in seconds either side of the moment the ball
+ * lands, after `count` kicks with a ball of `tier` (1-3). Perfect narrows the
+ * most as the count goes up, Good a little less, and the earliest and latest
+ * taps that still count the least.
+ */
+export function kickWindows(count, tier = 1) {
+  const tight = (rate, floor) => Math.max(floor, 1 - count * rate);
+  const edge = (0.19 + 0.03 * tier) * tight(0.008, 0.65);
+  return { perfect: (0.05 + 0.02 * tier) * tight(0.012, 0.4), good: (0.1 + 0.03 * tier) * tight(0.009, 0.55), early: edge, late: edge };
+}
+
+/** How much higher or lower than usual a kick can go (0.15 = up to 15% more or less air time). */
+export const heightSpread = (count) => Math.min(0.3, 0.12 + count * 0.004);
 
 export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag', hockey: 'Hockey' };
 
@@ -81,7 +98,10 @@ export const HAPPY = { ...CALM, valence: 0.7, arousal: 0.6 };
 const FOOT = 4; // how high the ball is when it meets a foot
 const GRAV = 272; // pixels a second, squared: a 1 second hop goes 34 pixels up
 const TAG_REACH = 9;
-export const TAG_OUTS = 3; // tag ends when your buddy is tagged this many times
+export const TAG_OUTS = 3;
+export const TAG_DRAIN = 0.5; // while your buddy is IT the score goes down at this many seconds per second
+const BONK_BACK = 10; // pixels a moving obstacle knocks a buddy back
+const BONK_STOP = 0.5; // seconds a knocked-back buddy can't move // tag ends when your buddy is tagged this many times
 const FEET = SPRITE_Y + 16; // from a buddy's feet to the top of its picture
 
 export function rng(seed) {
@@ -282,11 +302,7 @@ export class Play {
   }
 
   // ---------- soccer ----------
-  windows() {
-    const harder = Math.max(0.65, 1 - this.count * 0.008);
-    const k = this.tier;
-    return { perfect: (0.05 + 0.02 * k) * harder, good: (0.1 + 0.03 * k) * harder, early: (0.19 + 0.03 * k) * harder, late: (0.19 + 0.03 * k) * harder };
-  }
+  windows() { return kickWindows(this.count, this.tier); }
 
   /** Seconds the ball is in the air for a straight-up juggle: a little quicker as the count goes up. */
   beat() { return Math.max(0.62, 1.0 - this.count * 0.01); }
@@ -336,7 +352,8 @@ export class Play {
     if (q !== 'start' && q !== 'off' && this.count % 10 === 0) to.brain.impulse('cheer', 1);
 
     const pass = to !== from;
-    let T = this.beat() * (pass ? 1.25 : 1);
+    // each kick goes a little higher or lower than the last, so the timing changes
+    let T = this.beat() * (pass ? 1.25 : 1) * (1 + (this.r() * 2 - 1) * heightSpread(this.count));
     const side = (this.r() < 0.5 ? -1 : 1) * (wild ? 64 : this.wob * 24 + (q === 'off' ? 6 : 0));
     T *= 1 - 0.3 * Math.min(1, this.wob);
     const bd = this.bounds;
@@ -346,6 +363,8 @@ export class Play {
       if (tx < bd.x0 + 4 || tx > bd.x1 - 4) tx = to.home[0] - side;
       tx = clamp(tx, bd.x0 + 4, bd.x1 - 4); ty = clamp(ty, bd.y0 + 8, bd.y1 - 2);
     }
+    // never higher than the top of the field, never so low it can't be read
+    T = clamp(T, 0.42, Math.sqrt((8 * Math.max(20, ty - this.top)) / GRAV));
     if (wild) this.pop('Whoa!', from.x, from.y - 28, '#ffa8a8');
     Object.assign(b, {
       state: 'air', owner: from, to, fx: b.x, fy: b.y, fh: b.h, tx, ty,
@@ -441,6 +460,8 @@ export class Play {
     k.speed = this.baseSpeed(k) * Math.max(0.5, 1 - 0.012 * age);
     if (age > 14) k.brain.set({ focus: 0.6 }); // tired: a drop of sweat
     const ready = this.t >= this.frozen;
+    // the score drains at half speed while your buddy is IT
+    if (this.it === 'kid') this.free = Math.max(0, this.free - dt * TAG_DRAIN);
     if (this.it === 'vis') {
       this.free += dt;
       v.speed = this.baseSpeed(v) * 0.68 * Math.max(0.6, 1 - 0.004 * age);
@@ -478,6 +499,8 @@ export class Play {
     }
     if (!ready) (this.it === 'kid' ? k : v).goTo((this.it === 'kid' ? k : v).x, (this.it === 'kid' ? k : v).y);
     else if (k.dest) this.steer(k, ...k.dest);
+    // knocked back by a moving obstacle: stopped for a moment
+    for (const p of [k, v]) if (this.t < (p.stunned || 0)) p.goTo(p.x, p.y);
     k.lookAt = [v.x, v.y - 10]; v.lookAt = [k.x, k.y - 10];
   }
 
@@ -543,7 +566,16 @@ export class Play {
       for (const o of this.obstacles || []) {
         const dx = p.x - o.x; const dy = (p.y - o.y) * 1.4; const d = Math.hypot(dx, dy) || 0.01;
         const need = o.r + 4;
-        if (d < need) { p.x = o.x + (dx / d) * need; p.y = o.y + (dy / d) * need / 1.4; }
+        if (d >= need) continue;
+        if (o.move && this.phase === 'play' && !(this.t < (p.stunned || 0))) {
+          // a rolling barrel knocks you back and stops you for a moment
+          const back = need + BONK_BACK;
+          p.x = o.x + (dx / d) * back; p.y = o.y + (dy / d) * back / 1.4;
+          p.stunned = this.t + BONK_STOP; p.goTo(p.x, p.y);
+          p.brain.impulse('dizzy', 1);
+          this.pop('Bonk!', p.x, p.y - 26, '#ffa8a8');
+          this.sound = 'board';
+        } else { p.x = o.x + (dx / d) * need; p.y = o.y + (dy / d) * need / 1.4; }
       }
       p.x = clamp(p.x, b.x0 - 4, b.x1 + 4); p.y = clamp(p.y, b.y0 - 2, b.y1 + 2);
     }
@@ -590,8 +622,10 @@ export class Play {
       // the timing ring, shrinking onto the landing spot
       if (b.state === 'air') {
         const left = b.contact - this.t;
-        if (left < 0.75) {
-          const rad = Math.max(2, 2 + 12 * Math.max(0, left) / 0.75);
+        // the ring shows up a little later as the count goes up
+        const lead = Math.max(0.5, 0.75 - this.count * 0.004);
+        if (left < lead) {
+          const rad = Math.max(2, 2 + 12 * Math.max(0, left) / lead);
           const near = Math.abs(left) <= this.windows().perfect;
           ctx.fillStyle = near ? '#ffd43b' : 'rgba(255,255,255,0.85)';
           const n = Math.max(10, Math.round(rad * 5));
@@ -647,7 +681,7 @@ export class Play {
       if (this.best) text(`Best ${this.best}`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
     } else {
       const free = this.phase === 'over' ? this.score : this.free;
-      text(`${free.toFixed(1)} s`, W / 2, u * 2.6, u * 3.6, '#ffd43b');
+      text(`${free.toFixed(1)} s`, W / 2, u * 2.6, u * 3.6, this.phase === 'play' && this.it === 'kid' ? '#ffa8a8' : '#ffd43b');
       if (this.best) text(`Best ${this.best.toFixed(1)} s`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
       if (this.phase !== 'ready') { ctx.textAlign = 'left'; text(`Level ${this.level}`, u * 1.2, u * 5.2, u * 1.6, '#ffffff'); ctx.textAlign = 'center'; }
       if (this.phase === 'play') {

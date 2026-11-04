@@ -4,12 +4,16 @@
 // skates 15% slower. Press and hold the round button: a needle sweeps over red,
 // yellow and a thin green band; let go to shoot (if you have the puck) or to
 // steal (if you're close to the buddy who has it). The color decides the odds:
-//   shot:  red 15%, yellow 40%, green 75% to score (the aim is a random angle)
+//   shot:  red 5%, yellow 25%, green 55% to score from close in (the aim is a
+//          random angle, so from farther away the goal is a smaller target)
 //   steal: green 80% steal / 20% knocked loose / 0% kept,
 //          yellow 50 / 40 / 10, red 20 / 30 / 50.
 // A shot that runs into the other buddy is theirs. A missed shot bounces off the
 // boards and slows down until somebody picks it up. Losing the puck to a steal
 // or a knock freezes you for a second. The visitor plays by the same rules.
+//
+// The rink is longer than the screen: the view slides along to keep your buddy
+// in sight, and an arrow at the edge points to the puck when it's off screen.
 //
 // Same interface as Play in play.js (tap, drag, step, draw, drawHud), plus
 // press() / release() for the button.
@@ -17,11 +21,11 @@ import { Player, playLook, rng, canvas, cellsCanvas, clamp, HAPPY } from './play
 import { ballCells } from './avatar.js';
 
 export const GAME_SECONDS = 60;
-export const SHOT_ODDS = { red: 0.15, yellow: 0.4, green: 0.75 };
+export const SHOT_ODDS = { red: 0.05, yellow: 0.25, green: 0.55 };
 /** [steal, knocked loose, kept] */
 export const STEAL_ODDS = { green: [0.8, 0.2, 0], yellow: [0.5, 0.4, 0.1], red: [0.2, 0.3, 0.5] };
 // For an aim error drawn from a normal curve, P(|error| < z * sigma) = the shot odds
-const Z = { red: 0.1891, yellow: 0.5244, green: 1.1503 };
+export const Z = { red: 0.0627, yellow: 0.3186, green: 0.7554 };
 
 const SKATE = 66; // top speed, pixels a second
 const CARRY = 0.85; // with the puck
@@ -32,6 +36,8 @@ const PICKUP = 7;
 const STEAL_REACH = 17;
 const MOUTH = 9; // half the goal's width
 const SWEEP = 0.65; // seconds for the needle to cross the meter once
+export const CLOSE = 45; // shots from this close (pixels) or closer get the full SHOT_ODDS
+const RINK_LENGTH = 1.6; // the rink is this many screens long
 const AI_SKILL = { green: 0.18, yellow: 0.42, red: 0.4 };
 
 const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
@@ -73,7 +79,8 @@ export class Hockey {
     this.r = rng(opts.seed || 1);
     this.t = 0; this.pops = [];
     this.top = 26;
-    this.rink = { x0: 5, x1: this.W - 6, y0: this.top + 8, y1: this.H - 4 };
+    this.RW = Math.round(this.W * RINK_LENGTH);
+    this.rink = { x0: 5, x1: this.RW - 6, y0: this.top + 8, y1: this.H - 4 };
     const rk = this.rink;
     this.cx = Math.round((rk.x0 + rk.x1) / 2); this.cy = Math.round((rk.y0 + rk.y1) / 2) + 4;
     this.goalL = rk.x0 + 14; this.goalR = rk.x1 - 14;
@@ -85,6 +92,7 @@ export class Hockey {
     this.puckPic = cellsCanvas(ballCells('hockey', 1));
     // in the corner, where the rink curves away
     this.button = { x: this.W - 15, y: this.H - 15, r: 12 };
+    this.camX = this.camFor(this.cx);
     this.locked = false;
     this.reset();
   }
@@ -104,10 +112,14 @@ export class Hockey {
     const place = (p, x, face) => { p.x = x; p.y = this.cy; p.tx = x; p.ty = this.cy; p.svx = 0; p.svy = 0; p.face = face; p.frozen = 0; };
     place(this.kid, this.cx - 30, 1); place(this.vis, this.cx + 30, -1);
     this.dropAt = countdown ? this.t + 1.2 : Infinity;
+    this.camX = this.camFor(this.kid.x + 15);
     this.charge = null; this.ai.charge = null;
   }
 
   other(p) { return p === this.kid ? this.vis : this.kid; }
+
+  /** Where the view starts to have rink x in the middle of the screen. */
+  camFor(x) { return clamp(x - this.W / 2, 0, this.RW - this.W); }
 
   pop(text, x, y, color = '#ffffff', big = false) {
     this.pops.push({ text, x, y, at: this.t, color, big });
@@ -119,7 +131,7 @@ export class Hockey {
   onButton(x, y) { const b = this.button; return Math.hypot(x - b.x, y - b.y) <= b.r * 1.35; }
 
   start() {
-    if (this.locked) { this.pop('No more games today!', this.W / 2, this.cy - 20, '#ffa8a8', true); return; }
+    if (this.locked) { this.pop('No more games today!', this.cx, this.cy - 20, '#ffa8a8', true); return; }
     this.phase = 'play';
     this.faceoff(true);
   }
@@ -127,10 +139,10 @@ export class Hockey {
   tap(x, y) {
     if (this.phase === 'over') { if (this.t - this.overAt > 1.2) this.reset(); return; }
     if (this.phase === 'ready') { this.start(); return; }
-    this.skateTo(x, y);
+    this.skateTo(x + this.camX, y);
   }
 
-  drag(x, y) { if (this.phase === 'play') this.skateTo(x, y); }
+  drag(x, y) { if (this.phase === 'play') this.skateTo(x + this.camX, y); }
 
   skateTo(x, y) {
     const b = this.bounds;
@@ -171,7 +183,10 @@ export class Hockey {
     const dx = gx - pk.x; const dy = this.cy - pk.y;
     const dist = Math.hypot(dx, dy);
     const half = Math.atan2(MOUTH - 1.5, Math.max(4, Math.abs(dx))) * (Math.abs(dx) / Math.max(dist, 1));
-    const aim = Math.atan2(dy, dx) + gauss(this.r) * (Math.max(0.02, half) / Z[zone]);
+    // the aim spread is sized so the odds hold from CLOSE in; farther out the
+    // same spread misses more often, since the goal looks smaller
+    const spread = (Math.max(0.02, half) * Math.max(1, dist / CLOSE)) / Z[zone];
+    const aim = Math.atan2(dy, dx) + gauss(this.r) * spread;
     pk.owner = null; pk.vx = Math.cos(aim) * SHOT_SPEED; pk.vy = Math.sin(aim) * SHOT_SPEED;
     p.noPick = this.t + 0.35;
     p.face = dx > 0 ? 1 : -1;
@@ -224,6 +239,9 @@ export class Hockey {
     if (d < 11) { const push = (11 - d) / 2; k.x -= (dx / d) * push; v.x += (dx / d) * push; k.y -= (dy / d) * push / 1.6; v.y += (dy / d) * push / 1.6; }
     this.stepPuck(dt);
     for (const p of [this.kid, this.vis]) p.lookAt = [this.puck.x, this.puck.y - 4];
+    // the view follows your buddy, a little ahead of where it's skating
+    const want = this.camFor(k.x + clamp(k.svx * 0.4, -30, 30));
+    this.camX += (want - this.camX) * Math.min(1, dt * 5);
   }
 
   end() {
@@ -354,12 +372,12 @@ export class Hockey {
 
   // ---------- drawing ----------
   paintRink() {
-    const c = canvas(this.W, this.H); const x = c.getContext('2d');
+    const c = canvas(this.RW, this.H); const x = c.getContext('2d');
     const rk = this.rink; const r = rng(5);
-    x.fillStyle = '#3b5bdb'; x.fillRect(0, 0, this.W, this.H); // the stands
-    for (let i = 0; i < (this.W * this.top) / 6; i += 1) {
+    x.fillStyle = '#3b5bdb'; x.fillRect(0, 0, this.RW, this.H); // the stands
+    for (let i = 0; i < (this.RW * this.top) / 6; i += 1) {
       x.fillStyle = ['#ff8787', '#ffd43b', '#74c0fc', '#b2f2bb', '#e599f7'][Math.floor(r() * 5)];
-      x.fillRect(Math.floor(r() * this.W), Math.floor(r() * (rk.y0 - 2)), 1, 1);
+      x.fillRect(Math.floor(r() * this.RW), Math.floor(r() * (rk.y0 - 2)), 1, 1);
     }
     const round = (fill, inset) => {
       x.fillStyle = fill;
@@ -373,7 +391,7 @@ export class Hockey {
     };
     round('#1b1430', -2); round('#ffd43b', -1); round('#e7f5ff', 0);
     x.fillStyle = '#d0ebff';
-    for (let i = 0; i < (this.W * this.H) / 50; i += 1) {
+    for (let i = 0; i < (this.RW * this.H) / 50; i += 1) {
       const gx = rk.x0 + 3 + Math.floor(r() * (rk.x1 - rk.x0 - 6)); const gy = rk.y0 + 3 + Math.floor(r() * (rk.y1 - rk.y0 - 6));
       x.fillRect(gx, gy, 2, 1);
     }
@@ -406,6 +424,8 @@ export class Hockey {
 
   draw(ctx) {
     ctx.imageSmoothingEnabled = false;
+    ctx.save();
+    ctx.translate(-Math.round(this.camX), 0);
     ctx.drawImage(this.field, 0, 0);
     for (const p of [this.kid, this.vis]) p.paint(this.t);
     const pk = this.puck;
@@ -414,6 +434,7 @@ export class Hockey {
     things.sort((a, b) => a.y - b.y).forEach((th) => th.draw());
     // who has the puck: a little marker under their feet
     if (pk.owner) { ctx.fillStyle = pk.owner === this.kid ? '#ffd43b' : '#ff8787'; ctx.fillRect(Math.round(pk.owner.x) - 3, Math.round(pk.owner.y) + 2, 7, 1); }
+    ctx.restore();
   }
 
   drawHud(ctx, scale) {
@@ -426,6 +447,15 @@ export class Hockey {
       ctx.strokeText(s, x, y); ctx.fillStyle = color; ctx.fillText(s, x, y);
     };
     const u = S * 4;
+    const sx = (x) => (x - Math.round(this.camX)) * S; // rink x to the screen
+    // the puck is off screen: an arrow at that edge points to it
+    const pk = this.puck;
+    if (this.phase === 'play' && (pk.x < this.camX - 1 || pk.x > this.camX + this.W + 1)) {
+      const right = pk.x > this.camX; const ax = right ? W - u * 1.4 : u * 1.4; const ay = clamp(pk.y, this.top + 12, this.H - 30) * S; const d = right ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(ax + d * u, ay); ctx.lineTo(ax - d * u * 0.6, ay - u); ctx.lineTo(ax - d * u * 0.6, ay + u); ctx.closePath();
+      ctx.fillStyle = pk.owner === this.kid ? '#ffd43b' : pk.owner ? '#ff8787' : '#ffffff'; ctx.fill();
+      ctx.lineWidth = S * 0.6; ctx.strokeStyle = '#1b1430'; ctx.stroke();
+    }
     // score and clock
     const secs = Math.ceil(this.left);
     const sc = `${this.goals.kid}  –  ${this.goals.vis}`;
@@ -455,12 +485,12 @@ export class Hockey {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(mx + meter * mw - S * 0.6, my - S, S * 1.2, mh + 2 * S);
     }
     // the visitor lining something up
-    if (this.ai.charge && this.phase === 'play') text('!', (this.vis.x) * S, (this.vis.y - 30) * S, u * 2, '#ff8787');
+    if (this.ai.charge && this.phase === 'play') text('!', sx(this.vis.x), (this.vis.y - 30) * S, u * 2, '#ff8787');
 
     for (const p of this.pops) {
       const age = (this.t - p.at) / 1.1;
       ctx.globalAlpha = Math.min(1, (1 - age) * 3);
-      text(p.text, p.x * S, (p.y - age * 10) * S, u * (p.big ? 2.4 : 1.7), p.color);
+      text(p.text, sx(p.x), (p.y - age * 10) * S, u * (p.big ? 2.4 : 1.7), p.color);
       ctx.globalAlpha = 1;
     }
     if (this.phase === 'play' && this.t < this.dropAt) text(this.t > this.dropAt - 0.5 ? 'GO!' : 'Ready…', W / 2, (this.cy - 22) * S, u * 2.4, '#ffffff');
