@@ -143,21 +143,24 @@ function fft(re, im) {
 
 /**
  * Plays samples through a listener the way the browser's analyser would: every
- * 20 ms, a Blackman-windowed 2048-sample spectrum in dB plus the loudness.
- * Returns every event the listener reported.
+ * 20 ms, the new raw samples (for the note finder), then a Blackman-windowed
+ * 2048-sample spectrum in dB plus the loudness. Returns every event the listener reported.
  */
 export function runListener(listener, samples, { rate = RATE, size = 2048, hopMs = 20 } = {}) {
   const hop = Math.round(rate * hopMs / 1000);
   const events = [];
   const win = Float64Array.from({ length: size }, (_, i) => 0.42 - 0.5 * Math.cos(2 * Math.PI * i / size) + 0.08 * Math.cos(4 * Math.PI * i / size));
+  let fed = 0;
   for (let end = size, f = 0; end <= samples.length; end += hop, f++) {
+    const now = (end / rate) * 1000;
+    // the microphone's raw samples go to the note finder as they come
+    if (listener.samples) { events.push(...listener.samples(samples.subarray(fed, end), now)); fed = end; }
     const re = new Float64Array(size), im = new Float64Array(size);
     const wave = samples.subarray(end - size, end);
     for (let i = 0; i < size; i++) re[i] = wave[i] * win[i];
     fft(re, im);
     const db = new Float32Array(size / 2);
     for (let i = 0; i < size / 2; i++) db[i] = 20 * Math.log10(Math.hypot(re[i], im[i]) / size + 1e-12);
-    const now = (end / rate) * 1000;
     events.push(...listener.frame(db, wave, now));
   }
   return events;

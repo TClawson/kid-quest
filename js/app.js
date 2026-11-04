@@ -1315,7 +1315,7 @@ function micNote(st) {
   const on = ['echoCancellation', 'noiseSuppression', 'autoGainControl'].filter((k) => st[k] === true);
   return on.length
     ? `⚠️ Chrome kept these voice filters on: ${on.join(', ')}. They can hide held piano notes.`
-    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}.`;
+    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}${st.notesFrom ? ` · notes from ${st.notesFrom}` : ''}.`;
 }
 
 async function startListenTest() {
@@ -1339,7 +1339,7 @@ async function startListenTest() {
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
     listenTest.run = await startListening(onListenFrame, { mode, recognizer });
-    listenTest.settings = { ...listenTest.run.settings, sampleRate: listenTest.run.sampleRate };
+    listenTest.settings = { ...listenTest.run.settings, sampleRate: listenTest.run.sampleRate, notesFrom: listenTest.run.notesFrom };
     grabWakeLock();
   } catch (e) {
     listenTest.run = null;
