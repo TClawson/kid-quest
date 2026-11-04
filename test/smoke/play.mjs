@@ -13,11 +13,11 @@ const shots = process.env.SHOTS;
 
 // which family buddies visit is random per day: point the first visitor at the one we want
 async function visit(page, id) {
-  await page.evaluate((v) => { document.querySelector('.map-visitor').dataset.id = v; }, id);
+  await page.evaluate((v) => { if (!document.querySelector(`.map-visitor[data-id="${v}"]`)) document.querySelector('.map-visitor').dataset.id = v; }, id);
   await page.click(`.map-visitor[data-id="${id}"]`);
 }
 
-async function open(device, done) {
+async function open(device, done, played = 0) {
   const ctx = await browser.newContext(device);
   const page = await ctx.newPage();
   const errors = [];
@@ -28,6 +28,7 @@ async function open(device, done) {
   s.settings.sound = false;
   const tasks = defaultTasks();
   s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: ['sport-shoes-regular'], buddy: { species: 'fox', outfit: { background: 'bg-meadow', hat: 'hat-cap' } } });
+  if (played) s.kids[0].playLog = { day: dateKey(), n: played };
   if (done) s.log[dateKey()] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
   await page.evaluate((st) => {
     localStorage.setItem('kidquest.v1', JSON.stringify(st));
@@ -36,6 +37,7 @@ async function open(device, done) {
     localStorage.setItem('kidquest.cloud.buddies', JSON.stringify([
       { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', owned: ['sport-soccer-good'], buddy: { species: 'cat', outfit: { sport: 'sport-soccer-good' } } },
       { id: 'kid_max', name: 'Max', color: '#51cf66', owned: [], buddy: { species: 'bear', outfit: {} } },
+      { id: 'kid_lu', name: 'Lu', color: '#fcc419', owned: ['sport-hockey-good'], buddy: { species: 'panda', outfit: {} } },
     ]));
   }, s);
   await page.reload();
@@ -55,6 +57,17 @@ try {
     await page.waitForTimeout(300);
     assert.equal(await page.locator('.playground').count(), 0, 'no game before the quest is done');
     assert.match(await page.locator('.map-visitor[data-id="kid_ava"] .visitor-bubble').innerText(), /Finish your quest and let's play! \d+ to go/);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+
+  // out of games for today: the visitors say so, and no game opens
+  {
+    const { page, ctx, errors } = await open(devices['Galaxy Tab S4'], true, 8);
+    await visit(page, 'kid_max');
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator('.playground').count(), 0, 'no game after 8 today');
+    assert.match(await page.locator('.map-visitor[data-id="kid_max"] .visitor-bubble').innerText(), /That's all our games today/);
     assert.deepEqual(errors, []);
     await ctx.close();
   }
@@ -100,6 +113,24 @@ try {
     await page.waitForTimeout(1600);
     if (shots) await page.screenshot({ path: `${shots}/play-tag-${name}.png` });
     await page.click('.play-close');
+
+    // hockey with Lu's panda (a hockey stick)
+    await visit(page, 'kid_lu');
+    await page.waitForSelector('.playground');
+    assert.match(await page.locator('.play-top').innerText(), /Hockey with Lu/);
+    assert.match(await page.locator('.play-left').innerText(), /6 games left today/);
+    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.waitForTimeout(1800);
+    assert.equal(await page.locator('.playground').getAttribute('data-phase'), 'play');
+    // skate toward the puck, hold the button and let go
+    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.6);
+    await page.waitForTimeout(800);
+    await page.mouse.move(box.x + box.width - 15 * box.width / await field.evaluate((c) => c.width), box.y + box.height - 15 * box.height / await field.evaluate((c) => c.height));
+    await page.mouse.down(); await page.waitForTimeout(300); await page.mouse.up();
+    if (shots) await page.screenshot({ path: `${shots}/play-hockey-${name}.png` });
+    await page.click('.play-close');
+    const after = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud.cache')));
+    assert.equal(after.kids[0].playLog.n, 3, 'each game started counts toward the day');
 
     assert.deepEqual(errors, []);
     await ctx.close();

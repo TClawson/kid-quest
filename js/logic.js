@@ -560,3 +560,17 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
   }
   return { weeks, best, thisWeek: days, goal: Math.max(0, need), today: exercisedOn(state, kid, today, today) };
 }
+
+// ---------- games with visiting buddies ----------
+export const GAMES_PER_DAY = 8;
+
+/** Games a kid may play with visitors in a day: 8, plus 2 for each week of the current exercise streak (up to 3). */
+export function gamesPerDay(exerciseWeeks = 0) {
+  return GAMES_PER_DAY + 2 * Math.min(3, Math.max(0, Math.floor(exerciseWeeks)));
+}
+
+/** Games left today. kid.playLog is { day, n }: games started on that day. */
+export function gamesLeft(kid, today, exerciseWeeks = 0) {
+  const used = kid?.playLog?.day === today ? kid.playLog.n || 0 : 0;
+  return Math.max(0, gamesPerDay(exerciseWeeks) - used);
+}

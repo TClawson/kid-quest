@@ -7,6 +7,7 @@ import {
   defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
+  gamesLeft,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
@@ -972,7 +973,11 @@ function visitorsHtml(kid, s) {
   if (!visitors.length) return { html: '', room: 0, areas: '' };
   const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
   // once the quest is done, every visitor wants to play (see playWith)
-  if (s.complete) visitors.forEach((v, i) => { lines[i] = gameFor(bestGear(v.owned)) === 'soccer' ? 'Keepy-uppy? Tap me!' : 'Wanna play tag? Tap me!'; });
+  if (s.complete) {
+    const left = gamesLeftFor(kid);
+    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', tag: 'Wanna play tag? Tap me!' };
+    visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[visitGame(v)] : "That's all our games today! See you tomorrow"; });
+  }
   // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
   const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [22, 37], right: [78, 63] };
@@ -2589,19 +2594,27 @@ actions.visitor = (el) => {
   // once the day's quest is done, visitors want to play
   if (v && kid) {
     const s = dayStatus(state, kid, today(), today());
-    if (s.complete) { sounds.tap(); playWith(kid, v); return; }
-    const left = s.total - s.done;
-    el.querySelector('.visitor-bubble').textContent = `Finish your quest and let's play! ${left} to go`;
+    if (s.complete && gamesLeftFor(kid) > 0) { sounds.tap(); playWith(kid, v); return; }
+    if (s.complete) el.querySelector('.visitor-bubble').textContent = "That's all our games today! See you tomorrow";
+    else {
+      const left = s.total - s.done;
+      el.querySelector('.visitor-bubble').textContent = `Finish your quest and let's play! ${left} to go`;
+    }
   }
   nextVisitorTalks(el);
   if (!v || !doMove(el, v)) { sounds.tap(); live(`visit:${el.dataset.id}`).giggle(); }
 };
 
 // ---------- playing with a visitor ----------
-// A ball game when the visitor owns a ball, tag when not. Best scores live on the kid (kid.playBest).
+// A ball game when the visitor owns a ball (the same one all day), tag when not.
+// Best scores live on the kid (kid.playBest). A kid gets gamesLeft() games a day:
+// 8, plus 2 a week of the current exercise streak (up to 3 weeks).
+const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
+const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks);
+
 function playWith(kid, v) {
   const gear = bestGear(v.owned);
-  const kind = gameFor(gear);
+  const kind = visitGame(v);
   const best = kid.playBest?.[kind] || 0;
   openPlay({
     kind,
@@ -2609,6 +2622,15 @@ function playWith(kid, v) {
     kid: { buddy: kid.buddy, name: kid.name, gear: bestGear(kid.owned || []) },
     visitor: { buddy: v.buddy, name: v.name, gear },
     sounds,
+    gamesLeft: () => gamesLeftFor(kid),
+    onStart: () => {
+      const day = today();
+      const n = kid.playLog?.day === day ? kid.playLog.n || 0 : 0;
+      kid.playLog = { day, n: n + 1 };
+      save();
+    },
+    // the map's bubbles change when the games run out
+    onClose: () => render(),
     onScore: (score) => {
       kid.playBest = { ...(kid.playBest || {}), [kind]: score };
       save();

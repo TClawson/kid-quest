@@ -1,6 +1,7 @@
 // The playground screen: a full-screen field where the kid's buddy plays a
 // game (see play.js) with a visiting buddy. Opened from a visitor on the map.
 import { Play, GAME_NAMES } from './play.js';
+import { Hockey } from './hockey.js';
 
 let open = null;
 
@@ -25,7 +26,7 @@ export function openPlay(opts) {
   root.setAttribute('aria-label', `${GAME_NAMES[opts.kind]} with ${opts.visitor.name}`);
   root.innerHTML = `
     <div class="play-stage"><canvas class="play-field"></canvas><canvas class="play-hud"></canvas></div>
-    <div class="play-top"><b>${GAME_NAMES[opts.kind]} with ${opts.visitor.name.replace(/[&<>"']/g, '')}</b><button class="btn play-close" aria-label="Done playing">Done</button></div>`;
+    <div class="play-top"><b>${GAME_NAMES[opts.kind]} with ${opts.visitor.name.replace(/[&<>"']/g, '')}<small class="play-left"></small></b><button class="btn play-close" aria-label="Done playing">Done</button></div>`;
   document.body.appendChild(root);
   const stage = root.querySelector('.play-stage');
   const field = root.querySelector('.play-field');
@@ -37,7 +38,17 @@ export function openPlay(opts) {
   for (const c of [field, hud]) { c.style.width = `${W * S}px`; c.style.height = `${H * S}px`; }
   stage.style.width = `${W * S}px`; stage.style.height = `${H * S}px`;
 
-  const game = new Play({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, seed: Date.now() % 100000 });
+  const Game = opts.kind === 'hockey' ? Hockey : Play;
+  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, seed: Date.now() % 100000 });
+  // the daily limit: opts.gamesLeft() says how many games are left today
+  const left = () => (opts.gamesLeft ? opts.gamesLeft() : Infinity);
+  const $left = root.querySelector('.play-left');
+  const showLeft = () => {
+    const n = left();
+    game.locked = n <= 0;
+    if ($left) $left.textContent = Number.isFinite(n) ? `${n} ${n === 1 ? 'game' : 'games'} left today` : '';
+  };
+  showLeft();
   const fctx = field.getContext('2d');
   const hctx = hud.getContext('2d');
   const snd = opts.sounds || {};
@@ -48,6 +59,8 @@ export function openPlay(opts) {
     if (game.kind === 'soccer' && game.count > seen.count) snd.kick?.(game.count);
     const pops = game.pops.length ? game.pops[game.pops.length - 1].at : 0;
     if (pops !== seen.pops && game.kind === 'tag' && game.it !== seen.it && game.it) snd.tag?.();
+    if (game.phase === 'play' && seen.phase !== 'play') { opts.onStart?.(); showLeft(); }
+    if (game.kind === 'hockey' && game.sound) { snd[game.sound]?.(); game.sound = null; }
     if (game.phase === 'over' && seen.phase !== 'over') {
       snd.over?.(game.newBest);
       if (game.newBest) opts.onScore?.(game.score);
@@ -55,7 +68,7 @@ export function openPlay(opts) {
     }
     // for tests: what the game is doing
     root.dataset.phase = game.phase;
-    root.dataset.score = game.kind === 'soccer' ? game.count : game.free.toFixed(1);
+    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.free.toFixed(1);
     const n = game.kind === 'soccer' && game.next();
     root.dataset.next = n ? String(Math.round((n.at - game.t) * 1000)) : '';
     seen = { count: game.kind === 'soccer' ? game.count : 0, pops, phase: game.phase, it: game.it };
@@ -65,19 +78,26 @@ export function openPlay(opts) {
     const r = field.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H];
   };
-  let down = false;
+  // one finger can hold the hockey button while another steers
+  let down = null; let button = null;
   const onDown = (e) => {
     if (e.target.closest('.play-close')) return;
     e.preventDefault();
-    down = true;
-    game.tap(...at(e));
+    const p = at(e);
+    if (game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
+    down = e.pointerId;
+    game.tap(...p);
     listen();
   };
-  const onMove = (e) => { if (down) game.drag(...at(e)); };
-  const onUp = () => { down = false; };
+  const onMove = (e) => { if (down === e.pointerId) game.drag(...at(e)); };
+  const onUp = (e) => {
+    if (button === e.pointerId) { button = null; game.release(); listen(); }
+    if (down === e.pointerId) down = null;
+  };
   root.addEventListener('pointerdown', onDown);
   root.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
 
   let last = performance.now();
   let raf = 0;
@@ -98,6 +118,7 @@ export function openPlay(opts) {
     cancelAnimationFrame(raf);
     root.removeEventListener('pointerdown', onDown);
     window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
     document.removeEventListener('visibilitychange', onVis);
     root.remove();
     open = null;
