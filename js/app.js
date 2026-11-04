@@ -1796,6 +1796,7 @@ function parentSettings() {
       <label class="row"><input type="checkbox" data-setting-bool="sound" ${st.sound ? 'checked' : ''}> Sounds on</label>
     </div>
 ${allowanceCard()}
+${gameTestCard()}
     <div class="card">
       <h2>🎹 Piano listening test</h2>
       <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>
@@ -2666,6 +2667,51 @@ actions['play-pick'] = (el) => {
   const kid = kidById(el.dataset.host);
   closeModal();
   if (v && kid && GAME_NAMES[el.dataset.kind]) playWith(kid, v, el.dataset.kind);
+};
+
+// Settings > Try the games: a parent plays any visitor game right away, with
+// any gear, to see how it feels. It doesn't count toward the daily limit or records.
+const TIER_NAMES = ['No gear', 'Regular', 'Good', 'Super'];
+function gameTestCard() {
+  const kids = state.kids;
+  if (!kids.length) return '';
+  const opt = (sel, list) => list.map(([v, label]) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(label)}</option>`).join('');
+  const who = kids.map((k) => [k.id, `${k.name}'s buddy`]);
+  const tiers = TIER_NAMES.map((n, i) => [String(i), n]);
+  return `
+    <div class="card game-test">
+      <h2>🎮 Try the games</h2>
+      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
+      <div class="game-test-pick">
+        <label>Playing <select id="gt-kid">${opt(ui.gtKid || kids[0].id, who)}</select></label>
+        <label>Their gear <select id="gt-kid-gear">${opt(ui.gtKidGear || '1', tiers)}</select></label>
+        <label>Visitor <select id="gt-vis">${opt(ui.gtVis || (kids[1] || kids[0]).id, who)}</select></label>
+        <label>Visitor's gear <select id="gt-vis-gear">${opt(ui.gtVisGear || '1', tiers)}</select></label>
+      </div>
+      <div class="row wrap">
+        ${['soccer', 'tag', 'hockey'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
+      </div>
+    </div>`;
+}
+
+actions['game-test'] = (el) => {
+  const kind = el.dataset.kind;
+  const val = (id) => document.getElementById(id)?.value;
+  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear') });
+  const kid = kidById(ui.gtKid) || state.kids[0];
+  const other = kidById(ui.gtVis) || kid;
+  const gearKind = kind === 'tag' ? 'shoes' : kind;
+  const gear = (tier) => (Number(tier) ? { [gearKind]: Number(tier) } : {});
+  // the same kid on both sides still needs two names
+  const visName = other.id === kid.id ? 'Visitor' : other.name;
+  sounds.tap();
+  openPlay({
+    kind,
+    best: 0,
+    kid: { buddy: kid.buddy, name: kid.name, gear: gear(ui.gtKidGear) },
+    visitor: { buddy: other.buddy, name: visName, gear: gear(ui.gtVisGear) },
+    sounds,
+  });
 };
 
 function playWith(kid, v, kind) {
