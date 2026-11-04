@@ -22,32 +22,80 @@
 import { buildRig, render, Brain, CALM } from './rig.js';
 import { ballCells, SPRITE_Y } from './avatar.js';
 
-/** Which game a visitor plays, from the gear they own: { kind: best tier }. */
-export function gameFor(gear = {}) {
-  return gear.soccer ? 'soccer' : 'tag';
+/**
+ * Which game a visitor plays, from the gear they own ({ kind: best tier }): one of
+ * their ball games, the same one all day (seed: something like the date and the
+ * visitor's id), or tag when they have none.
+ */
+export function gameFor(gear = {}, seed = '') {
+  const games = ['soccer', 'hockey'].filter((k) => gear[k]);
+  if (!games.length) return 'tag';
+  let h = 7;
+  for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return games[h % games.length];
 }
 
-export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag' };
+export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag', hockey: 'Hockey' };
 
-const HAPPY = { ...CALM, valence: 0.7, arousal: 0.6 };
+// ---------- tag levels ----------
+// Every LEVEL_HOLD seconds the field scrolls sideways to the next level. Tag goes
+// on while it scrolls: the buddies ride along with the screen, and the new
+// level's obstacles slide in from the right (and bump anyone in their way). Level n has n obstacles; from level 4 on, n - 3 of them move.
+const LEVEL_HOLD = 10;
+const LEVEL_SCROLL = 2.5;
+const MAX_OBSTACLES = 7;
+
+/** Obstacles for a level, placed in the strip x0..x0 + W (world pixels). */
+export function levelObstacles(level, x0, W, y0, y1, r) {
+  const n = Math.min(MAX_OBSTACLES, level);
+  const moving = Math.max(0, level - 3);
+  const out = [];
+  for (let i = 0; i < n && out.length < n; i += 1) {
+    for (let tries = 0; tries < 40; tries += 1) {
+      const rad = 6 + Math.floor(r() * 4);
+      const x = x0 + 34 + r() * (W - 56); const y = y0 + rad + 6 + r() * (y1 - y0 - 2 * rad - 10);
+      if (out.some((o) => Math.hypot(o.x - x, (o.y - y) * 1.4) < o.r + rad + 18)) continue;
+      const kinds = ['bush', 'rock', 'hay'];
+      const o = { x, y, r: rad, kind: kinds[Math.floor(r() * kinds.length)], cx: x, cy: y };
+      if (i < moving) {
+        // rolls back and forth along a line
+        const ang = r() * Math.PI;
+        o.kind = 'barrel'; o.r = 6;
+        o.move = { dx: Math.cos(ang) * (18 + r() * 14), dy: Math.sin(ang) * (10 + r() * 8), speed: 0.9 + r() * 0.7, phase: r() * Math.PI * 2 };
+      }
+      out.push(o);
+      break;
+    }
+  }
+  return out;
+}
+
+const OBSTACLE_PAL = {
+  bush: ['#2f9e44', '#51cf66', '#1b5e20'],
+  rock: ['#868e96', '#ced4da', '#495057'],
+  hay: ['#fcc419', '#ffe066', '#e67700'],
+  barrel: ['#a0522d', '#d08a5a', '#5c2d12'],
+};
+
+export const HAPPY = { ...CALM, valence: 0.7, arousal: 0.6 };
 const FOOT = 4; // how high the ball is when it meets a foot
 const GRAV = 272; // pixels a second, squared: a 1 second hop goes 34 pixels up
 const TAG_REACH = 9;
 const FEET = SPRITE_Y + 16; // from a buddy's feet to the top of its picture
 
-function rng(seed) {
+export function rng(seed) {
   let s = (seed >>> 0) || 1;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, k) => a + (b - a) * k;
 
-function canvas(w, h) {
+export function canvas(w, h) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   return c;
 }
-function cellsCanvas(cells) {
+export function cellsCanvas(cells) {
   const h = cells.length; const w = cells[0].length;
   const c = canvas(w, h); const x = c.getContext('2d');
   const img = x.createImageData(w, h);
@@ -61,15 +109,18 @@ function cellsCanvas(cells) {
 }
 
 /** A buddy's outfit for a game: held gear put down (the game draws the ball), running shoes on for tag. */
-function playLook(buddy, gear, kind) {
+export function playLook(buddy, gear, kind) {
   const outfit = { ...(buddy?.outfit || {}) };
   delete outfit.sport;
-  if (kind === 'tag' && gear?.shoes) outfit.sport = `sport-shoes-${['regular', 'good', 'super'][gear.shoes - 1]}`;
+  const version = (tier) => ['regular', 'good', 'super'][Math.max(0, Math.min(2, tier - 1))];
+  if (kind === 'tag' && gear?.shoes) outfit.sport = `sport-shoes-${version(gear.shoes)}`;
+  // hockey: everyone holds a stick (a borrowed regular one if they have none)
+  if (kind === 'hockey') outfit.sport = `sport-hockey-${version(gear?.hockey || 1)}`;
   return { species: buddy?.species, outfit };
 }
 
 // ---------- a buddy on the field ----------
-class Player {
+export class Player {
   constructor(buddy, name, seed, x, y) {
     this.name = name;
     this.rig = buildRig(buddy, { background: false });
@@ -175,11 +226,20 @@ export class Play {
       this.ball = { state: 'held', owner: this.vis, x: this.vis.home[0], y: this.vis.home[1] + 1, h: FOOT };
     } else {
       this.it = null; this.tags = 0; this.free = 0; this.frozen = 0; this.wander = 0; this.itSince = 0;
+      this.camX = 0; this.level = 1; this.levelAt = 0; this.scroll = null;
+      for (const p of [this.kid, this.vis]) { p.x = p.home[0]; p.y = p.home[1]; p.goTo(...p.home); }
+      const b = this.bounds;
+      // level 1: one obstacle, out of the way of where the buddies start
+      this.obstacles = [];
+      for (let i = 0; i < 20 && !this.obstacles.length; i += 1) {
+        this.obstacles = levelObstacles(1, 0, this.W, b.y0, b.y1, this.r)
+          .filter((o) => [this.kid, this.vis].every((p) => Math.hypot(o.x - p.x, o.y - p.y) > o.r + 16));
+      }
       this.kid.speed = 60; this.vis.speed = 60;
     }
   }
 
-  get bounds() { return { x0: 12, x1: this.W - 12, y0: this.top + 22, y1: this.H - 4 }; }
+  get bounds() { const c = this.camX || 0; return { x0: c + 12, x1: c + this.W - 12, y0: this.top + 22, y1: this.H - 4 }; }
 
   pop(text, x, y, color = '#ffffff', big = false) {
     this.pops.push({ text, x, y, at: this.t, color, big });
@@ -198,11 +258,11 @@ export class Play {
       if (this.t - this.overAt > 1.2) this.reset();
       return;
     }
-    if (this.kind === 'soccer') this.tapSoccer(x, y); else this.tapTag(x, y);
+    if (this.kind === 'soccer') this.tapSoccer(x, y); else this.tapTag(x + (this.camX || 0), y);
   }
 
   drag(x, y) {
-    if (this.kind === 'tag' && this.phase === 'play') this.runTo(x, y);
+    if (this.kind === 'tag' && this.phase === 'play') this.runTo(x + this.camX, y);
   }
 
   step(dt) {
@@ -210,6 +270,7 @@ export class Play {
     this.t += dt;
     if (this.kind === 'soccer') this.stepSoccer(dt); else this.stepTag(dt);
     for (const p of [this.kid, this.vis]) p.move(dt);
+    if (this.kind === 'tag') this.bump();
     this.pops = this.pops.filter((p) => this.t - p.at < 1.1);
   }
 
@@ -236,6 +297,7 @@ export class Play {
     const who = this.nearest(x, y);
     const b = this.ball;
     if (this.phase === 'ready') {
+      if (this.locked) { this.pop('No more games today!', this.W / 2, this.top + 30, '#ffa8a8', true); return; }
       this.phase = 'play';
       this.kick(this.vis, who, 'start', 0);
       return;
@@ -338,13 +400,16 @@ export class Play {
   runTo(x, y) {
     const bd = this.bounds;
     if (this.it === 'kid' && this.t < this.frozen) return;
-    this.kid.goTo(clamp(x, bd.x0, bd.x1), clamp(y + 8, bd.y0, bd.y1));
+    this.kid.dest = [clamp(x, bd.x0, bd.x1), clamp(y + 8, bd.y0, bd.y1)];
+    this.kid.goTo(...this.kid.dest);
+    if (this.phase === 'play') this.steer(this.kid, ...this.kid.dest);
   }
 
   tapTag(x, y) {
     if (this.phase === 'ready') {
       const near = Math.hypot(this.vis.x - x, this.vis.y - 10 - y) < 18;
       if (!near) { this.runTo(x, y); return; }
+      if (this.locked) { this.pop('No more games today!', this.camX + this.W / 2, this.top + 30, '#ffa8a8', true); return; }
       this.phase = 'play'; this.start = this.t;
       this.tagged(this.vis, 1.5);
       return;
@@ -371,6 +436,7 @@ export class Play {
       return;
     }
     const age = this.t - this.start;
+    this.stepLevels(dt);
     k.speed = this.baseSpeed(k) * Math.max(0.5, 1 - 0.012 * age);
     if (age > 14) k.brain.set({ focus: 0.6 }); // tired: a drop of sweat
     const ready = this.t >= this.frozen;
@@ -380,7 +446,7 @@ export class Play {
       if (ready) {
         // aims a little ahead of where the kid's buddy is going, with a wobble
         const lead = 0.15;
-        v.goTo(clamp(k.x + k.vx * lead + Math.sin(this.t * 1.7) * 4, bd.x0, bd.x1), clamp(k.y + k.vy * lead, bd.y0, bd.y1));
+        this.steer(v, clamp(k.x + k.vx * lead + Math.sin(this.t * 1.7) * 4, bd.x0, bd.x1), clamp(k.y + k.vy * lead, bd.y0, bd.y1));
         if (Math.hypot(k.x - v.x, k.y - v.y) < TAG_REACH) {
           this.tags += 1;
           if (this.tags >= 2) {
@@ -406,11 +472,80 @@ export class Play {
       this.wander += (this.r() - 0.5) * dt * 6;
       ax += Math.cos(this.wander) * 0.35; ay += Math.sin(this.wander) * 0.35;
       const n = Math.hypot(ax, ay) || 1;
-      v.goTo(clamp(v.x + (ax / n) * 24, bd.x0, bd.x1), clamp(v.y + (ay / n) * 24, bd.y0, bd.y1));
+      this.steer(v, clamp(v.x + (ax / n) * 24, bd.x0, bd.x1), clamp(v.y + (ay / n) * 24, bd.y0, bd.y1));
       if (ready && Math.hypot(k.x - v.x, k.y - v.y) < TAG_REACH) this.tagged(v);
     }
     if (!ready) (this.it === 'kid' ? k : v).goTo((this.it === 'kid' ? k : v).x, (this.it === 'kid' ? k : v).y);
+    else if (k.dest) this.steer(k, ...k.dest);
     k.lookAt = [v.x, v.y - 10]; v.lookAt = [k.x, k.y - 10];
+  }
+
+  /** Holds each level, then scrolls to the next one with more obstacles. */
+  stepLevels(dt) {
+    const b = this.bounds;
+    if (this.scroll) {
+      const u = Math.min(1, (this.t - this.scroll.t0) / LEVEL_SCROLL);
+      const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      const cam = lerp(this.scroll.from, this.scroll.to, e);
+      const d = cam - this.camX;
+      this.camX = cam;
+      for (const p of [this.kid, this.vis]) { p.x += d; p.tx += d; if (p.dest) p.dest[0] += d; }
+      if (u >= 1) {
+        this.scroll = null; this.levelAt = this.t;
+        this.obstacles = this.obstacles.filter((o) => o.x > this.camX - 20);
+      }
+    } else if (this.t - (this.levelAt || this.start) >= LEVEL_HOLD) {
+      this.level += 1;
+      const to = this.camX + this.W;
+      this.obstacles.push(...levelObstacles(this.level, to, this.W, b.y0, b.y1, this.r));
+      this.scroll = { from: this.camX, to, t0: this.t };
+      this.pop(`Level ${this.level}! →`, this.camX + this.W / 2, this.top + 30, '#ffd43b', true);
+    }
+    // moving obstacles roll back and forth
+    for (const o of this.obstacles) {
+      if (!o.move) continue;
+      const a = Math.sin(this.t * o.move.speed + o.move.phase);
+      o.x = o.cx + o.move.dx * a; o.y = clamp(o.cy + o.move.dy * a, b.y0 + o.r, b.y1 - 2);
+    }
+  }
+
+  /** Sends a buddy toward (tx, ty), around any obstacle in the way. */
+  steer(p, tx, ty) {
+    let gx = tx; let gy = ty;
+    const dx = tx - p.x; const dy = ty - p.y; const len = Math.hypot(dx, dy);
+    if (len > 1) {
+      const ux = dx / len; const uy = dy / len;
+      let worst = null;
+      for (const o of this.obstacles || []) {
+        const ox = o.x - p.x; const oy = o.y - p.y;
+        const along = ox * ux + oy * uy;
+        if (along < 0 || along > Math.min(len, 40)) continue;
+        const side = ox * -uy + oy * ux;
+        const need = o.r + 7;
+        if (Math.abs(side) < need && (!worst || along < worst.along)) worst = { o, along, side, need };
+      }
+      if (worst) {
+        // aim past the obstacle's edge, on the side we're already leaning to
+        const turn = worst.side > 0 ? -1 : 1;
+        gx = worst.o.x + -uy * turn * (worst.need + 3) + ux * 4;
+        gy = worst.o.y + ux * turn * (worst.need + 3) + uy * 4;
+      }
+    }
+    const b = this.bounds;
+    p.goTo(clamp(gx, b.x0, b.x1), clamp(gy, b.y0, b.y1));
+  }
+
+  /** Buddies can't walk through obstacles, and the scrolling edge pushes them along. */
+  bump() {
+    const b = this.bounds;
+    for (const p of [this.kid, this.vis]) {
+      for (const o of this.obstacles || []) {
+        const dx = p.x - o.x; const dy = (p.y - o.y) * 1.4; const d = Math.hypot(dx, dy) || 0.01;
+        const need = o.r + 4;
+        if (d < need) { p.x = o.x + (dx / d) * need; p.y = o.y + (dy / d) * need / 1.4; }
+      }
+      p.x = clamp(p.x, b.x0 - 4, b.x1 + 4); p.y = clamp(p.y, b.y0 - 2, b.y1 + 2);
+    }
   }
 
   // ---------- drawing ----------
@@ -428,8 +563,8 @@ export class Play {
     }
     x.fillStyle = '#f1f3f5';
     const b = { x0: 4, y0: this.top + 6, x1: this.W - 5, y1: this.H - 2 };
-    x.fillRect(b.x0, b.y0, b.x1 - b.x0, 1); x.fillRect(b.x0, b.y1, b.x1 - b.x0 + 1, 1);
-    x.fillRect(b.x0, b.y0, 1, b.y1 - b.y0); x.fillRect(b.x1, b.y0, 1, b.y1 - b.y0);
+    if (this.kind !== 'tag') { x.fillRect(b.x0, b.y0, b.x1 - b.x0, 1); x.fillRect(b.x0, b.y1, b.x1 - b.x0 + 1, 1); } else x.fillRect(0, b.y1, this.W, 1);
+    if (this.kind !== 'tag') { x.fillRect(b.x0, b.y0, 1, b.y1 - b.y0); x.fillRect(b.x1, b.y0, 1, b.y1 - b.y0); } else x.fillRect(0, b.y0, this.W, 1);
     if (this.kind === 'soccer') {
       const cx = Math.round(this.W / 2); const cy = Math.round((b.y0 + b.y1) / 2);
       x.fillRect(cx, b.y0, 1, b.y1 - b.y0);
@@ -441,7 +576,12 @@ export class Play {
   /** Draws the field, buddies and ball on a W x H canvas. */
   draw(ctx) {
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(this.field, 0, 0);
+    const cam = Math.round(this.camX || 0);
+    const off = ((cam % this.W) + this.W) % this.W;
+    ctx.drawImage(this.field, -off, 0);
+    if (off) ctx.drawImage(this.field, this.W - off, 0);
+    ctx.save();
+    ctx.translate(-cam, 0);
     const things = [this.kid, this.vis].map((p) => ({ y: p.y, draw: () => p.draw(ctx) }));
     for (const p of [this.kid, this.vis]) p.paint(this.t);
     if (this.kind === 'soccer') {
@@ -462,7 +602,32 @@ export class Play {
       ctx.fillRect(Math.round(b.x - sw / 2), Math.round(b.y), sw, 1);
       things.push({ y: b.y + 0.5, draw: () => ctx.drawImage(this.ballPic, Math.round(b.x - 3), Math.round(b.y - b.h - 6)) });
     }
+    for (const o of this.obstacles || []) if (o.x > cam - 20 && o.x < cam + this.W + 20) things.push({ y: o.y, draw: () => this.drawObstacle(ctx, o) });
     things.sort((a, b) => a.y - b.y).forEach((th) => th.draw());
+    ctx.restore();
+  }
+
+  drawObstacle(ctx, o) {
+    const [base, light, dark] = OBSTACLE_PAL[o.kind];
+    const x = Math.round(o.x); const y = Math.round(o.y); const r = o.r;
+    const h = o.kind === 'rock' ? r : o.kind === 'barrel' ? r + 2 : r + 3; // how tall it stands
+    ctx.fillStyle = 'rgba(20,40,20,0.28)';
+    for (let i = -r; i <= r; i += 1) { const w = Math.round(Math.sqrt(r * r - i * i) * 0.4); ctx.fillRect(x + i, y - w + 1, 1, w * 2 || 1); }
+    // a rounded lump, outlined, lit from the top left
+    for (let yy = -h - r; yy <= 0; yy += 1) {
+      for (let xx = -r; xx <= r; xx += 1) {
+        const ny = (yy + h / 2 + r / 2) / ((h + r) / 2); const nx = xx / r;
+        const d = nx * nx + ny * ny;
+        if (d > 1) continue;
+        let c = base;
+        if (d > 0.78) c = '#1b1430';
+        else if (nx < -0.2 && ny < -0.2) c = light;
+        else if (nx > 0.35 || ny > 0.5) c = dark;
+        if (o.kind === 'barrel' && Math.abs(ny) < 0.1 && d <= 0.78) c = '#495057';
+        if (o.kind === 'hay' && d <= 0.78 && (yy + 64) % 3 === 0) c = dark;
+        ctx.fillStyle = c; ctx.fillRect(x + xx, y + yy, 1, 1);
+      }
+    }
   }
 
   /** Words and numbers, on a canvas `scale` times bigger than the field. */
@@ -483,23 +648,24 @@ export class Play {
       const free = this.phase === 'over' ? this.score : this.free;
       text(`${free.toFixed(1)} s`, W / 2, u * 2.6, u * 3.6, '#ffd43b');
       if (this.best) text(`Best ${this.best.toFixed(1)} s`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
+      if (this.phase !== 'ready') { ctx.textAlign = 'left'; text(`Level ${this.level}`, u * 1.2, u * 5.2, u * 1.6, '#ffffff'); ctx.textAlign = 'center'; }
       if (this.phase === 'play') {
         const msg = this.it === 'vis' ? `${this.vis.name} is IT! Run!` : `You're IT! Tag ${this.vis.name}!`;
         text(msg, W / 2, (this.H - 5) * S, u * 1.6, this.it === 'vis' ? '#ffffff' : '#ffd43b');
         if (this.t < this.frozen) {
           const p = this.it === 'kid' ? this.kid : this.vis;
-          text(String(Math.ceil(this.frozen - this.t)), p.x * S, (p.y - 28) * S, u * 2.2, '#ffffff');
+          text(String(Math.ceil(this.frozen - this.t)), (p.x - this.camX) * S, (p.y - 28) * S, u * 2.2, '#ffffff');
         }
       }
     }
     for (const p of this.pops) {
       const age = (this.t - p.at) / 1.1;
       ctx.globalAlpha = Math.min(1, (1 - age) * 3);
-      text(p.text, p.x * S, (p.y - age * 10) * S, u * (p.big ? 2.2 : 1.7), p.color);
+      text(p.text, (p.x - (this.camX || 0)) * S, (p.y - age * 10) * S, u * (p.big ? 2.2 : 1.7), p.color);
       ctx.globalAlpha = 1;
     }
     if (this.phase === 'ready') {
-      const msg = this.kind === 'soccer' ? 'Tap a buddy to kick off!' : `Tap ${this.vis.name} to start tag!`;
+      const msg = this.locked ? "That's all our games today!" : this.kind === 'soccer' ? 'Tap a buddy to kick off!' : `Tap ${this.vis.name} to start tag!`;
       if (Math.floor(this.t * 2) % 3) text(msg, W / 2, (this.H - 5) * S, u * 1.8);
     }
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
@@ -508,7 +674,7 @@ export class Play {
       const bw = Math.min(W * 0.8, u * 34); const bh = u * 9.5;
       ctx.fillRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
-      const line = this.kind === 'soccer' ? `${this.score} ${this.score === 1 ? 'kick' : 'kicks'}!` : `Free for ${this.score.toFixed(1)} seconds!`;
+      const line = this.kind === 'soccer' ? `${this.score} ${this.score === 1 ? 'kick' : 'kicks'}!` : `Free for ${this.score.toFixed(1)} s · level ${this.level}!`;
       text(line, W / 2, cy - u * 2.3, u * 2.6, '#ffd43b');
       text(this.newBest ? 'New best!' : `Best ${this.kind === 'soccer' ? this.best : `${this.best.toFixed(1)} s`}`, W / 2, cy + u * 0.4, u * 1.8, this.newBest ? '#b2f2bb' : '#e9ecef');
       if (this.t - this.overAt > 1.2) text('Tap to play again', W / 2, cy + u * 2.8, u * 1.5, '#ffffff');

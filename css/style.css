@@ -512,4 +512,5 @@ label { color: var(--ink); }
 .play-field { image-rendering: pixelated; image-rendering: crisp-edges; }
 .play-top { position: absolute; top: max(8px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; pointer-events: none; color: #fff; text-shadow: 2px 2px 0 #1b1430; font-size: 1.1rem; }
 .play-top b { flex: 1; }
+.play-left { display: block; font-size: 0.8rem; font-weight: 400; opacity: 0.9; }
 .play-close { pointer-events: auto; }
