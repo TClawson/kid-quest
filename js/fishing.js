@@ -23,13 +23,18 @@
 // press() / release() for holding anywhere, and onButton(x, y).
 import { Player, rng, canvas, clamp, HAPPY } from './play.js';
 
-export const GAME_SECONDS = 120;
+export const GAME_SECONDS = 90;
 const FEET = 7 + 16; // SPRITE_Y + 16, as in play.js
 const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
 const SWEEP = 0.8; // seconds for the cast needle to cross the meter
 const HOLD = 0.18; // a press longer than this is reeling, shorter is a twitch
 export const SNAG = { weed: 0.1, log: 0.5 };
 export const TWITCH_STRIKE = 0.55;
+/** Points for a catch: each kind's base, up to 2.5x for the biggest; the map's special fish is worth the most. */
+export const POINTS = { bluegill: 10, smallmouth: 20, largemouth: 25, pike: 35, catfish: 35, special: 60 };
+export const pointsFor = (kind, size) => Math.round((POINTS[kind] || 10) * (1 + 1.5 * size));
+/** Bigger fish are pickier: a bait has to be at least this good for them to look at it (size 0-1). */
+export const pickiness = (size) => 0.1 + 0.35 * size;
 
 // ---------- fish ----------
 // len: [smallest, biggest] in field pixels; inches: the same range in inches.
@@ -212,12 +217,19 @@ export class Fishing {
     this.spot = spotFor(opts.map);
     this.today = baitToday(opts.day || 'today');
     if (this.spot.special) for (const b of BAITS) this.today[b][this.spot.special.id] = this.spot.special.like[b];
-    this.t = 0; this.pops = []; this.best = opts.best || {};
+    this.t = 0; this.pops = []; this.best = opts.best || 0;
+    this.score = { kid: 0, vis: 0 }; this.newBest = false;
     this.surface = Math.round(this.H * 0.36);
     this.bankX = Math.max(46, Math.round(this.W * 0.21));
-    // the underwater bank: nothing goes left of this at depth y
-    this.shoreX = (y) => this.bankX + 22 - Math.max(0, y - this.surface) / 3.2;
-    this.bedAt = (x) => Math.round(this.H - 9 + 1.6 * Math.sin(x / 13) + Math.sin(x / 5.3));
+    // the lake bed slopes up to the shore under the buddies, then runs along the bottom
+    this.slopeRun = Math.round((this.W - this.bankX) * 0.34);
+    const deepest = this.H - 9 - this.surface;
+    this.slopeK = deepest / this.slopeRun; // pixels down for each pixel out
+    const floor = (x) => Math.round(this.H - 9 + 1.6 * Math.sin(x / 13) + Math.sin(x / 5.3));
+    this.bedAt = (x) => (x <= this.bankX ? this.surface + 2 : Math.min(floor(x), Math.round(this.surface + 2 + (x - this.bankX) * this.slopeK)));
+    // the slope: nothing at depth y goes left of this
+    this.shoreX = (y) => this.bankX + Math.max(0, y - this.surface - 2) / this.slopeK;
+    this.leftLimit = this.bankX + this.slopeRun * 0.55;
     const rod = (b) => ({ ...b, outfit: { ...(b?.outfit || {}), music: undefined, sport: `sport-rod-${['regular', 'good', 'super'][Math.max(0, Math.min(2, (opts.kid.gear?.rod || 1) - 1))]}` } });
     this.kid = new Player(rod(opts.kid.buddy), opts.kid.name, 11, this.bankX - 13, this.surface - 3);
     this.vis = new Player(rod(opts.visitor.buddy), opts.visitor.name, 23, this.bankX - 32, this.surface - 3);
@@ -248,13 +260,14 @@ export class Fishing {
     this.weeds = []; this.logs = [];
     const n = Math.max(3, Math.round(W / 50));
     for (let i = 0; i < n; i += 1) {
-      const x = Math.round(this.bankX + 26 + ((W - this.bankX - 34) * (i + 0.2 + r() * 0.6)) / n);
-      const h = Math.round((this.H - this.surface) * (0.25 + r() * 0.35));
+      const x = Math.round(this.bankX + this.slopeRun * 0.45 + ((W - this.bankX - this.slopeRun * 0.45 - 8) * (i + 0.2 + r() * 0.6)) / n);
+      const h = Math.round((this.bedAt(x) - this.surface) * (0.3 + r() * 0.35));
       this.weeds.push({ x, w: 7 + Math.round(r() * 5), h, top: this.bedAt(x) - h, seed: r() * 10 });
     }
     const nl = W > 160 ? 2 : 1;
     for (let i = 0; i < nl; i += 1) {
-      const x = Math.round(this.bankX + 30 + (W - this.bankX - 70) * (i / nl + r() * 0.35 / nl) + 20 * i);
+      const x0 = this.bankX + this.slopeRun + 4;
+      const x = Math.round(x0 + (W - x0 - 40) * (i / nl + (r() * 0.35) / nl) + 10 * i);
       const len = 20 + Math.round(r() * 10);
       this.logs.push({ x, len, y: this.bedAt(x + len / 2) - 4, h: 4 });
     }
@@ -292,21 +305,16 @@ export class Fishing {
     if (sp.coral) for (let i = 0; i < W / 30; i += 1) this.paintCoral(x, Math.floor(this.bankX + 20 + r() * (W - this.bankX - 20)), r);
     // the shore: land at the top left, a muddy slope down into the water
     const L = sp.land;
-    for (let i = 0; i < this.bankX + 18; i += 1) {
-      const top = i < this.bankX ? S - 3 : S - 3 + Math.round((i - this.bankX) * 0.9);
-      const slope = i < this.bankX - 2 ? H : Math.min(H, S + Math.round((this.bankX + 22 - i) * 3.2));
-      if (i >= this.bankX) { rect(L[2], i, S + 1, 1, Math.max(0, slope - S - 1)); continue; }
+    for (let i = 0; i < this.bankX; i += 1) {
+      const top = S - 3;
       rect(L[0], i, top, 1, 2);
       rect(L[1], i, top + 2, 1, 2);
       rect(L[2], i, top + 4, 1, H - top - 4);
       if (r() < 0.2) rect(L[1], i, top + 6 + Math.floor(r() * (H - top - 8)), 1, 1);
       if (r() < 0.05) { const sy = top + 10 + Math.floor(r() * (H - top - 16)); rect('#1b1430', i, sy, 4, 3); rect(L[0] === L[2] ? '#adb5bd' : L[1], i, sy, 3, 2); }
     }
-    for (let i = this.bankX - 2; i < this.bankX + 22; i += 1) {
-      const slope = Math.min(H, S + Math.round((this.bankX + 22 - i) * 3.2));
-      rect(L[2], i, S + 1, 1, Math.max(0, slope - S - 1));
-      if (i % 3 === 0) rect(L[1], i, slope - 2, 1, 1);
-    }
+    // pebbles where the slope meets the shore
+    for (let i = this.bankX; i < this.bankX + this.slopeRun * 0.3; i += 3) if (r() < 0.6) rect(sp.bed[1], i, this.bedAt(i), 2, 1);
     // grass tufts on the bank
     for (let i = 1; i < this.bankX - 1; i += 4) rect(L[1], i, S - 4, 1, 1);
     // logs on the bottom
@@ -457,12 +465,9 @@ export class Fishing {
   }
 
   seedFish() {
-    this.spawn('bluegill', true);
-    this.spawn('catfish', true);
-    this.spawn('pike', true);
-    this.spawn('largemouth', true);
-    if (this.spot.special) this.spawn('special', true);
-    this.nextSpawn = 4;
+    // the lake starts empty and fills up as fish swim in from the right
+    this.arrivals = [[0, 'bluegill'], [0.7, 'largemouth'], [1.5, 'catfish'], [2.4, 'pike'], [3.4, this.pickKind()]];
+    this.nextSpawn = 6;
   }
 
   makeFish(kind, x, y, move) {
@@ -481,15 +486,16 @@ export class Fishing {
     return f;
   }
 
-  spawn(kind, onScreen = false) {
+  /** A new fish (or school) just off the right edge; it swims onto the screen. */
+  spawn(kind) {
     const W = this.W; const S = this.surface; const deep = this.H - S;
     const side = this.r() < 0.5 ? -1 : 1;
-    const edgeX = side < 0 ? this.bankX + 6 - 30 : W + 30;
+    const edgeX = W + 50; // the left side is the shore, so new fish swim in from the right
     const move = kind === 'special' ? MOVES[this.spot.special.as] : MOVES[kind];
-    const startX = onScreen ? this.bankX + 30 + this.r() * (W - this.bankX - 50) : edgeX;
+    const startX = edgeX;
     if (move === 'school') {
       const cy = S + deep * (0.3 + this.r() * 0.3);
-      const school = { x: startX, y: cy, dir: side < 0 ? 1 : -1, speed: 5 + this.r() * 3, born: this.t, life: 12 + this.r() * 18, members: [] };
+      const school = { x: startX, y: cy, dir: -1, speed: 5 + this.r() * 3, born: this.t, life: 12 + this.r() * 18, members: [] };
       const n = 5 + Math.floor(this.r() * 5);
       for (let i = 0; i < n; i += 1) {
         const f = this.makeFish(kind, startX, cy, 'school');
@@ -504,31 +510,32 @@ export class Fishing {
     }
     if (move === 'shadow') {
       const sc = this.schools.find((s) => !s.gone);
-      if (!sc) return this.spawn('largemouth', onScreen);
+      if (!sc) return this.spawn('largemouth');
       const f = this.makeFish(kind, startX, sc.y, 'shadow'); f.school = sc; f.ox = (this.r() < 0.5 ? -1 : 1) * (18 + this.r() * 8); f.oy = 4 + this.r() * 6;
       return;
     }
     if (move === 'lurk') {
       const w = this.weeds[Math.floor(this.r() * this.weeds.length)];
       const y = this.bedAt(w.x) - 4 - this.r() * Math.max(4, w.h * 0.6);
-      const f = this.makeFish(kind, onScreen ? w.x + (this.r() - 0.5) * 10 : edgeX, y, 'lurk');
+      const f = this.makeFish(kind, edgeX, y, 'lurk');
       f.post = [w.x + (this.r() - 0.5) * 10, y]; f.life = 15 + this.r() * 25;
       return;
     }
     if (move === 'bottom') {
       const g = this.logs[Math.floor(this.r() * this.logs.length)];
       const px = g.x + (this.r() < 0.5 ? -8 : g.len + 6);
-      const f = this.makeFish(kind, onScreen ? px : edgeX, this.bedAt(px) - 3, 'bottom');
+      const f = this.makeFish(kind, edgeX, this.bedAt(px) - 3, 'bottom');
       f.post = [px, this.bedAt(px) - 2]; f.life = 18 + this.r() * 30;
       return;
     }
     // cruise: mostly one depth, near the weeds for largemouth
     const y = S + deep * (0.2 + this.r() * 0.55);
-    this.makeFish(kind, startX, y, 'cruise');
+    this.makeFish(kind, startX, y, 'cruise').dir = -1;
   }
 
   stepFish(dt) {
     const W = this.W; const S = this.surface;
+    while (this.arrivals.length && this.t >= this.arrivals[0][0]) this.spawn(this.arrivals.shift()[1]);
     if (this.t >= this.nextSpawn) {
       this.nextSpawn = this.t + 3 + this.r() * 5;
       const loose = this.fish.filter((f) => f.move !== 'school').length;
@@ -540,8 +547,10 @@ export class Fishing {
       const leaving = age > sc.life;
       sc.x += sc.dir * sc.speed * dt;
       sc.y += Math.sin(this.t * 0.3 + sc.born) * 1.5 * dt;
-      if (!leaving && (sc.x < this.bankX + 34 || sc.x > W - 18)) sc.dir = sc.x < W / 2 ? 1 : -1;
-      if (sc.x < this.bankX - 40 || sc.x > W + 40) sc.gone = true;
+      if (!leaving && sc.x < this.leftLimit + 8) sc.dir = 1;
+      if (!leaving && sc.x > W - 18) sc.dir = -1;
+      if (leaving) sc.dir = 1;
+      if (sc.x > W + 60) sc.gone = true;
     }
     for (const f of this.fish) {
       const age = this.t - f.born;
@@ -565,27 +574,34 @@ export class Fishing {
       } else if (f.move === 'lurk' || f.move === 'bottom') {
         if (leaving) {
           // swim up a bit, then off the nearest side
-          tx = f.x + f.dir * 40; ty = Math.max(S + 10, (f.post?.[1] ?? f.y) - 14); f.dir = f.x < W / 2 + 20 ? -1 : 1; if (f.x < this.bankX + 30) f.dir = 1;
+          f.dir = 1; tx = f.x + 40; ty = Math.max(S + 10, (f.post?.[1] ?? f.y) - 14);
         } else {
           const [px, py] = f.post;
           const drift = Math.sin(this.t * 0.25 + f.wob);
           tx = px + drift * (f.move === 'bottom' ? 6 : 3); ty = py + (f.move === 'lurk' ? Math.sin(this.t * 0.6 + f.wob) * 1.5 : 0);
-          spd = f.move === 'lurk' && Math.hypot(px - f.x, py - f.y) > 8 ? f.speed : f.speed * 0.35;
-          if (Math.abs(tx - f.x) > 0.6) f.dir = tx > f.x ? 1 : -1;
+          spd = Math.hypot(px - f.x, py - f.y) > 8 ? f.speed * (f.move === 'bottom' ? 2 : 1) : f.speed * 0.35;
+          if (Math.abs(tx - f.x) > 2) f.dir = tx > f.x ? 1 : -1;
         }
       } else {
         // cruise
-        if (!leaving && (f.x < this.bankX + 34 || f.x > W - 14) && Math.sign(f.dir) === (f.x < W / 2 ? -1 : 1)) f.dir *= -1;
+        if (leaving) f.dir = 1;
+        else if (f.x < this.leftLimit && f.dir < 0) f.dir = 1;
+        else if (f.x > W - 14 && f.dir > 0) f.dir = -1;
         tx = f.x + f.dir * 20; ty = f.homeY + Math.sin(this.t * 0.4 + f.wob) * 4;
       }
       ty = clamp(ty, S + 4, this.bedAt(f.x) - 2);
       const dx = tx - f.x; const dy = ty - f.y; const d = Math.hypot(dx, dy);
       if (d > 0.3) { const k = Math.min(1, (spd * dt) / d); f.x += dx * k; f.y += dy * k; }
-      if (f.x < this.bankX - 40 || f.x > W + 40) f.gone = true;
+      if (f.x > W + 60) f.gone = true;
       if (leaving && (f.move === 'cruise' || (f.move === 'school' && f.school?.gone))) { /* they swim off on their own */ }
       // keep out of the bank
-      const shore = this.shoreX(f.y) + f.len / 2;
-      if (f.x < shore) { f.x = shore; if (f.state === 'flee' || leaving) f.dir = 1; }
+      // stay off the slope
+      const shore = this.shoreX(f.y + 3) + f.len * 0.5;
+      if (f.x < shore) f.x = shore;
+      if (f.y > this.bedAt(f.x) - 2) f.y = this.bedAt(f.x) - 2;
+      // which way the picture faces: only turns after a short while, so it never flickers
+      if (f.face === undefined) f.face = f.dir;
+      if (f.dir !== f.face && (f.state === 'hooked' || this.t - (f.turnAt || -9) > 0.7)) { f.face = f.dir; f.turnAt = this.t; }
     }
     this.fish = this.fish.filter((f) => !f.gone);
     this.schools = this.schools.filter((s) => !s.gone || this.fish.some((f) => f.school === s));
@@ -615,12 +631,12 @@ export class Fishing {
   /** Tap: a quick twitch of the bait. */
   twitch(L) {
     if (L.state !== 'water') return;
-    L.y = Math.max(this.surface + 2, L.y - 3); L.x = Math.max(this.bankX + 20, L.x - 2); L.twitchAt = this.t;
+    L.y = Math.max(this.surface + 2, L.y - 3); L.x = Math.max(this.bankX + 4, L.x - 2); L.twitchAt = this.t;
     for (const f of this.fish) {
       if (f.line !== L || f.state !== 'interest') continue;
       if (Math.hypot(f.x - L.x, f.y - L.y) > 12 + f.len / 2) continue;
       // biased slightly toward a strike; big fish are a little warier
-      if (this.r() < TWITCH_STRIKE - f.size * 0.1) this.hook(L, f); else this.spook(f, 'Spooked!');
+      if (this.r() < TWITCH_STRIKE - f.size * 0.15) this.hook(L, f); else this.spook(f, 'Spooked!');
       break;
     }
   }
@@ -633,7 +649,7 @@ export class Fishing {
   }
 
   spook(f, msg) {
-    f.state = 'flee'; f.line = null; f.dir = f.x < this.W * 0.6 ? 1 : -1;
+    f.state = 'flee'; f.line = null; f.dir = 1;
     f.life = 0;
     if (msg) this.pop(msg, f.x, f.y - 5, '#ff8787');
   }
@@ -659,18 +675,18 @@ export class Fishing {
     }
     if (L.state === 'fight') return this.stepFight(L, dt, holding);
     if (L.state !== 'water') return;
-    const bed = L.x < this.bankX + 24 ? Math.min(this.bedAt(L.x) - 1, this.surface + (this.bankX + 24 - L.x) * 3.2) : this.bedAt(L.x) - 1;
+    const bed = this.bedAt(L.x) - 1;
     const [rx] = this.rodTip(L.who);
     if (holding) {
       // reel toward the bank, rising a little
-      const tx = this.bankX + 24; const ty = S + 1;
+      const tx = this.bankX + 3; const ty = S + 1;
       const dx = tx - L.x; const dy = ty - L.y; const d = Math.hypot(dx, dy);
       const sp = 24 * dt;
       L.x += (dx / d) * sp; L.y += (dy / d) * sp * 0.55;
       // up along the bank instead of into it
-      if (L.x < this.shoreX(L.y) + 2) { L.x = this.shoreX(L.y) + 2; L.y -= sp; }
-      L.y = Math.max(S + 1, L.y);
-      if (d < 3 || (L.x <= this.bankX + 26 && L.y <= S + 3)) { L.state = 'idle'; this.pop('Reeled in', rx + 10, S - 8, '#ffffff'); return; }
+      // up along the slope, never into it
+      L.y = clamp(L.y, S + 1, this.bedAt(L.x) - 1);
+      if (d < 3 || (L.x <= this.bankX + 6 && L.y <= S + 3)) { L.state = 'idle'; this.pop('Reeled in', rx + 10, S - 8, '#ffffff'); return; }
     } else if (L.y < bed) {
       L.y = Math.min(bed, L.y + BAIT[L.bait].sink * dt);
     }
@@ -692,11 +708,11 @@ export class Fishing {
       if (f.state === 'swim' && d < SPECIES[f.kind === 'special' ? this.spot.special.as : f.kind].reach && this.t >= f.checkAt) {
         f.checkAt = this.t + 0.5;
         if (like < 0) { const sc = f.school; for (const o of this.fish) if (o.school === sc && o.move === 'school') this.spook(o); if (sc) sc.gone = true; this.pop('Eek! A spoon!', f.x, f.y - 6, '#ff8787'); continue; }
-        if (this.r() < like * 0.3 * (1 - 0.4 * f.size)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
+        if (like >= pickiness(f.size) && this.r() < like * 0.3 * (1 - 0.5 * f.size)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
       } else if (f.state === 'interest') {
         if (this.t - f.since > 8) { f.state = 'swim'; f.line = null; continue; }
         // sometimes they just take it
-        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * dt) { this.hook(L, f); return; }
+        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.size) * dt) { this.hook(L, f); return; }
       }
     }
   }
@@ -717,11 +733,11 @@ export class Fishing {
     if (holding) {
       L.tension += (pull * 0.9 - 0.15) * dt;
       const sp = Math.max(4, 22 - pull * 14) * dt;
-      const tx = this.bankX + 24; const ty = S + 1;
+      const tx = this.bankX + 3; const ty = S + 1;
       const dx = tx - L.x; const dy = ty - L.y; const d = Math.hypot(dx, dy);
       L.x += (dx / d) * sp; L.y += (dy / d) * sp * 0.6;
-      if (L.x < this.shoreX(L.y) + 2) { L.x = this.shoreX(L.y) + 2; L.y -= sp; }
-      L.y = Math.max(S + 1, L.y);
+      // up along the slope, never into it
+      L.y = clamp(L.y, S + 1, this.bedAt(L.x) - 1);
       f.stamina = Math.max(0, f.stamina - dt * (0.25 + L.tension * 0.3));
     } else {
       L.tension -= 0.6 * dt;
@@ -732,15 +748,16 @@ export class Fishing {
     L.tension = clamp(L.tension, 0, 1.05);
     f.x = L.x + f.len * 0.45; f.y = L.y + 1; f.dir = 1;
     if (L.tension >= 1) { this.pop('Snap! It got away', L.x, L.y - 6, '#ff8787', true); this.spook(f); L.state = 'idle'; L.fish = null; return; }
-    if (L.x <= this.bankX + 26 && L.y <= S + 4) this.land(L, f);
+    if (L.x <= this.bankX + 6 && L.y <= S + 4) this.land(L, f);
   }
 
   land(L, f) {
     L.state = 'idle'; L.fish = null; f.gone = true;
-    const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, kind: f.likeKey, pic: f.pic, at: this.t };
+    const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special' };
+    this.score[c.who] += c.points;
     this.catches.push(c);
     if (c.who === 'kid') this.showCatch = c;
-    this.pop(c.who === 'kid' ? `${f.inches} in!` : `${this.vis.name}: ${f.inches} in ${f.name}!`, c.who === 'kid' ? L.who.x + 10 : this.W / 2, this.surface - 30, '#b2f2bb', true);
+    this.pop(c.who === 'kid' ? `+${c.points}` : `${this.vis.name}: ${f.name} +${c.points}`, c.who === 'kid' ? L.who.x + 10 : this.W / 2, this.surface - 30, '#b2f2bb', true);
     L.who.brain.set({ ...HAPPY, valence: 1, arousal: 0.8 });
   }
 
@@ -751,7 +768,7 @@ export class Fishing {
   // ---------- the visitor fishes too ----------
   stepAI(dt) {
     const L = this.lines.vis;
-    if (L.state === 'idle' && this.t > this.ai.next) { L.bait = BAITS[Math.floor(this.r() * 3)]; this.startCast(L); this.ai.release = this.t + 0.4 + this.r() * 1.2; }
+    if (L.state === 'idle' && this.t > this.ai.next && this.left > 3) { L.bait = BAITS[Math.floor(this.r() * 3)]; this.startCast(L); this.ai.release = this.t + 0.4 + this.r() * 1.2; }
     if (L.state === 'aim' && this.t >= this.ai.release) { this.cast(L); this.ai.reelAt = this.t + 2 + this.r() * 3; }
     let holding = false;
     if (L.state === 'water') {
@@ -783,7 +800,9 @@ export class Fishing {
 
   tap(x, y) {
     const L = this.lines.kid;
+    if (this.phase === 'over') { if (this.t - this.overAt > 1.2) this.restart(); return; }
     if (this.tapBait(x, y)) return;
+    if (this.left <= 0 && (L.state === 'idle' || L.state === 'aim')) return;
     if (this.onButton(x, y) || L.state === 'idle' || L.state === 'aim') {
       if (L.state === 'idle') { L.bait = this.bait; this.startCast(L); } else if (L.state === 'aim') this.cast(L);
       return;
@@ -801,10 +820,26 @@ export class Fishing {
   }
 
   // ---------- the clock ----------
+  /** Time's up: the session ends once any fish on the kid's line is landed or lost. */
+  finish() {
+    this.phase = 'over'; this.overAt = this.t;
+    for (const L of Object.values(this.lines)) { if (L.fish) this.spook(L.fish); L.state = 'idle'; L.fish = null; L.held = false; }
+    this.newBest = this.score.kid > this.best;
+    if (this.newBest) this.best = this.score.kid;
+    this.showCatch = null;
+  }
+
+  restart() {
+    this.phase = 'play'; this.left = GAME_SECONDS; this.score = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false;
+    this.ai.next = this.t + 2;
+  }
+
   step(dt) {
     this.t += dt;
+    if (this.phase === 'over') { this.stepFish(dt); for (const p of [this.kid, this.vis]) p.move(dt); this.pops = this.pops.filter((p) => this.t - p.at < 1.4); return; }
     this.left = Math.max(0, this.left - dt);
     const L = this.lines.kid;
+    if (this.left <= 0 && L.state !== 'fight') { this.finish(); return; }
     const holding = L.held && this.t - L.downAt >= HOLD;
     this.stepLine(L, dt, holding);
     this.stepAI(dt);
@@ -822,7 +857,7 @@ export class Fishing {
     for (const f of this.fish) {
       const x = Math.round(f.x - f.pic.width / 2); const y = Math.round(f.y - f.pic.height / 2);
       ctx.save();
-      if (f.dir > 0) { ctx.translate(Math.round(f.x) * 2, 0); ctx.scale(-1, 1); }
+      if ((f.face ?? f.dir) > 0) { ctx.translate(Math.round(f.x) * 2, 0); ctx.scale(-1, 1); }
       ctx.drawImage(f.pic, x, y);
       ctx.restore();
     }
@@ -889,7 +924,12 @@ export class Fishing {
     }
     // clock
     const secs = Math.ceil(this.left);
-    text(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, (this.chips()[0].y + 16) * S, u * 1.3, '#e9ecef');
+    text(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, (this.chips()[0].y + 16) * S, u * 1.3, secs <= 10 && this.phase === 'play' ? '#ff8787' : '#e9ecef');
+    // points
+    const ch0 = this.chips()[0]; const ch2 = this.chips()[2];
+    ctx.textAlign = 'right'; text(`${this.kid.name} ${this.score.kid}`, (ch0.x - 3) * S, (ch0.y + 6) * S, u * 1.5, '#ffd43b');
+    ctx.textAlign = 'left'; text(`${this.vis.name} ${this.score.vis}`, (ch2.x + ch2.w + 3) * S, (ch2.y + 6) * S, u * 1.5, '#ffffff');
+    ctx.textAlign = 'center';
     // the spot's name
     ctx.textAlign = 'right'; text(this.spot.name, W - u * 1.2, (this.surface - 4) * S, u * 1.2, '#ffffff'); ctx.textAlign = 'center';
 
@@ -939,7 +979,18 @@ export class Fishing {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(c.pic, W / 2 - (c.pic.width * z) / 2, cy + u * 1.2, c.pic.width * z, c.pic.height * z);
       text(`${c.who === 'kid' ? this.kid.name : this.vis.name} caught a ${c.name}!`, W / 2, cy + ch - u * 3.2, u * 1.6, '#ffd43b');
-      text(`${c.inches} inches`, W / 2, cy + ch - u * 1.3, u * 1.3, '#ffffff');
+      text(`${c.inches} inches · +${c.points} points${c.rare ? ' · RARE!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare ? '#ffd43b' : '#ffffff');
+    }
+    if (this.phase === 'over' && this.t - this.overAt > 0.3) {
+      const cy = (this.surface + 22) * S;
+      const bw = Math.min(W * 0.84, u * 34); const bh = u * 11;
+      ctx.fillStyle = 'rgba(27,20,48,0.88)'; ctx.fillRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
+      ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
+      const mine = this.catches.filter((c) => c.who === 'kid');
+      text(`Time's up! ${this.score.kid} points`, W / 2, cy - u * 3.2, u * 2.4, '#ffd43b');
+      text(`${mine.length} ${mine.length === 1 ? 'fish' : 'fish'} · ${this.vis.name} got ${this.score.vis}`, W / 2, cy - u * 0.7, u * 1.4, '#e9ecef');
+      text(this.newBest ? 'New best!' : `Best ${this.best} points`, W / 2, cy + u * 1.5, u * 1.6, this.newBest ? '#b2f2bb' : '#e9ecef');
+      if (this.t - this.overAt > 1.2) text('Tap to fish again', W / 2, cy + u * 3.7, u * 1.3, '#ffffff');
     }
   }
 }
