@@ -43,7 +43,85 @@ function play(notes, step, dur, type, vol) {
 
 const N = { C4: 261.6, E4: 329.6, G4: 392, C5: 523.3, D5: 587.3, E5: 659.3, F5: 698.5, G5: 784, A5: 880, B5: 987.8, C6: 1046.5, E6: 1318.5, G6: 1568 };
 
+/** Noise for rain and thunder: a couple of seconds, made once. */
+let noise = null;
+function noiseBuffer(ac) {
+  if (noise && noise.sampleRate === ac.sampleRate) return noise;
+  noise = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+  const d = noise.getChannelData(0);
+  for (let i = 0; i < d.length; i += 1) d[i] = Math.random() * 2 - 1;
+  return noise;
+}
+
+/**
+ * The rainforest's rain: a soft hiss that follows the shower (level 0 to 1). It stops itself a
+ * little after the level drops to 0, and stays silent when sounds are off.
+ */
+let rain = null; // { src, gain, level, stopTimer }
+export function setRain(level = 0) {
+  const k = Math.max(0, Math.min(1, level));
+  if (!rain && k <= 0) return;
+  const ac = k > 0 ? audio() : ctx;
+  if (!ac) return;
+  if (!rain) {
+    const src = ac.createBufferSource();
+    src.buffer = noiseBuffer(ac);
+    src.loop = true;
+    // high, airy hiss for the drops, with a little low patter under it
+    const hi = ac.createBiquadFilter(); hi.type = 'bandpass'; hi.frequency.value = 2400; hi.Q.value = 0.5;
+    const lo = ac.createBiquadFilter(); lo.type = 'lowpass'; lo.frequency.value = 500;
+    const gain = ac.createGain();
+    gain.gain.value = 0.0001;
+    const loGain = ac.createGain(); loGain.gain.value = 0.6;
+    src.connect(hi).connect(gain);
+    src.connect(lo).connect(loGain).connect(gain);
+    gain.connect(ac.destination);
+    src.start();
+    rain = { src, gain, level: 0, stopTimer: 0 };
+  }
+  if (Math.abs(k - rain.level) < 0.02 && !(k === 0 && rain.level > 0)) return;
+  rain.level = k;
+  const t = ac.currentTime;
+  rain.gain.gain.cancelScheduledValues(t);
+  rain.gain.gain.setValueAtTime(Math.max(0.0001, rain.gain.gain.value), t);
+  rain.gain.gain.linearRampToValueAtTime(Math.max(0.0001, 0.09 * k), t + 0.3);
+  clearTimeout(rain.stopTimer);
+  if (k === 0) {
+    const r = rain;
+    r.stopTimer = setTimeout(() => {
+      if (rain !== r) return;
+      try { r.src.stop(); } catch { /* already stopped */ }
+      r.gain.disconnect();
+      rain = null;
+    }, 800);
+  }
+}
+
+/** A low, rolling rumble of thunder (a few seconds). */
+function thunder() {
+  const ac = audio();
+  if (!ac) return;
+  const t = ac.currentTime + 0.05;
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer(ac);
+  src.loop = true;
+  const lo = ac.createBiquadFilter(); lo.type = 'lowpass'; lo.frequency.setValueAtTime(260, t); lo.frequency.exponentialRampToValueAtTime(90, t + 3);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  // a crack, then rolls that fade away
+  g.gain.exponentialRampToValueAtTime(0.5, t + 0.08);
+  g.gain.exponentialRampToValueAtTime(0.18, t + 0.6);
+  g.gain.linearRampToValueAtTime(0.32, t + 1.0);
+  g.gain.exponentialRampToValueAtTime(0.08, t + 1.9);
+  g.gain.linearRampToValueAtTime(0.14, t + 2.3);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 3.6);
+  src.connect(lo).connect(g).connect(ac.destination);
+  src.start(t);
+  src.stop(t + 3.8);
+}
+
 export const sounds = {
+  thunder,
   tap: () => play([N.E5], 0, 0.08, 'sine', 0.12),
   task: () => play([N.C6, N.E6, N.G6], 0.07, 0.25, 'triangle', 0.22),
   pending: () => play([N.G5, N.E5], 0.1, 0.2, 'sine', 0.15),

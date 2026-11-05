@@ -3,7 +3,8 @@
 // on a second canvas over the land (under the stops), with the same pixel size as the map. Events
 // happen where the kid is looking.
 
-import { sounds } from './fx.js';
+import { sounds, setRain } from './fx.js';
+import { duckMusic } from './music.js';
 
 const OUT = '#2a1838';
 const FPS = 12.5;
@@ -1161,7 +1162,10 @@ function jungleLife(m) {
   };
 
   const stepRain = (t, view) => {
-    if (!s.rain && !s.toucan && t > s.nextRain) s.rain = { t: 0, len: Math.round(FPS * 8) };
+    if (!s.rain && !s.toucan && t > s.nextRain) {
+      s.rain = { t: 0, len: Math.round(FPS * 8) };
+      sounds.thunder();
+    }
     const r = s.rain;
     jag.t += 1;
     if (r) {
@@ -1170,7 +1174,9 @@ function jungleLife(m) {
       const k = Math.min(1, r.t / 10, (r.len - r.t) / 10);
       r.k = Math.max(0, k);
       for (let i = 0; i < 9 * r.k; i += 1) s.drops.push({ x: rand(-10, m.aw), y: rand(view.top - 10, view.bottom), life: Math.floor(rand(3, 6)) });
-      if (r.t >= r.len) { s.rain = null; s.nextRain = t + rand(80000, 140000); jag.mode = 'shake'; jag.t = 0; }
+      setRain(r.k);
+      duckMusic(r.k);
+      if (r.t >= r.len) { s.rain = null; setRain(0); duckMusic(0); s.nextRain = t + rand(80000, 140000); jag.mode = 'shake'; jag.t = 0; }
     } else if (jag.mode === 'shake' && jag.t > 14) { jag.mode = 'nap'; jag.t = 0; }
     for (const d of s.drops) { d.x += 1; d.y += 5; d.life -= 1; if (d.life === 0) s.splash.push({ x: d.x, y: d.y, life: 3 }); }
     for (const p of s.splash) p.life -= 1;
@@ -1220,6 +1226,8 @@ function jungleLife(m) {
 
   return {
     s, jag, monkey, fall, vines,
+    // off the map (or the app hidden): the rain goes quiet; the next step brings it back if it is still raining
+    quiet() { setRain(0); duckMusic(0); },
     where: () => (s.toucan ? { x: s.toucan.x + TW / 2, y: s.toucan.y + 4 } : s.sloth ? { x: s.sloth.x + SW / 2, y: vineY(s.sloth.v, s.sloth.x) + 6 } : { x: monkey.x, y: monkey.y }),
     poke(x, y) {
       const c = s.toucan;
@@ -1400,8 +1408,8 @@ export function startMapLife(m) {
   }
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const tick = () => {
-    if (!canvas.isConnected) { clearInterval(running.get(m.section)); return; }
-    if (document.visibilityState === 'hidden') return;
+    if (!canvas.isConnected) { clearInterval(running.get(m.section)); actor.quiet?.(); return; }
+    if (document.visibilityState === 'hidden') { actor.quiet?.(); return; }
     const t = performance.now() - t0;
     // a frame's worth of time since the last step (a redraw can call this early)
     if (t - keep.last >= FRAME * 0.8) {
