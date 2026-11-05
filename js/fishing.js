@@ -21,8 +21,9 @@
 // bait works best changes a little every day (the same for everyone that day).
 //
 // Fish on: hold to reel, let go when the line gets too tight or it snaps. Big
-// fish pull harder and make runs. A better rod gives a wider green and a
-// stronger line. Points for each catch: more for rarer and bigger fish.
+// fish pull harder and make runs. A better rod gives a wider green, a
+// stronger line, twitches that hook more often instead of spooking, and (the
+// kid's rod) more visits from the map's rare fish. Points for each catch: more for rarer and bigger fish.
 //
 // Same interface as Play in play.js (tap, step, draw, drawHud, score, phase).
 // holdAnywhere: a finger held down anywhere reels, so playground.js calls
@@ -40,7 +41,11 @@ export const SNAG = { weed: 0.1, log: 0.5 };
  * Small fish 44%, the biggest 20% (Taylor, 2026-11-05: big fish half as likely as
  * before, small ones 20% less).
  */
-export const strikeChance = (size) => 0.44 - 0.24 * size;
+export const strikeChance = (size, tier = 1) => 0.44 - 0.24 * size + RODS_STRIKE * (Math.max(1, tier) - 1);
+/** Each better rod: this much likelier a twitch hooks instead of spooking (Taylor, 2026-11-05). */
+export const RODS_STRIKE = 0.06;
+/** Each better rod (the kid's): the map's rare fish turns up this much more often (+75%, then +150%). */
+export const RODS_RARE = 0.75;
 /** How much likelier than before a fish of this size is to take the bait on its own (0.8 small, 0.5 biggest). */
 const biteScale = (size) => 0.8 - 0.3 * size;
 /** Seconds a fish that saw another one spooked stays away from the bait. */
@@ -477,7 +482,7 @@ export class Fishing {
   // ---------- fish coming and going ----------
   pickKind() {
     const sp = this.spot; const odds = { ...sp.odds };
-    if (sp.special) odds.special = sp.special.odds;
+    if (sp.special) odds.special = sp.special.odds * (1 + RODS_RARE * (this.rodTier - 1));
     const total = Object.values(odds).reduce((a, b) => a + b, 0);
     let x = this.r() * total;
     for (const [k, v] of Object.entries(odds)) { x -= v; if (x <= 0) return k; }
@@ -660,7 +665,7 @@ export class Fishing {
       if (f.line !== L || f.state !== 'interest') continue;
       if (Math.hypot(f.x - L.x, f.y - L.y) > 12 + f.len / 2) continue;
       // one roll per twitch: a bite, or it bolts and startles the fish around it
-      if (this.r() < strikeChance(f.size)) this.hook(L, f);
+      if (this.r() < strikeChance(f.size, L === this.lines.vis ? this.visTier : this.rodTier)) this.hook(L, f);
       else { this.spook(f, 'Spooked!'); this.startle(f); }
       break;
     }
