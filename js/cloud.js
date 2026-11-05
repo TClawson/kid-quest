@@ -272,15 +272,23 @@ export function stopSync() {
 
 // Send what changed in one save. Works offline: Firestore keeps the writes on
 // the device and sends them when it is back online.
+// Documents this device has just created and the server hasn't confirmed yet.
+// A change to one of them right away (a kid added, then their day summary
+// saved a moment later) writes the whole document again instead of updating
+// it, since an update can reach the server before the document exists.
+const creating = new Map(); // path -> pending creates
+
 export function writeChanges(familyId, changes, before, after, onStatus = () => {}) {
   const ops = [];
+  const created = [];
   for (const path of changes.changed) {
     if (path === 'device') continue;
     const ref = refFor(familyId, path);
     const was = before ? docAt(before, path) : undefined;
     const now = clean(docAt(after, path));
-    if (was === undefined) {
+    if (was === undefined || (creating.get(path) && path !== 'family')) {
       ops.push((b) => b.set(ref, now, path === 'family' ? { merge: true } : undefined));
+      if (was === undefined && path !== 'family') created.push(path);
     } else {
       const fields = diffFields(clean(was), now);
       if (!fields.length) continue;
@@ -293,12 +301,16 @@ export function writeChanges(familyId, changes, before, after, onStatus = () => 
     const ref = refFor(familyId, path);
     ops.push((b) => b.delete(ref));
   }
+  created.forEach((path) => creating.set(path, (creating.get(path) || 0) + 1));
+  const done = () => created.forEach((path) => { const n = (creating.get(path) || 1) - 1; if (n > 0) creating.set(path, n); else creating.delete(path); });
   for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
     const batch = fb.writeBatch(db);
     ops.slice(i, i + BATCH_LIMIT).forEach((op) => op(batch));
     pending += 1;
     onStatus({ pending });
-    batch.commit()
+    const commit = batch.commit();
+    if (i + BATCH_LIMIT >= ops.length) commit.finally(done).catch(() => {});
+    commit
       .catch((err) => {
         // An update fails if another device removed that document meanwhile:
         // fall back to writing the changed documents whole.
