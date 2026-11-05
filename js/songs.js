@@ -263,4 +263,14 @@ export const SHOW_SONGS = {
     bass: [[R, 1], null, null, null, [F, 1], null, null, null],
     drums: [['k.......', '........', '....h...']],
   },
+  // the rain dance: jungle drums and a bouncy pipe tune, D dorian
+  'bg-rainforest': {
+    bpm: 140,
+    leadWave: 'triangle', leadVol: 0.5,
+    lead: ['. . . . . . . .', 'D5 - F5 G5 A5 - G5 F5', 'E5 - G5 A5 B5 - A5 G5', 'A5 C6 A5 G5 F5 G5 E5 -', 'D5 - A5 - D6 - - -'],
+    chords: ['Dm', 'Dm', 'Em', 'C', 'Dm'],
+    arp: { from: 1, octave: 4, vol: 0.05 },
+    bass: [[R, 2], null, [R, 2], [F, 1], null, [R, 2], null, [F, 1]],
+    drums: [['t..t.tt.', 'k...k...', '........'], ['t.tt.tt.', 'k..k.k..', 'h.h.h.h.']],
+  },
 };

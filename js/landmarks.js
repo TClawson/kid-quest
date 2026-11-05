@@ -244,6 +244,35 @@ function starWhale(i) {
   return [[0, 0, G.rows(), { B: '#5c7cfa', w: '#d0bfff', m: '#3b5bdb', T: '#4c6ef5', s: '#fff3bf', E: '#1a1028', n: '#364fc7', y: '#ffe066', Y: '#fff3bf', p: '#f783ac' }]];
 }
 
+function rainDrum(i) {
+  const G = grid(56, 48);
+  const stone = textured('Q', 'S', 's', 0.12);
+  // the stage, two old pillars and a lintel across them
+  G.rect(2, 38, 52, 10, stone).rect(6, 35, 44, 3, stone);
+  [[6, 9], [42, 9]].forEach(([x, y]) => { G.rect(x, y, 8, 26, stone); G.rect(x - 1, y, 10, 2, 's'); G.rect(x - 1, y + 25, 10, 2, 's'); });
+  G.rect(2, 3, 52, 7, stone);
+  for (let x = 6; x < 52; x += 7) G.rect(x, 5, 3, 3, 's');
+  // vines and leaves hanging from the lintel
+  [[4, 14], [11, 8], [17, 18], [39, 12], [46, 20], [52, 9]].forEach(([x, n]) => {
+    G.line(x, 9, x + (x % 2 ? 1 : -1), 9 + n, 'v');
+    for (let k = 3; k < n; k += 4) G.rect(x + (k % 8 ? 1 : -2), 9 + k, 2, 1, 'V');
+  });
+  G.ellipse(10, 3, 7, 3, 'V').ellipse(44, 3, 8, 3, 'V').ellipse(28, 2, 6, 2, 'v');
+  // the big drum
+  G.rect(19, 23, 18, 13, textured('D', 'E', 'd', 0.08));
+  for (let x = 19; x < 37; x += 1) G.set(x, 23 + ((x - 19) % 6 < 3 ? (x - 19) % 3 * 4 : 12 - ((x - 19) % 3) * 4), 'r');
+  G.ellipse(28, 23, 9, 2.5, i ? 'L' : 'l').rect(19, 35, 18, 1, 'd');
+  // the sloth hangs from the lintel, asleep (or waving)
+  G.stamp(29, 10, i ? ['a......a', 'aa....aa', '.aaaaaa.', 'aammmmaa', 'amKmmKma', 'aammnmaa', '.aaaaaa.'] : ['a......a', 'aa....aa', '.aaaaaa.', 'aammmmaa', 'amemmema', 'aammnmaa', '.aaaaaa.']);
+  if (i) {
+    // music notes over the drum, and monkeys peeking round the pillars
+    G.stamp(22 + i, 13, ['.n', 'nn', 'n.']).stamp(33 - i, 15, ['nn', '.n', 'nn']);
+    G.stamp(2, 20 - i, ['.ffff.', 'fttttf', 'ftKtKt', '.tttt.']).stamp(48, 21 + i, ['.ffff.', 'fttttf', 'tKtKtf', '.tttt.']);
+    [[24, 20], [31, 19], [27, 18]].forEach(([x, y]) => G.set(x, y - i, 'w'));
+  }
+  return [[0, 0, G.rows(), { Q: '#868e96', S: '#adb5bd', s: '#5c7a5c', v: '#2f9e44', V: '#69db7c', D: '#a0612f', E: '#c98a4b', d: '#5c3a1e', r: '#e9c46a', L: '#fff3d6', l: '#d9c49a', a: '#a68a64', m: '#d8bf94', e: '#4a3220', n: '#ffe066', f: '#8b5a2b', t: '#f1c27d', w: '#a5d8ff' }]];
+}
+
 /** The landmarks: size and frames(i) giving the layers for frame i: [[x, y, rows, pal]]. */
 export const LANDMARKS = {
   'bg-meadow': { w: 46, h: 46, frames: oak },
@@ -254,4 +283,5 @@ export const LANDMARKS = {
   'bg-volcano': { w: 52, h: 54, frames: stoneFace },
   'bg-rainbow': { w: 56, h: 40, frames: potOfGold },
   'bg-galaxy': { w: 60, h: 36, frames: starWhale },
+  'bg-rainforest': { w: 56, h: 48, frames: rainDrum },
 };

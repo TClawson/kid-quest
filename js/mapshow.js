@@ -4,7 +4,10 @@
 // pixel size, like the moving things in maplife.js. Music and sounds: SHOW_SONGS in songs.js
 // and playShowAudio in music.js (the times in each show's sfx line up with what it draws).
 
-import { DRAGON, DRAGON_ROAR, WING_UP, WING_DOWN, KNIGHT, UNICORN_RUN, TIKI, draw, puff } from './maplife.js';
+import {
+  DRAGON, DRAGON_ROAR, WING_UP, WING_DOWN, KNIGHT, UNICORN_RUN, TIKI, draw, puff,
+  MONKEY_DANCE, NOTE, TOUCAN, TOUCAN_WING_UP, TOUCAN_WING_DOWN, JAGUAR, SLOTH_WAVE, CAPY_CALM,
+} from './maplife.js';
 import { outlined, SHIP, WHALE, CHEST_CLOSED, CHEST_PALS } from './treasure-art.js';
 
 const OUT = '#2a1838';
@@ -519,6 +522,67 @@ export const SHOWS = {
           for (let i = 0; i < 3; i += 1) S.parts.add({ x: x + w.width - 7 * V.big, y: y + V.big, vx: rand(-1.2, 1.2), vy: rand(-3, -1.5), g: 0.08, max: 30, star: true, c: pick(['#ffe066', '#ffffff', '#fff3bf']) });
         }
       }
+    },
+  },
+
+  'bg-rainforest': {
+    dur: 8.5,
+    sfx: [[0, 'rumble'], [0.5, 'boom'], [1.1, 'splash'], [2.4, 'squawk'], [3.4, 'boom'], [4.6, 'roar'], [5.1, 'whoosh'], [6.3, 'splash'], [7.2, 'sparkle']],
+    init(S) { S.notes = []; },
+    step(ctx, t, V, S, frame) {
+      const rain = span(t, 0.4, 1.4) - span(t, 6.6, 7.6);
+      // dark clouds, then rain
+      ctx.fillStyle = `rgba(20, 30, 60, ${0.3 * rain})`;
+      ctx.fillRect(0, V.top, V.aw, V.h);
+      if (t > 0.5 && t < 0.62) { ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(0, V.top, V.aw, V.h); }
+      for (let i = 0; i < Math.round(rain * 9); i += 1) S.parts.add({ x: rand(0, V.aw + 20), y: V.top - 4 + rand(0, 10), vx: -0.8, vy: 4.5, max: Math.ceil(V.h / 4.5) + 2, c: '#a5d8ff' });
+      // the rain fills a pool at the bottom, and the capybara floats in on its swim ring
+      const pool = span(t, 1, 4);
+      ctx.fillStyle = '#1c9c8c';
+      ctx.fillRect(0, Math.round(V.bottom - 1 - pool * 7 + Math.sin(t * 3)), V.aw, 10);
+      if (pool > 0.5) draw(ctx, -20 + span(t, 3, 7.5) * (V.aw + 30), V.bottom - 12 - pool * 4 + Math.sin(t * 4) * 1.5, CAPY_CALM, { c: '#b07443', C: '#8b5a2b', n: '#5c3a1e', e: '#ffffff', r: '#ff6b6b', w: '#ffffff' });
+      // the monkey troupe drops in and does the rain dance
+      const mx = [0.14, 0.3, 0.7, 0.86];
+      const drop = span(t, 1, 1.6);
+      const my = V.bottom - 40;
+      mx.forEach((f, i) => {
+        if (t < 1 || t > 7.6) return;
+        const y = V.top + (my - V.top) * drop;
+        const k = (Math.floor(t * 5) + i) % 3;
+        const mk = big(`monkey${k}`, MONKEY_DANCE[k], { f: '#8b5a2b', F: '#e8590c', t: '#f1c27d', b: '#d9a066' }, V.big - 1);
+        blit(ctx, mk, f * V.aw - mk.width / 2, y - mk.height + 14 - ((Math.floor(t * 6) + i) % 2 ? 2 : 0));
+        if (frame % 9 === i * 2) S.notes.push({ x: f * V.aw, y: y - 4, life: 0 });
+      });
+      for (const n of S.notes) { n.life += 1; n.y -= 0.8; n.x += Math.sin(n.life / 3) * 0.6; }
+      S.notes = S.notes.filter((n) => n.life < 30);
+      for (const n of S.notes) draw(ctx, n.x, n.y, NOTE, { s: n.life % 8 < 4 ? '#ffe066' : '#ffffff' });
+      // the sloth hangs from a vine and waves, very slowly
+      ctx.fillStyle = '#2f9e44';
+      ctx.fillRect(0, Math.round(V.top + 6), V.aw, 2);
+      if (t > 0.8) draw(ctx, V.aw * 0.62, V.top + 7, SLOTH_WAVE[Math.floor(t * 1.2) % 2], { a: '#a68a64', A: '#7f6545', m: '#d8bf94', e: '#4a3220', n: '#3b2a1a', c: '#3b2a1a' });
+      // toucans fly across
+      [0, 1, 2].forEach((i) => {
+        const t0 = 2.2 + i * 0.5;
+        if (t < t0 || t > t0 + 3.4) return;
+        const x = V.aw + 10 - ((t - t0) / 3.4) * (V.aw + 40);
+        const y = V.top + 18 + i * 9 + Math.sin(t * 6 + i) * 2;
+        const pal = { b: '#22223b', B: '#4a4e69', W: '#fff3bf', e: '#4dabf7', O: '#ff922b', o: '#fcc419', y: '#e03131', r: '#e03131' };
+        const up = (frame + i) % 4 < 2;
+        if (up) draw(ctx, x + TOUCAN[0].length - 9, y - 4, TOUCAN_WING_UP, pal, true);
+        draw(ctx, x, y, TOUCAN, pal, true);
+        if (!up) draw(ctx, x + TOUCAN[0].length - 9, y + 5, TOUCAN_WING_DOWN, pal, true);
+      });
+      // the jaguar pounces across, and the buddy jumps on its back for a ride
+      const jag = big('jaguar', JAGUAR, { y: '#f2a93b', Y: '#c47a1e', s: '#5c3a1e', l: '#fff3d6', e: '#ffe066', n: '#3b2a1a', g: '#8ce99a', G: '#2f9e44', T: '#2f9e44' }, V.big - 1);
+      const JW = jag.width;
+      const ju = span(t, 4.6, 7.4);
+      const jx = -JW - 4 + ju * (V.aw + JW + 30);
+      const jy = my + 14 - jag.height - Math.sin(Math.min(1, Math.max(0, (t - 4.6) / 2.8)) * Math.PI * 3) ** 2 * 14;
+      if (t > 4.6 && t < 7.6) blit(ctx, jag, jx, jy);
+      const onBack = t > 4.6 && jx + JW * 0.45 >= V.cx;
+      if (onBack) buddyAt(ctx, S, jx + JW * 0.45 - 10, jy - 16 + (V.big - 1) * 2);
+      else if (t > 1.6) buddyAt(ctx, S, V.cx - 10, my - 8 - ((Math.floor(t * 6)) % 2 ? 4 : 0));
+      if (t > 6.8 && t < 7.6 && frame % 2 === 0) S.parts.add({ x: rand(0, V.aw), y: V.top + rand(0, V.h * 0.5), max: 16, star: true, c: pick(RAINBOW) });
     },
   },
 };

@@ -563,6 +563,12 @@ export const SECRETS = {
       return layers;
     },
   },
+  'bg-rainforest': {
+    name: 'The rain drum',
+    lines: ['BOOM-boom! The monkeys want to dance!', 'The sloth waves… very… slowly.', 'Drip drop! Here comes the rain!'],
+    w: 56, h: 48,
+    frames: () => [],
+  },
   'bg-galaxy': {
     name: 'The star whale',
     lines: ['A space whale! It spouts stars. WHOOSH!', 'The whale sings a long, low song.', 'The whale winks. Splash!'],
