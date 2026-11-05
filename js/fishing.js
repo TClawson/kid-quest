@@ -15,7 +15,9 @@
 // lurking in the weeds, catfish lying on the bottom by the logs. Each map tips
 // the odds toward some kinds and has one rare fish of its own. A fish near a
 // bait it likes may get interested and come up to it; a twitch then makes it
-// strike (55%) or spooks it. Big fish are pickier and slower to bite. Which
+// strike (44% for small fish, down to 20% for the biggest) or spooks it, and
+// a spooked fish startles its school and the fish around it. Big fish are
+// pickier and slower to bite. Which
 // bait works best changes a little every day (the same for everyone that day).
 //
 // Fish on: hold to reel, let go when the line gets too tight or it snaps. Big
@@ -33,7 +35,16 @@ const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
 const SWEEP = 0.8; // seconds for the cast needle to cross the meter
 const HOLD = 0.18; // a press longer than this is reeling, shorter is a twitch
 export const SNAG = { weed: 0.1, log: 0.5 };
-export const TWITCH_STRIKE = 0.55;
+/**
+ * The chance a twitch makes an interested fish bite (size 0-1); otherwise it spooks.
+ * Small fish 44%, the biggest 20% (Taylor, 2026-11-05: big fish half as likely as
+ * before, small ones 20% less).
+ */
+export const strikeChance = (size) => 0.44 - 0.24 * size;
+/** How much likelier than before a fish of this size is to take the bait on its own (0.8 small, 0.5 biggest). */
+const biteScale = (size) => 0.8 - 0.3 * size;
+/** Seconds a fish that saw another one spooked stays away from the bait. */
+export const WARY = 4;
 /** Points for a catch: each kind's base, up to 2.5x for the biggest; the map's special fish is worth the most. */
 export const POINTS = { bluegill: 10, smallmouth: 20, largemouth: 25, pike: 35, catfish: 35, special: 60 };
 export const pointsFor = (kind, size) => Math.round((POINTS[kind] || 10) * (1 + 1.5 * size));
@@ -648,8 +659,9 @@ export class Fishing {
     for (const f of this.fish) {
       if (f.line !== L || f.state !== 'interest') continue;
       if (Math.hypot(f.x - L.x, f.y - L.y) > 12 + f.len / 2) continue;
-      // biased slightly toward a strike; big fish are a little warier
-      if (this.r() < TWITCH_STRIKE - f.size * 0.15) this.hook(L, f); else this.spook(f, 'Spooked!');
+      // one roll per twitch: a bite, or it bolts and startles the fish around it
+      if (this.r() < strikeChance(f.size)) this.hook(L, f);
+      else { this.spook(f, 'Spooked!'); this.startle(f); }
       break;
     }
   }
@@ -662,6 +674,18 @@ export class Fishing {
     this.pop('Fish on!', L.x, L.y - 6, '#ffd43b', true);
     if (L === this.lines.kid) { this.sound = 'tag'; this.buzz = [40]; }
     L.who.brain.set({ ...HAPPY, valence: 0.9, arousal: 0.9 });
+  }
+
+  /** A fish bolted: its school bolts too, and anything else nearby keeps away from the bait for a while. */
+  startle(f) {
+    for (const o of this.fish) {
+      if (o === f || o.state === 'hooked' || o.state === 'flee') continue;
+      if (o.move === 'school' && o.school && o.school === f.school) { this.spook(o); continue; }
+      if (Math.hypot(o.x - f.x, o.y - f.y) > 30) continue;
+      if (o.state === 'interest') { o.state = 'swim'; o.line = null; }
+      o.waryUntil = this.t + WARY;
+    }
+    if (f.school && f.move === 'school') f.school.life = 0; // the school swims off
   }
 
   spook(f, msg) {
@@ -721,14 +745,14 @@ export class Fishing {
       if (f.line && f.line !== L) continue;
       const d = Math.hypot(f.x - L.x, f.y - L.y);
       const like = this.today[L.bait][f.likeKey] ?? 0;
-      if (f.state === 'swim' && d < SPECIES[f.kind === 'special' ? this.spot.special.as : f.kind].reach && this.t >= f.checkAt) {
+      if (f.state === 'swim' && d < SPECIES[f.kind === 'special' ? this.spot.special.as : f.kind].reach && this.t >= f.checkAt && !(f.waryUntil > this.t)) {
         f.checkAt = this.t + 0.5;
         if (like < 0) { const sc = f.school; for (const o of this.fish) if (o.school === sc && o.move === 'school') this.spook(o); if (sc) sc.gone = true; this.pop('Eek! A spoon!', f.x, f.y - 6, '#ff8787'); continue; }
         if (like >= pickiness(f.size) && this.r() < like * 0.3 * (1 - 0.5 * f.size)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
       } else if (f.state === 'interest') {
         if (this.t - f.since > 8) { f.state = 'swim'; f.line = null; continue; }
         // sometimes they just take it
-        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.size) * dt) { this.hook(L, f); return; }
+        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.size) * biteScale(f.size) * dt) { this.hook(L, f); return; }
       }
     }
   }
