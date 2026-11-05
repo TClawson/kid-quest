@@ -1,6 +1,10 @@
 // Things that move on the quest map: fish, aliens and a rocket, an erupting volcano, a dragon
-// and a knight, a unicorn, flying saucers. Drawn on a second canvas over the land (under the
-// stops), with the same pixel size as the map. Events happen where the kid is looking.
+// and a knight, a unicorn, flying saucers, the rainforest's sloth, toucan, monkey and jaguar. Drawn
+// on a second canvas over the land (under the stops), with the same pixel size as the map. Events
+// happen where the kid is looking.
+
+import { sounds, setRain } from './fx.js';
+import { duckMusic } from './music.js';
 
 const OUT = '#2a1838';
 const FPS = 12.5;
@@ -866,7 +870,538 @@ function crabLife(m) {
   };
 }
 
-const LIVES = { crab: crabLife, fish: fishLife, space: spaceLife, volcano: volcanoLife, castle: castleLife, unicorn: unicornLife, saucer: saucerLife };
+// ---------- the rainforest ----------
+
+// The sloth hangs under a vine, moving right: a fur, A shade, m face, e eye stripes, n nose, c claws.
+const SLOTH_BODY = [
+  '..c....c.....c....c',
+  '..a....a.....a....a',
+  '..aa...a.....aa...a',
+  '...aa.aa......aa.aa',
+  '....aaaaaaaaaaaaaaa',
+  '...aaaaaaaaaaaaaaaaa',
+  '..AaaaaaaaaaammmmmmA',
+  '..AAaaaaaaaaammmmmmmm',
+  '...AAAAaaaaaaeKemmeKe',
+  '.......AAAAAAeeemmeee',
+  '.............mmmnnmmm',
+  '..............mKmmKm',
+  '...............mKKm',
+];
+const SLOTH = sprite(SLOTH_BODY);
+// the other two arms reach forward, hand over hand
+const SLOTH_REACH = sprite(swap(SLOTH_BODY, 0, ['....c....c.....c....c', '....a....a.....a....a', '...aa....a.....aa...a', '...aa...aa.....aa..aa']));
+// lets go with the front arm to wave (slowly)
+const SLOTH_WAVE = [
+  sprite(swap(SLOTH_BODY, 0, ['..c....c.....c.......c', '..a....a.....a......a', '..aa...a.....aa....a', '...aa.aa......aa.aa'])),
+  sprite(swap(SLOTH_BODY, 0, ['..c....c.....c', '..a....a.....a', '..aa...a.....aa.....ac', '...aa.aa......aa.aaa'])),
+];
+
+// The toucan flies right: b black, B its shine, W chest, e eye ring, O/o beak, y beak tip, r under the tail.
+const TOUCAN_BODY = [
+  '......bbbb',
+  '....bbbbbbW',
+  '..bbbbbbbWWeKOOOOO',
+  '.bbbbbbbWWWWOOOOOOOy',
+  'bbbBbbbbWWWWooooooy',
+  'bbbbbbbbbWW',
+  '.bbbbbbbbb',
+  '..rr.bbb',
+];
+const TOUCAN = sprite(TOUCAN_BODY);
+// eyes wide and beak open: EEK
+const TOUCAN_EEK = sprite(swap(TOUCAN_BODY, 1, ['....bbbbbeeW', '..bbbbbbbWeKeOOOOO', '.bbbbbbbWWeeeOOOO...', 'bbbBbbbbWWWWoooo', 'bbbbbbbbbWWooooo']));
+// cross: a frown above the eye
+const TOUCAN_CROSS = sprite(swap(TOUCAN_BODY, 0, ['......bbbbKK', '....bbbbbbbW']));
+const TOUCAN_WING_UP = sprite(['....bb', '..bbbb', '.bbbBb', 'bbbbb']);
+const TOUCAN_WING_DOWN = sprite(['bbbbb', '.bbbBb', '..bbbb', '....bb']);
+const ANGRY = sprite(['rr.rr', 'r...r', '.....', 'r...r', 'rr.rr']);
+const BANANA = sprite(['y', 'yy', '.yy', '.yyy', '..yyyg'], true);
+
+// The monkey (front on): f fur, F shade, t face and hands, b belly.
+const MONKEY_BODY = [
+  '....ffff',
+  '..ffffffff',
+  '.tftttttft',
+  '.tftKttKtft',
+  '..fttttttf',
+  '...ftFFtf',
+  '....ffff',
+  '..ffbbbbff',
+  '.ff.bbbb.ff..f',
+  '.t..bbbb..t...f',
+  '...ffffff....f',
+  '...ff..ff...f',
+  '...tt..tt',
+];
+const MONKEY = sprite(MONKEY_BODY);
+const MONKEY_EAT = sprite(swap(MONKEY_BODY, 7, ['..ffbbbbfft', '.ff.bbbb.f..f', '.t..bbbb.....f']));
+// arm up, shaking a fist (two frames)
+const MONKEY_FIST = [
+  sprite(swap(MONKEY_BODY, 0, ['....ffff....t', '..ffffffff..f', '.tftttttft.f', '.tftKttKtftf', '..fttttttff', '...ftKKtf', '....ffff', '..ffbbbbf', '.ff.bbbb.....f', '.t..bbbb......f'])),
+  sprite(swap(MONKEY_BODY, 0, ['....ffff...t', '..ffffffff.f', '.tftttttftf', '.tftKttKtff', '..fttttttf', '...ftKKtf', '....ffff', '..ffbbbbf', '.ff.bbbb.....f', '.t..bbbb......f'])),
+];
+const MONKEY_RUN = [
+  sprite(swap(MONKEY_BODY, 10, ['...ffffff....f', '..ff....ff..f', '..tt.....tt'])),
+  sprite(swap(MONKEY_BODY, 10, ['...ffffff....f', '....ff.ff...f', '....tt.tt'])),
+];
+// both arms up: hooray (or hiding under the leaf with a shiver)
+const MONKEY_YAY = sprite(swap(MONKEY_BODY, 0, ['t...ffff...t', 'f.ffffffff.f', 'ftftttttftf', '.tftKttKtf', '..fttttttf', '...fttttf', '....ffff', '...fbbbbf', '....bbbb.....f', '....bbbb......f']));
+// dancing (and singing) in the rain: one arm up, both up, the other arm up
+const MONKEY_DANCE = [
+  sprite(swap(MONKEY_BODY, 0, ['t...ffff', 'f.ffffffff', 'ftftttttft', '.tftKttKtft', '..fttttttf', '...ftFFtf', '....ffff', '...fbbbbff', '....bbbb.ff..f', '....bbbb..t...f'])),
+  sprite(swap(MONKEY_BODY, 0, ['t...ffff...t', 'f.ffffffff.f', 'ftftttttftf', '.tftKttKtf', '..fttttttf', '...ftFFtf', '....ffff', '...fbbbbf', '....bbbb.....f', '....bbbb......f'])),
+  sprite(swap(MONKEY_BODY, 0, ['....ffff...t', '..ffffffff.f', '.tftttttftf', '.tftKttKtf', '..fttttttf', '...ftFFtf', '....ffff', '..ffbbbbf', '.ff.bbbb.....f', '.t..bbbb......f'])),
+];
+// a music note: s stem
+const NOTE = sprite(['.ss', '.s.s', '.s', 'ss', 'ss']);
+
+// The jaguar lies down facing right: y coat, Y shade, s spots, l light belly, e eye, n nose.
+const JAGUAR_BODY = [
+  '.................yy.yy',
+  '................yyyyyyy',
+  '................yyesyyesy',
+  '................yyKyyyKyyy',
+  '.yy..ysyyysyyysyyyyyynnyy',
+  'y.y.yyyyyyyyyyyyyyyyylly',
+  'y..yysyysyyysyyysyyyyyy',
+  '.yyyyyyyyyyyyyyyyyyyy',
+  '....YYllllllllYYlllyyy',
+  '...YYY.......YYY..llll',
+];
+// asleep: eyes shut
+const JAGUAR = sprite(JAGUAR_BODY);
+const JAGUAR_SLEEP = sprite(swap(JAGUAR_BODY, 2, ['................yyyyyyyyyy', '................yyKKyyKKyy']));
+const JAGUAR_TAIL = sprite(swap(JAGUAR_BODY, 4, ['yyy..ysyyysyyysyyyyyynnyy', '..yyyyyyyyyyyyyyyyyyylly', '...yysyysyyysyyysyyyyyy']));
+// sitting up under a big leaf: g leaf, G its vein, T stem
+const JAGUAR_SIT = sprite([
+  '....yy.yy',
+  '....yyyyyy',
+  '...yyesyyesy',
+  '...yyKyyyKyy',
+  '...yyyynnyyy',
+  '....yyllyyy',
+  '.....yyyyy',
+  '....ysyyysy.y',
+  '...yyyyyyyyyy',
+  '...ysyyllysyy',
+  '..yyyyllllyy',
+  '.yy.yyllllyy',
+  'y...lll..lll',
+]);
+const LEAF = sprite([
+  '.........gggggg',
+  '.....gggggggggggg',
+  '...ggggggGGgggggggg',
+  '.gggGGGGgggGGGGggggg',
+  'ggGGgggggggggggGGggg',
+  'gg.......T.......gg',
+  '.........T',
+  '.........T',
+  '.........T',
+]);
+
+// Things that come over the waterfall: a log, a coconut, a capybara in a rubber ring.
+const LOG = [sprite(['bbbbbbbbbbbB', 'BbBbbbBbbbbB', 'bbbbbbbbbbbB']), sprite(['bbB', 'bbB', 'bBb', 'bbB', 'bbB', 'Bbb', 'bbB'])];
+const COCONUT = sprite(['.cc.', 'cKcc', 'cccc', '.cc.']);
+// c fur, C shade, n nose, e eye, r/w the ring
+const CAPY_BODY = [
+  '......cc.cc',
+  '.....ccccccc',
+  '....cccKcccccc',
+  '....cccccccnnn',
+  '.....ccccccnnn',
+  '..rrwwrrrwwrr',
+  '.rrwwrrrwwrrrr',
+  '..rrwwrrrwwrr',
+];
+const CAPY_CALM = sprite(CAPY_BODY);
+const CAPY_EEK = sprite(swap(CAPY_BODY, 1, ['.....cceeccc', '....cceKeccccc', '....cceeecccnn', '.....cccccccKn']));
+const CAPY_FALL = sprite(['....c.cc.cc.c', '...c.ccccccc.c', '....cceKeccccc', '....cceeecccnn', '.....ccccccccK', '..rrwwrrrwwrr', '.rrwwrrrwwrrrr', '..rrwwrrrwwrr']);
+
+/**
+ * Where the rainforest waterfall is, in map pixels: it pours out of the forest wall on one side
+ * into the river, and whatever comes over it floats off down the river (maparts.js paints the rock).
+ * band: the river (see drawRiver in maparts.js), side: -1 left wall, 1 right wall.
+ */
+export function waterfallAt(band, wall, side) {
+  const { aw } = band;
+  const x0 = side < 0 ? wall - 3 : aw - wall - 6;
+  const riverY = band.wave(x0) ;
+  return { side, x0, x1: x0 + 9, lip: riverY - 34, base: riverY - 2, dir: -side, aw, wave: band.wave, bridge: [band.bx0, band.bx1] };
+}
+
+/**
+ * The rainforest: a sloth takes a whole minute to cross on a vine (tap it for a slow wave), a toucan
+ * steals the monkey's banana (tap it to make it drop it), a rain shower sends everyone under the
+ * jaguar's leaf, and now and then something comes over the waterfall.
+ */
+function jungleLife(m) {
+  let fall = m.falls;
+  // vines to hang from, kept clear of the river and the waterfall
+  const vines = [];
+  for (let y = 84; y < m.ah - 60; y += 230) {
+    const yy = fall && Math.abs(y - fall.base) < 60 ? fall.base + (y < fall.base ? -60 : 60) : y;
+    if (yy > 60 && yy < m.ah - 60) vines.push(yy);
+  }
+  if (!vines.length) vines.push(Math.round(m.ah / 3));
+  const vineY = (v, x) => v + Math.round(Math.sin((Math.PI * Math.max(0, Math.min(m.aw, x))) / m.aw) * 7);
+  const SW = SLOTH[0].length;
+  const TW = TOUCAN[0].length;
+  const JW = JAGUAR[0].length;
+  const MW = MONKEY[0].length;
+  const MH = MONKEY.length;
+  // the jaguar naps near the top of the map, and the monkey lives nearby
+  // between the first vine and the next (clear of the sloth)
+  const jag = { ...(m.openSpot({ top: vines[0] + 26, bottom: Math.min(m.ah - 40, vines[0] + 120) }) || { x: m.wall + 4, y: vines[0] + 30 }), mode: 'nap', t: 0 };
+  const mHome = m.openSpot({ top: Math.max(vines[0] + 22, jag.y - 30), bottom: jag.y + 50 }) || { x: Math.min(m.aw - m.wall - 16, jag.x + 30), y: jag.y + 4 };
+  const monkey = { x: mHome.x, y: mHome.y, home: mHome, mode: 'eat', t: 0, dir: 1, banana: true };
+  const s = {
+    sloth: null, nextSloth: 600,
+    toucan: null, nextToucan: 6000, banana: null,
+    rain: null, nextRain: 40000, drops: [], splash: [],
+    things: [], nextThing: 2500, capyOdds: 0.3,
+  };
+  const MONKEY_FURS = [{ f: '#8b5a2b', F: '#e8590c', t: '#f1c27d', b: '#d9a066' }, { f: '#6e4b2a', F: '#e8590c', t: '#e9b97a', b: '#c8935a' }, { f: '#a0612f', F: '#e8590c', t: '#f6d09a', b: '#e2ae72' }];
+  const pal = {
+    sloth: { a: '#a68a64', A: '#7f6545', m: '#d8bf94', e: '#4a3220', n: '#3b2a1a', c: '#3b2a1a' },
+    toucan: { b: '#22223b', B: '#4a4e69', W: '#fff3bf', e: '#4dabf7', O: '#ff922b', o: '#fcc419', y: '#e03131', r: '#e03131' },
+    angry: { b: '#22223b', B: '#4a4e69', W: '#fff3bf', e: '#ff6b6b', O: '#ff922b', o: '#fcc419', y: '#e03131', r: '#e03131' },
+    monkey: { f: '#8b5a2b', F: '#e8590c', t: '#f1c27d', b: '#d9a066' },
+    jaguar: { y: '#f2a93b', Y: '#c47a1e', s: '#5c3a1e', l: '#fff3d6', e: '#ffe066', n: '#3b2a1a', g: '#8ce99a', G: '#2f9e44', T: '#2f9e44' },
+    banana: { y: '#ffe066', g: '#5c940d' },
+    log: { b: '#8b5a2b', B: '#5c3a1e' },
+    coconut: { c: '#7a4a26' },
+    capy: { c: '#b07443', C: '#8b5a2b', n: '#5c3a1e', e: '#ffffff', r: '#ff6b6b', w: '#ffffff' },
+  };
+  const toward = (o, tx, ty, speed) => {
+    const dx = tx - o.x; const dy = ty - o.y; const d = Math.hypot(dx, dy);
+    if (d <= speed) { o.x = tx; o.y = ty; return true; }
+    o.x += (dx / d) * speed; o.y += (dy / d) * speed;
+    if (Math.abs(dx) > 0.5) o.dir = dx > 0 ? 1 : -1;
+    return false;
+  };
+  const monkeyTo = (mode) => { monkey.mode = mode; monkey.t = 0; };
+  const busy = () => s.toucan || s.rain;
+
+  const stepSloth = (t, view) => {
+    if (!s.sloth && t > s.nextSloth) {
+      const mid = (view.top + view.bottom) / 2;
+      const v = vines.reduce((a, b) => (Math.abs(b - mid) < Math.abs(a - mid) ? b : a), vines[0]);
+      const dir = (s.lastDir || -1) * -1;
+      s.lastDir = dir;
+      s.sloth = { x: dir > 0 ? -SW : m.aw, v, dir, wave: 0, reach: 0 };
+    }
+    const k = s.sloth;
+    if (!k) return;
+    if (k.wave > 0) { k.wave -= 1; return; }
+    // about a minute to get across, one slow hand at a time
+    k.reach += 1;
+    k.x += k.dir * ((m.aw + SW) / (FPS * 60)) * (Math.floor(k.reach / 15) % 2 ? 1.6 : 0.4);
+    if (k.x < -SW - 2 || k.x > m.aw + 2) { s.sloth = null; s.nextSloth = t + rand(12000, 25000); }
+  };
+
+  const stepToucan = (t, view) => {
+    if (!busy() && t > s.nextToucan && monkey.mode === 'eat') {
+      const dir = monkey.x > m.aw / 2 ? -1 : 1;
+      const y = Math.max(view.top + 6, monkey.y - 50);
+      s.toucan = { x: dir > 0 ? -TW - 4 : m.aw + 4, y, dir, phase: 'in', t: 0, banana: false };
+    }
+    const c = s.toucan;
+    if (!c) return;
+    c.t += 1;
+    const beak = () => ({ x: c.dir > 0 ? c.x + TW - 4 : c.x + 1, y: c.y + 6 });
+    if (c.phase === 'in') {
+      // swoop down to the banana in the monkey's hand
+      const tx = c.dir > 0 ? monkey.x + MW - TW : monkey.x - 1;
+      if (toward(c, tx, monkey.y + 2, 2.4)) {
+        c.phase = 'away'; c.banana = true; c.t = 0; c.base = c.y;
+        monkey.banana = false; monkeyTo('shock');
+      }
+      c.dir = c.dir || 1;
+    } else if (c.phase === 'away') {
+      // off it goes with the banana, not too fast, so there is time to tap it
+      c.x += c.dir * 1.2;
+      c.y = c.base - Math.min(28, c.t * 0.6) + Math.sin(c.t / 3) * 2;
+    } else if (c.phase === 'eek') {
+      if (c.t > 14) { c.phase = 'cross'; c.t = 0; c.dir = -c.dir; }
+    } else if (c.phase === 'cross') {
+      // flaps off in a huff
+      c.x += c.dir * 2.6; c.y -= 0.9;
+    }
+    if (c.x < -TW - 30 || c.x > m.aw + 30 || c.y < -30) {
+      if (c.banana) monkeyTo('sulk');
+      s.toucan = null; s.nextToucan = t + rand(25000, 40000);
+    }
+    c.beak = beak();
+  };
+
+  const stepMonkey = () => {
+    monkey.t += 1;
+    const c = s.toucan;
+    if (s.rain && ['eat', 'home', 'sulk'].includes(monkey.mode)) monkeyTo('dance');
+    switch (monkey.mode) {
+      case 'shock': if (monkey.t > 10) monkeyTo('chase'); break;
+      case 'chase':
+        // runs after the toucan, shaking a fist
+        if (c && c.banana) toward(monkey, Math.max(m.wall, Math.min(m.aw - m.wall - MW, c.x + TW / 2 - MW / 2)), monkey.home.y, 1.3);
+        else if (!c) monkeyTo('sulk');
+        break;
+      case 'sulk': if (monkey.t > 30) monkeyTo('home'); break;
+      case 'fetch':
+        // to the dropped banana, then a little dance
+        if (s.banana && !s.banana.landed) break;
+        if (s.banana && toward(monkey, s.banana.x - 3, s.banana.y - MH + 4, 1.8)) { s.banana = null; monkey.banana = true; monkeyTo('yay'); }
+        break;
+      case 'yay': if (monkey.t > 30) monkeyTo('home'); break;
+      case 'home':
+        if (toward(monkey, monkey.home.x, monkey.home.y, 0.8)) {
+          if (!monkey.banana && monkey.t > 60) monkey.banana = true; // finds another one
+          if (monkey.banana) monkeyTo('eat');
+        }
+        break;
+      case 'dance':
+        // home first, then dance (and sing) until the rain stops
+        if (!s.rain) { monkeyTo('home'); break; }
+        toward(monkey, monkey.home.x, monkey.home.y, 1.5);
+        break;
+      default: break;
+    }
+    monkey.moving = ['chase', 'home', 'fetch', 'dance'].includes(monkey.mode);
+  };
+
+  const stepRain = (t, view) => {
+    if (!s.rain && !s.toucan && t > s.nextRain) {
+      s.rain = { t: 0, len: Math.round(FPS * 10) };
+      sounds.thunder();
+      // a troupe of monkeys swings into the trees on both sides, near where the kid is looking
+      const n = m.aw > 140 ? 3 : 2;
+      const mid = Math.max(view.top + 40, Math.min(view.bottom - 50, monkey.home.y));
+      s.troupe = [];
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < n; i += 1) {
+          const x = side < 0 ? Math.max(1, Math.round(m.wall / 2) - 7) : Math.min(m.aw - 15, m.aw - Math.round(m.wall / 2) - 7);
+          const y = Math.round(mid + (i - (n - 1) / 2) * 34 + (side < 0 ? 0 : 12));
+          s.troupe.push({ side, x: side < 0 ? -18 - i * 10 : m.aw + 4 + i * 10, y, tx: x, out: side < 0 ? -20 : m.aw + 6, fur: MONKEY_FURS[(i * 2 + (side > 0 ? 1 : 0)) % MONKEY_FURS.length] });
+        }
+      }
+    }
+    for (const k of s.troupe || []) {
+      const dest = s.rain ? k.tx : k.out;
+      k.moving = Math.abs(dest - k.x) > 0.5;
+      if (k.moving) k.x += Math.sign(dest - k.x) * Math.min(2.2, Math.abs(dest - k.x));
+    }
+    if (!s.rain && s.troupe?.every((k) => !k.moving)) s.troupe = null;
+    const r = s.rain;
+    jag.t += 1;
+    if (r) {
+      r.t += 1;
+      if (jag.mode === 'nap' && r.t > 6) { jag.mode = 'leaf'; jag.t = 0; }
+      const k = Math.min(1, r.t / 10, (r.len - r.t) / 10);
+      r.k = Math.max(0, k);
+      for (let i = 0; i < 9 * r.k; i += 1) s.drops.push({ x: rand(-10, m.aw), y: rand(view.top - 10, view.bottom), life: Math.floor(rand(3, 6)) });
+      setRain(r.k);
+      duckMusic(r.k);
+      // the monkeys sing along: ooh ooh aah aah
+      if (r.t % 48 === 14) sounds.monkeys();
+      if (r.t >= r.len) { s.rain = null; setRain(0); duckMusic(0); s.nextRain = t + rand(80000, 140000); jag.mode = 'shake'; jag.t = 0; }
+    } else if (jag.mode === 'shake' && jag.t > 14) { jag.mode = 'nap'; jag.t = 0; }
+    for (const d of s.drops) { d.x += 1; d.y += 5; d.life -= 1; if (d.life === 0) s.splash.push({ x: d.x, y: d.y, life: 3 }); }
+    for (const p of s.splash) p.life -= 1;
+    s.drops = s.drops.filter((d) => d.life > 0);
+    s.splash = s.splash.filter((p) => p.life > 0);
+  };
+
+  const underBridge = (o) => fall && o.x + 12 > fall.bridge[0] && o.x < fall.bridge[1];
+  const stepFalls = (t) => {
+    if (!fall) return;
+    if (t > s.nextThing) {
+      s.nextThing = t + rand(6000, 12000);
+      const capy = Math.random() < s.capyOdds;
+      s.capyOdds = capy ? 0.15 : Math.min(0.5, s.capyOdds + 0.1);
+      const kind = capy ? 'capy' : Math.random() < 0.6 ? 'log' : 'coconut';
+      s.things.push({ kind, x: (fall.x0 + fall.x1) / 2 - 6, y: fall.lip - 6, vy: 0.3, phase: 'fall', t: 0 });
+    }
+    for (const o of s.things) {
+      o.t += 1;
+      if (o.phase === 'fall') {
+        o.vy += 0.22; o.y += o.vy;
+        if (o.y >= fall.base - 6) {
+          o.phase = 'float'; o.t = 0;
+          for (let i = 0; i < 10; i += 1) s.splash.push({ x: o.x + 6 + rand(-6, 6), y: fall.base - rand(0, 6), life: Math.floor(rand(3, 8)), big: true });
+        }
+      } else {
+        // bob along down the river, under the bridge and away
+        const wait = o.kind === 'capy' ? 16 : 0;
+        if (o.t > wait) o.x += fall.dir * (o.kind === 'capy' ? 0.3 : 0.4);
+        o.y = fall.wave(o.x + 6) - 5;
+      }
+    }
+    s.things = s.things.filter((o) => o.x > -20 && o.x < m.aw + 6);
+  };
+
+  // one dance for everyone, on the beat of the song (about 6 frames a beat): left, both, right, both
+  const danceAt = (frame) => {
+    const beat = Math.floor(frame / 6) % 4;
+    return { look: MONKEY_DANCE[[0, 1, 2, 1][beat]], hop: beat % 2 && frame % 6 < 3 ? -2 : 0 };
+  };
+
+  const flow = (ctx, frame) => {
+    if (!fall) return;
+    // the falling water, streaking down, and foam where it lands
+    for (let x = fall.x0; x <= fall.x1; x += 1) {
+      for (let y = fall.lip + ((frame * 3 + x * 5) % 9); y < fall.base - 2; y += 9) {
+        ctx.fillStyle = x % 3 ? '#e7f5ff' : '#ffffff';
+        ctx.fillRect(x, y, 1, 3);
+      }
+    }
+    for (let i = 0; i < 5; i += 1) puff(ctx, fall.x0 + 0.5 + i * 2.2, fall.base - 1 + ((frame + i) % 3 === 0 ? -1 : 0), 1.4 + ((frame + i) % 2) * 0.5, '#ffffff');
+  };
+
+  return {
+    s, jag, monkey, fall, vines,
+    // off the map (or the app hidden): the rain goes quiet; the next step brings it back if it is still raining
+    quiet() { setRain(0); duckMusic(0); },
+    where: () => (s.toucan ? { x: s.toucan.x + TW / 2, y: s.toucan.y + 4 } : s.sloth ? { x: s.sloth.x + SW / 2, y: vineY(s.sloth.v, s.sloth.x) + 6 } : { x: monkey.x, y: monkey.y }),
+    poke(x, y) {
+      const c = s.toucan;
+      const pad = 8;
+      if (c && c.banana && c.phase === 'away' && x > c.x - pad && x < c.x + TW + pad && y > c.y - pad && y < c.y + 10 + pad) {
+        // EEK! It drops the banana, and the monkey runs to get it
+        c.phase = 'eek'; c.t = 0; c.banana = false;
+        sounds.squeak?.();
+        s.banana = { x: c.beak.x, y: c.beak.y, vy: 0, ground: monkey.home.y + MH - 5, landed: false };
+        monkeyTo('fetch');
+        return true;
+      }
+      const k = s.sloth;
+      if (k && !k.wave) {
+        const ky = vineY(k.v, k.x + SW / 2);
+        if (x > k.x - 6 && x < k.x + SW + 6 && y > ky - 6 && y < ky + 20) { k.wave = Math.round(FPS * 6); return true; }
+      }
+      return false;
+    },
+    step(t, view) {
+      fall = m.falls; // the map may have been redrawn at a new size
+      stepSloth(t, view);
+      stepToucan(t, view);
+      stepMonkey();
+      stepRain(t, view);
+      stepFalls(t);
+      const b = s.banana;
+      if (b && !b.landed) { b.vy += 0.3; b.y += b.vy; if (b.y >= b.ground) { b.y = b.ground; b.landed = true; } }
+    },
+    draw(ctx, frame) {
+      // vines across the map, with leaves
+      for (const v of vines) {
+        for (let x = 0; x < m.aw; x += 1) {
+          const y = vineY(v, x);
+          ctx.fillStyle = OUT; ctx.fillRect(x, y - 1, 1, 3);
+          ctx.fillStyle = '#5c940d'; ctx.fillRect(x, y, 1, 1);
+          if (x % 9 === 4) { ctx.fillStyle = '#2b8a3e'; ctx.fillRect(x, y + 1, 2, 2); ctx.fillStyle = '#69db7c'; ctx.fillRect(x, y + 1, 1, 1); }
+        }
+      }
+      flow(ctx, frame);
+      for (const o of s.things) {
+        if (o.phase !== 'fall' && underBridge(o)) continue;
+        const bob = o.phase === 'fall' ? 0 : Math.round(Math.sin((o.t + o.x) / 4));
+        if (o.kind === 'log') draw(ctx, o.x, o.y + bob + (o.phase === 'fall' && Math.floor(o.t / 3) % 2 ? -2 : 0), o.phase === 'fall' && Math.floor(o.t / 3) % 2 ? LOG[1] : LOG[0], pal.log);
+        else if (o.kind === 'coconut') draw(ctx, o.x + 4, o.y + 2 + bob, COCONUT, pal.coconut);
+        else {
+          const eek = o.phase === 'fall' || o.t < 22;
+          draw(ctx, o.x, o.y - 3 + bob, o.phase === 'fall' ? CAPY_FALL : eek ? CAPY_EEK : CAPY_CALM, pal.capy, fall.dir < 0);
+          if (eek && frame % 4 < 3) draw(ctx, o.x + 6, o.y - 12 + bob, BANG2, { y: '#ffe066' });
+        }
+      }
+      // the jaguar: napping, under its leaf in the rain, or shaking itself dry
+      if (jag.mode === 'leaf') {
+        draw(ctx, jag.x + 6, jag.y - 4, JAGUAR_SIT, pal.jaguar);
+        draw(ctx, jag.x - 1, jag.y - 14 + (frame % 8 < 4 ? 0 : -1), LEAF, pal.jaguar);
+      } else {
+        const shake = jag.mode === 'shake' ? (frame % 2 ? 1 : -1) : 0;
+        draw(ctx, jag.x + shake, jag.y + 5, jag.mode === 'shake' ? JAGUAR : Math.floor(frame / 10) % 3 === 0 ? JAGUAR_TAIL : JAGUAR_SLEEP, pal.jaguar);
+        if (jag.mode === 'shake') for (let i = 0; i < 6; i += 1) { ctx.fillStyle = '#a5d8ff'; ctx.fillRect(jag.x + 2 + i * 4 + (frame % 3), jag.y + 2 - ((i + frame) % 4), 1, 1); }
+        else if (frame % 30 < 20) { ctx.fillStyle = '#ffffff'; ctx.fillRect(jag.x + JW - 1 + Math.floor((frame % 30) / 7), jag.y - 2 - Math.floor((frame % 30) / 7) * 2, 2, 1); } // z z z
+      }
+      // the monkey
+      const mk = monkey;
+      const run = mk.moving && Math.hypot(mk.x - mk.home.x, mk.y - mk.home.y) > 0.5;
+      let look = MONKEY;
+      let hop = 0;
+      if (mk.mode === 'eat') look = Math.floor(frame / 6) % 3 === 0 ? MONKEY_EAT : MONKEY;
+      else if (mk.mode === 'shock') { look = MONKEY_YAY; hop = -2; }
+      else if (mk.mode === 'chase' || mk.mode === 'sulk') { look = MONKEY_FIST[frame % 2]; hop = mk.mode === 'sulk' && frame % 4 < 2 ? -1 : 0; }
+      else if (mk.mode === 'yay') { look = MONKEY_YAY; hop = frame % 4 < 2 ? -2 : 0; }
+      else if (mk.mode === 'dance' && !run) { const d = danceAt(frame); look = d.look; hop = d.hop; }
+      else if (run) look = MONKEY_RUN[frame % 2];
+      const mx = mk.x;
+      draw(ctx, mx, mk.y + hop, look, pal.monkey);
+      if (mk.banana && (mk.mode === 'eat' || mk.mode === 'yay' || mk.mode === 'home')) {
+        const up = mk.mode === 'yay' || (mk.mode === 'eat' && look === MONKEY_EAT);
+        draw(ctx, mx + (up ? 9 : 9), mk.y + hop + (up ? (mk.mode === 'yay' ? -6 : 4) : 8), BANANA, pal.banana);
+      }
+      if (mk.mode === 'shock' || (mk.mode === 'chase' && frame % 6 < 3)) draw(ctx, mx + 5, mk.y - 8, BANG2, { y: '#ffe066' });
+      if (mk.mode === 'dance' && !run) {
+        // singing: notes float up and away
+        for (let i = 0; i < 3; i += 1) {
+          const a = (frame + i * 9) % 27;
+          draw(ctx, mx + 10 + Math.round(Math.sin((a + i) / 3) * 2) + i * 2, mk.y - 4 - a * 0.7, NOTE, { s: ['#ffe066', '#ffffff', '#ff8fa3'][i] });
+        }
+      }
+      // the troupe in the trees, all dancing the same steps
+      for (const k of s.troupe || []) {
+        if (k.moving) { draw(ctx, k.x, k.y - (frame % 2 ? 2 : 0), MONKEY_RUN[frame % 2], k.fur); continue; }
+        const d = danceAt(frame);
+        draw(ctx, k.x, k.y + d.hop, d.look, k.fur);
+      }
+      if (s.banana) draw(ctx, s.banana.x, s.banana.y, BANANA, pal.banana);
+      // the sloth
+      const k = s.sloth;
+      if (k) {
+        const ky = vineY(k.v, k.x + SW / 2) - 1;
+        let look2 = Math.floor(k.reach / 15) % 2 ? SLOTH_REACH : SLOTH;
+        if (k.wave > 0) look2 = SLOTH_WAVE[Math.floor(k.wave / 8) % 2];
+        draw(ctx, k.x, ky, look2, pal.sloth, k.dir < 0);
+        if (s.rain) for (let i = 0; i < 3; i += 1) { ctx.fillStyle = '#a5d8ff'; ctx.fillRect(k.x + 4 + i * 7, ky + 14 + ((frame + i * 3) % 6), 1, 2); }
+      }
+      // the toucan
+      const c = s.toucan;
+      if (c) {
+        const flip = c.dir < 0;
+        const fast = c.phase === 'cross' || c.phase === 'in';
+        const up = fast ? frame % 2 : frame % 4 < 2;
+        const p = c.phase === 'cross' ? pal.angry : pal.toucan;
+        const body = c.phase === 'eek' ? TOUCAN_EEK : c.phase === 'cross' ? TOUCAN_CROSS : TOUCAN;
+        const jx = c.phase === 'eek' ? (frame % 2 ? 1 : -1) : 0;
+        if (up) draw(ctx, partX(c.x + jx, TW, 3, TOUCAN_WING_UP, flip), c.y - 4, TOUCAN_WING_UP, p, flip);
+        draw(ctx, c.x + jx, c.y, body, p, flip);
+        if (!up) draw(ctx, partX(c.x + jx, TW, 3, TOUCAN_WING_DOWN, flip), c.y + 5, TOUCAN_WING_DOWN, p, flip);
+        if (c.banana) draw(ctx, flip ? c.x - 1 : c.x + TW - 6, c.y + 5, BANANA, pal.banana, flip);
+        if (c.phase === 'eek') draw(ctx, c.x + TW / 2, c.y - 9, BANG2, { y: '#ffe066' });
+        if (c.phase === 'cross' && c.t < 30) {
+          // a cross little mark over its head
+          if (frame % 4 < 3) draw(ctx, c.x + TW / 2 - 2, c.y - 9, ANGRY, { r: '#ff6b6b' });
+        }
+      }
+      // the rain, over everything
+      if (s.rain) {
+        ctx.globalAlpha = 0.22 * s.rain.k;
+        ctx.fillStyle = '#1c3d5a';
+        ctx.fillRect(0, 0, m.aw, m.ah);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#d0ebff';
+        for (const d of s.drops) { ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 3); ctx.fillRect(Math.round(d.x) + 1, Math.round(d.y) + 3, 1, 1); }
+      }
+      for (const p of s.splash) {
+        ctx.fillStyle = p.big ? '#ffffff' : '#a5d8ff';
+        ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y) - (p.big ? 3 - p.life / 3 : 0), 1, 1);
+        ctx.fillRect(Math.round(p.x) + 1, Math.round(p.y) - (p.big ? 3 - p.life / 3 : 0), 1, 1);
+      }
+    },
+  };
+}
+
+const LIVES = { jungle: jungleLife, crab: crabLife, fish: fishLife, space: spaceLife, volcano: volcanoLife, castle: castleLife, unicorn: unicornLife, saucer: saucerLife };
 const running = new WeakMap();
 // The screen is redrawn whenever family sync brings news, which makes a new map each time.
 // Keep each kid's moving things (and their clock) across redraws, so a fish that is halfway
@@ -919,8 +1454,8 @@ export function startMapLife(m) {
   }
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const tick = () => {
-    if (!canvas.isConnected) { clearInterval(running.get(m.section)); return; }
-    if (document.visibilityState === 'hidden') return;
+    if (!canvas.isConnected) { clearInterval(running.get(m.section)); actor.quiet?.(); return; }
+    if (document.visibilityState === 'hidden') { actor.quiet?.(); return; }
     const t = performance.now() - t0;
     // a frame's worth of time since the last step (a redraw can call this early)
     if (t - keep.last >= FRAME * 0.8) {
