@@ -40,3 +40,12 @@ test('there are 12 cheers and a tap never repeats the last one', () => {
   assert.equal(pickCheer(0, () => 0), 1);
   assert.equal(pickCheer(11, () => 0.9999), 10);
 });
+
+test('effort cheers name what the kid really did, and say nothing made up', async () => {
+  const { effortCheers } = await import('../js/practice.js');
+  assert.deepEqual(effortCheers({}), []);
+  const lines = effortCheers({ pianoStreak: 6, pianoWeek: 3, minutesWeek: 75, pianoHabit: { done: 30, goal: 37, mastered: false }, month: { done: 9, days: 10 } });
+  assert.equal(lines.length, 5);
+  assert.ok(lines[0].startsWith('6 piano days in a row'));
+  assert.ok(lines.some((l) => l.includes('30 of 37')));
+});

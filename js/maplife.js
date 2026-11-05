@@ -307,9 +307,31 @@ const TIKI_RUN = [
   ['...bb', '...bb', '..bbb'],
 ].map((legs) => sprite(swap(swap(TIKI_BODY, 0, ['b.g.y.g.b', 'b.gyryg.b', 'b.MMMMM.b']), 9, ['...bbb', '..bbbbb', '...bbb', '..GGGGG', '.GGGGGGG', ...legs])));
 
+// The family party (mapParty): for a few seconds every critter bounces and sways
+// to the same beat, with little hearts popping up over the bigger ones.
+let partyUntil = 0;
+let partyFrame = 0;
+/** Make every critter on the map dance for ms. */
+export function mapParty(ms) {
+  partyUntil = performance.now() + ms;
+}
+const partyOn = () => performance.now() < partyUntil;
+const HEART = sprite(['r.r', 'rrr', '.r'], false);
+
 function draw(ctx, x0, y0, rows, pal, flip = false) {
-  const x = Math.round(x0);
-  const y = Math.round(y0);
+  let x = Math.round(x0);
+  let y = Math.round(y0);
+  if (partyOn()) {
+    const f = partyFrame;
+    y -= Math.round(Math.abs(Math.sin((f * Math.PI) / 4)) * 4); // a hop on every beat
+    x += f % 8 < 4 ? 1 : -1; // and a sway
+    const w = Math.max(...rows.map((r) => r.length));
+    if (rows.length >= 9 && w >= 9 && f % 6 < 4) {
+      const hx = x + Math.floor(w / 2) - 1 + ((f >> 1) % 3) - 1;
+      const hy = y - 6 - (f % 6);
+      for (const [dy, r] of HEART.entries()) for (let i = 0; i < r.length; i += 1) if (r[i] === 'r') { ctx.fillStyle = '#ff6b9a'; ctx.fillRect(hx + i, hy + dy, 1, 1); }
+    }
+  }
   rows.forEach((r, yy) => {
     for (let i = 0; i < r.length; i += 1) {
       const ch = r[i];
@@ -929,6 +951,7 @@ export function startMapLife(m) {
       keep.last = t;
     }
     ctx.clearRect(0, 0, m.aw, m.ah);
+    partyFrame = keep.frame;
     actor.draw(ctx, keep.frame);
   };
   tick();

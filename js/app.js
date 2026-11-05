@@ -8,11 +8,14 @@ import {
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
   gamesLeft,
+  withMemo, monthDays, habitInfo, MASTERED_PAY, COMEBACK_BONUS, CUES, cueFor, planOrder, planSentence,
+  todaySummary, familyDay, FAMILY_GOAL, weekLookback, isPianoTask,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
-import { liveHtml, live, liveStart, feel } from './live.js';
+import { liveHtml, live, liveStart, feel, partyAll } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
+import { mapParty } from './maplife.js';
 import { startMusic, stopMusic } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
@@ -22,7 +25,7 @@ import { pickVisitors, visitorLines, planVisits } from './visits.js';
 import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { SPOTS as FISH_SPOTS } from './fishing.js';
-import { runSeconds, CHEERS, pickCheer } from './practice.js';
+import { runSeconds, CHEERS, pickCheer, effortCheers } from './practice.js';
 import { startListening, buddyState, TUNING } from './listen.js';
 import { createBeatFollower } from './beat.js';
 import { loadRecognizer } from './hear.js';
@@ -353,6 +356,8 @@ function celebrate({ kid, emoji, title, text, sound, big = false, onClose = null
 /** Show any newly unlocked wardrobe items. Returns true if something was shown. */
 function showUnlocks(kid) {
   if (!$modal.hidden) return false;
+  if (showMastered(kid)) return true;
+  if (showLookback(kid)) return true;
   if (showNewMoves(kid)) return true;
   const ids = newUnlocks(kid, progressFor(kid));
   if (!ids.length) return false;
@@ -377,6 +382,104 @@ function showUnlocks(kid) {
       </div>
     </div>`);
   return true;
+}
+
+/** A habit the kid just mastered (see habitInfo): a star, once. */
+function showMastered(kid) {
+  const seen = new Set(kid.seenMastered || []);
+  const fresh = [...habitInfo(state, kid, today()).values()].filter((h) => h.mastered && !seen.has(h.task.id));
+  if (!fresh.length) return false;
+  kid.seenMastered = [...seen, ...fresh.map((h) => h.task.id)];
+  save();
+  sounds.week();
+  confetti(200, 3200);
+  openModal(`
+    <div class="celebrate">
+      ${buddyHtml(kid, 'proud', 'xl')}
+      <div class="celebrate-emoji small">⭐</div>
+      <h1>Habit mastered!</h1>
+      <p>${fresh.map((h) => `${esc(h.task.icon)} <b>${esc(h.task.name)}</b>`).join(', ')}</p>
+      <p>You did ${fresh.length > 1 ? 'these' : 'it'} on almost every day for two months. That's not a chore anymore, it's part of who you are!</p>
+      <p class="muted small">It keeps its star for good. From Monday it earns half as many coins, and the rest go to the habits you're still building.</p>
+      <button class="btn huge" data-action="modal-close">Awesome!</button>
+    </div>`, () => setTimeout(() => showUnlocks(kid), 250));
+  return true;
+}
+
+/** Once a week: how last week went, task by task, next to four weeks before. Then plan the new week. */
+function showLookback(kid) {
+  const t = today();
+  const monday = weekStart(t);
+  if (kid.lookbackSeen === monday) return false;
+  const lb = weekLookback(state, kid, t);
+  // only once there is a real week to look back on (a kid who used the app last week)
+  if (lb.days < 4 || !lb.tasks.some((r) => r.done > 0)) return false;
+  kid.lookbackSeen = monday;
+  save();
+  const rows = planOrder(kid, lb.tasks.map((r) => r.task)).map((task) => lb.tasks.find((r) => r.task.id === task.id)).map((r) => {
+    const b = r.before;
+    const better = b && r.done / r.of > b.done / b.of;
+    return `<div class="look-row ${better ? 'better' : ''}"><span>${esc(r.task.icon)} ${esc(r.task.name)}</span><b>${r.done} of ${r.of}</b>${b ? `<small>${better ? '⬆ ' : ''}4 weeks ago: ${b.done} of ${b.of}</small>` : ''}</div>`;
+  }).join('');
+  const ups = lb.tasks.filter((r) => r.before && r.done / r.of > r.before.done / r.before.of);
+  const lead = ups.length
+    ? `You got better at ${ups.length === 1 ? esc(ups[0].task.name.toLowerCase()) : `${ups.length} things`} since a month ago. Your practice is working!`
+    : `You finished every task on ${lb.daysDone} of ${lb.days} days.`;
+  openModal(`
+    <div class="lookback">
+      <h1>📅 Last week</h1>
+      <p>${lead}</p>
+      <div class="look-rows">${rows}</div>
+      <div class="stack">
+        <button class="btn huge" data-action="plan" data-kid="${kid.id}">📝 Plan this week</button>
+        <button class="btn ghost" data-action="modal-close">Later</button>
+      </div>
+    </div>`);
+  return true;
+}
+
+// ---------- the kid's plan: order and cues ----------
+
+function planModal(kid) {
+  const d = ui.planDraft;
+  const block = (period, title) => {
+    const tasks = planOrder({ plan: d }, questTasks(kid.tasks).filter((x) => x.period === period));
+    if (!tasks.length) return '';
+    return `<h3>${title}</h3>${tasks.map((task, i) => {
+      const cue = d.cues[task.id] || '';
+      return `<div class="plan-row">
+          <div class="plan-top"><span class="plan-name">${esc(task.icon)} ${esc(task.name)}</span>
+            <span class="plan-move"><button class="btn ghost round" data-action="plan-move" data-id="${task.id}" data-dir="-1" ${i ? '' : 'disabled'} aria-label="Earlier">▲</button><button class="btn ghost round" data-action="plan-move" data-id="${task.id}" data-dir="1" ${i < tasks.length - 1 ? '' : 'disabled'} aria-label="Later">▼</button></span></div>
+          <select data-plancue="${task.id}" aria-label="When for ${esc(task.name)}">
+            <option value="">Pick a moment…</option>
+            ${CUES[period].map((c) => `<option ${c === cue ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+          </select>
+          ${cue ? `<small class="plan-say">${esc(planSentence(cue, task))}</small>` : ''}
+        </div>`;
+    }).join('')}`;
+  };
+  const html = `
+    <div class="plan">
+      <h1>📝 ${esc(kid.name)}'s plan</h1>
+      <p class="muted">Put your tasks in the order you'll do them, and pick the moment that reminds you. Doing it at the same moment every day is how it becomes a habit.</p>
+      ${block('morning', '🌅 Morning')}
+      ${block('afternoon', '☀️ After school')}
+      <div class="row end">
+        <button class="btn ghost" data-action="modal-close">Cancel</button>
+        <button class="btn" data-action="plan-save" data-kid="${kid.id}">Save my plan</button>
+      </div>
+    </div>`;
+  // already open: change it in place, so it doesn't pop in again on every pick
+  const open = !$modal.hidden && $modal.querySelector('.modal-card > .plan');
+  if (open) open.outerHTML = html;
+  else openModal(html);
+}
+
+function openPlan(kid) {
+  closeModal();
+  ui.planKid = kid.id;
+  ui.planDraft = { order: planOrder(kid, questTasks(kid.tasks)).map((x) => x.id), cues: { ...(kid.plan?.cues || {}) } };
+  planModal(kid);
 }
 
 /** Moves the kid's buddy just learned from the exercise streak (or from new gear). Shows the first one in action. */
@@ -411,16 +514,25 @@ function celebrateIfDue(kid) {
   if (seen?.day === t) return showUnlocks(kid);
   state.celebrations[kid.id] = { day: t, streak: info.streak };
   save();
-  if (info.streak > 0 && info.streak % 7 === 0) {
-    const weeks = info.streak / 7;
+  if (info.inARow > 0 && info.inARow % 7 === 0) {
+    const weeks = info.inARow / 7;
     celebrate({
       kid,
       onClose: after,
       emoji: '🏆',
       title: weeks === 1 ? 'A WHOLE WEEK!' : `${weeks} WEEKS IN A ROW!`,
-      text: `${info.streak}-day streak! Your reward: ${state.settings.weeklyReward}. Show a parent!${info.freezes ? ' You also have a streak freeze ❄️ saved up.' : ''}`,
+      text: `${info.inARow} days in a row! Your reward: ${state.settings.weeklyReward}. Show a parent!${info.freezes ? ' You also have a streak freeze ❄️ saved up.' : ''}`,
       sound: sounds.week,
       big: true,
+    });
+  } else if (info.comebacks.includes(t)) {
+    celebrate({
+      kid,
+      onClose: after,
+      emoji: '💪',
+      title: 'Welcome back!',
+      text: `You bounced back after a missed day. That's how habits are built! +${COMEBACK_BONUS} 🪙 bonus. Your streak is ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥`,
+      sound: sounds.day,
     });
   } else {
     celebrate({
@@ -428,7 +540,7 @@ function celebrateIfDue(kid) {
       onClose: after,
       emoji: '🌟',
       title: 'Quest complete!',
-      text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥`,
+      text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 ${effortNote(kid)}`,
       sound: sounds.day,
     });
   }
@@ -681,14 +793,53 @@ document.addEventListener('visibilitychange', () => {
 // The buddy on the timer page says a cheer when tapped.
 let lastCheer = -1;
 let cheerTimeout = 0;
+let cheerTaps = 0;
+let lastEffort = '';
+
+/** What a kid has really done lately, for praise that names the effort (see effortCheers). */
+function effortFacts(kid) {
+  const t = today();
+  const piano = pianoStreakInfo(state, kid, t);
+  const week = weekStart(t);
+  let pianoWeek = 0;
+  let minutesWeek = 0;
+  for (let key = week; key <= t; key = addDays(key, 1)) {
+    const entry = entryFor(state, kid.id, key);
+    for (const task of tasksForDay(state, kid, key, t).filter(isPianoTask)) {
+      const st = entry?.tasks?.[task.id];
+      if (st?.status === 'done' || st?.status === 'pending') pianoWeek += 1;
+      minutesWeek += Math.floor((st?.seconds || 0) / 60);
+    }
+  }
+  const habit = [...habitInfo(state, kid, t).values()].find((h) => isPianoTask(h.task));
+  return { name: kid.name, pianoStreak: piano.streak, pianoWeek, minutesWeek, pianoHabit: habit ? { done: habit.done, goal: habit.goal, mastered: Boolean(habit.mastered) } : null, month: monthDays(state, kid, t) };
+}
+
+/** One true sentence about the kid's effort, for the end-of-day celebration. */
+function effortNote(kid) {
+  const t = today();
+  const m = monthDays(state, kid, t);
+  const near = [...habitInfo(state, kid, t).values()].filter((h) => !h.mastered).sort((a, b) => b.done / b.goal - a.done / a.goal)[0];
+  if (near && near.done / near.goal >= 0.5) return `${near.task.name}: ${near.done} of ${near.goal} toward a habit star ⭐`;
+  if (m.days >= 5) return `That's ${m.done} of ${m.days} days done this month.`;
+  return '';
+}
+
 function buddyCheer() {
   const kid = kidById(ui.kidId);
   const $b = document.querySelector('.timer-buddy');
   const $say = $b?.querySelector('.timer-bubble');
   if (!kid || !$say) return;
-  lastCheer = pickCheer(lastCheer);
   if (!['head', 'silly'].includes($b.querySelector('canvas.live-buddy')?.dataset.zone)) live(liveKey(kid)).giggle();
-  $say.textContent = CHEERS[lastCheer](kid.name);
+  // every other tap names something the kid has really done (effort praise), the rest are plain cheers
+  const facts = effortCheers(effortFacts(kid)).filter((line) => line !== lastEffort);
+  if (facts.length && (cheerTaps += 1) % 2 === 0) {
+    lastEffort = facts[Math.floor(Math.random() * facts.length)];
+    $say.textContent = lastEffort;
+  } else {
+    lastCheer = pickCheer(lastCheer);
+    $say.textContent = CHEERS[lastCheer](kid.name);
+  }
   $b.classList.remove('hop');
   void $b.offsetWidth; // restart the hop
   $b.classList.add('talking', 'hop');
@@ -938,10 +1089,13 @@ function taskTile(kid, task, status) {
     const left = task.minutes * 60 - (status?.seconds || 0);
     sub = left <= 0 ? 'Time done! Get a parent' : status?.seconds ? `${mmss(left)} left` : `${task.minutes} minute timer`;
   }
+  const cue = cueFor(kid, task);
+  if (cue && state_ === 'todo') sub = `${cue} · ${sub}`;
+  const star = habitInfo(state, kid, today()).get(task.id)?.mastered ? ' ⭐' : '';
   return `
     <button class="tile ${state_}" data-action="task" data-id="${task.id}">
       <span class="tile-icon">${esc(task.icon)}</span>
-      <span class="tile-text"><b>${esc(task.name)}</b><small>${esc(sub)}</small></span>
+      <span class="tile-text"><b>${esc(task.name)}${star}</b><small>${esc(sub)}</small></span>
       <span class="tile-check">${st === 'done' ? '✓' : st === 'pending' ? '⏳' : ''}</span>
     </button>`;
 }
@@ -954,8 +1108,63 @@ const VILLAGE = 150; // extra room at the top of the map when buddies are visiti
 // device, the others from the cloud.
 function familyBuddies() {
   const all = new Map((family.buddies || []).map((b) => [b.id, b]));
-  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: mover(k).exBest });
+  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: mover(k).exBest, today: todaySummary(state, k, today()) });
   return [...all.values()];
+}
+
+/**
+ * Keep each kid's summary of today (kid.today) up to date, so the family's
+ * other devices can tell how the whole family is doing (see familyDay).
+ * Only needed with family sync: on one device every kid is here already.
+ */
+function shareToday() {
+  if (!cloudCfg) return;
+  let changed = false;
+  for (const k of state.kids) {
+    const now = todaySummary(state, k, today());
+    if (stableJson(now) !== stableJson(k.today)) { k.today = now; changed = true; }
+  }
+  if (changed) save();
+}
+
+/** How the whole family is doing today, and whether the map should party. */
+const familyToday = () => familyDay(familyBuddies(), today());
+
+/** "Family: 8 of 10 chores done today" while there is more than one kid. */
+function familyBanner() {
+  const all = familyBuddies();
+  if (all.length < 2) return '';
+  const f = familyDay(all, today());
+  const goal = Math.round(FAMILY_GOAL * 100);
+  const text = f.happy
+    ? `🎉 Family party! Everyone's done ${Math.round(f.share * 100)}% of today's chores`
+    : f.unknown
+      ? `👨‍👩‍👧‍👦 Family: ${f.done} chores done so far · when everyone gets to ${goal}%, the whole map celebrates`
+      : `👨‍👩‍👧‍👦 Family: ${f.done} of ${f.total} chores done · at ${goal}% the whole map celebrates`;
+  return `<div class="family-banner ${f.happy ? 'happy' : ''}" data-action="family-party">${esc(text)}${f.happy ? '' : `<span class="bar"><span style="width:${Math.min(100, Math.round((f.share / FAMILY_GOAL) * 100))}%"></span></span>`}</div>`;
+}
+
+// The family party: every buddy on the map gets a silly happy face and dances,
+// and the map's critters bounce along, for a few seconds each time the map opens.
+const PARTY_MS = 5000;
+let partyDue = false;
+let partyDay = null; // the day the family party already started by itself on this screen
+function maybeParty() {
+  if (ui.view !== 'kid' || state.settings.questView === 'list') return;
+  const happy = familyToday().happy;
+  // when the family crosses the goal while the map is open, celebrate right then too
+  const justNow = happy && partyDay !== today();
+  if (!(happy && (partyDue || justNow))) { partyDue = false; return; }
+  partyDue = false;
+  partyDay = today();
+  startParty();
+}
+function startParty() {
+  const keys = [...$app.querySelectorAll('.quest-map canvas.live-buddy')].map((c) => c.dataset.live);
+  partyAll(keys, PARTY_MS);
+  mapParty(PARTY_MS);
+  $app.querySelector('.quest-map')?.classList.add('party');
+  setTimeout(() => $app.querySelector('.quest-map')?.classList.remove('party'), PARTY_MS);
 }
 
 const visitorsArrived = new Set();
@@ -1047,7 +1256,7 @@ const MAP_WAVE = [0, 22, 30, 18, -4, -24, -30, -16];
 function questMap(kid, s, entry, mood) {
   const rows = [];
   const add = (period, label) => {
-    const tasks = s.tasks.filter((x) => x.period === period);
+    const tasks = planOrder(kid, s.tasks.filter((x) => x.period === period));
     if (!tasks.length) return;
     rows.push({ type: 'sign', label });
     for (const t of tasks) rows.push({ type: 'task', task: t, status: entry?.tasks?.[t.id]?.status });
@@ -1088,11 +1297,14 @@ function questMap(kid, s, entry, mood) {
       const left = t.minutes * 60 - sec;
       sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left` : `${t.minutes} minute timer`;
     }
+    const cue = cueFor(kid, t);
+    if (cue && st !== 'done' && st !== 'pending') sub = `${cue} · ${sub}`;
+    const star = habitInfo(state, kid, today()).get(t.id)?.mastered ? ' ⭐' : '';
     return `<button class="map-node ${st}" style="${pos}" data-action="task" data-id="${t.id}" aria-label="${esc(t.name)}">
         <span class="node-icon">${esc(t.icon)}</span>
         ${st === 'done' ? '<span class="node-badge">✓</span>' : st === 'pending' ? '<span class="node-badge wait">⏳</span>' : ''}
       </button>
-      <div class="map-label ${p.x > 50 ? 'left' : 'right'}" style="${pos};${labelWidth(p.x)}"><b>${esc(t.name)}</b><small>${esc(sub)}</small></div>`;
+      <div class="map-label ${p.x > 50 ? 'left' : 'right'}" style="${pos};${labelWidth(p.x)}"><b>${esc(t.name)}${star}</b><small>${esc(sub)}</small></div>`;
   }).join('');
 
   const hp = pts[here];
@@ -1121,7 +1333,7 @@ function viewKid() {
   const lv = levelFor(xp);
   const entry = entryFor(state, kid.id, t);
   const section = (period, title, by) => {
-    const tasks = s.tasks.filter((x) => x.period === period);
+    const tasks = planOrder(kid, s.tasks.filter((x) => x.period === period));
     if (!tasks.length) return '';
     return `
       <section>
@@ -1165,15 +1377,50 @@ function viewKid() {
         <button class="${listMode ? 'on' : ''}" data-action="quest-mode" data-mode="list">📋 List</button>
       </div>
       ${listMode || !state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
+      ${familyBanner()}
       ${listMode ? `${section('morning', '🌅 Morning', state.settings.morningBy)}
       ${section('afternoon', '☀️ After school', state.settings.bedtime)}` : questMap(kid, s, entry, mood)}
       <section>
         <h2>This week</h2>
         ${weekDots(kid, info)}
+        ${monthLine(kid)}
         ${weekCoinsHtml(kid)}
-        <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Best streak: ${info.best} days.</p>
+        <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Miss a day without one and your streak is cut in half, not lost, and finishing the next day earns a welcome-back bonus. Best streak: ${info.best} days.</p>
       </section>
+      ${habitsSection(kid)}
     </div>`;
+}
+
+/** "This month: 18 of 20 days done 💪" */
+function monthLine(kid) {
+  const m = monthDays(state, kid, today());
+  if (m.days < 3) return '';
+  return `<p class="month-line"><b>This month: ${m.done} of ${m.days} days done</b>${m.done === m.days ? ' 🌟' : m.done / m.days >= 0.8 ? ' 💪' : ''}</p>`;
+}
+
+/**
+ * Habits: each task that comes up often enough, with how close it is to being
+ * mastered (done on 85% of its days over 60 days). Mastered ones get a star.
+ */
+function habitsSection(kid) {
+  const habits = [...habitInfo(state, kid, today()).values()];
+  if (!habits.length) return '';
+  const rows = planOrder(kid, habits.map((h) => h.task)).map((t) => habits.find((h) => h.task.id === t.id)).map((h) => {
+    const pct = Math.min(100, Math.round((h.done / h.goal) * 100));
+    return `<div class="habit-row ${h.mastered ? 'mastered' : ''}">
+        <span class="habit-icon">${esc(h.task.icon)}</span>
+        <span class="habit-text"><b>${esc(h.task.name)}</b>
+          ${h.mastered ? '<small>⭐ Mastered habit! It\'s part of who you are now.</small>' : `<span class="bar habit-bar"><span style="width:${pct}%"></span></span><small>${h.done} of ${h.goal} in the last 60 days</small>`}
+        </span>
+      </div>`;
+  }).join('');
+  return `
+      <section class="habits">
+        <h2>⭐ Habits <small class="muted">do it ${Math.round(0.85 * 100)}% of days for 60 days</small></h2>
+        <button class="btn ghost plan-btn" data-action="plan" data-kid="${kid.id}">📝 Plan my day</button>
+        ${rows}
+        <p class="muted small">A mastered habit keeps its star for good. It earns half as many coins from the next Monday, so more coins go to the habits you're still building.</p>
+      </section>`;
 }
 
 /** "🪙 120 of 300 this week", and any bonuses a parent gave. */
@@ -1957,13 +2204,15 @@ function render() {
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
-  const html = (views[ui.view] || viewHome)();
+  if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
+  shareToday();
+  const html = withMemo(() => (views[ui.view] || viewHome)());
   // load the sign-in code early, so a sign-in popup opens straight from the tap
   if (ui.view === 'setup' || (ui.view === 'parent' && ui.tab === 'settings')) loadCloud().catch(() => {});
   // Family sync can ask for a redraw many times a minute (another tablet saving, a piano timer
   // ticking). When nothing on screen changed, leave the page alone: the visitors don't arrive
   // again, the fish keep swimming and a half-scrolled row stays where it is.
-  if (html === lastHtml && $app.firstElementChild) { syncMusic(); return; }
+  if (html === lastHtml && $app.firstElementChild) { syncMusic(); maybeParty(); return; }
   const sameView = lastView === ui.view;
   const side = sameView ? [...$app.querySelectorAll(SIDE_SCROLLERS)].map((el) => el.scrollLeft) : [];
   $app.innerHTML = html;
@@ -1974,6 +2223,7 @@ function render() {
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
+  maybeParty();
 }
 
 /** Map music plays only on the quest map, with sound on and music not muted, while the app is visible. */
@@ -2873,6 +3123,46 @@ restoreTimer();
 render();
 startEars();
 if (cloudCfg) startCloud();
+
+Object.assign(actions, {
+  plan: (el) => { const kid = kidById(el.dataset.kid); if (kid) openPlan(kid); },
+  'plan-move': (el) => {
+    const kid = kidById(ui.planKid);
+    const d = ui.planDraft;
+    if (!kid || !d) return;
+    // move it past the next task of the same time of day
+    const task = kid.tasks.find((x) => x.id === el.dataset.id);
+    const same = planOrder({ plan: d }, questTasks(kid.tasks).filter((x) => x.period === task.period)).map((x) => x.id);
+    const i = same.indexOf(task.id);
+    const j = i + Number(el.dataset.dir);
+    if (j < 0 || j >= same.length) return;
+    [same[i], same[j]] = [same[j], same[i]];
+    const others = d.order.filter((id) => !same.includes(id));
+    d.order = [...same, ...others];
+    planModal(kid);
+  },
+  'plan-save': (el) => {
+    const kid = kidById(el.dataset.kid);
+    const d = ui.planDraft;
+    if (!kid || !d) return;
+    const cues = Object.fromEntries(Object.entries(d.cues).filter(([, c]) => c));
+    kid.plan = { order: planOrder({ plan: d }, questTasks(kid.tasks)).map((x) => x.id), cues, week: weekStart(today()) };
+    save();
+    ui.planDraft = null;
+    closeModal();
+    render();
+    toast('Plan saved! 📝');
+  },
+  'family-party': () => { if (familyToday().happy) startParty(); },
+});
+
+document.addEventListener('change', (e) => {
+  const id = e.target.dataset?.plancue;
+  if (!id || !ui.planDraft) return;
+  ui.planDraft.cues[id] = e.target.value;
+  const kid = kidById(ui.planKid);
+  if (kid) planModal(kid);
+});
 
 // Exposed for debugging in the browser console only.
 window.kidQuest = { get state() { return state; }, save, get cloud() { return cloud; } };

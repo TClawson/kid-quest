@@ -106,7 +106,7 @@ test('xp and pending approvals', () => {
   assert.equal(pending[0].task.name, 'Chore of the week');
 });
 
-test('piano streak skips non-piano days, keeps excused days, resets on a miss', async () => {
+test('piano streak skips non-piano days, keeps excused days, uses its freeze, then halves on a miss', async () => {
   const L = await import('../js/logic.js');
   const s = L.emptyState();
   const kid = { id: 'k', name: 'A', tasks: L.defaultTasks(), startDate: '2026-10-05' }; // a Monday
@@ -122,9 +122,14 @@ test('piano streak skips non-piano days, keeps excused days, resets on a miss', 
   s.log['2026-10-19'] = { k: { tasks: {}, excused: true } };
   done('2026-10-20');
   assert.equal(L.pianoStreakInfo(s, kid, '2026-10-20').streak, 11);
-  // Wednesday missed: reset, best stays
+  // 10 piano days in a row earned a freeze: Wednesday missed uses it
+  assert.equal(L.pianoStreakInfo(s, kid, '2026-10-20').freezes, 1);
   info = L.pianoStreakInfo(s, kid, '2026-10-22');
-  assert.equal(info.streak, 0);
+  assert.equal(info.streak, 11);
+  assert.equal(info.freezes, 0);
+  // Thursday missed too, with no freeze left: cut in half, best stays
+  info = L.pianoStreakInfo(s, kid, '2026-10-23');
+  assert.equal(info.streak, 5);
   assert.equal(info.best, 11);
   // today not done yet doesn't break it
   assert.equal(L.pianoStreakInfo(s, kid, '2026-10-20').streak, 11);
@@ -428,4 +433,99 @@ test('buddy store opens when today\'s chores are done and approved, excused days
   assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: 1, waiting: 1 });
   entry.excused = true;
   assert.equal(storeOpen(state, kid, MONDAY).open, true);
+});
+
+test('a missed day with no freeze halves the streak; the next full day earns a welcome-back bonus', async () => {
+  const L = await import('../js/logic.js');
+  const { state, kid } = setup();
+  // six perfect days (no freeze yet), then a miss, then a full day
+  for (let i = 0; i < 6; i += 1) finishDay(state, kid, addDays(MONDAY, i), addDays(MONDAY, 8));
+  finishDay(state, kid, addDays(MONDAY, 7), addDays(MONDAY, 8));
+  const info = streakInfo(state, kid, addDays(MONDAY, 8));
+  assert.equal(info.streak, 4); // 6 -> 3, then +1
+  assert.equal(info.best, 6);
+  assert.equal(info.inARow, 1);
+  assert.deepEqual(info.comebacks, [addDays(MONDAY, 7)]);
+  // the bonus is counted in coins and XP
+  const before = L.totalCoins(state, kid, addDays(MONDAY, 8));
+  const s2 = structuredClone(state);
+  delete s2.log[addDays(MONDAY, 7)];
+  assert.ok(before - L.totalCoins(s2, kid, addDays(MONDAY, 8)) > L.COMEBACK_BONUS - 1);
+  // this month: 7 of 8 past days done (today not done yet)
+  assert.deepEqual(L.monthDays(state, kid, addDays(MONDAY, 8)), { done: 7, days: 8 });
+});
+
+test('a task done 85% of days over 60 days becomes a mastered habit and earns half from the next Monday', async () => {
+  const L = await import('../js/logic.js');
+  const start = '2026-09-07'; // a Monday
+  const { state, kid } = setup(start);
+  state.settings.allowance = { on: true, coins: 300, xp: 300, bonus: 50, since: start };
+  const teeth = kid.tasks.find((t) => t.name === 'Brush teeth');
+  const laundry = kid.tasks.find((t) => t.name === 'Laundry');
+  assert.equal(L.masteryGoal(teeth), 51);
+  assert.equal(L.masteryGoal(laundry), 0); // once a week is too rare
+  // teeth every day except every 7th
+  let n = 0;
+  for (let k = start; k < '2026-11-16'; k = addDays(k, 1)) {
+    n += 1;
+    if (n % 7) entryFor(state, kid.id, k, true).tasks[teeth.id] = { status: 'done' };
+  }
+  const h = L.habitInfo(state, kid, '2026-11-15').get(teeth.id);
+  assert.ok(h.mastered, 'mastered');
+  assert.ok(h.done >= 51);
+  const monday = L.weekStart(addDays(h.mastered, 7));
+  assert.ok(L.masteredBefore(state, kid, monday).has(teeth.id));
+  // on a later week, teeth earns about half of what make-bed (same size) earns
+  const bed = kid.tasks.find((t) => t.name === 'Make bed');
+  const day = addDays(monday, 1);
+  const pt = L.taskPay(state, kid, day, teeth, day);
+  const pb = L.taskPay(state, kid, day, bed, day);
+  assert.ok(Math.abs(pt.coins * 2 - pb.coins) <= 2, `${pt.coins} vs ${pb.coins}`);
+  // the week before it was mastered, they earned the same (give or take rounding)
+  const early = addDays(L.weekStart(h.mastered), -6);
+  assert.ok(Math.abs(L.taskPay(state, kid, early, teeth, early).coins - L.taskPay(state, kid, early, bed, early).coins) <= 1);
+});
+
+test('kids plan their order and cues', async () => {
+  const L = await import('../js/logic.js');
+  const { kid } = setup();
+  const pm = kid.tasks.filter((t) => t.period === 'afternoon');
+  kid.plan = { order: [pm[1].id, pm[0].id], cues: { [pm[0].id]: 'After snack', [pm[1].id]: 'Not a cue' } };
+  const ordered = L.planOrder(kid, pm);
+  assert.equal(ordered[0].id, pm[1].id);
+  assert.equal(ordered[1].id, pm[0].id);
+  assert.equal(ordered.length, pm.length);
+  assert.equal(L.cueFor(kid, pm[0]), 'After snack');
+  assert.equal(L.cueFor(kid, pm[1]), '');
+  assert.equal(L.planSentence('After snack', pm[0]), "After snack, I'll do piano practice.");
+  assert.equal(L.planSentence('When I wake up', { name: 'Brush teeth' }), "When I wake up, I'll brush teeth.");
+});
+
+test('the family day is happy at 85% once every kid has reported today', async () => {
+  const L = await import('../js/logic.js');
+  const day = '2026-11-05';
+  const kids = [{ id: 'a', today: { day, done: 5, total: 5 } }, { id: 'b', today: { day, done: 4, total: 5 } }];
+  assert.equal(L.familyDay(kids, day).happy, true); // 9 of 10
+  kids[1].today.done = 3;
+  assert.equal(L.familyDay(kids, day).happy, false); // 8 of 10
+  kids[1].today = { day: '2026-11-04', done: 5, total: 5 };
+  assert.equal(L.familyDay(kids, day).unknown, 1);
+  assert.equal(L.familyDay(kids, day).happy, false);
+  // an excused kid has nothing to do
+  kids[1].today = { day, done: 0, total: 0 };
+  assert.equal(L.familyDay(kids, day).happy, true);
+});
+
+test('the weekly look-back counts last week and four weeks before', async () => {
+  const L = await import('../js/logic.js');
+  const { state, kid } = setup('2026-09-28');
+  const bed = kid.tasks.find((t) => t.name === 'Make bed');
+  for (let i = 0; i < 6; i += 1) entryFor(state, kid.id, addDays('2026-10-26', i), true).tasks[bed.id] = { status: 'done' };
+  for (let i = 0; i < 3; i += 1) entryFor(state, kid.id, addDays('2026-09-28', i), true).tasks[bed.id] = { status: 'done' };
+  const lb = L.weekLookback(state, kid, MONDAY);
+  assert.equal(lb.from, '2026-10-26');
+  const row = lb.tasks.find((r) => r.task.id === bed.id);
+  assert.equal(row.done, 6);
+  assert.equal(row.of, 7);
+  assert.deepEqual(row.before, { done: 3, of: 7 });
 });

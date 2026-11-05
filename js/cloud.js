@@ -252,7 +252,7 @@ export function watchBuddies(familyId, onBuddies) {
   unsubs.push(fb.onSnapshot(kidsCol(familyId), (snap) => {
     onBuddies(snap.docs.map((d) => {
       const k = d.data();
-      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: k.exBest || 0 };
+      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: k.exBest || 0, today: k.today || null };
     }));
   }, (err) => console.error('Kid Quest buddies', err)));
 }
