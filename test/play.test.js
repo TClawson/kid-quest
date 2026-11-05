@@ -4,9 +4,10 @@ import { gameFor, levelObstacles, rng, kickWindows, heightSpread } from '../js/p
 import { needle, zoneAt, SHOT_ODDS, STEAL_ODDS, Z } from '../js/hockey.js';
 import { gamesPerDay, gamesLeft } from '../js/logic.js';
 
-test('visitors play their ball game, the same one all day, or tag', () => {
+test('visitors play their ball game or go fishing, the same one all day, or tag', () => {
   assert.equal(gameFor({}), 'tag');
-  assert.equal(gameFor({ shoes: 2, rod: 1 }), 'tag');
+  assert.equal(gameFor({ shoes: 2 }), 'tag');
+  assert.equal(gameFor({ shoes: 2, rod: 1 }), 'fishing');
   assert.equal(gameFor({ soccer: 1 }), 'soccer');
   assert.equal(gameFor({ hockey: 3 }), 'hockey');
   const both = { soccer: 1, hockey: 1 };

@@ -21,6 +21,7 @@ import {
 import { pickVisitors, visitorLines, planVisits } from './visits.js';
 import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
+import { SPOTS as FISH_SPOTS } from './fishing.js';
 import { runSeconds, CHEERS, pickCheer } from './practice.js';
 import { startListening, buddyState, TUNING } from './listen.js';
 import { createBeatFollower } from './beat.js';
@@ -975,7 +976,7 @@ function visitorsHtml(kid, s) {
   // once the quest is done, every visitor wants to play (see playWith)
   if (s.complete) {
     const left = gamesLeftFor(kid);
-    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', tag: 'Wanna play tag? Tap me!' };
+    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', fishing: 'Wanna go fishing? Tap me!', tag: 'Wanna play tag? Tap me!' };
     const plan = visitPlan(kid, visitors);
     visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[gamesWith(kid, v, plan)[0]] : "That's all our games today! See you tomorrow"; });
   }
@@ -2630,7 +2631,7 @@ actions.visitor = (el) => {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 8, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick' };
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', fishing: 'rod' };
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
 const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks);
 
@@ -2645,14 +2646,20 @@ function visitPlan(kid, visitors) {
   return planVisits(kid.id, visitors.map((v) => ({ id: v.id, gear: bestGear(v.owned) })), today(), heldGame(kid));
 }
 
+/** Fishing when the kid's buddy is holding a fishing rod (there's no field for it: the lake is in the game). */
+function heldRod(kid) {
+  return itemById(kid.buddy?.outfit?.sport)?.kind === 'rod' ? 'fishing' : null;
+}
+
 function gamesWith(kid, v, plan) {
   const area = plan.areas.find((a) => a.members.includes(v.id));
-  const theirs = area && PLAY_KINDS.includes(area.kind) ? area.kind : visitGame(v);
-  return [...new Set([heldGame(kid), theirs, 'tag'].filter(Boolean))];
+  // a visitor fishing at the village pond goes fishing with you
+  const theirs = area && PLAY_KINDS.includes(area.kind) ? area.kind : area?.kind === 'pond' ? 'fishing' : visitGame(v);
+  return [...new Set([heldGame(kid) || heldRod(kid), theirs, 'tag'].filter(Boolean))];
 }
 
 function pickGame(kid, v, games) {
-  const held = heldGame(kid);
+  const held = heldGame(kid) || heldRod(kid);
   const note = (k) => (k === 'tag' ? 'No gear needed' : k === held ? `With your ${GEAR_WORD[k]}` : `With ${esc(v.name)}'s ${GEAR_WORD[k]}`);
   openModal(`
     <h2>Play with ${esc(v.name)}</h2>
@@ -2681,15 +2688,16 @@ function gameTestCard() {
   return `
     <div class="card game-test">
       <h2>🎮 Try the games</h2>
-      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
+      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, fishing rod or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
       <div class="game-test-pick">
         <label>Playing <select id="gt-kid">${opt(ui.gtKid || kids[0].id, who)}</select></label>
         <label>Their gear <select id="gt-kid-gear">${opt(ui.gtKidGear || '1', tiers)}</select></label>
         <label>Visitor <select id="gt-vis">${opt(ui.gtVis || (kids[1] || kids[0]).id, who)}</select></label>
         <label>Visitor's gear <select id="gt-vis-gear">${opt(ui.gtVisGear || '1', tiers)}</select></label>
+        <label>Fishing spot <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
       </div>
       <div class="row wrap">
-        ${['soccer', 'tag', 'hockey'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
+        ${['soccer', 'tag', 'hockey', 'fishing'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
       </div>
     </div>`;
 }
@@ -2697,10 +2705,10 @@ function gameTestCard() {
 actions['game-test'] = (el) => {
   const kind = el.dataset.kind;
   const val = (id) => document.getElementById(id)?.value;
-  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear') });
+  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map') });
   const kid = kidById(ui.gtKid) || state.kids[0];
   const other = kidById(ui.gtVis) || kid;
-  const gearKind = kind === 'tag' ? 'shoes' : kind;
+  const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind;
   const gear = (tier) => (Number(tier) ? { [gearKind]: Number(tier) } : {});
   // the same kid on both sides still needs two names
   const visName = other.id === kid.id ? 'Visitor' : other.name;
@@ -2710,6 +2718,8 @@ actions['game-test'] = (el) => {
     best: 0,
     kid: { buddy: kid.buddy, name: kid.name, gear: gear(ui.gtKidGear) },
     visitor: { buddy: other.buddy, name: visName, gear: gear(ui.gtVisGear) },
+    map: ui.gtMap || kidTheme(kid),
+    day: today(),
     sounds,
   });
 };
@@ -2722,6 +2732,8 @@ function playWith(kid, v, kind) {
     best,
     kid: { buddy: kid.buddy, name: kid.name, gear: bestGear(kid.owned || []) },
     visitor: { buddy: v.buddy, name: v.name, gear },
+    map: kidTheme(kid),
+    day: today(),
     sounds,
     gamesLeft: () => gamesLeftFor(kid),
     onStart: () => {

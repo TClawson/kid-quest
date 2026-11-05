@@ -19,9 +19,10 @@ try {
   saved.settings.pinHash = fallbackHash('kidquest:1234');
   saved.settings.questView = 'list';
   const tasks = [...defaultTasks(), { id: 'task_run', name: 'Run', icon: '🏃', period: 'exercise', days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0, gems: 50 }];
-  // exercised every day for the last 14 days: at least one full week, so jumping jacks are unlocked
-  const start = addDays(t, -14);
-  for (let i = 1; i <= 14; i += 1) saved.log[addDays(t, -i)] = { kid_ava: { tasks: { task_run: { status: 'done' } }, excused: false } };
+  // exercised every day for the last 21 days: at least two full Monday-Sunday weeks whatever
+  // day the test runs (14 days only gave two on some weekdays), so jumping jacks are unlocked
+  const start = addDays(t, -21);
+  for (let i = 1; i <= 21; i += 1) saved.log[addDays(t, -i)] = { kid_ava: { tasks: { task_run: { status: 'done' } }, excused: false } };
   saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: start, seenUnlocks: [], seenMoves: ['jacks', 'cartwheel'], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow', music: 'music-keyboard' } } });
   saved.log[t] = { kid_ava: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
   await page.goto(site.url);
@@ -31,9 +32,9 @@ try {
   await page.waitForTimeout(500);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
 
-  // the bonus exercise section is there, the gems chip shows 14 x 50
+  // the bonus exercise section is there, the gems chip shows 21 x 50
   assert.equal(await page.locator('.exercise .tile').count(), 1);
-  assert.match(await page.locator('.chip.gem').innerText(), /700/);
+  assert.match(await page.locator('.chip.gem').innerText(), /1,?050/);
   // the quest list doesn't include the exercise task
   assert.equal(await page.locator('section:not(.exercise) .tile[data-id="task_run"]').count(), 0);
 
@@ -48,7 +49,7 @@ try {
   await page.click('.exercise .tile[data-id="task_run"]');
   await page.waitForTimeout(800);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
-  assert.match(await page.locator('.chip.gem').innerText(), /750/);
+  assert.match(await page.locator('.chip.gem').innerText(), /1,?100/);
 
   // buy a soccer ball with gems
   await page.click('[data-action="wardrobe"]');

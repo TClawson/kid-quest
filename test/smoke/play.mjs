@@ -190,7 +190,7 @@ try {
     await page.selectOption('#gt-kid', 'kid_ava');
     await page.selectOption('#gt-vis', 'kid_sam');
     await page.selectOption('#gt-vis-gear', '3');
-    for (const [kind, title] of [['hockey', /^Hockey with Sam/], ['tag', /^Tag with Sam/], ['soccer', /^Keepy-uppy with Sam/]]) {
+    for (const [kind, title] of [['hockey', /^Hockey with Sam/], ['tag', /^Tag with Sam/], ['soccer', /^Keepy-uppy with Sam/], ['fishing', /^Fishing with Sam/]]) {
       await page.click(`[data-action="game-test"][data-kind="${kind}"]`);
       await page.waitForSelector('.playground');
       assert.match(await page.locator('.play-top').innerText(), title);
