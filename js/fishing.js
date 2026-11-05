@@ -133,6 +133,12 @@ export const SPOTS = {
     odds: { bluegill: 18, smallmouth: 20, largemouth: 24, pike: 26, catfish: 12 },
     special: { id: 'dragon', name: 'Fire dragon fish', as: 'pike', look: { back: '#862e9c', side: '#e03131', belly: '#ffd43b', mark: 'flame', depth: 0.22, fin: '#ffd43b' }, like: { worm: 0.2, jig: 0.7, spoon: 0.9 }, odds: 4 },
   },
+  'bg-rainforest': {
+    name: 'Jungle River', sky: ['#b2f2bb', '#e6fcf5'], water: ['#1c9c8c', '#127a6e', '#0b5a50'], bed: ['#6e4b2a', '#4a3220'],
+    land: ['#2f9e44', '#237032', '#6e4b2a'], weed: ['#2b8a3e', '#69db7c'], log: ['#6e4b2a', '#4a3220', '#5c940d'], far: 'jungle', top: 'lily', logKind: 'mossy',
+    odds: { bluegill: 22, smallmouth: 14, largemouth: 20, pike: 12, catfish: 32 },
+    special: { id: 'peacock', name: 'Peacock bass', as: 'largemouth', look: { back: '#5c940d', side: '#fcc419', belly: '#ff922b', mark: 'peacock', depth: 0.38, fin: '#e8590c' }, like: { worm: 0.3, jig: 0.8, spoon: 0.9 }, odds: 4 },
+  },
   'bg-rainbow': {
     name: 'Candy Pond', sky: ['#c3fae8', '#fff0f6'], water: ['#f783ac', '#e64980', '#a61e4d'], bed: ['#ffffff', '#ffdeeb'],
     land: ['#69db7c', '#40c057', '#fcc2d7'], weed: ['#845ef7', '#b197fc'], log: ['#ffffff', '#e03131', '#ffffff'], far: 'rainbow', top: 'sparkle', logKind: 'cane',
@@ -187,6 +193,7 @@ export function fishPic(look, len) {
       if (look.mark === 'bars' && u > 0.2 && u < 0.78 && Math.floor(u * 9) % 2 === 0 && j + 0.5 < cy + D * 0.25) col = look.bar || look.back;
       if (look.mark === 'stripe' && Math.abs(j + 0.5 - cy) < 0.8 && u > 0.18 && u < 0.85) col = look.back;
       if ((look.mark === 'spots' || look.mark === 'glow') && u > 0.2 && u < 0.78 && (i * 7 + j * 13) % 9 === 0 && j + 0.5 < cy + D * 0.3) col = look.belly;
+      if (look.mark === 'peacock' && j + 0.5 < cy + D * 0.3 && [0.3, 0.47, 0.64].some((b) => Math.abs(u - b) < 0.035)) col = '#2b3a1a';
       if (look.mark === 'flame' && u > 0.25 && u < 0.78 && (i + j) % 4 === 0) col = '#ffd43b';
       if (look.mark === 'comet' && u > 0.2 && u < 0.78 && (i * 5 + j * 3) % 7 === 0) col = '#ffffff';
       px(i, j, col);
@@ -207,6 +214,11 @@ export function fishPic(look, len) {
   px(ex, ey, look.eye || '#ffffff'); px(ex + 1, ey, '#1b1430');
   if (look.mark === 'bars' && look.depth > 0.5) { px(ex + 2, ey + 1, '#1b1430'); px(ex + 3, ey + 1, '#1b1430'); } // bluegill's dark ear flap
   if (look.mark === 'whiskers') { px(0, Math.round(cy), '#1b1430'); px(1, Math.round(cy) + 1, '#1b1430'); px(0, Math.round(cy) + 2, '#1b1430'); }
+  if (look.mark === 'peacock') {
+    // the eye spot at the base of the tail: a dark dot in a gold ring
+    const tx = Math.round(1 + L * 0.76); const ty = Math.round(cy);
+    px(tx - 1, ty, '#fcc419'); px(tx + 1, ty, '#fcc419'); px(tx, ty - 1, '#fcc419'); px(tx, ty + 1, '#fcc419'); px(tx, ty, '#1b1430');
+  }
   if (look.mark === 'horn') { px(1, top - 1, '#ffd43b'); px(0, top - 2, '#ffd43b'); }
   if (look.mark === 'crown') { for (const d of [0, 2, 4]) { px(ex + d, top - 2, '#ffd43b'); } for (let d = 0; d < 5; d += 1) px(ex + d, top - 1, '#fcc419'); }
   if (look.mark === 'sword') for (let i = 0; i < 2 + L * 0.12; i += 1) px(i, Math.round(cy) - 1, i === 0 ? '#1b1430' : '#adb5bd');
@@ -385,6 +397,17 @@ export class Fishing {
       rect('#ff6b1a', cx - 2, S - 26, 2, 10); rect('#ff6b1a', cx + 3, S - 26, 1, 14);
       rect('#495057', cx - 6, S - 34, 5, 3); rect('#495057', cx - 3, S - 38, 6, 4); rect('#343a40', cx + 1, S - 42, 5, 4);
       rect('#2b211d', this.bankX, S - 2, W, 2);
+    } else if (kind === 'jungle') {
+      // tall trees with big round tops, vines hanging down, and mist
+      for (let i = this.bankX - 6; i < W; i += 13 + Math.floor(r() * 8)) {
+        const h = 16 + Math.floor(r() * 16); const top = S - h;
+        rect('#5c3a1e', i + 4, top + 4, 2, h - 4);
+        disc(r() < 0.5 ? '#1b5e20' : '#237032', i + 5, top + 2, 5);
+        rect('#2f9e44', i + 2, top - 1, 4, 2);
+        if (r() < 0.6) rect('#5c940d', i + 1 + Math.floor(r() * 8), top + 5, 1, 4 + Math.floor(r() * 8));
+      }
+      rect('#237032', this.bankX, S - 3, W, 3);
+      for (let i = this.bankX; i < W; i += 5) rect('#d3f9d8', i + Math.floor(r() * 3), S - 6 - Math.floor(r() * 3), 3, 1);
     } else if (kind === 'rainbow') {
       const cols = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#4dabf7', '#b197fc'];
       const cx = Math.round(W * 0.66); const R = Math.round(Math.min(W * 0.3, S * 0.95));
@@ -420,6 +443,7 @@ export class Fishing {
     rect(light, g.x, g.y, g.len, 1);
     if (sp.logKind === 'pipe') { for (let i = 4; i < g.len; i += 6) rect(dark, g.x + i, g.y, 1, g.h); rect('#1b1430', g.x + g.len - 1, g.y + 1, 1, g.h - 2); return; }
     if (sp.logKind === 'charred') { for (let i = 2; i < g.len; i += 5) rect('#ff6b1a', g.x + i, g.y + 1 + (i % 2), 2, 1); return; }
+    if (sp.logKind === 'mossy') { for (let i = 1; i < g.len - 1; i += 3) rect(light, g.x + i, g.y, 2, 1); for (let i = 4; i < g.len - 2; i += 6) rect(dark, g.x + i, g.y + 2, 2, 1); return; }
     if (sp.logKind === 'rock') { for (let i = 3; i < g.len; i += 7) rect(light, g.x + i, g.y + 2, 1, 1); return; }
     // bark lines, the cut end and a stub of a branch
     for (let i = 3; i < g.len - 2; i += 5) rect(dark, g.x + i, g.y + 1, 3, 1);

@@ -123,6 +123,28 @@ export const SONGS = {
     fill: ['k.......', '........', 'hhhhhhhh', '..t.tttt'],
   },
 
+  // Rainforest: a bouncy marimba over jungle toms, A minor
+  'bg-rainforest': {
+    name: 'Jungle Drums',
+    bpm: 124,
+    swing: 0.16,
+    leadWave: 'triangle',
+    leadEnv: 'pluck',
+    leadVol: 0.55,
+    lead: [
+      'A4 - C5 E5 - D5 C5 A4', 'G4 - B4 D5 - C5 B4 G4', 'F4 A4 C5 F5 - E5 D5 C5', 'E5 - - - G#4 - B4 -',
+      'A5 - G5 E5 - D5 E5 G5', 'F#5 - E5 D5 - A4 D5 F#5', 'F5 - E5 C5 - A4 C5 F5', 'E5 - - - . . B4 -',
+      'C5 - E5 - A5 - G5 E5', 'D5 - G5 - B5 - A5 G5', 'C6 - A5 - F5 - A5 C6', 'B5 - G#5 - E5 - . .',
+      'A5 C6 A5 E5 A5 C6 A5 E5', 'G5 B5 G5 D5 G5 B5 G5 D5', 'E5 G#5 B5 G#5 E5 G#5 B5 D6', 'A5 - - - . . . .',
+    ],
+    chords: ['Am', 'G', 'F', 'E', 'Am', 'D', 'F', 'E', 'Am', 'G', 'F', 'E', 'Am', 'G', 'E', 'Am'],
+    arp: { from: 8, wave: 'pulse12', octave: 4, vol: 0.05 },
+    bass: [[R, 2], null, [F, 1], [R, 2], null, [R, 2], [F, 1], null],
+    drums: [['k..k..k.', '....s...', 'h.h.h.hh', '.t...t.t'], ['k..k..k.', '....s..s', 'h.h.h.hh', '.t.t.tt.']],
+    fill: ['k.......', '........', 'hhhhhhhh', 'tttt.ttt'],
+    drumVol: 0.85,
+  },
+
   // Rainbow Land: a skippy, sugary bounce with a bell lead, G major
   'bg-rainbow': {
     name: 'Candy Skip',

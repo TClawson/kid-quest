@@ -213,6 +213,7 @@ export function startMusic(theme = 'bg-meadow') {
   master.gain.linearRampToValueAtTime(VOLUME * (song.gain || 1), ac.currentTime + 1.2);
   master.connect(ac.destination);
   live = { id, song, master, r: rig(ac, master, song, 60 / song.bpm / 2), step: 0, nextTime: ac.currentTime + 0.1, timer: 0 };
+  ducked = 0;
   tick();
   live.timer = setInterval(tick, 100);
 }
@@ -230,6 +231,22 @@ export function stopMusic() {
 }
 
 export const isMusicPlaying = () => !!live;
+
+/**
+ * Turn the map song down while something else is loud (the rainforest's rain shower):
+ * 0 is full volume, 1 is the quietest (a bit under half).
+ */
+let ducked = 0;
+export function duckMusic(k = 0) {
+  const level = Math.max(0, Math.min(1, k));
+  if (!live || Math.abs(level - ducked) < 0.02) return;
+  ducked = level;
+  const g = live.master.gain;
+  const t = ac.currentTime;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(Math.max(0.0001, g.value), t);
+  g.linearRampToValueAtTime(VOLUME * (live.song.gain || 1) * (1 - 0.55 * level), t + 0.25);
+}
 
 /** Render a song's loop to an AudioBuffer (used to make preview files). */
 export async function renderSong(theme, loops = 1, sampleRate = 44100) {
