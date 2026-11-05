@@ -51,7 +51,8 @@ export function needle(held) {
 /** Which color the needle is on. tier: the stick (1-3); better sticks widen green a little. */
 export function zoneAt(m, tier = 1) {
   const d = Math.abs(m - 0.5);
-  const green = 0.035 + 0.008 * (Math.max(1, tier) - 1);
+  // a good stick makes green half again as wide, a super one twice (Taylor, 2026-11-05)
+  const green = 0.035 + 0.02 * (Math.max(1, tier) - 1);
   if (d <= green) return 'green';
   if (d <= 0.17) return 'yellow';
   return 'red';
