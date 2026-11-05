@@ -431,6 +431,8 @@ function totalEarned(state, kid, today, field) {
       if (entry.tasks?.[t.id]?.status === 'done') sum += taskPay(state, kid, key, t, today)[field] || 0;
     }
     if (field !== 'gems') for (const b of bonusesOn(entry)) sum += b.coins || 0;
+    // the treasure chest's coins or gems (see treasure.js); chests give no XP
+    if (field !== 'xp') sum += entry.chest?.[field] || 0;
   }
   return sum;
 }
@@ -569,8 +571,8 @@ export function gamesPerDay(exerciseWeeks = 0) {
   return GAMES_PER_DAY + 2 * Math.min(3, Math.max(0, Math.floor(exerciseWeeks)));
 }
 
-/** Games left today. kid.playLog is { day, n }: games started on that day. */
-export function gamesLeft(kid, today, exerciseWeeks = 0) {
+/** Games left today. kid.playLog is { day, n }: games started on that day. extra: games from today's treasure chest. */
+export function gamesLeft(kid, today, exerciseWeeks = 0, extra = 0) {
   const used = kid?.playLog?.day === today ? kid.playLog.n || 0 : 0;
-  return Math.max(0, gamesPerDay(exerciseWeeks) - used);
+  return Math.max(0, gamesPerDay(exerciseWeeks) + extra - used);
 }
