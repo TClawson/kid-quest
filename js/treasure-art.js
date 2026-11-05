@@ -2,6 +2,8 @@
 // Same 16-bit style as the map: letter grids, one letter per color, wrapped in a dark outline.
 // Everything comes out as an SVG string, so it works in the app and in tests.
 
+import { LANDMARKS } from './landmarks.js';
+
 const OUT = '#2a1838';
 
 /** Wrap a grid's shape in an outline ring of K (like sprite() in maplife.js). */
@@ -578,10 +580,14 @@ export const SECRETS = {
 export function secretSvg(themeId, scale = 4) {
   const s = SECRETS[themeId];
   if (!s) return '';
+  // the big landmark if there is one (landmarks.js), else the small spot above
+  const art = LANDMARKS[themeId] || s;
+  const w = art.w + 2;
+  const h = art.h + 2;
   const frames = [0, 1, 2].map((i) => {
-    const p = new Pix(s.w, s.h);
-    for (const [x, y, rows, pal, outline = true] of s.frames(i)) p.put(x, y, rows, pal, outline);
+    const p = new Pix(w, h);
+    for (const [x, y, rows, pal, outline = true] of art.frames(i)) p.put(x + 1, y + 1, rows, pal, outline);
     return `<g class="f${i}">${p.rects()}</g>`;
   }).join('');
-  return svgOf(s.w, s.h, scale, 'secret-svg', frames);
+  return svgOf(w, h, scale, 'secret-svg', frames);
 }

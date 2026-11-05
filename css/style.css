@@ -580,7 +580,8 @@ label { color: var(--ink); }
 .map-secret.awake .secret-svg .f0 { visibility: hidden; }
 .map-secret.awake .secret-svg .f1 { animation: secret-a 0.5s steps(1, end) infinite; }
 .map-secret.awake .secret-svg .f2 { animation: secret-b 0.5s steps(1, end) infinite; }
-.map-secret.awake { animation: px-node 0.4s steps(1, end) infinite; }
+.map-secret.awake { animation: secret-bob 0.4s steps(1, end) infinite; }
+@keyframes secret-bob { 50% { translate: 0 -3px; } }
 .secret-name { margin-top: 2px; font-size: 0.8rem; font-weight: 800; background: #fffdf5; border: 3px solid var(--px-ink, #2a1838); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
 .secret-bubble { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 220px; font-size: 0.85rem; font-weight: 700; background: #fff; border: 3px solid var(--px-ink, #2a1838); border-radius: 6px; padding: 4px 8px; }
 @keyframes secret-a { 0% { visibility: visible; } 50% { visibility: hidden; } }

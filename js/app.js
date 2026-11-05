@@ -1143,7 +1143,7 @@ function visitorsHtml(kid, s) {
 const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
 const MAP_WAVE = [0, 22, 30, 18, -4, -24, -30, -16];
 /** Room at the bottom of the map for the secret landmark. */
-const SECRET_ROOM = 150;
+const SECRET_ROOM = 280;
 /** A show can play again a minute after the last one. */
 const SHOW_AGAIN_MS = 60000;
 

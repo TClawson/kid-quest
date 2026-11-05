@@ -246,6 +246,11 @@ export const SHOWS = {
       ctx.fillStyle = '#4dabf7';
       for (let x = 0; x < V.aw; x += 4) ctx.fillRect(x, Math.round(V.bottom - 3 + Math.sin(x / 6 + t * 4) * 1.5), 3, 4);
       if (rise > 0.2 && frame % 3 === 0) S.parts.add({ x: rand(S.sx, S.sx + S.ship.width), y: y + rand(0, 20), vy: -0.4, max: 18, c: '#c3fae8' });
+      // the buddy stands on deck and jumps each time a cannon fires
+      if (rise > 0.5) {
+        const jump = [2, 2.8, 3.6, 4.4, 5.2].some((c) => t > c && t < c + 0.35) ? 5 : 0;
+        buddyAt(ctx, S, S.sx + S.ship.width * 0.18, y + 8 * V.big - 19 - jump);
+      }
       stepShells(ctx, t, S, '#212529');
       // the parrot
       if (t > 3.2 && t < 7.6) {
@@ -264,14 +269,33 @@ export const SHOWS = {
     },
     step(ctx, t, V, S) {
       const up = span(t, 0, 1.6) - span(t, 6.4, 8);
+      const tips = [];
       for (const a of S.arms) {
         const n = Math.floor(up * Math.min(38, V.h * 0.17));
+        let tip = { x: a.x, y: V.bottom };
         for (let i = 0; i < n; i += 1) {
           const x = a.x + Math.sin(t * 2.5 + i * 0.22 + a.ph) * i * 0.35 + a.lean * i * 0.4;
           const y = V.bottom + 4 - i * 3;
           puff(ctx, x, y, Math.max(1.5, 5 - i * 0.11), i % 2 ? '#9775fa' : '#b197fc', OUT);
           if (i % 3 === 1) { ctx.fillStyle = '#e5dbff'; ctx.fillRect(Math.round(x + a.lean * 2), Math.round(y), 2, 2); }
+          tip = { x, y };
         }
+        tips.push(tip);
+      }
+      // the buddy jumps from tentacle to tentacle
+      if (t > 1.6 && t < 6.6) {
+        const order = [1, 0, 1, 2, 3, 2, 1, 2];
+        const u = (t - 1.6) / 0.625;
+        const k = Math.min(order.length - 2, Math.floor(u));
+        const f = u - k;
+        const a = tips[order[k]];
+        const b = tips[order[k + 1]];
+        const air = f > 0.35;
+        const g = air ? (f - 0.35) / 0.65 : 0;
+        const x = air ? a.x + (b.x - a.x) * g : a.x;
+        const y = air ? a.y + (b.y - a.y) * g - Math.sin(g * Math.PI) * Math.max(14, Math.abs(b.x - a.x) * 0.35) : a.y;
+        buddyAt(ctx, S, x - 10, y - 22);
+        if (air && f < 0.45) S.parts.add({ x: a.x, y: a.y - 2, vx: rand(-0.6, 0.6), vy: -0.6, max: 20, ring: true, size: 1, c: '#d0ebff' });
       }
       // the octopus pops up and throws a treasure chest, which bursts into bubbles and coins
       const oy = V.bottom - span(t, 1, 2) * 20 + span(t, 6.5, 7.5) * 24;
@@ -370,6 +394,8 @@ export const SHOWS = {
       if (flap) blit(ctx, wing, x + 13 * V.big, y - V.big);
       const roaring = t > 1.5 && t < 5.6 && frame % 12 < 9;
       blit(ctx, roaring ? S.roar : d, x, y);
+      // the buddy rides on the Dragon King's back
+      buddyAt(ctx, S, x + 15 * V.big - 10, y + 9 * V.big - 19 + (flap ? -1 : 1));
       if (!flap) blit(ctx, wing, x + 13 * V.big, y + 10 * V.big);
       // fireworks out of its mouth
       for (const sh of S.shells) if (!sh.started) { sh.from = { x: x + 2 * V.big, y: y + 8 * V.big }; if (t >= sh.t0) sh.started = true; }
@@ -399,6 +425,7 @@ export const SHOWS = {
         const y = V.bottom - u * (V.h + 40);
         const bird = big(`phoenix${frame % 4 < 2}`, PHOENIX[frame % 4 < 2 ? 0 : 1], PHOENIX_PAL, V.big);
         blit(ctx, bird, x - bird.width / 2, y);
+        buddyAt(ctx, S, x - 10, y - 14 + (frame % 4 < 2 ? 0 : 2));
         for (let i = 0; i < 3; i += 1) S.parts.add({ x: x + rand(-6, 6), y: y + bird.height - 2, vx: rand(-0.4, 0.4), vy: rand(0.2, 1), max: 22, size: 2, c: (p) => (p.life < 6 ? '#ffe066' : p.life < 14 ? '#ff922b' : '#e03131') });
       }
       // the tikis bow
@@ -427,14 +454,15 @@ export const SHOWS = {
       ctx.globalAlpha = 1;
       if (t > 0.3 && t < 2.6 && frame % 2 === 0) S.parts.add({ x: V.spot.x, y: V.spot.y, vx: rand(-1.5, 1.5), vy: rand(-3.5, -2), g: 0.15, max: 30, size: 2, c: '#fcc419' });
       // the buddy slides down the rainbow
-      if (t > 2.2 && t < 5.4) {
+      if (t > 2.2 && t < 5.2) {
         const a = Math.PI * (1 - span(t, 2.2, 5.2));
         const x = cx - Math.cos(a) * (R + 2);
         const y = cy - Math.sin(a) * (R + 2);
         buddyAt(ctx, S, x - 10, y - 20);
         S.parts.add({ x: x + rand(-3, 3), y: y - 2, max: 16, star: true, c: pick(RAINBOW) });
       }
-      // flying unicorns
+      // flying unicorns; the buddy jumps off the end of the rainbow onto the last one
+      const ride = {};
       [0, 1, 2].forEach((i) => {
         const t0 = 2.6 + i * 0.6;
         if (t < t0 || t > t0 + 4.2) return;
@@ -445,7 +473,15 @@ export const SHOWS = {
         const manes = ['#f783ac', '#b197fc', '#74c0fc', '#8ce99a', '#ffd43b'];
         draw(ctx, x, y, UNICORN_RUN[frame % 2], { y: '#ffe066', Y: '#f59f00', M: manes[(c + i) % 5], N: manes[(c + i + 2) % 5], W: '#ffffff', w: '#e5dbff', p: '#f783ac', h: '#9775fa' });
         if (frame % 2 === 0) S.parts.add({ x, y: y + 12, max: 14, star: true, c: manes[(c + i) % 5] });
+        if (i === 2) { ride.x = x + 10; ride.y = y + 2; }
       });
+      if (t >= 5.2 && ride.x !== undefined) {
+        const from = { x: cx + R + 2, y: cy };
+        const g = span(t, 5.2, 5.8);
+        const x = from.x + (ride.x - from.x) * g;
+        const y = from.y + (ride.y - from.y) * g - Math.sin(g * Math.PI) * 20;
+        buddyAt(ctx, S, x - 10, y - 18);
+      }
     },
   },
 
@@ -478,6 +514,7 @@ export const SHOWS = {
         const x = px - w.width + u * (V.aw + w.width * 1.3);
         const y = py - w.height / 2 + Math.sin(t * 2) * 4;
         blit(ctx, w, x, y);
+        buddyAt(ctx, S, x + w.width * 0.42 - 10, y - 15);
         if ((t > 3 && t < 3.8) || (t > 5 && t < 5.8)) {
           for (let i = 0; i < 3; i += 1) S.parts.add({ x: x + w.width - 7 * V.big, y: y + V.big, vx: rand(-1.2, 1.2), vy: rand(-3, -1.5), g: 0.08, max: 30, star: true, c: pick(['#ffe066', '#ffffff', '#fff3bf']) });
         }

@@ -55,7 +55,9 @@ try {
     await page.waitForTimeout(600);
     await page.screenshot({ path: `${shots}/${theme}-0.png` });
     const clickAt = (Date.now() - born) / 1000;
-    await page.click('.map-secret');
+    // tap it where it is, without scrolling the page
+    const box = await page.locator('.map-secret .secret-svg').boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     for (const [i, ms] of [[1, 1200], [2, 1600], [3, 1600], [4, 1600]]) {
       await page.waitForTimeout(ms);
       await page.screenshot({ path: `${shots}/${theme}-${i}.png` });
