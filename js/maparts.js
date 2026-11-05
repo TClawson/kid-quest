@@ -4,7 +4,7 @@
 // Moving things (fish, dragons, saucers...) are in maplife.js.
 // One art pixel is SCALE screen pixels, so the scene stays chunky at any screen size.
 
-import { startMapLife } from './maplife.js';
+import { startMapLife, waterfallAt } from './maplife.js';
 
 const SCALE = 4;
 const OUT = '#2a1838';
@@ -81,6 +81,37 @@ const MUSHROOM = [
   '..KWBWDK..',
   '..KWWWDK..',
   '..KKKKKK..',
+];
+
+// the rainforest: big trees with vines, ferns, flowers, and huts on stilts
+const JUNGLE_TREE = [
+  '...KKKKKK...',
+  '.KKGGgGGGKK.',
+  'KGGgGGGGgGGK',
+  'KGgGGdGGGgdK',
+  'KGGGGGGgGGGK',
+  'KdGGdGGGGdGK',
+  '.KKdKKKdKKK.',
+  '.v..KTTK..v.',
+  '.v..KTTK..v.',
+  '....KTTK..v.',
+  '...KTTTTK...',
+];
+const JUNGLE_PAL = { G: '#2b8a3e', g: '#51cf66', d: '#1b5e20', T: '#6e4b2a', v: '#5c940d' };
+const FERN = ['K..K..K', 'KgKgKgK', '.KgGgK.', 'KgGGGgK', '.KKKKK.'];
+const FLOWER = ['.K.K.', 'KrKrK', 'KrrrK', '.KGK.', 'KGGGK'];
+const STILTS = [
+  '....KK....',
+  '...KRRK...',
+  '..KRrRRK..',
+  '.KRRRRrRK.',
+  'KRrRRRRRRK',
+  'KKKKKKKKKK',
+  '.KWWWWWWK.',
+  '.KWBWWDWK.',
+  '.KKKKKKKK.',
+  '..K....K..',
+  '..K....K..',
 ];
 
 // ---------- themes ----------
@@ -209,6 +240,26 @@ export const MAP_THEMES = {
     sparkle: { colors: ['#ff922b', '#ffd43b', '#fa5252'], every: 200 },
   },
 
+  'bg-rainforest': {
+    name: 'Rainforest',
+    life: 'jungle',
+    ground: ['#237032', '#1b5e20', '#2f9e44'],
+    walls: [[JUNGLE_TREE, JUNGLE_PAL], [JUNGLE_TREE, { ...JUNGLE_PAL, G: '#237032', g: '#40c057' }]],
+    scenery: [[FERN, { G: '#2f9e44', g: '#8ce99a' }], [FLOWER, { r: '#ff6b6b', G: '#2f9e44' }], [JUNGLE_TREE, JUNGLE_PAL], [FLOWER, { r: '#f783ac', G: '#2f9e44' }]],
+    rocks: [ROCK, { L: '#5c7a5c', d: '#3d5a3d' }],
+    road: { layers: [[9, '#5c3a1e'], [7, '#8b5a2b']], walked: '#b07443', pebble: '#5c3a1e' },
+    river: { bank: '#6e4b2a', water: '#1c9c8c', deep: '#127a6e', shine: '#96f2d7' },
+    pond: 'lily',
+    bridge: { plank: '#a0612f', dark: '#6e4b2a', rail: '#5c940d' },
+    house: STILTS,
+    housePals: [{ R: '#5c940d', r: '#94d82d' }, { R: '#2b8a3e', r: '#69db7c' }],
+    houseBase: { W: '#d9a066', B: '#1c9c8c', D: '#5c3a1e' },
+    fence: null,
+    goal: temple({ hi: '#94d82d', roof: '#868e96', lo: '#495057', crest: '#ffd43b', col: '#adb5bd', colLo: '#5c940d', step1: '#868e96', step2: '#6c757d' }),
+    falls: true, // a waterfall into the river (there is always a river)
+    sparkle: { colors: ['#ff6b6b', '#ffd43b', '#f783ac', '#ffffff', '#ff922b'], every: 150 },
+  },
+
   'bg-rainbow': {
     name: 'Rainbow Land',
     life: 'unicorn',
@@ -334,7 +385,12 @@ function paintOne(section) {
 
   const stops = JSON.parse(section.dataset.pts).map(([x, y, kind]) => ({ x: (x / 100) * aw, y: y / SCALE, kind }));
   const here = Number(section.dataset.here) || 0;
-  const riverY = section.dataset.river ? Number(section.dataset.river) / SCALE : null;
+  let riverY = section.dataset.river ? Number(section.dataset.river) / SCALE : null;
+  // the rainforest's waterfall needs a river: halfway down the map, between two stops
+  if (th.falls && riverY === null && stops.length > 1) {
+    const i = Math.max(1, Math.floor(stops.length / 2));
+    riverY = Math.round((stops[i - 1].y + stops[i].y) / 2);
+  }
   const road = roadSamples([{ x: aw / 2, y: 0 }, ...stops]);
   const nearRoad = (x, y, d) => road.some((r) => Math.abs(r.x - x) < d && Math.abs(r.y - y) < d);
   const wall = Math.min(20, Math.floor(aw * 0.12));
@@ -395,6 +451,9 @@ function paintOne(section) {
   // the river cuts through everything except the road (the bridge takes the road across)
   let band = null;
   if (riverY !== null) band = drawRiver(px, aw, riverY, road, th.river);
+  // it pours out of the wall on the side away from the bridge
+  const falls = th.falls && band ? waterfallAt(band, wall, (band.bx0 + band.bx1) / 2 > aw / 2 ? -1 : 1) : null;
+  if (falls) drawWaterfall(px, falls);
 
   // the road: outer layers first; the part already walked is lighter
   const hereY = stops[here]?.y ?? 0;
@@ -470,7 +529,7 @@ function paintOne(section) {
   const roadX = road.reduce((best, r) => (Math.abs(r.y - postY) < Math.abs(best.y - postY) ? r : best), road[0]).x;
   const side = roadX > aw / 2 ? -1 : 1;
   startMapLife({
-    section, aw, ah, scale: SCALE, life: th.life, wall,
+    section, aw, ah, scale: SCALE, life: th.life, wall, falls,
     goal: chest || { x: aw / 2, y: ah - 30 },
     knightPost: { x: side < 0 ? wall + 2 : aw - wall - 28, y: postY, side },
     openSpot: ({ top, bottom }) => {
@@ -751,6 +810,34 @@ function drawVolcano(px, cx, cy) {
     px(cx + dx, top + dy, '#ced4da', s, s - 2);
     px(cx + dx, top + dy, '#f1f3f5', s - 1, 1);
   }
+}
+
+/**
+ * The rainforest waterfall: a mossy cliff in the forest wall with water pouring off it into the
+ * river. The water moves, and things come over it, in maplife.js.
+ */
+function drawWaterfall(px, f) {
+  const top = f.lip - 4;
+  const bottom = f.base;
+  const inner = f.side < 0 ? f.x1 + 6 : f.x0 - 6; // the cliff's edge facing the open ground
+  const x0 = f.side < 0 ? 0 : inner;
+  const x1 = f.side < 0 ? inner : f.aw;
+  for (let y = top; y <= bottom; y += 1) {
+    const grow = Math.round((y - top) * 0.12);
+    const a = f.side < 0 ? x0 : x0 - grow;
+    const b = f.side < 0 ? x1 + grow : x1;
+    px(a, y, OUT, b - a, 1);
+    px(a + (f.side < 0 ? 0 : 1), y, '#6c757d', b - a - 1, 1);
+    for (let x = a; x < b; x += 1) if ((x * 7 + y * 3) % 23 === 0) px(x, y, '#495057', 3, 1);
+  }
+  // moss on top, hanging down the rock
+  px(x0, top - 2, OUT, x1 - x0, 4);
+  px(x0 + (f.side < 0 ? 0 : 1), top - 2, '#2f9e44', x1 - x0 - 1, 3);
+  for (let x = x0; x < x1; x += 3) { px(x, top + 1, '#2f9e44', 2, 2 + ((x * 3) % 5)); px(x + 1, top - 3, '#51cf66', 1, 1); }
+  // the water coming over the edge
+  px(f.x0 - 1, f.lip - 1, OUT, f.x1 - f.x0 + 3, f.base - f.lip + 1);
+  px(f.x0, f.lip - 1, '#4dabf7', f.x1 - f.x0 + 1, f.base - f.lip + 1);
+  px(f.x0, f.lip - 1, '#a5d8ff', f.x1 - f.x0 + 1, 2);
 }
 
 /** A rainbow arching over the treasure, with a cloud at each end. */

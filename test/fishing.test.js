@@ -45,7 +45,7 @@ test('bigger fish are pickier', () => {
 });
 
 test('every regular map has its own fishing spot and rare fish', () => {
-  const maps = ['bg-meadow', 'bg-castle', 'bg-sunset', 'bg-ocean', 'bg-space', 'bg-volcano', 'bg-rainbow', 'bg-galaxy'];
+  const maps = ['bg-meadow', 'bg-castle', 'bg-sunset', 'bg-ocean', 'bg-space', 'bg-volcano', 'bg-rainforest', 'bg-rainbow', 'bg-galaxy'];
   assert.deepEqual(Object.keys(SPOTS).sort(), [...maps].sort());
   const rare = new Set(maps.map((m) => SPOTS[m].special.name));
   assert.equal(rare.size, maps.length);

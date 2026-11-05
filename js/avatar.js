@@ -736,10 +736,11 @@ const CATCHES = {
   'bg-space': [['space jelly', JELLY, { J: SH('#63e6be', '#c3fae8', '#0ca678'), H: '#ffffff' }], ['moon fish', FISH, fishPal('#dee2e6', '#ffffff', '#868e96')]],
   'bg-castle': [['old boot', BOOT, { B: SH('#8d5524', '#b07443', '#5c3a1e') }], ['golden goblet', GOBLET, { G: SH('#fcc419', '#fff3bf', '#e67700'), g: '#ffffff' }]],
   'bg-volcano': [['lava fish', FISH, fishPal('#ff6b1a', '#ffe066', '#c92a2a')], ['fire dragon fish', FISH, fishPal('#e03131', '#ffd43b', '#862e9c')]],
+  'bg-rainforest': [['piranha', FISH, fishPal('#868e96', '#ff8787', '#495057')], ['peacock bass', FISH, fishPal('#fcc419', '#94d82d', '#e8590c')]],
   'bg-rainbow': [['rainbow trout', FISH, { F: SH('#ff8787', '#ffe066', '#748ffc'), E: OUT }], ['unicorn fish', FISH, fishPal('#f3d9fa', '#ffffff', '#da77f2')]],
   'bg-galaxy': [['star fish', STAR, { Y: SH('#ffd43b', '#fff9db', '#f08c00') }], ['comet fish', FISH, fishPal('#b197fc', '#e5dbff', '#5f3dc4')]],
 };
-const CATCH_ICON = { 'bg-volcano': '🔥', 'bg-space': '🚀', 'bg-castle': '🏰', 'bg-galaxy': '✨', 'bg-ocean': '🫧', 'bg-rainbow': '🌈', 'bg-sunset': '🏖️', 'bg-meadow': '🎣' };
+const CATCH_ICON = { 'bg-volcano': '🔥', 'bg-space': '🚀', 'bg-castle': '🏰', 'bg-galaxy': '✨', 'bg-ocean': '🫧', 'bg-rainbow': '🌈', 'bg-sunset': '🏖️', 'bg-meadow': '🎣', 'bg-rainforest': '🌿' };
 
 /**
  * A catch for a fishing visitor on this map theme. rod: 1-3, better rods land
@@ -822,6 +823,19 @@ const BACKGROUNDS = {
     px.rect(16, 7, 4, 2, '#fa5252'); dots(px, '#ff8787', [[17, 9], [18, 10]]);
     px.rect(16, 3, 2, 2, '#ced4da'); px.rect(18, 1, 3, 2, '#e9ecef');
     px.rect(3, 13, 1, 7, '#8d5524'); px.rect(1, 12, 5, 1, '#2f9e44'); dots(px, '#2f9e44', [[0, 13], [6, 13], [2, 11], [4, 11]]);
+  },
+  'bg-rainforest': (px) => {
+    bands(px, [[0, '#b2f2bb'], [6, '#8ce99a'], [12, '#69db7c'], [20, '#2f9e44'], [22, '#237032']]);
+    // a waterfall down a mossy cliff, into a pool
+    px.rect(0, 4, 7, 16, '#6c757d'); px.rect(0, 3, 7, 2, '#2f9e44'); dots(px, '#495057', [[0, 8], [5, 12], [1, 16]]);
+    px.rect(2, 5, 3, 15, '#74c0fc'); dots(px, '#ffffff', [[2, 6], [3, 9], [4, 12], [2, 14], [3, 17]]);
+    px.rect(0, 19, 9, 2, '#1c9c8c'); dots(px, '#ffffff', [[1, 19], [3, 19], [5, 20]]);
+    // jungle leaves along the top, and vines
+    px.rect(6, 0, 18, 2, '#237032'); px.rect(8, 2, 3, 1, '#237032'); px.rect(15, 2, 4, 1, '#237032'); dots(px, '#40c057', [[9, 0], [13, 1], [18, 0], [21, 1]]);
+    px.rect(11, 2, 1, 4, '#5c940d'); px.rect(16, 3, 1, 3, '#5c940d');
+    // a toucan on a branch
+    px.rect(18, 9, 6, 1, '#6e4b2a'); px.rect(19, 7, 2, 2, '#212529'); px.rect(20, 7, 1, 1, '#fff3bf'); px.rect(21, 7, 2, 1, '#ff922b');
+    dots(px, '#ff6b6b', [[2, 21], [15, 22]]); dots(px, '#ffd43b', [[20, 21]]); dots(px, '#f783ac', [[5, 22], [19, 23]]);
   },
   'bg-rainbow': (px) => {
     bands(px, [[0, '#d0ebff'], [20, '#74d474'], [21, '#5cc45c']]);
