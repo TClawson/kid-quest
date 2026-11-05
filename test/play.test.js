@@ -10,6 +10,7 @@ test('visitors play their ball game or go fishing, the same one all day, or tag'
   assert.equal(gameFor({ shoes: 2, rod: 1 }), 'fishing');
   assert.equal(gameFor({ soccer: 1 }), 'soccer');
   assert.equal(gameFor({ hockey: 3 }), 'hockey');
+  assert.equal(gameFor({ football: 2 }), 'football');
   const both = { soccer: 1, hockey: 1 };
   assert.equal(gameFor(both, '2026-11-04|kid_a'), gameFor(both, '2026-11-04|kid_a'));
   const picks = new Set(Array.from({ length: 30 }, (_, i) => gameFor(both, `2026-11-${i}|kid_a`)));

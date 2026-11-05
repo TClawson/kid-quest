@@ -33,7 +33,7 @@ import { ballCells, SPRITE_Y } from './avatar.js';
  * something like the date and the visitor's id), or tag when they have none.
  */
 export function gameFor(gear = {}, seed = '') {
-  const games = ['soccer', 'hockey', 'fishing'].filter((k) => gear[k === 'fishing' ? 'rod' : k]);
+  const games = ['soccer', 'hockey', 'football', 'fishing'].filter((k) => gear[k === 'fishing' ? 'rod' : k]);
   if (!games.length) return 'tag';
   let h = 7;
   for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -61,7 +61,7 @@ export const SWITCH_STEP = 0.1;
 /** Points taken off for a kick with the buddy it isn't the turn of. */
 export const WRONG_BUDDY = 2;
 
-export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag', hockey: 'Hockey', fishing: 'Fishing' };
+export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag', hockey: 'Hockey', football: 'Football', fishing: 'Fishing' };
 
 // ---------- tag levels ----------
 // Every LEVEL_HOLD seconds the field scrolls sideways to the next level. Tag goes
