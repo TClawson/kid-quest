@@ -5,7 +5,7 @@
 const OUT = '#2a1838';
 
 /** Wrap a grid's shape in an outline ring of K (like sprite() in maplife.js). */
-function outlined(rows) {
+export function outlined(rows) {
   const w = Math.max(...rows.map((r) => r.length));
   const g = rows.map((r) => r.padEnd(w, '.'));
   const at = (x, y) => (y >= 0 && y < g.length && x >= 0 && x < w ? g[y][x] : '.');
@@ -66,7 +66,7 @@ const svgOf = (w, h, scale, cls, body) => `<svg class="pixel ${cls}" viewBox="0 
 
 // ---------- chests ----------
 
-const CHEST_CLOSED = [
+export const CHEST_CLOSED = [
   '..hhhhhhhhhhhhhh..',
   '.hWWWWWWBBWWWWWWh.',
   'BWWWWWWWBBWWWWWWWB',
@@ -92,7 +92,7 @@ const CHEST_OPEN = [
   'BwwwwwwwwwwwwwwwwB',
   'BBBBBBBBBBBBBBBBBB',
 ];
-const CHEST_PALS = {
+export const CHEST_PALS = {
   wood: { h: '#d39556', W: '#b5733a', w: '#8a5226', B: '#6c757d', L: '#fcc419', l: '#e67700', d: '#5c3a1e' },
   silver: { h: '#f8f9fa', W: '#ced4da', w: '#adb5bd', B: '#4c6ef5', L: '#fcc419', l: '#e67700', d: '#495057' },
   gold: { h: '#fff3bf', W: '#fcc419', w: '#f08c00', B: '#c92a2a', L: '#e64980', l: '#a61e4d', d: '#7a4a10' },
@@ -362,7 +362,7 @@ export function mapPiecesSvg(found, total = 4, { scale = 3, ground = '#69db7c' }
 
 const brick = (w, h, a, b) => Array.from({ length: h }, (_, y) => Array.from({ length: w }, (_, x) => ((y % 3 === 2) || ((x + (Math.floor(y / 3) % 2) * 3) % 6 === 0) ? b : a)).join(''));
 
-const SHIP = [
+export const SHIP = [
   '...........M............',
   '...........MFF..........',
   '...........MFFF.........',
@@ -456,7 +456,7 @@ const FOAL = [
   '.W.W..W.W...',
   '.h.h..h.h...',
 ];
-const WHALE = (eye) => [
+export const WHALE = (eye) => [
   '.........BBBBBBBB.............',
   '.......BBBBBBBBBBBB.........T.',
   '.....BBBBBBBBBBBBBBBB.....TT..',
@@ -476,7 +476,7 @@ const SPOUT = (h) => ['y.y.y', '.y.y.', 'y.y.y', ...Array(h).fill('..y..')];
  */
 export const SECRETS = {
   'bg-meadow': {
-    name: 'The owl tree',
+    name: 'The Great Oak',
     lines: ['Hoo! Hoo! You found my tree!', 'Hoo! I keep watch all night.', 'Hoo-hoo! Shh, it’s nap time.'],
     w: 22, h: 22,
     frames: (i) => {
@@ -486,7 +486,7 @@ export const SECRETS = {
     },
   },
   'bg-sunset': {
-    name: 'The old shipwreck',
+    name: 'The ghost ship wreck',
     lines: ['A bottle! The note says: “Ahoy, treasure hunter!”', 'The note says: “Keep it up, matey!”', 'The note says: “X marks the spot!”'],
     w: 28, h: 17,
     frames: (i) => {
@@ -497,7 +497,7 @@ export const SECRETS = {
     },
   },
   'bg-ocean': {
-    name: 'The sunken ship',
+    name: 'The Kraken’s ship',
     lines: ['An octopus! It squirts ink and giggles.', 'Blub blub! This ship is my house.', 'Boo! Got you with my ink!'],
     w: 28, h: 20,
     frames: (i) => {
@@ -509,7 +509,7 @@ export const SECRETS = {
     },
   },
   'bg-space': {
-    name: 'The moon cave',
+    name: 'The moon worm’s cave',
     lines: ['A sleepy moon puff! It yawns hello.', 'Moon puff says: boop!', 'Moon puff waves. Bye!'],
     w: 26, h: 16,
     frames: (i) => {
@@ -521,7 +521,7 @@ export const SECRETS = {
     },
   },
   'bg-castle': {
-    name: 'The secret door',
+    name: 'The Dragon King’s door',
     lines: ['A baby dragon guarding gold! It sneezes a spark.', 'Rawr! (That’s dragon for hi.)', 'The baby dragon counts its coins.'],
     w: 26, h: 20,
     frames: (i) => {
@@ -538,7 +538,7 @@ export const SECRETS = {
     },
   },
   'bg-volcano': {
-    name: 'The giant stone face',
+    name: 'The fire stone face',
     lines: ['The stone face opens its eyes. RUMBLE!', 'It says: “WHO… IS… TICKLING… ME?”', 'The stone face winks at you.'],
     w: 20, h: 20,
     frames: (i) => {
@@ -562,7 +562,7 @@ export const SECRETS = {
     },
   },
   'bg-galaxy': {
-    name: 'The space whale',
+    name: 'The star whale',
     lines: ['A space whale! It spouts stars. WHOOSH!', 'The whale sings a long, low song.', 'The whale winks. Splash!'],
     w: 32, h: 18,
     frames: (i) => {

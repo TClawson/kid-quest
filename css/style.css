@@ -573,3 +573,21 @@ label { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   .chest-card .chest-shake, .chest-card .chest-reveal, .chest-card .prize-art, .map-node.chest.ready .chest-svg, .late-chest { animation-duration: 0.01s; animation-delay: 0s; }
 }
+/* the secret landmark and its show (see mapshow.js) */
+.map-secret { position: absolute; left: 50%; z-index: 3; transform: translate(-50%, -50%); background: none; border: 0; padding: 0; display: grid; justify-items: center; cursor: pointer; }
+.map-secret .secret-svg { animation: secret-glow 2s ease-in-out infinite alternate; }
+.map-secret .secret-svg .f1, .map-secret .secret-svg .f2 { visibility: hidden; }
+.map-secret.awake .secret-svg .f0 { visibility: hidden; }
+.map-secret.awake .secret-svg .f1 { animation: secret-a 0.5s steps(1, end) infinite; }
+.map-secret.awake .secret-svg .f2 { animation: secret-b 0.5s steps(1, end) infinite; }
+.map-secret.awake { animation: px-node 0.4s steps(1, end) infinite; }
+.secret-name { margin-top: 2px; font-size: 0.8rem; font-weight: 800; background: #fffdf5; border: 3px solid var(--px-ink, #2a1838); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+.secret-bubble { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 220px; font-size: 0.85rem; font-weight: 700; background: #fff; border: 3px solid var(--px-ink, #2a1838); border-radius: 6px; padding: 4px 8px; }
+@keyframes secret-a { 0% { visibility: visible; } 50% { visibility: hidden; } }
+@keyframes secret-b { 0% { visibility: hidden; } 50% { visibility: visible; } }
+@keyframes secret-glow { from { filter: drop-shadow(0 0 0 rgba(255, 224, 102, 0)); } to { filter: drop-shadow(0 0 10px rgba(255, 224, 102, 0.9)); } }
+.map-show { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; image-rendering: pixelated; }
+.quest-map.map-quake { animation: map-quake 0.12s steps(2, end) infinite; }
+@keyframes map-quake { 0% { transform: translate(-2px, 1px); } 50% { transform: translate(2px, -1px); } }
+.quest-map.show-on .map-visitor, .quest-map.show-on .map-buddy { animation: show-hop 0.5s steps(2, end) infinite; }
+@keyframes show-hop { 50% { translate: 0 -8px; } }

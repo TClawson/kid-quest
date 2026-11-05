@@ -13,7 +13,7 @@ import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { liveHtml, live, liveStart, feel } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
-import { startMusic, stopMusic } from './music.js';
+import { startMusic, stopMusic, playShowAudio } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
@@ -27,7 +27,8 @@ import { startListening, buddyState, TUNING } from './listen.js';
 import { createBeatFollower } from './beat.js';
 import { loadRecognizer } from './hear.js';
 import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
-import { chestSvg, trophySvg, mapPiecesSvg } from './treasure-art.js';
+import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, SECRETS } from './treasure-art.js';
+import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
@@ -1141,6 +1142,10 @@ function visitorsHtml(kid, s) {
 /** The map theme follows the kid's Places background. */
 const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
 const MAP_WAVE = [0, 22, 30, 18, -4, -24, -30, -16];
+/** Room at the bottom of the map for the secret landmark. */
+const SECRET_ROOM = 150;
+/** A show can play again a minute after the last one. */
+const SHOW_AGAIN_MS = 60000;
 
 function questMap(kid, s, entry, mood) {
   const rows = [];
@@ -1161,7 +1166,10 @@ function questMap(kid, s, entry, mood) {
   const visit = visitorsHtml(kid, s);
   const top = 70 + visit.room;
   const pts = rows.map((r, i) => ({ x: 50 + (r.type === 'task' || r.type === 'chest' ? MAP_WAVE[i % MAP_WAVE.length] : 0), y: top + i * MAP_ROW }));
-  const height = top + rows.length * MAP_ROW;
+  // a finished treasure map shows this map's secret landmark below the treasure
+  const theme = kidTheme(kid);
+  const secret = SECRETS[theme] && treasureFound(state.log, kid.id).maps.has(theme) ? SECRETS[theme] : null;
+  const height = top + rows.length * MAP_ROW + (secret ? SECRET_ROOM : 0);
   // the river runs just above the after-school sign, so crossing the bridge means school's out
   const pmSign = rows.findIndex((r, i) => i > 0 && r.type === 'sign');
   const riverY = pmSign > 0 ? pts[pmSign].y - 42 : '';
@@ -1207,6 +1215,7 @@ function questMap(kid, s, entry, mood) {
       <div class="map-start" style="left:50%;top:0">🚩 Start</div>
       ${visit.html}
       ${nodes}
+      ${secret ? `<button class="map-secret" style="top:${height - SECRET_ROOM / 2}px" data-action="secret" aria-label="${esc(secret.name)}">${secretSvg(theme, 4)}<span class="secret-name">${esc(secret.name)}</span><span class="secret-bubble" hidden></span></button>` : ''}
       ${walker}
     </section>`;
 }
@@ -2178,6 +2187,31 @@ const actions = {
     else toast(`${c.s.total - c.s.done} more to reach the ${c.tier.name.toLowerCase()}!`);
   },
   trophies: () => openTrophies(kidById(ui.kidId)),
+  secret: (el) => {
+    const kid = kidById(ui.kidId);
+    const theme = kidTheme(kid);
+    const info = SECRETS[theme];
+    const section = el.closest('.quest-map');
+    if (!info || !section) return;
+    // the landmark wakes up and says something
+    el.classList.add('awake');
+    clearTimeout(el.sleepTimer);
+    el.sleepTimer = setTimeout(() => el.classList.remove('awake'), 3500);
+    const bubble = el.querySelector('.secret-bubble');
+    bubble.textContent = info.lines[(ui.secretLine = ((ui.secretLine ?? -1) + 1) % info.lines.length)];
+    bubble.hidden = false;
+    clearTimeout(bubble.hideTimer);
+    bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
+    if (showPlaying(section) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
+    const img = new Image();
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(kid.buddy, 'excited', { background: false }))}`;
+    const spot = { x: el.offsetLeft + el.offsetWidth / 2, y: el.offsetTop + el.offsetHeight / 2 };
+    const def = playShow(section, theme, { buddy: img, spot, onDone: () => section.classList.remove('show-on') });
+    if (!def) return;
+    ui.lastShow = Date.now();
+    section.classList.add('show-on');
+    if (state.settings.sound !== false) playShowAudio(theme, { music: state.settings.music !== false, sfx: def.sfx });
+  },
   'buy-confirm': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);

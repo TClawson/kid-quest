@@ -125,15 +125,15 @@ const DRAGON_BODY = [
   '..........DDD...DDD',
   '..........hh.h..hh.h',
 ];
-const DRAGON = sprite(DRAGON_BODY);
-const DRAGON_ROAR = sprite(swap(DRAGON_BODY, 7, [
+export const DRAGON = sprite(DRAGON_BODY);
+export const DRAGON_ROAR = sprite(swap(DRAGON_BODY, 7, [
   'tGtGGGGGGGGGs',
   'rrrrrDGGGGGGs',
   'rrrrDDDGGGGGGs.s.s',
   'tDtDD..YGGGGGGsLsLsL',
 ]));
 // wings, w the skin, D the bones
-const WING_UP = sprite([
+export const WING_UP = sprite([
   '...........D',
   '.........DDw',
   '.......DDwwD',
@@ -144,7 +144,7 @@ const WING_UP = sprite([
   '.wwwwDwwwwwD',
   '..wwDwwwwwD',
 ]);
-const WING_DOWN = sprite([
+export const WING_DOWN = sprite([
   'DDDDDDDDDDDD',
   '.wwwwDwwwwwD',
   '..wwwDwwwwD',
@@ -179,7 +179,7 @@ const KNIGHT_BODY = [
   '...ww.ww.....ww.ww',
   '...hh.hh.....hh.hh',
 ];
-const KNIGHT = sprite(KNIGHT_BODY);
+export const KNIGHT = sprite(KNIGHT_BODY);
 const KNIGHT_RUN = [
   sprite(swap(KNIGHT_BODY, 17, ['..WW.WW......WW.WW', '.WW...WW......WW.WW', 'ww.....ww......ww.ww', 'h.......h.......h...h'])),
   sprite(swap(KNIGHT_BODY, 17, ['...WWWW.....WWWW', '....WW.......WW', '....ww.......ww', '....hh.......hh'])),
@@ -211,7 +211,7 @@ const UNICORN_BODY = [
   '....hh.hh...hh.hh',
 ];
 const UNICORN = sprite(UNICORN_BODY);
-const UNICORN_RUN = [
+export const UNICORN_RUN = [
   sprite(swap(UNICORN_BODY, 17, ['...WW..WW....WW.WW', '..WW....WW....WW.WW', '.ww......ww....ww.ww', '.h........h.....h...h'])),
   sprite(swap(UNICORN_BODY, 17, ['.....WWWW....WWWW', '......WW......WW', '......ww......ww', '......hh......hh'])),
 ];
@@ -301,13 +301,13 @@ const CRAB_BODY = [
 // beach crabs: r shell, l its light top, e eye. Claws open and shut, legs scuttle.
 const CRAB_CLAWS_SHUT = ['rr...........rr', 'rrr..e...e..rrr', 'rr...K...K...rr'];
 const CRAB = [CRAB_BODY, swap(CRAB_BODY, 7, ['.r..r.r.r.r..r', 'r...r.....r...r'])].map((b) => [sprite(b), sprite(swap(b, 0, CRAB_CLAWS_SHUT))]);
-const TIKI = sprite(TIKI_BODY);
+export const TIKI = sprite(TIKI_BODY);
 const TIKI_RUN = [
   ['..b..b', '.b...b', 'bb...bb'],
   ['...bb', '...bb', '..bbb'],
 ].map((legs) => sprite(swap(swap(TIKI_BODY, 0, ['b.g.y.g.b', 'b.gyryg.b', 'b.MMMMM.b']), 9, ['...bbb', '..bbbbb', '...bbb', '..GGGGG', '.GGGGGGG', ...legs])));
 
-function draw(ctx, x0, y0, rows, pal, flip = false) {
+export function draw(ctx, x0, y0, rows, pal, flip = false) {
   const x = Math.round(x0);
   const y = Math.round(y0);
   rows.forEach((r, yy) => {
@@ -324,7 +324,7 @@ function draw(ctx, x0, y0, rows, pal, flip = false) {
 /** Where a part (wing, sword) goes on a sprite that may be flipped: `ox` is from the sprite's left. */
 const partX = (x, w, ox, part, flip) => (flip ? x + w - ox - part[0].length : x + ox);
 /** A round pixel puff, for smoke and fire. */
-function puff(ctx, cx, cy, r, c, edge) {
+export function puff(ctx, cx, cy, r, c, edge) {
   const x0 = Math.round(cx);
   const y0 = Math.round(cy);
   const rr = Math.max(0.5, r);
