@@ -61,7 +61,7 @@ const THROW_WINDOW = { green: 1, yellow: 0.8, red: 0.6 };
 /** How far from the cone (pixels) a throw of each color lands. */
 export const MISS = { green: 0, yellow: 12, red: 26 };
 /** How close (pixels) the catcher has to be to where the ball comes down. */
-export const reachFor = (tier = 1) => 8 + 1.5 * (Math.max(1, tier) - 1);
+export const reachFor = (tier = 1) => 8 + 3 * (Math.max(1, tier) - 1);
 const RING_LEAD = 0.8; // the catch ring shows this long before the catch
 const RING_TAP = 16; // a tap this close to the ring is a catch; farther away it's running
 const RUN = 60; // pixels a second, as in tag
@@ -76,7 +76,8 @@ export function needle(held, sweep) {
 }
 
 // green is narrow: a perfect throw is hard (Taylor, 2026-11-05)
-const greenHalf = (tier) => 0.045 + 0.012 * (Math.max(1, tier) - 1);
+// a better ball widens it a lot: about 1.5x with a good one, 2x with a super one
+const greenHalf = (tier) => 0.045 + 0.025 * (Math.max(1, tier) - 1);
 /** The color under the needle. tier: the ball (1-3); better balls widen green. */
 export function zoneAt(m, tier = 1) {
   const d = Math.abs(m - 0.5);
@@ -87,7 +88,7 @@ export function zoneAt(m, tier = 1) {
 
 /** The kid's catch windows (seconds either side), for a route, the throw's color and the ball. */
 export function catchWindows(route, zone, tier = 1) {
-  const k = ROUTES[route].win * THROW_WINDOW[zone] * (1 + 0.12 * (Math.max(1, tier) - 1));
+  const k = ROUTES[route].win * THROW_WINDOW[zone] * (1 + 0.25 * (Math.max(1, tier) - 1));
   return { green: CATCH_GREEN * k, yellow: CATCH_YELLOW * k };
 }
 

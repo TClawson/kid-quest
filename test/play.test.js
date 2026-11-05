@@ -37,6 +37,8 @@ test('the hockey meter sweeps back and forth over red, yellow and a thin green',
   // a better stick widens green a little
   assert.equal(zoneAt(0.545, 1), 'yellow');
   assert.equal(zoneAt(0.545, 3), 'green');
+  assert.equal(zoneAt(0.57, 3), 'green', 'a super stick doubles green');
+  assert.ok(kickWindows(0, 3).perfect >= 2 * kickWindows(0, 1).perfect - 1e-9, 'a super ball doubles Perfect');
   assert.deepEqual(SHOT_ODDS, { red: 0.05, yellow: 0.25, green: 0.55 });
   // the aim spread for each color gives those odds: P(|normal| < Z) = odds
   const within = (z) => { let sum = 0; const n = 20000; for (let i = 0; i < n; i += 1) { const x = ((i + 0.5) / n) * z; sum += Math.exp(-x * x / 2); } return (2 * sum * (z / n)) / Math.sqrt(2 * Math.PI); };
