@@ -1,26 +1,30 @@
-// Fishing with a visiting buddy (DRAFT for the mockup, not wired into the app yet).
+// Fishing with a visiting buddy: 90 seconds at the lake on the kid's map.
 //
-// A side view: your buddy stands on the shore at the top left, and most of the
-// screen is the lake, seen from the side, down to the lake bed.
+// A side view: your buddy stands on the shore at the top left, the visitor
+// beside it, and most of the screen is the lake, seen from the side. The lake
+// bed slopes up to the shore under the buddies.
 //
 // Pick a bait (worm, jig or spoon), then tap CAST: a needle swings over red,
 // yellow and green, and a second tap casts short (red), medium (yellow) or far
 // (green). The bait sinks. Tap to twitch it, press and hold to reel it in; let
 // go and it sinks slowly again. Weeds snag it 10% of the time it touches them,
-// logs 50%.
+// logs 50%; hold to yank it free (or the line snaps and you cast again).
 //
-// Fish come and go: bluegill in a school, a smallmouth or two hanging just off
-// the school, largemouth cruising past the weeds, pike lurking in the weeds,
-// catfish lying on the bottom by the logs. Each map tips the odds toward some
-// kinds and has one special fish of its own. A fish near the right bait may get
-// interested and come up to it; a twitch then makes it strike (55%) or spooks
-// it (45%). Which bait works best changes a little every day.
+// Fish swim in from the right and stay a while: bluegill in a school, a
+// smallmouth or two hanging just off the school, largemouth cruising, pike
+// lurking in the weeds, catfish lying on the bottom by the logs. Each map tips
+// the odds toward some kinds and has one rare fish of its own. A fish near a
+// bait it likes may get interested and come up to it; a twitch then makes it
+// strike (55%) or spooks it. Big fish are pickier and slower to bite. Which
+// bait works best changes a little every day (the same for everyone that day).
 //
 // Fish on: hold to reel, let go when the line gets too tight or it snaps. Big
-// fish pull harder and longer.
+// fish pull harder and make runs. A better rod gives a wider green and a
+// stronger line. Points for each catch: more for rarer and bigger fish.
 //
-// Same interface as Play in play.js (tap, step, draw, drawHud), plus
-// press() / release() for holding anywhere, and onButton(x, y).
+// Same interface as Play in play.js (tap, step, draw, drawHud, score, phase).
+// holdAnywhere: a finger held down anywhere reels, so playground.js calls
+// release() for every finger that comes up.
 import { Player, rng, canvas, clamp, HAPPY } from './play.js';
 
 export const GAME_SECONDS = 90;
@@ -218,7 +222,9 @@ export class Fishing {
     this.today = baitToday(opts.day || 'today');
     if (this.spot.special) for (const b of BAITS) this.today[b][this.spot.special.id] = this.spot.special.like[b];
     this.t = 0; this.pops = []; this.best = opts.best || 0;
-    this.score = { kid: 0, vis: 0 }; this.newBest = false;
+    this.points = { kid: 0, vis: 0 }; this.newBest = false;
+    this.holdAnywhere = true; this.locked = false;
+    this.rodTier = clamp(opts.kid.gear?.rod || 1, 1, 3); this.visTier = clamp(opts.visitor.gear?.rod || 1, 1, 3);
     this.surface = Math.round(this.H * 0.36);
     this.bankX = Math.max(46, Math.round(this.W * 0.21));
     // the lake bed slopes up to the shore under the buddies, then runs along the bottom
@@ -245,10 +251,13 @@ export class Fishing {
     this.nextSpawn = 0;
     this.button = { x: this.W - 15, y: this.H - 15, r: 12 };
     this.left = GAME_SECONDS;
-    this.phase = 'play';
+    this.phase = 'ready';
     this.catches = [];
     this.seedFish();
   }
+
+  /** The kid's points, like the other games' score. */
+  get score() { return this.points.kid; }
 
   newLine(p) { return { who: p, state: 'idle', bait: 'worm', x: 0, y: 0, held: false, downAt: 0, snagged: null, tried: new Set(), fish: null, tension: 0, meterAt: 0 }; }
 
@@ -613,18 +622,22 @@ export class Fishing {
 
   meter(L) { const ph = ((this.t - L.meterAt) / SWEEP) % 2; return ph < 1 ? ph : 2 - ph; }
 
-  zoneOf(m) { return m < 0.45 ? 'red' : m < 0.82 ? 'yellow' : 'green'; }
+  /** Red short, yellow medium, green far; a better rod widens green a little. */
+  zoneOf(m, tier = this.rodTier) { const g = 0.82 - 0.04 * (tier - 1); return m < 0.45 ? 'red' : m < g ? 'yellow' : 'green'; }
 
   cast(L, m = this.meter(L)) {
-    const zone = this.zoneOf(m);
+    const tier = L === this.lines.vis ? this.visTier : this.rodTier;
+    const zone = this.zoneOf(m, tier);
+    const g = 0.82 - 0.04 * (tier - 1);
     const reach = this.W - this.bankX - 14;
     const span = { red: [0.12, 0.32], yellow: [0.38, 0.62], green: [0.7, 0.95] }[zone];
-    const k = zone === 'red' ? m / 0.45 : zone === 'yellow' ? (m - 0.45) / 0.37 : (m - 0.82) / 0.18;
+    const k = zone === 'red' ? m / 0.45 : zone === 'yellow' ? (m - 0.45) / (g - 0.45) : (m - g) / (1 - g);
     const land = this.bankX + 14 + reach * (span[0] + (span[1] - span[0]) * clamp(k, 0, 1));
     const [rx, ry] = this.rodTip(L.who);
     L.state = 'air'; L.from = [rx, ry]; L.to = [Math.round(land), this.surface]; L.t0 = this.t; L.flight = 0.5 + 0.5 * (land - rx) / reach;
     L.zone = zone; L.tried = new Set(); L.snagged = null; L.fish = null; L.tension = 0;
     L.who.brain.set({ ...HAPPY, arousal: 0.8 });
+    if (L === this.lines.kid) this.sound = 'kick';
     this.pop(zone === 'green' ? 'Far!' : zone === 'yellow' ? 'Nice cast' : 'Short', rx + 16, ry - 4, ZONE_COLORS[zone]);
   }
 
@@ -642,9 +655,12 @@ export class Fishing {
   }
 
   hook(L, f) {
-    f.state = 'hooked'; L.fish = f; L.state = 'fight'; L.tension = 0.2; f.stamina = 0.4 + f.size * 1.2 + f.pull * 0.6; f.runAt = this.t + 1 + this.r() * 2;
+    f.state = 'hooked'; f.dir = -1; f.face = -1; L.fish = f;
+    f.x = L.x + f.pic.width / 2 - 1; f.y = L.y + 1; // nose on the bait
+    L.state = 'fight'; L.tension = 0.2; f.stamina = 0.4 + f.size * 1.2 + f.pull * 0.6; f.runAt = this.t + 1 + this.r() * 2;
     for (const o of this.fish) if (o.line === L && o !== f && o.state === 'interest') { o.state = 'swim'; o.line = null; }
     this.pop('Fish on!', L.x, L.y - 6, '#ffd43b', true);
+    if (L === this.lines.kid) { this.sound = 'tag'; this.buzz = [40]; }
     L.who.brain.set({ ...HAPPY, valence: 0.9, arousal: 0.9 });
   }
 
@@ -731,7 +747,8 @@ export class Fishing {
     if (this.t > f.runAt + 1.2) f.runAt = this.t + 1.5 + this.r() * 3;
     const pull = f.pull * (0.5 + f.size) * (running ? 1.8 : 1) * Math.min(1, 0.4 + f.stamina);
     if (holding) {
-      L.tension += (pull * 0.9 - 0.15) * dt;
+      const strong = 1 - 0.12 * ((L === this.lines.vis ? this.visTier : this.rodTier) - 1);
+      L.tension += (pull * 0.9 * strong - 0.15) * dt;
       const sp = Math.max(4, 22 - pull * 14) * dt;
       const tx = this.bankX + 3; const ty = S + 1;
       const dx = tx - L.x; const dy = ty - L.y; const d = Math.hypot(dx, dy);
@@ -746,7 +763,11 @@ export class Fishing {
       f.stamina = Math.max(0, f.stamina - dt * 0.05);
     }
     L.tension = clamp(L.tension, 0, 1.05);
-    f.x = L.x + f.len * 0.45; f.y = L.y + 1; f.dir = 1;
+    // left alone, it swims off to the far side and slips the hook
+    L.slack = !holding && L.x >= this.W - 8 ? (L.slack || 0) + dt : 0;
+    if (L.slack > 2) { this.pop('It got away!', L.x - 10, L.y - 6, '#ff8787', true); this.spook(f); L.state = 'idle'; L.fish = null; return; }
+    // the hook is in its mouth: nose on the bait, body trailing away from the shore
+    f.x = L.x + f.pic.width / 2 - 1; f.y = L.y + 1; f.dir = -1; f.face = -1;
     if (L.tension >= 1) { this.pop('Snap! It got away', L.x, L.y - 6, '#ff8787', true); this.spook(f); L.state = 'idle'; L.fish = null; return; }
     if (L.x <= this.bankX + 6 && L.y <= S + 4) this.land(L, f);
   }
@@ -754,9 +775,9 @@ export class Fishing {
   land(L, f) {
     L.state = 'idle'; L.fish = null; f.gone = true;
     const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special' };
-    this.score[c.who] += c.points;
+    this.points[c.who] += c.points;
     this.catches.push(c);
-    if (c.who === 'kid') this.showCatch = c;
+    if (c.who === 'kid') { this.showCatch = c; this.sound = 'goal'; }
     this.pop(c.who === 'kid' ? `+${c.points}` : `${this.vis.name}: ${f.name} +${c.points}`, c.who === 'kid' ? L.who.x + 10 : this.W / 2, this.surface - 30, '#b2f2bb', true);
     L.who.brain.set({ ...HAPPY, valence: 1, arousal: 0.8 });
   }
@@ -801,12 +822,17 @@ export class Fishing {
   tap(x, y) {
     const L = this.lines.kid;
     if (this.phase === 'over') { if (this.t - this.overAt > 1.2) this.restart(); return; }
+    if (this.phase === 'ready') {
+      if (this.locked) return;
+      if (this.tapBait(x, y)) return;
+      this.phase = 'play'; // the first tap starts the clock (and casts)
+    }
     if (this.tapBait(x, y)) return;
     if (this.left <= 0 && (L.state === 'idle' || L.state === 'aim')) return;
-    if (this.onButton(x, y) || L.state === 'idle' || L.state === 'aim') {
-      if (L.state === 'idle') { L.bait = this.bait; this.startCast(L); } else if (L.state === 'aim') this.cast(L);
-      return;
-    }
+    // with the line in: CAST, then tap again to let go. With the line out: tap twitches, hold reels (the button too).
+    if (L.state === 'idle') { L.bait = this.bait; this.startCast(L); return; }
+    if (L.state === 'aim') { this.cast(L); return; }
+    if (L.state === 'air') return;
     this.press();
   }
 
@@ -824,22 +850,23 @@ export class Fishing {
   finish() {
     this.phase = 'over'; this.overAt = this.t;
     for (const L of Object.values(this.lines)) { if (L.fish) this.spook(L.fish); L.state = 'idle'; L.fish = null; L.held = false; }
-    this.newBest = this.score.kid > this.best;
-    if (this.newBest) this.best = this.score.kid;
+    this.newBest = this.points.kid > this.best;
+    if (this.newBest) this.best = this.points.kid;
     this.showCatch = null;
   }
 
   restart() {
-    this.phase = 'play'; this.left = GAME_SECONDS; this.score = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false;
+    this.phase = 'ready'; this.left = GAME_SECONDS; this.overtime = 0; this.points = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false;
     this.ai.next = this.t + 2;
   }
 
   step(dt) {
     this.t += dt;
-    if (this.phase === 'over') { this.stepFish(dt); for (const p of [this.kid, this.vis]) p.move(dt); this.pops = this.pops.filter((p) => this.t - p.at < 1.4); return; }
+    if (this.phase !== 'play') { this.stepFish(dt); for (const p of [this.kid, this.vis]) p.move(dt); this.pops = this.pops.filter((p) => this.t - p.at < 1.4); return; }
     this.left = Math.max(0, this.left - dt);
     const L = this.lines.kid;
-    if (this.left <= 0 && L.state !== 'fight') { this.finish(); return; }
+    // time's up: a fish on the line still gets landed (or lost), up to 15 s more
+    if (this.left <= 0 && (L.state !== 'fight' || (this.overtime = (this.overtime || 0) + dt) > 15)) { this.finish(); return; }
     const holding = L.held && this.t - L.downAt >= HOLD;
     this.stepLine(L, dt, holding);
     this.stepAI(dt);
@@ -927,8 +954,8 @@ export class Fishing {
     text(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, (this.chips()[0].y + 16) * S, u * 1.3, secs <= 10 && this.phase === 'play' ? '#ff8787' : '#e9ecef');
     // points
     const ch0 = this.chips()[0]; const ch2 = this.chips()[2];
-    ctx.textAlign = 'right'; text(`${this.kid.name} ${this.score.kid}`, (ch0.x - 3) * S, (ch0.y + 6) * S, u * 1.5, '#ffd43b');
-    ctx.textAlign = 'left'; text(`${this.vis.name} ${this.score.vis}`, (ch2.x + ch2.w + 3) * S, (ch2.y + 6) * S, u * 1.5, '#ffffff');
+    ctx.textAlign = 'right'; text(`${this.kid.name} ${this.points.kid}`, (ch0.x - 3) * S, (ch0.y + 6) * S, u * 1.5, '#ffd43b');
+    ctx.textAlign = 'left'; text(`${this.vis.name} ${this.points.vis}`, (ch2.x + ch2.w + 3) * S, (ch2.y + 6) * S, u * 1.5, '#ffffff');
     ctx.textAlign = 'center';
     // the spot's name
     ctx.textAlign = 'right'; text(this.spot.name, W - u * 1.2, (this.surface - 4) * S, u * 1.2, '#ffffff'); ctx.textAlign = 'center';
@@ -981,14 +1008,15 @@ export class Fishing {
       text(`${c.who === 'kid' ? this.kid.name : this.vis.name} caught a ${c.name}!`, W / 2, cy + ch - u * 3.2, u * 1.6, '#ffd43b');
       text(`${c.inches} inches · +${c.points} points${c.rare ? ' · RARE!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare ? '#ffd43b' : '#ffffff');
     }
+    if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) text(this.locked ? "That's all our games today!" : 'Pick a bait, then tap CAST!', W / 2, (this.surface + 10) * S, u * 1.8);
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
       const cy = (this.surface + 22) * S;
       const bw = Math.min(W * 0.84, u * 34); const bh = u * 11;
       ctx.fillStyle = 'rgba(27,20,48,0.88)'; ctx.fillRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
       const mine = this.catches.filter((c) => c.who === 'kid');
-      text(`Time's up! ${this.score.kid} points`, W / 2, cy - u * 3.2, u * 2.4, '#ffd43b');
-      text(`${mine.length} ${mine.length === 1 ? 'fish' : 'fish'} · ${this.vis.name} got ${this.score.vis}`, W / 2, cy - u * 0.7, u * 1.4, '#e9ecef');
+      text(`Time's up! ${this.points.kid} points`, W / 2, cy - u * 3.2, u * 2.4, '#ffd43b');
+      text(`${mine.length} ${mine.length === 1 ? 'fish' : 'fish'} · ${this.vis.name} got ${this.points.vis}`, W / 2, cy - u * 0.7, u * 1.4, '#e9ecef');
       text(this.newBest ? 'New best!' : `Best ${this.best} points`, W / 2, cy + u * 1.5, u * 1.6, this.newBest ? '#b2f2bb' : '#e9ecef');
       if (this.t - this.overAt > 1.2) text('Tap to fish again', W / 2, cy + u * 3.7, u * 1.3, '#ffffff');
     }
