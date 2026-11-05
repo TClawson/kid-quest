@@ -61,6 +61,8 @@ export const sounds = {
   steal: () => play([N.E5, N.A5], 0.05, 0.1, 'square', 0.07),
   board: () => play([N.C4], 0, 0.05, 'triangle', 0.08),
   catch: () => play([N.E5, N.G5, N.C6], 0.06, 0.12, 'square', 0.08),
+  // the rainforest toucan, startled into dropping the banana
+  squeak: () => play([N.G6, N.C6 * 2, N.G6], 0.045, 0.07, 'square', 0.07),
   drop: () => play([N.E4, N.C4], 0.08, 0.12, 'triangle', 0.1),
   goal: () => play([N.C5, N.E5, N.G5, N.C6, N.G5, N.C6], 0.08, 0.16, 'square', 0.1),
   over: (best) => (best ? play([N.C5, N.E5, N.G5, N.C6], 0.09, 0.2, 'square', 0.1) : play([N.G5, N.E5, N.C5], 0.1, 0.18, 'triangle', 0.12)),
