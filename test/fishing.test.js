@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BAIT, BAITS, baitToday, pointsFor, POINTS, pickiness, SPOTS, SPECIES, GAME_SECONDS, SNAG } from '../js/fishing.js';
+import { BAIT, BAITS, baitToday, pointsFor, POINTS, pickiness, strikeChance, SPOTS, SPECIES, GAME_SECONDS, SNAG } from '../js/fishing.js';
 
 test('bait: jigs and spoons for bass and pike, worms for catfish and bluegill', () => {
   const like = (b, k) => BAIT[b].like[k];
@@ -29,6 +29,13 @@ test('points: more for bigger fish, the most for the map\'s rare fish', () => {
   assert.equal(pointsFor('pike', 1), Math.round(POINTS.pike * 2.5));
   for (const k of Object.keys(SPECIES)) assert.ok(pointsFor('special', 0) > pointsFor(k, 0), k);
   assert.ok(POINTS.bluegill < POINTS.largemouth && POINTS.largemouth < POINTS.pike);
+});
+
+test('a twitch hooks small fish 44% of the time, the biggest 20%', () => {
+  // Taylor, 2026-11-05: from 55% and 40%, small fish 20% harder and big ones twice as hard
+  assert.ok(Math.abs(strikeChance(0) - 0.55 * 0.8) < 1e-9);
+  assert.ok(Math.abs(strikeChance(1) - 0.4 / 2) < 1e-9);
+  assert.ok(strikeChance(0.5) < strikeChance(0) && strikeChance(0.5) > strikeChance(1));
 });
 
 test('bigger fish are pickier', () => {
