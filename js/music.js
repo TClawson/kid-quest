@@ -1,7 +1,7 @@
 // Background music for the quest map: one original 16-bar chiptune loop per map theme,
 // synthesized live with Web Audio (pulse waves, a triangle bass and noise drums, like old
 // consoles). No audio files. A small look-ahead scheduler keeps the timing steady.
-import { SONGS } from './songs.js';
+import { SONGS, SHOW_SONGS } from './songs.js';
 
 const VOLUME = 0.07;
 const SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -28,7 +28,7 @@ function chordTones(name) {
 const compiled = new Map();
 function compile(id) {
   if (compiled.has(id)) return compiled.get(id);
-  const s = SONGS[id] || SONGS['bg-meadow'];
+  const s = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] || SHOW_SONGS['bg-meadow'] : SONGS[id] || SONGS['bg-meadow'];
   const song = {
     ...s,
     beat: s.beat || 8,
@@ -261,4 +261,137 @@ export async function renderSong(theme, loops = 1, sampleRate = 44100) {
   const r = rig(off, master, song, step);
   for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s % (song.lead.length * song.beat), 0.05 + s * step);
   return off.startRendering();
+}
+
+// ---------- the secret shows (see mapshow.js) ----------
+
+function context() {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+  } catch {
+    return null;
+  }
+  if (ac.state === 'suspended') ac.resume().catch(() => {});
+  return ac;
+}
+
+/**
+ * Play a show's song once (music: false skips it) and its sound effects
+ * (sfx: [[seconds, kind]]). The map song goes quiet meanwhile and comes back after.
+ */
+export function playShowAudio(theme, { music = true, sfx = [] } = {}) {
+  const a = context();
+  if (!a) return;
+  const t0 = a.currentTime + 0.05;
+  const song = compile(`show:${theme}`);
+  const step = 60 / song.bpm / 2;
+  const steps = song.lead.length * song.beat;
+  const len = steps * step + 0.6;
+  if (live) {
+    const g = live.master.gain;
+    g.cancelScheduledValues(t0);
+    g.setValueAtTime(g.value, t0);
+    g.linearRampToValueAtTime(0.0001, t0 + 0.3);
+    g.setValueAtTime(0.0001, t0 + len);
+    g.linearRampToValueAtTime(VOLUME * (live.song.gain || 1), t0 + len + 1.5);
+  }
+  const master = a.createGain();
+  master.connect(a.destination);
+  scheduleShow(a, master, theme, { music, sfx, t0 });
+  setTimeout(() => master.disconnect(), (len + 4) * 1000);
+}
+
+/** Schedule a show's song (from t0 + 0.2) and sound effects (from t0) into out. */
+function scheduleShow(a, out, theme, { music = true, sfx = [], t0 = 0 }) {
+  const song = compile(`show:${theme}`);
+  const step = 60 / song.bpm / 2;
+  const steps = song.lead.length * song.beat;
+  const tune = a.createGain();
+  tune.gain.value = VOLUME * 1.6;
+  tune.connect(out);
+  if (music) {
+    const r = rig(a, tune, song, step);
+    for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s, t0 + 0.2 + s * step);
+  }
+  const fx = a.createGain();
+  fx.gain.value = 0.9;
+  fx.connect(out);
+  const r = rig(a, fx, song, step);
+  for (const [at, kind] of sfx) effect(r, kind, t0 + at);
+}
+
+/** Render a show's sound to an AudioBuffer (used to make preview videos). */
+export async function renderShow(theme, sfx = [], seconds = 9, sampleRate = 44100) {
+  const off = new OfflineAudioContext(1, Math.ceil(seconds * sampleRate), sampleRate);
+  scheduleShow(off, off.destination, theme, { sfx, t0: 0.05 });
+  return off.startRendering();
+}
+
+function noiseHit(r, t, len, type, f0, f1, vol) {
+  const { ac: a } = r;
+  const src = a.createBufferSource();
+  src.buffer = r.noise;
+  src.loop = true;
+  const f = a.createBiquadFilter();
+  f.type = type;
+  f.frequency.setValueAtTime(f0, t);
+  f.frequency.exponentialRampToValueAtTime(f1, t + len);
+  const g = a.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+  src.connect(f).connect(g).connect(r.out);
+  src.start(t);
+  src.stop(t + len + 0.02);
+}
+
+function glide(r, t, len, wave, f0, f1, vol, wobble = 0) {
+  const { ac: a } = r;
+  const o = a.createOscillator();
+  if (r.waves[wave]) o.setPeriodicWave(r.waves[wave]);
+  else o.type = wave;
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(f1, t + len);
+  if (wobble) {
+    const lfo = a.createOscillator();
+    const lg = a.createGain();
+    lfo.frequency.value = 7;
+    lg.gain.value = wobble;
+    lfo.connect(lg).connect(o.frequency);
+    lfo.start(t);
+    lfo.stop(t + len + 0.02);
+  }
+  const g = a.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + Math.min(0.05, len / 4));
+  g.gain.setValueAtTime(vol, t + len * 0.7);
+  g.gain.linearRampToValueAtTime(0.0001, t + len);
+  o.connect(g).connect(r.out);
+  o.start(t);
+  o.stop(t + len + 0.02);
+}
+
+const PENTA = [1047, 1175, 1319, 1568, 1760, 2093, 2349];
+
+/** One sound effect at time t. */
+function effect(r, kind, t) {
+  switch (kind) {
+    case 'boom': noiseHit(r, t, 0.7, 'lowpass', 1200, 80, 0.5); glide(r, t, 0.3, 'triangle', 90, 40, 0.5); break;
+    case 'cannon': noiseHit(r, t, 0.35, 'lowpass', 600, 60, 0.6); glide(r, t, 0.25, 'triangle', 130, 35, 0.6); break;
+    case 'whoosh': noiseHit(r, t, 0.7, 'bandpass', 300, 3000, 0.35); break;
+    case 'rumble': noiseHit(r, t, 1.4, 'lowpass', 180, 60, 0.6); glide(r, t, 1.2, 'triangle', 55, 40, 0.4, 6); break;
+    case 'splash': noiseHit(r, t, 0.5, 'highpass', 800, 3000, 0.35); break;
+    case 'pop': glide(r, t, 0.08, 'sine', 700, 300, 0.3); break;
+    case 'hoot': glide(r, t, 0.22, 'sine', 560, 480, 0.35); glide(r, t + 0.3, 0.35, 'sine', 520, 430, 0.35); break;
+    case 'roar': glide(r, t, 1, 'sawtooth', 220, 70, 0.22, 25); noiseHit(r, t, 1, 'lowpass', 900, 200, 0.3); break;
+    case 'screech': glide(r, t, 0.6, 'pulse25', 1800, 900, 0.12, 60); break;
+    case 'squawk': glide(r, t, 0.12, 'pulse25', 1300, 900, 0.12, 80); glide(r, t + 0.16, 0.14, 'pulse25', 1400, 950, 0.12, 80); break;
+    case 'whee': glide(r, t, 1.1, 'sine', 400, 1600, 0.25); break;
+    case 'neigh': for (let i = 0; i < 6; i += 1) glide(r, t + i * 0.07, 0.07, 'pulse25', i % 2 ? 900 : 1100, i % 2 ? 850 : 1000, 0.1); break;
+    case 'warp': glide(r, t, 1.3, 'sine', 90, 900, 0.3, 30); break;
+    case 'whale': glide(r, t, 1.6, 'sine', 330, 190, 0.35, 8); glide(r, t + 1.4, 1, 'sine', 190, 270, 0.3, 8); break;
+    case 'sparkle': for (let i = 0; i < 6; i += 1) glide(r, t + i * 0.07, 0.12, 'square', PENTA[(i * 3) % PENTA.length], PENTA[(i * 3) % PENTA.length], 0.05); break;
+    case 'coins': for (let i = 0; i < 8; i += 1) glide(r, t + i * 0.06, 0.1, 'square', i % 2 ? 1976 : 1568, i % 2 ? 1976 : 1568, 0.05); break;
+    case 'boing': glide(r, t, 0.35, 'triangle', 200, 600, 0.35, 40); break;
+    default: break;
+  }
 }

@@ -129,15 +129,15 @@ const DRAGON_BODY = [
   '..........DDD...DDD',
   '..........hh.h..hh.h',
 ];
-const DRAGON = sprite(DRAGON_BODY);
-const DRAGON_ROAR = sprite(swap(DRAGON_BODY, 7, [
+export const DRAGON = sprite(DRAGON_BODY);
+export const DRAGON_ROAR = sprite(swap(DRAGON_BODY, 7, [
   'tGtGGGGGGGGGs',
   'rrrrrDGGGGGGs',
   'rrrrDDDGGGGGGs.s.s',
   'tDtDD..YGGGGGGsLsLsL',
 ]));
 // wings, w the skin, D the bones
-const WING_UP = sprite([
+export const WING_UP = sprite([
   '...........D',
   '.........DDw',
   '.......DDwwD',
@@ -148,7 +148,7 @@ const WING_UP = sprite([
   '.wwwwDwwwwwD',
   '..wwDwwwwwD',
 ]);
-const WING_DOWN = sprite([
+export const WING_DOWN = sprite([
   'DDDDDDDDDDDD',
   '.wwwwDwwwwwD',
   '..wwwDwwwwD',
@@ -183,7 +183,7 @@ const KNIGHT_BODY = [
   '...ww.ww.....ww.ww',
   '...hh.hh.....hh.hh',
 ];
-const KNIGHT = sprite(KNIGHT_BODY);
+export const KNIGHT = sprite(KNIGHT_BODY);
 const KNIGHT_RUN = [
   sprite(swap(KNIGHT_BODY, 17, ['..WW.WW......WW.WW', '.WW...WW......WW.WW', 'ww.....ww......ww.ww', 'h.......h.......h...h'])),
   sprite(swap(KNIGHT_BODY, 17, ['...WWWW.....WWWW', '....WW.......WW', '....ww.......ww', '....hh.......hh'])),
@@ -215,7 +215,7 @@ const UNICORN_BODY = [
   '....hh.hh...hh.hh',
 ];
 const UNICORN = sprite(UNICORN_BODY);
-const UNICORN_RUN = [
+export const UNICORN_RUN = [
   sprite(swap(UNICORN_BODY, 17, ['...WW..WW....WW.WW', '..WW....WW....WW.WW', '.ww......ww....ww.ww', '.h........h.....h...h'])),
   sprite(swap(UNICORN_BODY, 17, ['.....WWWW....WWWW', '......WW......WW', '......ww......ww', '......hh......hh'])),
 ];
@@ -305,13 +305,13 @@ const CRAB_BODY = [
 // beach crabs: r shell, l its light top, e eye. Claws open and shut, legs scuttle.
 const CRAB_CLAWS_SHUT = ['rr...........rr', 'rrr..e...e..rrr', 'rr...K...K...rr'];
 const CRAB = [CRAB_BODY, swap(CRAB_BODY, 7, ['.r..r.r.r.r..r', 'r...r.....r...r'])].map((b) => [sprite(b), sprite(swap(b, 0, CRAB_CLAWS_SHUT))]);
-const TIKI = sprite(TIKI_BODY);
+export const TIKI = sprite(TIKI_BODY);
 const TIKI_RUN = [
   ['..b..b', '.b...b', 'bb...bb'],
   ['...bb', '...bb', '..bbb'],
 ].map((legs) => sprite(swap(swap(TIKI_BODY, 0, ['b.g.y.g.b', 'b.gyryg.b', 'b.MMMMM.b']), 9, ['...bbb', '..bbbbb', '...bbb', '..GGGGG', '.GGGGGGG', ...legs])));
 
-function draw(ctx, x0, y0, rows, pal, flip = false) {
+export function draw(ctx, x0, y0, rows, pal, flip = false) {
   const x = Math.round(x0);
   const y = Math.round(y0);
   rows.forEach((r, yy) => {
@@ -328,7 +328,7 @@ function draw(ctx, x0, y0, rows, pal, flip = false) {
 /** Where a part (wing, sword) goes on a sprite that may be flipped: `ox` is from the sprite's left. */
 const partX = (x, w, ox, part, flip) => (flip ? x + w - ox - part[0].length : x + ox);
 /** A round pixel puff, for smoke and fire. */
-function puff(ctx, cx, cy, r, c, edge) {
+export function puff(ctx, cx, cy, r, c, edge) {
   const x0 = Math.round(cx);
   const y0 = Math.round(cy);
   const rr = Math.max(0.5, r);
@@ -892,7 +892,7 @@ const SLOTH = sprite(SLOTH_BODY);
 // the other two arms reach forward, hand over hand
 const SLOTH_REACH = sprite(swap(SLOTH_BODY, 0, ['....c....c.....c....c', '....a....a.....a....a', '...aa....a.....aa...a', '...aa...aa.....aa..aa']));
 // lets go with the front arm to wave (slowly)
-const SLOTH_WAVE = [
+export const SLOTH_WAVE = [
   sprite(swap(SLOTH_BODY, 0, ['..c....c.....c.......c', '..a....a.....a......a', '..aa...a.....aa....a', '...aa.aa......aa.aa'])),
   sprite(swap(SLOTH_BODY, 0, ['..c....c.....c', '..a....a.....a', '..aa...a.....aa.....ac', '...aa.aa......aa.aaa'])),
 ];
@@ -908,13 +908,13 @@ const TOUCAN_BODY = [
   '.bbbbbbbbb',
   '..rr.bbb',
 ];
-const TOUCAN = sprite(TOUCAN_BODY);
+export const TOUCAN = sprite(TOUCAN_BODY);
 // eyes wide and beak open: EEK
 const TOUCAN_EEK = sprite(swap(TOUCAN_BODY, 1, ['....bbbbbeeW', '..bbbbbbbWeKeOOOOO', '.bbbbbbbWWeeeOOOO...', 'bbbBbbbbWWWWoooo', 'bbbbbbbbbWWooooo']));
 // cross: a frown above the eye
 const TOUCAN_CROSS = sprite(swap(TOUCAN_BODY, 0, ['......bbbbKK', '....bbbbbbbW']));
-const TOUCAN_WING_UP = sprite(['....bb', '..bbbb', '.bbbBb', 'bbbbb']);
-const TOUCAN_WING_DOWN = sprite(['bbbbb', '.bbbBb', '..bbbb', '....bb']);
+export const TOUCAN_WING_UP = sprite(['....bb', '..bbbb', '.bbbBb', 'bbbbb']);
+export const TOUCAN_WING_DOWN = sprite(['bbbbb', '.bbbBb', '..bbbb', '....bb']);
 const ANGRY = sprite(['rr.rr', 'r...r', '.....', 'r...r', 'rr.rr']);
 const BANANA = sprite(['y', 'yy', '.yy', '.yyy', '..yyyg'], true);
 
@@ -948,13 +948,13 @@ const MONKEY_RUN = [
 // both arms up: hooray (or hiding under the leaf with a shiver)
 const MONKEY_YAY = sprite(swap(MONKEY_BODY, 0, ['t...ffff...t', 'f.ffffffff.f', 'ftftttttftf', '.tftKttKtf', '..fttttttf', '...fttttf', '....ffff', '...fbbbbf', '....bbbb.....f', '....bbbb......f']));
 // dancing (and singing) in the rain: one arm up, both up, the other arm up
-const MONKEY_DANCE = [
+export const MONKEY_DANCE = [
   sprite(swap(MONKEY_BODY, 0, ['t...ffff', 'f.ffffffff', 'ftftttttft', '.tftKttKtft', '..fttttttf', '...ftFFtf', '....ffff', '...fbbbbff', '....bbbb.ff..f', '....bbbb..t...f'])),
   sprite(swap(MONKEY_BODY, 0, ['t...ffff...t', 'f.ffffffff.f', 'ftftttttftf', '.tftKttKtf', '..fttttttf', '...ftFFtf', '....ffff', '...fbbbbf', '....bbbb.....f', '....bbbb......f'])),
   sprite(swap(MONKEY_BODY, 0, ['....ffff...t', '..ffffffff.f', '.tftttttftf', '.tftKttKtf', '..fttttttf', '...ftFFtf', '....ffff', '..ffbbbbf', '.ff.bbbb.....f', '.t..bbbb......f'])),
 ];
 // a music note: s stem
-const NOTE = sprite(['.ss', '.s.s', '.s', 'ss', 'ss']);
+export const NOTE = sprite(['.ss', '.s.s', '.s', 'ss', 'ss']);
 
 // The jaguar lies down facing right: y coat, Y shade, s spots, l light belly, e eye, n nose.
 const JAGUAR_BODY = [
@@ -970,7 +970,7 @@ const JAGUAR_BODY = [
   '...YYY.......YYY..llll',
 ];
 // asleep: eyes shut
-const JAGUAR = sprite(JAGUAR_BODY);
+export const JAGUAR = sprite(JAGUAR_BODY);
 const JAGUAR_SLEEP = sprite(swap(JAGUAR_BODY, 2, ['................yyyyyyyyyy', '................yyKKyyKKyy']));
 const JAGUAR_TAIL = sprite(swap(JAGUAR_BODY, 4, ['yyy..ysyyysyyysyyyyyynnyy', '..yyyyyyyyyyyyyyyyyyylly', '...yysyysyyysyyysyyyyyy']));
 // sitting up under a big leaf: g leaf, G its vein, T stem
@@ -1015,7 +1015,7 @@ const CAPY_BODY = [
   '.rrwwrrrwwrrrr',
   '..rrwwrrrwwrr',
 ];
-const CAPY_CALM = sprite(CAPY_BODY);
+export const CAPY_CALM = sprite(CAPY_BODY);
 const CAPY_EEK = sprite(swap(CAPY_BODY, 1, ['.....cceeccc', '....cceKeccccc', '....cceeecccnn', '.....cccccccKn']));
 const CAPY_FALL = sprite(['....c.cc.cc.c', '...c.ccccccc.c', '....cceKeccccc', '....cceeecccnn', '.....ccccccccK', '..rrwwrrrwwrr', '.rrwwrrrwwrrrr', '..rrwwrrrwwrr']);
 

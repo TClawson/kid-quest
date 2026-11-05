@@ -186,3 +186,91 @@ export const SONGS = {
     drumVol: 0.6,
   },
 };
+
+// Short songs for the secret shows (see mapshow.js): five bars, about 8 seconds, played
+// once over the map song (which goes quiet meanwhile). Same format as SONGS.
+export const SHOW_SONGS = {
+  // the Great Oak: twinkly and magical, fireflies everywhere
+  'bg-meadow': {
+    bpm: 150, echo: 0.35,
+    lead: ['C6 G5 E6 G5 C6 G5 E6 G5', 'D6 A5 F6 A5 D6 A5 F6 A5', 'E6 C6 G6 C6 E6 - D6 C6', 'B5 G5 D6 G5 B5 - C6 D6', 'C6 - G6 - C7 - - -'],
+    chords: ['C', 'Dm', 'C', 'G', 'C'],
+    arp: { from: 0, octave: 5, vol: 0.05 },
+    bass: [[R, 2], null, [F, 2], null, [R, 2], null, [F, 2], null],
+    drums: [['k.......', '....s...', 'h.h.h.h.']],
+  },
+  // the ghost pirate ship: a spooky sea shanty in D minor
+  'bg-sunset': {
+    bpm: 150, swing: 0.2,
+    lead: ['D5 - A4 D5 F5 - E5 D5', 'C5 - G4 C5 E5 - D5 C5', 'Bb4 - D5 F5 A5 - G5 F5', 'A5 - C#5 E5 A5 - . .', 'D6 - A5 - D5 - - -'],
+    chords: ['Dm', 'C', 'Bb', 'A', 'Dm'],
+    bass: [[R, 2], null, [F, 1], [R, 2], null, [F, 1], [R, 2], null],
+    drums: [['k..k..k.', '...s...s', 'h.hh.hh.']],
+  },
+  // the Kraken: low and mysterious, then a big splash, E minor
+  'bg-ocean': {
+    bpm: 140,
+    leadWave: 'triangle', leadVol: 0.55,
+    lead: ['E4 - - G4 - - B4 -', 'C5 - - B4 - - G4 -', 'E4 - - G4 - - B4 -', 'D#5 - - F#5 - - B5 -', 'E5 - B4 - E6 - - -'],
+    chords: ['Em', 'C', 'Em', 'B', 'Em'],
+    arp: { from: 2, wave: 'triangle', octave: 4, vol: 0.1 },
+    bass: [[R, 1], null, null, [R, 1], null, null, [F, 1], null],
+    drums: [['t.....t.', '...k....', '........'], ['k.t.k.t.', '....s...', 'hhhhhhhh']],
+  },
+  // the moon worm roller coaster: bouncy and fast
+  'bg-space': {
+    bpm: 168,
+    lead: ['G5 B5 D6 G6 F#6 D6 B5 A5', 'G5 B5 D6 G6 A6 G6 F#6 E6', 'C6 E6 G6 E6 D6 F#6 A6 F#6', 'G6 - D6 - B5 - G5 -', 'G5 B5 D6 G6 - - - -'],
+    chords: ['G', 'G', 'C', 'D', 'G'],
+    arp: { from: 0, octave: 4, order: 'updown', vol: 0.06 },
+    bass: [[R, 2], [R, 3], [F, 2], [R, 3], [R, 2], [R, 3], [F, 2], [R, 3]],
+    drums: [['k...k...', '..s...s.', 'hhhhhhhh']],
+  },
+  // the Dragon King: a royal fanfare in Bb
+  'bg-castle': {
+    bpm: 132,
+    lead: ['F5 - F5 F5 Bb5 - - -', 'C6 - C6 C6 D6 - Bb5 -', 'Eb6 - D6 - C6 - Bb5 -', 'C6 - - - F5 - . .', 'Bb5 - D6 - F6 - - -'],
+    chords: ['Bb', 'F', 'Eb', 'F', 'Bb'],
+    arp: { from: 1, octave: 4, vol: 0.06 },
+    bass: [[R, 2], null, [R, 2], null, [F, 1], null, [R, 2], null],
+    drums: [['k..k....', '....s...', '........'], ['k..k..k.', '....s.ss', 'hhhhhhhh']],
+  },
+  // the phoenix: drums and fire, A minor
+  'bg-volcano': {
+    bpm: 156,
+    lead: ['. . . . . . . .', 'A5 - - E5 A5 - C6 -', 'B5 - - G5 B5 - D6 -', 'C6 - B5 - A5 - G#5 -', 'A5 - E6 - A6 - - -'],
+    chords: ['Am', 'Am', 'G', 'F', 'Am'],
+    arp: { from: 1, octave: 4, vol: 0.06 },
+    bass: [[R, 1], [R, 1], null, [R, 1], [R, 2], null, [R, 1], null],
+    drums: [['t.t.t.tt', 'k...k...', '........'], ['k.tkk.t.', '..s...s.', 'hhhhhhhh']],
+  },
+  // the rainbow slide: a happy gallop in G
+  'bg-rainbow': {
+    bpm: 160, swing: 0.25,
+    lead: ['D5 G5 B5 D6 B5 G5 B5 D6', 'E6 - D6 B5 C6 - A5 -', 'B5 G5 B5 D6 G6 - E6 -', 'D6 - C6 - B5 - A5 -', 'G5 B5 D6 G6 - - - -'],
+    chords: ['G', 'C', 'G', 'D', 'G'],
+    arp: { from: 0, octave: 5, vol: 0.05 },
+    bass: [[R, 2], null, [F, 2], null, [R, 2], null, [F, 2], null],
+    drums: [['k..k..k.', '...s...s', 'h.h.h.h.']],
+  },
+  // the space whale: slow and dreamy, F with a lift
+  'bg-galaxy': {
+    bpm: 120, echo: 0.45,
+    leadWave: 'triangle', leadVol: 0.55,
+    lead: ['F5 - - - A5 - C6 -', 'B5 - - - G5 - - -', 'A5 - - - C6 - E6 -', 'D6 - - - B5 - - -', 'C6 - F6 - - - - -'],
+    chords: ['F', 'G', 'F', 'G', 'F'],
+    arp: { from: 0, octave: 5, vol: 0.05, order: 'updown' },
+    bass: [[R, 1], null, null, null, [F, 1], null, null, null],
+    drums: [['k.......', '........', '....h...']],
+  },
+  // the rain dance: jungle drums and a bouncy pipe tune, D dorian
+  'bg-rainforest': {
+    bpm: 140,
+    leadWave: 'triangle', leadVol: 0.5,
+    lead: ['. . . . . . . .', 'D5 - F5 G5 A5 - G5 F5', 'E5 - G5 A5 B5 - A5 G5', 'A5 C6 A5 G5 F5 G5 E5 -', 'D5 - A5 - D6 - - -'],
+    chords: ['Dm', 'Dm', 'Em', 'C', 'Dm'],
+    arp: { from: 1, octave: 4, vol: 0.05 },
+    bass: [[R, 2], null, [R, 2], [F, 1], null, [R, 2], null, [F, 1]],
+    drums: [['t..t.tt.', 'k...k...', '........'], ['t.tt.tt.', 'k..k.k..', 'h.h.h.h.']],
+  },
+};

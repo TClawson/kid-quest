@@ -13,7 +13,7 @@ import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { liveHtml, live, liveStart, feel } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
-import { startMusic, stopMusic } from './music.js';
+import { startMusic, stopMusic, playShowAudio } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
@@ -26,6 +26,9 @@ import { runSeconds, CHEERS, pickCheer } from './practice.js';
 import { startListening, buddyState, TUNING } from './listen.js';
 import { createBeatFollower } from './beat.js';
 import { loadRecognizer } from './hear.js';
+import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
+import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, SECRETS } from './treasure-art.js';
+import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
@@ -418,7 +421,7 @@ function celebrateIfDue(kid) {
       onClose: after,
       emoji: '🏆',
       title: weeks === 1 ? 'A WHOLE WEEK!' : `${weeks} WEEKS IN A ROW!`,
-      text: `${info.streak}-day streak! Your reward: ${state.settings.weeklyReward}. Show a parent!${info.freezes ? ' You also have a streak freeze ❄️ saved up.' : ''}`,
+      text: `${info.streak}-day streak! Your reward: ${state.settings.weeklyReward}. Show a parent!${info.freezes ? ' You also have a streak freeze ❄️ saved up.' : ''} Then tap your treasure chest!`,
       sound: sounds.week,
       big: true,
     });
@@ -428,11 +431,107 @@ function celebrateIfDue(kid) {
       onClose: after,
       emoji: '🌟',
       title: 'Quest complete!',
-      text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥`,
+      text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 Tap the treasure chest to open it!`,
       sound: sounds.day,
     });
   }
   return true;
+}
+
+// ---------- the treasure chest (see treasure.js) ----------
+
+/** A day's chest: its tier, whether it can be opened now, and what was in it once opened. */
+function chestFor(kid, key) {
+  const t = today();
+  const s = dayStatus(state, kid, key, t);
+  const opened = entryFor(state, kid.id, key)?.chest || null;
+  const ready = chestReady(key, t, { complete: s.complete, total: s.total, excused: s.excused, opened: Boolean(opened) });
+  // the streak counting this day: until the day is done, as if it were
+  const streak = streakInfo(state, kid, key).streak + (s.complete ? 0 : 1);
+  return { key, s, opened, ready, tier: opened ? tierById(opened.tier) : chestTier(streak) };
+}
+
+/** An earlier day's chest that is still waiting (a parent approved late), or null. */
+function lateChest(kid) {
+  for (let i = 1; i <= LATE_DAYS; i += 1) {
+    const c = chestFor(kid, addDays(today(), -i));
+    if (c.ready) return c;
+  }
+  return null;
+}
+
+/** The Places backgrounds (maps) this kid has unlocked. */
+const unlockedMaps = (kid) => {
+  const prog = progressFor(kid);
+  return ITEMS.filter((i) => i.slot === 'background' && isUnlocked(i, prog)).map((i) => i.id);
+};
+const mapName = (id) => mapTheme(id).name;
+const mapGround = (id) => mapTheme(id).ground[0];
+
+function openChest(kid, key) {
+  const c = chestFor(kid, key);
+  if (!c.ready) return;
+  const found = treasureFound(state.log, kid.id);
+  const maps = mapsNeedingPieces(unlockedMaps(kid), kidTheme(kid), found);
+  // extra games are only any use today, with visitors to play with
+  const games = key === today() && pickVisitors(kid.id, familyBuddies(), today()).length > 0;
+  const prize = chestPrize({ seed: `${kid.id}|${key}`, tier: c.tier, found, maps, games });
+  entryFor(state, kid.id, key, true).chest = { ...prize, at: Date.now() };
+  save();
+  const after = treasureFound(state.log, kid.id);
+  const words = prizeText(prize, mapName);
+  let art = '';
+  let extra = '';
+  if (prize.kind === 'coins') art = '<div class="prize-emoji">🪙</div>';
+  else if (prize.kind === 'gems') art = '<div class="prize-emoji">💎</div>';
+  else if (prize.kind === 'games') art = '<div class="prize-emoji">⚽</div>';
+  else if (prize.kind === 'trophy') art = trophySvg(prize.trophy, { scale: 6 });
+  else {
+    const n = after.pieces[prize.map] || 0;
+    art = mapPiecesSvg(n, PIECES_PER_MAP, { scale: 7, ground: mapGround(prize.map) });
+    extra = n >= PIECES_PER_MAP
+      ? `<p class="prize-big">You finished the ${esc(mapName(prize.map))} treasure map! Something secret is waiting on that map now. 👀</p>`
+      : `<p class="muted">${n} of ${PIECES_PER_MAP} pieces</p>`;
+  }
+  sounds.tap();
+  openModal(`
+    <div class="celebrate chest-card chest-${c.tier.id}">
+      <div class="chest-shake">${chestSvg(c.tier.id, false, 7)}</div>
+      <div class="chest-reveal">
+        <div class="chest-behind">${chestSvg(c.tier.id, true, 5)}</div>
+        <div class="prize-art">${art}</div>
+        <h1>${esc(words.title)}</h1>
+        <p>${esc(words.text)}</p>
+        ${extra}
+        <button class="btn huge" data-action="modal-close">Awesome!</button>
+      </div>
+    </div>`, () => render());
+  setTimeout(() => { sounds.day(); confetti(prize.kind === 'piece' || prize.kind === 'trophy' ? 160 : 90, 2200); }, 1000);
+}
+
+/** The trophy shelf and the treasure maps. */
+function openTrophies(kid) {
+  const found = treasureFound(state.log, kid.id);
+  const maps = unlockedMaps(kid);
+  const shelf = TROPHIES.map((t) => {
+    const has = found.trophies.has(t.id);
+    return `<div class="trophy ${has ? '' : 'missing'}">${trophySvg(t.id, { scale: 3, locked: !has })}<small>${has ? esc(t.name) : '?'}</small></div>`;
+  }).join('');
+  const mapShelf = [...found.maps].map((m) => `<div class="trophy">${trophySvg(`map-${m}`, { scale: 3, ground: mapGround(m) })}<small>${esc(mapName(m))} map</small></div>`).join('');
+  const mapRows = maps.map((m) => {
+    const n = found.pieces[m] || 0;
+    return `<div class="treasure-map-row">${mapPiecesSvg(n, PIECES_PER_MAP, { scale: 3, ground: mapGround(m) })}<div><b>${esc(mapName(m))}</b><small>${n >= PIECES_PER_MAP ? 'Finished! Find the secret on this map.' : `${n} of ${PIECES_PER_MAP} pieces`}</small></div></div>`;
+  }).join('');
+  openModal(`
+    <div class="trophy-room">
+      <h2>🏆 ${esc(kid.name)}'s trophies</h2>
+      <p class="muted small">Trophies come from treasure chests. ${found.trophies.size} of ${TROPHIES.length} found.</p>
+      <div class="trophy-shelf">${shelf}${mapShelf}</div>
+      <h3>🗺️ Treasure maps</h3>
+      <p class="muted small">Silver and gold chests sometimes hold a piece of a treasure map. Finish one to find a secret on that map.</p>
+      <div class="treasure-maps">${mapRows}</div>
+      <button class="btn" data-action="modal-close">Close</button>
+    </div>`);
 }
 
 // ---------- task actions ----------
@@ -1043,6 +1142,10 @@ function visitorsHtml(kid, s) {
 /** The map theme follows the kid's Places background. */
 const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
 const MAP_WAVE = [0, 22, 30, 18, -4, -24, -30, -16];
+/** Room at the bottom of the map for the secret landmark. */
+const SECRET_ROOM = 280;
+/** A show can play again a minute after the last one. */
+const SHOW_AGAIN_MS = 60000;
 
 function questMap(kid, s, entry, mood) {
   const rows = [];
@@ -1063,7 +1166,10 @@ function questMap(kid, s, entry, mood) {
   const visit = visitorsHtml(kid, s);
   const top = 70 + visit.room;
   const pts = rows.map((r, i) => ({ x: 50 + (r.type === 'task' || r.type === 'chest' ? MAP_WAVE[i % MAP_WAVE.length] : 0), y: top + i * MAP_ROW }));
-  const height = top + rows.length * MAP_ROW;
+  // a finished treasure map shows this map's secret landmark below the treasure
+  const theme = kidTheme(kid);
+  const secret = SECRETS[theme] && treasureFound(state.log, kid.id).maps.has(theme) ? SECRETS[theme] : null;
+  const height = top + rows.length * MAP_ROW + (secret ? SECRET_ROOM : 0);
   // the river runs just above the after-school sign, so crossing the bridge means school's out
   const pmSign = rows.findIndex((r, i) => i > 0 && r.type === 'sign');
   const riverY = pmSign > 0 ? pts[pmSign].y - 42 : '';
@@ -1076,9 +1182,12 @@ function questMap(kid, s, entry, mood) {
     const pos = `left:${p.x}%;top:${p.y}px`;
     if (r.type === 'sign') return `<div class="map-sign" style="${pos}">${esc(r.label)}</div>`;
     if (r.type === 'chest') {
-      return `<button class="map-node chest ${s.complete ? 'open' : ''}" style="${pos}" data-action="chest" aria-label="Treasure">
-          <span class="node-icon">${s.complete ? '🏆' : '🎁'}</span></button>
-        <div class="map-label ${p.x > 50 ? 'left' : 'right'}" style="${pos};${labelWidth(p.x)}"><b>${s.complete ? 'Quest complete!' : 'Treasure!'}</b><small>${s.complete ? 'See you tomorrow' : 'Finish every task'}</small></div>`;
+      const c = chestFor(kid, today());
+      const title = c.opened ? 'Quest complete!' : c.ready ? 'Tap to open!' : `${c.tier.name}!`;
+      const sub = c.opened ? `You got: ${prizeText(c.opened, mapName).title.replace(/!$/, '')}` : c.ready ? `A ${c.tier.name.toLowerCase()} for you` : s.complete ? 'See you tomorrow' : 'Finish every task';
+      return `<button class="map-node chest chest-${c.tier.id} ${c.ready ? 'open ready' : c.opened ? 'opened' : ''}" style="${pos}" data-action="chest" aria-label="Treasure">
+          <span class="node-icon">${chestSvg(c.tier.id, Boolean(c.opened), 3)}</span></button>
+        <div class="map-label ${p.x > 50 ? 'left' : 'right'}" style="${pos};${labelWidth(p.x)}"><b>${esc(title)}</b><small>${esc(sub)}</small></div>`;
     }
     const t = r.task;
     const st = r.status === 'done' ? 'done' : r.status === 'pending' ? 'pending' : i === here ? 'current' : 'todo';
@@ -1106,6 +1215,7 @@ function questMap(kid, s, entry, mood) {
       <div class="map-start" style="left:50%;top:0">🚩 Start</div>
       ${visit.html}
       ${nodes}
+      ${secret ? `<button class="map-secret" style="top:${height - SECRET_ROOM / 2}px" data-action="secret" aria-label="${esc(secret.name)}">${secretSvg(theme, 4)}<span class="secret-name">${esc(secret.name)}</span><span class="secret-bubble" hidden></span></button>` : ''}
       ${walker}
     </section>`;
 }
@@ -1134,6 +1244,7 @@ function viewKid() {
   const listMode = state.settings.questView === 'list';
   const newCount = (kid.newItems || []).length;
   const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
+  const late = lateChest(kid);
   return `
     <div class="screen kid" style="--kid:${kid.color}">
       <header class="kid-head">
@@ -1154,6 +1265,8 @@ function viewKid() {
             <div class="bar big"><span style="width:${pct}%"></span></div>
             <div>${s.complete ? '<b>Quest complete! 🌟</b>' : `<b>${s.done} of ${s.total}</b> done${s.pending ? ` · ${s.pending} waiting for a parent` : ''}`}</div>
           </div>
+          ${late ? `<button class="btn late-chest" data-action="chest" data-day="${late.key}">${chestSvg(late.tier.id, false, 2)} A chest from ${late.key === addDays(t, -1) ? 'yesterday' : 'earlier'} is waiting! Open it</button>` : ''}
+          <button class="btn ghost" data-action="trophies">🏆 Trophies &amp; treasure maps</button>
           ${storeOpen(state, kid, t).open
             ? `<button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>`
             : `<button class="btn ghost store-locked" data-action="wardrobe">🔒 Buddy store opens when today's chores are done</button>`}
@@ -2063,11 +2176,41 @@ const actions = {
   },
   'music-toggle': () => { state.settings.music = state.settings.music === false; save(); render(); },
   'quest-mode': (el) => { state.settings.questView = el.dataset.mode; save(); render(); },
-  chest: () => {
+  chest: (el) => {
     const kid = kidById(ui.kidId);
-    const t = today();
-    const s = dayStatus(state, kid, t, t);
-    if (s.complete) { sounds.day(); confetti(100, 2000); toast('You found the treasure! 🏆'); } else { sounds.tap(); toast(`${s.total - s.done} more to reach the treasure!`); }
+    const key = el.dataset.day || today();
+    const c = chestFor(kid, key);
+    if (c.ready) return openChest(kid, key);
+    if (c.opened) { sounds.day(); confetti(60, 1500); toast(`Today's treasure: ${prizeText(c.opened, mapName).title}`); return; }
+    sounds.tap();
+    if (c.s.complete) toast('See you tomorrow for another chest!');
+    else toast(`${c.s.total - c.s.done} more to reach the ${c.tier.name.toLowerCase()}!`);
+  },
+  trophies: () => openTrophies(kidById(ui.kidId)),
+  secret: (el) => {
+    const kid = kidById(ui.kidId);
+    const theme = kidTheme(kid);
+    const info = SECRETS[theme];
+    const section = el.closest('.quest-map');
+    if (!info || !section) return;
+    // the landmark wakes up and says something
+    el.classList.add('awake');
+    clearTimeout(el.sleepTimer);
+    el.sleepTimer = setTimeout(() => el.classList.remove('awake'), 3500);
+    const bubble = el.querySelector('.secret-bubble');
+    bubble.textContent = info.lines[(ui.secretLine = ((ui.secretLine ?? -1) + 1) % info.lines.length)];
+    bubble.hidden = false;
+    clearTimeout(bubble.hideTimer);
+    bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
+    if (showPlaying(section) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
+    const img = new Image();
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(kid.buddy, 'excited', { background: false }))}`;
+    const spot = { x: el.offsetLeft + el.offsetWidth / 2, y: el.offsetTop + el.offsetHeight / 2 };
+    const def = playShow(section, theme, { buddy: img, spot, onDone: () => section.classList.remove('show-on') });
+    if (!def) return;
+    ui.lastShow = Date.now();
+    section.classList.add('show-on');
+    if (state.settings.sound !== false) playShowAudio(theme, { music: state.settings.music !== false, sfx: def.sfx });
   },
   'buy-confirm': (el) => {
     const kid = kidById(ui.kidId);
@@ -2635,7 +2778,7 @@ const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishi
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
 const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).map((m) => m.move.id);
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
-const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks);
+const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, entryFor(state, kid.id, today())?.chest?.games || 0);
 
 /** The game the kid's buddy is holding a ball or stick for, if any. */
 function heldGame(kid) {
