@@ -77,8 +77,11 @@ try {
       for (let i = 0; i < 6; i += 1) { await page.waitForTimeout(450); await shot(`f-drop-${i}`, await where('({ x: L.monkey.home.x + 10, y: L.monkey.home.y - 10 })')); }
     }
     await life(page, 'L.s.nextRain = 0; L.s.toucan = null;');
-    await page.waitForTimeout(2500);
-    await shot('f-rain', await where('({ x: L.jag.x + 10, y: L.jag.y })'));
+    for (let i = 0; i < 4; i += 1) {
+      await page.waitForTimeout(i ? 480 : 2500);
+      await page.screenshot({ path: `${out}/f-rain-${i}.png` });
+    }
+    await shot('f-rain', await where('({ x: L.monkey.home.x, y: L.monkey.home.y })'));
     await life(page, 'L.s.capyOdds = 1; L.s.nextThing = 0;');
     const fall = await where('({ x: (L.fall.x0 + L.fall.x1) / 2 + L.fall.dir * 30, y: L.fall.base - 10 })');
     for (let i = 0; i < 5; i += 1) { await page.waitForTimeout(700); await shot(`f-capy-${i}`, fall); }
@@ -159,10 +162,10 @@ try {
         await tap(page, '({ x: L.s.sloth.x + 10, y: L.s.sloth.v + 6 })');
         await page.waitForTimeout(9000);
       }],
-      ['rain', 'L.s.nextToucan = 1e9; L.s.nextThing = 1e9; L.s.nextSloth = 1e9;', 'L.jag.y', async (page) => {
+      ['rain', 'L.s.nextToucan = 1e9; L.s.nextThing = 1e9; L.s.nextSloth = 1e9;', 'L.monkey.home.y', async (page) => {
         await page.waitForTimeout(1500);
         await life(page, 'L.s.nextRain = 0;');
-        await page.waitForTimeout(12000);
+        await page.waitForTimeout(14000);
       }],
       ['waterfall', 'L.s.nextToucan = 1e9; L.s.nextRain = 1e9; L.s.nextSloth = 1e9; L.s.nextThing = 1e9;', 'L.fall.base - 10', async (page) => {
         await life(page, 'L.s.capyOdds = 0; L.s.nextThing = 0;');
@@ -172,7 +175,9 @@ try {
       }],
     ];
     const size = { width: 800, height: 700 };
+    const only = process.argv[4];
     for (const [name, setup, yExpr, run] of clips) {
+      if (only && name !== only) continue;
       const { ctx, page } = await open(size, true);
       await life(page, setup);
       const y = await life(page, `return ${yExpr};`);

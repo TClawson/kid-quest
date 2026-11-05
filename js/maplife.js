@@ -947,7 +947,14 @@ const MONKEY_RUN = [
 ];
 // both arms up: hooray (or hiding under the leaf with a shiver)
 const MONKEY_YAY = sprite(swap(MONKEY_BODY, 0, ['t...ffff...t', 'f.ffffffff.f', 'ftftttttftf', '.tftKttKtf', '..fttttttf', '...fttttf', '....ffff', '...fbbbbf', '....bbbb.....f', '....bbbb......f']));
-const MONKEY_HUDDLE = sprite(swap(MONKEY_BODY, 3, ['.tftKttKtft', '..fttttttf', '...ftFFtf', '..tffffft', '..ffbbbbff', '..tfbbbbft', '...ffffff....f']));
+// dancing (and singing) in the rain: one arm up, both up, the other arm up
+const MONKEY_DANCE = [
+  sprite(swap(MONKEY_BODY, 0, ['t...ffff', 'f.ffffffff', 'ftftttttft', '.tftKttKtft', '..fttttttf', '...ftFFtf', '....ffff', '...fbbbbff', '....bbbb.ff..f', '....bbbb..t...f'])),
+  sprite(swap(MONKEY_BODY, 0, ['t...ffff...t', 'f.ffffffff.f', 'ftftttttftf', '.tftKttKtf', '..fttttttf', '...ftFFtf', '....ffff', '...fbbbbf', '....bbbb.....f', '....bbbb......f'])),
+  sprite(swap(MONKEY_BODY, 0, ['....ffff...t', '..ffffffff.f', '.tftttttftf', '.tftKttKtf', '..fttttttf', '...ftFFtf', '....ffff', '..ffbbbbf', '.ff.bbbb.....f', '.t..bbbb......f'])),
+];
+// a music note: s stem
+const NOTE = sprite(['.ss', '.s.s', '.s', 'ss', 'ss']);
 
 // The jaguar lies down facing right: y coat, Y shade, s spots, l light belly, e eye, n nose.
 const JAGUAR_BODY = [
@@ -1055,6 +1062,7 @@ function jungleLife(m) {
     rain: null, nextRain: 40000, drops: [], splash: [],
     things: [], nextThing: 2500, capyOdds: 0.3,
   };
+  const MONKEY_FURS = [{ f: '#8b5a2b', F: '#e8590c', t: '#f1c27d', b: '#d9a066' }, { f: '#6e4b2a', F: '#e8590c', t: '#e9b97a', b: '#c8935a' }, { f: '#a0612f', F: '#e8590c', t: '#f6d09a', b: '#e2ae72' }];
   const pal = {
     sloth: { a: '#a68a64', A: '#7f6545', m: '#d8bf94', e: '#4a3220', n: '#3b2a1a', c: '#3b2a1a' },
     toucan: { b: '#22223b', B: '#4a4e69', W: '#fff3bf', e: '#4dabf7', O: '#ff922b', o: '#fcc419', y: '#e03131', r: '#e03131' },
@@ -1131,7 +1139,7 @@ function jungleLife(m) {
   const stepMonkey = () => {
     monkey.t += 1;
     const c = s.toucan;
-    if (s.rain && ['eat', 'home', 'sulk'].includes(monkey.mode)) monkeyTo('cover');
+    if (s.rain && ['eat', 'home', 'sulk'].includes(monkey.mode)) monkeyTo('dance');
     switch (monkey.mode) {
       case 'shock': if (monkey.t > 10) monkeyTo('chase'); break;
       case 'chase':
@@ -1152,20 +1160,38 @@ function jungleLife(m) {
           if (monkey.banana) monkeyTo('eat');
         }
         break;
-      case 'cover':
+      case 'dance':
+        // home first, then dance (and sing) until the rain stops
         if (!s.rain) { monkeyTo('home'); break; }
-        toward(monkey, jag.x + JW - 16, jag.y - 1, 2.2);
+        toward(monkey, monkey.home.x, monkey.home.y, 1.5);
         break;
       default: break;
     }
-    monkey.moving = ['chase', 'home', 'fetch', 'cover'].includes(monkey.mode);
+    monkey.moving = ['chase', 'home', 'fetch', 'dance'].includes(monkey.mode);
   };
 
   const stepRain = (t, view) => {
     if (!s.rain && !s.toucan && t > s.nextRain) {
-      s.rain = { t: 0, len: Math.round(FPS * 8) };
+      s.rain = { t: 0, len: Math.round(FPS * 10) };
       sounds.thunder();
+      // a troupe of monkeys swings into the trees on both sides, near where the kid is looking
+      const n = m.aw > 140 ? 3 : 2;
+      const mid = Math.max(view.top + 40, Math.min(view.bottom - 50, monkey.home.y));
+      s.troupe = [];
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < n; i += 1) {
+          const x = side < 0 ? Math.max(1, Math.round(m.wall / 2) - 7) : Math.min(m.aw - 15, m.aw - Math.round(m.wall / 2) - 7);
+          const y = Math.round(mid + (i - (n - 1) / 2) * 34 + (side < 0 ? 0 : 12));
+          s.troupe.push({ side, x: side < 0 ? -18 - i * 10 : m.aw + 4 + i * 10, y, tx: x, out: side < 0 ? -20 : m.aw + 6, fur: MONKEY_FURS[(i * 2 + (side > 0 ? 1 : 0)) % MONKEY_FURS.length] });
+        }
+      }
     }
+    for (const k of s.troupe || []) {
+      const dest = s.rain ? k.tx : k.out;
+      k.moving = Math.abs(dest - k.x) > 0.5;
+      if (k.moving) k.x += Math.sign(dest - k.x) * Math.min(2.2, Math.abs(dest - k.x));
+    }
+    if (!s.rain && s.troupe?.every((k) => !k.moving)) s.troupe = null;
     const r = s.rain;
     jag.t += 1;
     if (r) {
@@ -1176,6 +1202,8 @@ function jungleLife(m) {
       for (let i = 0; i < 9 * r.k; i += 1) s.drops.push({ x: rand(-10, m.aw), y: rand(view.top - 10, view.bottom), life: Math.floor(rand(3, 6)) });
       setRain(r.k);
       duckMusic(r.k);
+      // the monkeys sing along: ooh ooh aah aah
+      if (r.t % 48 === 14) sounds.monkeys();
       if (r.t >= r.len) { s.rain = null; setRain(0); duckMusic(0); s.nextRain = t + rand(80000, 140000); jag.mode = 'shake'; jag.t = 0; }
     } else if (jag.mode === 'shake' && jag.t > 14) { jag.mode = 'nap'; jag.t = 0; }
     for (const d of s.drops) { d.x += 1; d.y += 5; d.life -= 1; if (d.life === 0) s.splash.push({ x: d.x, y: d.y, life: 3 }); }
@@ -1210,6 +1238,12 @@ function jungleLife(m) {
       }
     }
     s.things = s.things.filter((o) => o.x > -20 && o.x < m.aw + 6);
+  };
+
+  // one dance for everyone, on the beat of the song (about 6 frames a beat): left, both, right, both
+  const danceAt = (frame) => {
+    const beat = Math.floor(frame / 6) % 4;
+    return { look: MONKEY_DANCE[[0, 1, 2, 1][beat]], hop: beat % 2 && frame % 6 < 3 ? -2 : 0 };
   };
 
   const flow = (ctx, frame) => {
@@ -1298,16 +1332,28 @@ function jungleLife(m) {
       else if (mk.mode === 'shock') { look = MONKEY_YAY; hop = -2; }
       else if (mk.mode === 'chase' || mk.mode === 'sulk') { look = MONKEY_FIST[frame % 2]; hop = mk.mode === 'sulk' && frame % 4 < 2 ? -1 : 0; }
       else if (mk.mode === 'yay') { look = MONKEY_YAY; hop = frame % 4 < 2 ? -2 : 0; }
-      else if (mk.mode === 'cover' && !run) look = MONKEY_HUDDLE;
+      else if (mk.mode === 'dance' && !run) { const d = danceAt(frame); look = d.look; hop = d.hop; }
       else if (run) look = MONKEY_RUN[frame % 2];
-      const mx = mk.x + (mk.mode === 'cover' && !run && frame % 2 ? 1 : 0);
+      const mx = mk.x;
       draw(ctx, mx, mk.y + hop, look, pal.monkey);
       if (mk.banana && (mk.mode === 'eat' || mk.mode === 'yay' || mk.mode === 'home')) {
         const up = mk.mode === 'yay' || (mk.mode === 'eat' && look === MONKEY_EAT);
         draw(ctx, mx + (up ? 9 : 9), mk.y + hop + (up ? (mk.mode === 'yay' ? -6 : 4) : 8), BANANA, pal.banana);
       }
       if (mk.mode === 'shock' || (mk.mode === 'chase' && frame % 6 < 3)) draw(ctx, mx + 5, mk.y - 8, BANG2, { y: '#ffe066' });
-      if (mk.mode === 'cover' && jag.mode === 'leaf') draw(ctx, jag.x - 1, jag.y - 14 + (frame % 8 < 4 ? 0 : -1), LEAF, pal.jaguar);
+      if (mk.mode === 'dance' && !run) {
+        // singing: notes float up and away
+        for (let i = 0; i < 3; i += 1) {
+          const a = (frame + i * 9) % 27;
+          draw(ctx, mx + 10 + Math.round(Math.sin((a + i) / 3) * 2) + i * 2, mk.y - 4 - a * 0.7, NOTE, { s: ['#ffe066', '#ffffff', '#ff8fa3'][i] });
+        }
+      }
+      // the troupe in the trees, all dancing the same steps
+      for (const k of s.troupe || []) {
+        if (k.moving) { draw(ctx, k.x, k.y - (frame % 2 ? 2 : 0), MONKEY_RUN[frame % 2], k.fur); continue; }
+        const d = danceAt(frame);
+        draw(ctx, k.x, k.y + d.hop, d.look, k.fur);
+      }
       if (s.banana) draw(ctx, s.banana.x, s.banana.y, BANANA, pal.banana);
       // the sloth
       const k = s.sloth;

@@ -120,8 +120,31 @@ function thunder() {
   src.stop(t + 3.8);
 }
 
+/** Monkeys singing in the rain: ooh, ooh, aah, aah (little sliding hoots). */
+function monkeys() {
+  const ac = audio();
+  if (!ac) return;
+  const t0 = ac.currentTime + 0.02;
+  [[520, 700, 0], [520, 700, 0.24], [700, 950, 0.48], [700, 950, 0.72]].forEach(([a, b, at], i) => {
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = i < 2 ? 'triangle' : 'square';
+    const t = t0 + at;
+    osc.frequency.setValueAtTime(a, t);
+    osc.frequency.exponentialRampToValueAtTime(b, t + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(a * 0.9, t + 0.2);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(i < 2 ? 0.07 : 0.04, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    osc.connect(g).connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + 0.25);
+  });
+}
+
 export const sounds = {
   thunder,
+  monkeys,
   tap: () => play([N.E5], 0, 0.08, 'sine', 0.12),
   task: () => play([N.C6, N.E6, N.G6], 0.07, 0.25, 'triangle', 0.22),
   pending: () => play([N.G5, N.E5], 0.1, 0.2, 'sine', 0.15),
