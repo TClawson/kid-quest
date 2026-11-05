@@ -252,9 +252,17 @@ export function watchBuddies(familyId, onBuddies) {
   unsubs.push(fb.onSnapshot(kidsCol(familyId), (snap) => {
     onBuddies(snap.docs.map((d) => {
       const k = d.data();
-      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: k.exBest || 0, today: k.today || null };
+      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: k.exBest || 0, today: k.today || null, milestone: k.milestone || null };
     }));
   }, (err) => console.error('Kid Quest buddies', err)));
+}
+
+// A kid cheers another kid's milestone: one field on that kid's document,
+// cheers[milestoneId][fromKidId] = { name, at, what }. Works offline like any save.
+export function sendCheer(familyId, toKidId, milestoneId, fromKidId, cheer) {
+  const batch = fb.writeBatch(db);
+  batch.update(fb.doc(kidsCol(familyId), toKidId), new fb.FieldPath('cheers', milestoneId, fromKidId), cheer);
+  return batch.commit();
 }
 
 export function stopSync() {

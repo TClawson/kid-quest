@@ -567,3 +567,10 @@ label { color: var(--ink); }
 .look-row { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; padding: 6px 10px; border-radius: 10px; background: var(--bg, #f8f9fa); }
 .look-row small { grid-column: 1 / -1; color: var(--muted, #666); }
 .look-row.better small { color: #2b8a3e; font-weight: 700; }
+
+/* milestone news on visiting buddies, and the cheer button */
+.map-visitor.news, .map-visitor.cheering { z-index: 3; }
+.map-visitor.news .visitor-bubble, .map-visitor.cheering .visitor-bubble { background: #fff0f6; max-width: 150px; }
+.visitor-bubble .cheer-btn { pointer-events: auto; display: block; margin: 4px auto 0; font: inherit; font-size: 0.85rem; font-weight: 800; color: #fff; background: #e64980; border: 2px solid var(--px-ink); border-radius: 6px; padding: 3px 10px; box-shadow: 2px 2px 0 var(--px-ink); cursor: pointer; animation: cheer-pop 0.9s ease-in-out infinite alternate; }
+.visitor-bubble .cheer-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+@keyframes cheer-pop { from { transform: scale(1); } to { transform: scale(1.08); } }

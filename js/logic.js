@@ -233,12 +233,11 @@ export function taskPay(state, kid, key, task, today) {
   if (isExercise(task)) return { coins: 0, xp: taskXp(task), gems: taskGems(task) };
   const a = allowanceFor(state, kid);
   const since = state.settings?.allowance?.since;
-  // a habit mastered before this week earns less (see masteryDates); the rest of the week's pay goes to the others
+  // a habit mastered before this week gets a smaller share of the allowance; the week's total stays
+  // the same, so the rest goes to the habits the kid is still building
   const half = masteredBefore(state, kid, weekStart(key), today);
-  if (!a || (since && key < since)) {
-    const k = half.has(task.id) ? MASTERED_PAY : 1;
-    return { coins: Math.round(taskCoins(task) * k), xp: Math.round(taskXp(task) * k), gems: 0 };
-  }
+  // without the allowance, each task keeps the amount a parent typed: mastering one never lowers the total
+  if (!a || (since && key < since)) return { coins: taskCoins(task), xp: taskXp(task), gems: 0 };
   // a task that is not on the setup that day (e.g. ticked from a past day's list) earns nothing extra
   const slot = `${key}|${task.id}`;
   return { coins: weekSplit(kid, key, a.coins, half).get(slot) ?? 0, xp: weekSplit(kid, key, a.xp, half).get(slot) ?? 0, gems: 0 };
@@ -480,9 +479,10 @@ export function monthDays(state, kid, today) {
 //
 // Habits take about two months of steady repeats to form. A task a kid has done
 // on at least 85% of the days it was on their list over 60 days becomes a
-// mastered habit: it gets a star for good, and from the next Monday it earns
-// half as much (MASTERED_PAY), so the weekly allowance shifts to the tasks the
-// kid is still learning. Tasks that come up fewer than 20 times in 60 days
+// mastered habit: it gets a star for good, and from the next Monday it gets half
+// the share of the weekly allowance (MASTERED_PAY). The week's total is the same:
+// the rest goes to the tasks the kid is still learning. After a star the count
+// starts over, so keeping it up for the next 60 days earns another star. Tasks that come up fewer than 20 times in 60 days
 // (about 3 days a week) are too rare to become habits this way.
 
 export const MASTERY_DAYS = 60;
@@ -504,7 +504,8 @@ export function masteryGoal(task) {
 
 /**
  * Every quest task on the kid's setup that can become a habit:
- * Map taskId -> { task, done (times done in the last 60 days), goal, mastered (day it was first reached, or null) }.
+ * Map taskId -> { task, done (times done toward the next star), goal, mastered (day of the first star, or null),
+ *   stars: [day of each star] }.
  * Only done (parent-approved) days count. Today counts once it is done.
  */
 export function habitInfo(state, kid, today) {
@@ -512,7 +513,7 @@ export function habitInfo(state, kid, today) {
     const out = new Map();
     for (const t of questTasks(kid.tasks || [])) {
       const goal = masteryGoal(t);
-      if (goal) out.set(t.id, { task: t, done: 0, goal, mastered: null, days: [] });
+      if (goal) out.set(t.id, { task: t, done: 0, goal, mastered: null, stars: [], days: [] });
     }
     if (!out.size) return out;
     const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
@@ -522,7 +523,12 @@ export function habitInfo(state, kid, today) {
       for (const h of out.values()) {
         if (entry?.tasks?.[h.task.id]?.status === 'done') h.days.push(key);
         while (h.days.length && h.days[0] < oldest) h.days.shift();
-        if (!h.mastered && h.days.length >= h.goal) h.mastered = key;
+        if (h.days.length >= h.goal) {
+          // a star: the next one counts only days after this
+          h.stars.push(key);
+          h.mastered ||= key;
+          h.days = [];
+        }
       }
     }
     for (const h of out.values()) { h.done = h.days.length; delete h.days; }
@@ -811,3 +817,29 @@ export function weekLookback(state, kid, today) {
   });
   return { from, days: last.days, daysDone: last.daysDone, tasks };
 }
+
+// ---------- milestones the family can cheer ----------
+
+/**
+ * The kid's newest milestone from today or yesterday, or null:
+ * a habit star, a whole week (or weeks) in a row, or a welcome-back day.
+ * { id, kind: 'star' | 'streak' | 'back', day, n?, task? }. The id is the same on every device.
+ */
+export function milestoneFor(state, kid, today) {
+  for (const day of [today, addDays(today, -1)]) {
+    if (kid.startDate && day < kid.startDate) continue;
+    for (const h of habitInfo(state, kid, today).values()) {
+      const n = h.stars.indexOf(day) + 1;
+      if (n) return { id: `star-${h.task.id}-${n}`, kind: 'star', day, task: h.task.name, n };
+    }
+    const info = streakInfo(state, kid, day);
+    if (dayStatus(state, kid, day, today).complete && info.inARow > 0 && info.inARow % 7 === 0) {
+      return { id: `streak-${day}`, kind: 'streak', day, n: info.inARow };
+    }
+    if (info.comebacks.includes(day)) return { id: `back-${day}`, kind: 'back', day };
+  }
+  return null;
+}
+
+/** True while a milestone is new enough to talk about (its day or the next). */
+export const milestoneFresh = (m, today) => Boolean(m && m.day >= addDays(today, -1) && m.day <= today);

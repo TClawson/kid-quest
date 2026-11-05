@@ -472,10 +472,25 @@ test('a task done 85% of days over 60 days becomes a mastered habit and earns ha
   }
   const h = L.habitInfo(state, kid, '2026-11-15').get(teeth.id);
   assert.ok(h.mastered, 'mastered');
-  assert.ok(h.done >= 51);
+  assert.deepEqual(h.stars, [h.mastered]);
+  assert.ok(h.done < 51, 'counting starts over toward the next star');
+  // keep it up another two months: a second star
+  for (let k = '2026-11-16'; k < '2027-01-20'; k = addDays(k, 1)) entryFor(state, kid.id, k, true).tasks[teeth.id] = { status: 'done' };
+  const h2 = L.habitInfo(state, kid, '2027-01-20').get(teeth.id);
+  assert.equal(h2.stars.length, 2);
+  assert.equal(L.milestoneFor(state, kid, h2.stars[1]).id, `star-${teeth.id}-2`);
+  // without the allowance, a mastered task keeps its typed amount
+  const s3 = structuredClone(state);
+  s3.settings.allowance.on = false;
+  const later = addDays(h.mastered, 14);
+  assert.equal(L.taskPay(s3, kid, later, teeth, later).coins, L.taskCoins(teeth));
   const monday = L.weekStart(addDays(h.mastered, 7));
   assert.ok(L.masteredBefore(state, kid, monday).has(teeth.id));
-  // on a later week, teeth earns about half of what make-bed (same size) earns
+  // on a later week, teeth earns about half of what make-bed (same size) earns, and a perfect week still pays the whole allowance
+  const wk = L.weekStart(addDays(h.mastered, 7));
+  let total = 0;
+  for (let i = 0; i < 7; i += 1) { const d = addDays(wk, i); for (const t of L.questTasks(L.scheduledOn(kid, d))) total += L.taskPay(state, kid, d, t, d).coins; }
+  assert.equal(total, 300);
   const bed = kid.tasks.find((t) => t.name === 'Make bed');
   const day = addDays(monday, 1);
   const pt = L.taskPay(state, kid, day, teeth, day);
@@ -528,4 +543,16 @@ test('the weekly look-back counts last week and four weeks before', async () => 
   assert.equal(row.done, 6);
   assert.equal(row.of, 7);
   assert.deepEqual(row.before, { done: 3, of: 7 });
+});
+
+test('milestones: a week in a row, then a welcome-back day', async () => {
+  const L = await import('../js/logic.js');
+  const { state, kid } = setup();
+  for (let i = 0; i < 7; i += 1) finishDay(state, kid, addDays(MONDAY, i), addDays(MONDAY, 7));
+  const m = L.milestoneFor(state, kid, addDays(MONDAY, 6));
+  assert.deepEqual(m, { id: `streak-${addDays(MONDAY, 6)}`, kind: 'streak', day: addDays(MONDAY, 6), n: 7 });
+  assert.equal(L.milestoneFor(state, kid, addDays(MONDAY, 7)).id, m.id); // still fresh the next day
+  assert.equal(L.milestoneFor(state, kid, addDays(MONDAY, 8)), null);
+  assert.ok(L.milestoneFresh(m, addDays(MONDAY, 7)));
+  assert.ok(!L.milestoneFresh(m, addDays(MONDAY, 8)));
 });

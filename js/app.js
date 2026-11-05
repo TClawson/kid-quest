@@ -9,7 +9,7 @@ import {
   weekParity, isEveryOtherWeek, onWeek, weekStart,
   gamesLeft,
   withMemo, monthDays, habitInfo, MASTERED_PAY, COMEBACK_BONUS, CUES, cueFor, planOrder, planSentence,
-  todaySummary, familyDay, FAMILY_GOAL, weekLookback, isPianoTask,
+  todaySummary, familyDay, FAMILY_GOAL, weekLookback, isPianoTask, milestoneFor, milestoneFresh,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
@@ -21,7 +21,7 @@ import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
-import { pickVisitors, visitorLines, planVisits } from './visits.js';
+import { pickVisitors, visitorLines, planVisits, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
 import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { SPOTS as FISH_SPOTS } from './fishing.js';
@@ -199,6 +199,7 @@ function formatTime(hhmm) {
 }
 
 function toast(text) {
+  document.querySelectorAll('.toast').forEach((t) => t.remove()); // one at a time
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = text;
@@ -384,12 +385,16 @@ function showUnlocks(kid) {
   return true;
 }
 
-/** A habit the kid just mastered (see habitInfo): a star, once. */
+/** The key a habit star is remembered by once celebrated: the task id for the first, then id#2, id#3… */
+const starKey = (h, n) => (n === 1 ? h.task.id : `${h.task.id}#${n}`);
+
+/** A habit star the kid just earned (see habitInfo): celebrated once each. */
 function showMastered(kid) {
   const seen = new Set(kid.seenMastered || []);
-  const fresh = [...habitInfo(state, kid, today()).values()].filter((h) => h.mastered && !seen.has(h.task.id));
+  const fresh = [...habitInfo(state, kid, today()).values()].filter((h) => h.stars.some((_, i) => !seen.has(starKey(h, i + 1))));
   if (!fresh.length) return false;
-  kid.seenMastered = [...seen, ...fresh.map((h) => h.task.id)];
+  kid.seenMastered = [...seen, ...fresh.flatMap((h) => h.stars.map((_, i) => starKey(h, i + 1)))];
+  const again = fresh.every((h) => h.stars.length > 1);
   save();
   sounds.week();
   confetti(200, 3200);
@@ -397,10 +402,10 @@ function showMastered(kid) {
     <div class="celebrate">
       ${buddyHtml(kid, 'proud', 'xl')}
       <div class="celebrate-emoji small">⭐</div>
-      <h1>Habit mastered!</h1>
-      <p>${fresh.map((h) => `${esc(h.task.icon)} <b>${esc(h.task.name)}</b>`).join(', ')}</p>
-      <p>You did ${fresh.length > 1 ? 'these' : 'it'} on almost every day for two months. That's not a chore anymore, it's part of who you are!</p>
-      <p class="muted small">It keeps its star for good. From Monday it earns half as many coins, and the rest go to the habits you're still building.</p>
+      <h1>${again ? 'Another habit star!' : 'Habit mastered!'}</h1>
+      <p>${fresh.map((h) => `${esc(h.task.icon)} <b>${esc(h.task.name)}</b> ${'⭐'.repeat(Math.min(5, h.stars.length))}`).join(', ')}</p>
+      <p>${again ? 'You kept it up for another two months. It really is part of who you are!' : `You did ${fresh.length > 1 ? 'these' : 'it'} on almost every day for two months. That's not a chore anymore, it's part of who you are!`}</p>
+      <p class="muted small">Stars stay for good, and every 60 days you keep it up earns another. Your weekly coins stay the same: from Monday more of them come from the habits you're still building.</p>
       <button class="btn huge" data-action="modal-close">Awesome!</button>
     </div>`, () => setTimeout(() => showUnlocks(kid), 250));
   return true;
@@ -1108,7 +1113,7 @@ const VILLAGE = 150; // extra room at the top of the map when buddies are visiti
 // device, the others from the cloud.
 function familyBuddies() {
   const all = new Map((family.buddies || []).map((b) => [b.id, b]));
-  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: mover(k).exBest, today: todaySummary(state, k, today()) });
+  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: mover(k).exBest, today: todaySummary(state, k, today()), milestone: k.milestone || null });
   return [...all.values()];
 }
 
@@ -1118,13 +1123,77 @@ function familyBuddies() {
  * Only needed with family sync: on one device every kid is here already.
  */
 function shareToday() {
-  if (!cloudCfg) return;
   let changed = false;
   for (const k of state.kids) {
+    // the kid's newest milestone, for visiting buddies to mention on other maps
+    const m = milestoneFor(state, k, today());
+    if (stableJson(m) !== stableJson(k.milestone)) { k.milestone = m; changed = true; }
+    if (!cloudCfg) continue;
     const now = todaySummary(state, k, today());
     if (stableJson(now) !== stableJson(k.today)) { k.today = now; changed = true; }
   }
   if (changed) save();
+}
+
+// ---------- cheering each other's milestones ----------
+// A visitor who just reached a milestone mentions it, with a Cheer button.
+// A cheer is saved on the other kid (kid.cheers[milestoneId][fromKidId]), and
+// the next time that kid opens their map, the friend's buddy is visiting and
+// cheers back, with a little dance.
+
+/** Cheers this kid got in the last day or so: Map fromKidId -> { mid, what }. */
+function cheersFor(kid) {
+  const out = new Map();
+  const since = Date.now() - 36 * 3600 * 1000;
+  for (const [mid, byKid] of Object.entries(kid.cheers || {})) {
+    for (const [from, c] of Object.entries(byKid || {})) if ((c?.at || 0) > since && c.what) out.set(from, { mid, what: c.what, at: c.at });
+  }
+  return out;
+}
+
+/** Today's visitors: anyone who sent a cheer comes first, then the usual random pick. */
+function todaysVisitors(kid) {
+  const all = familyBuddies();
+  const cheering = [...cheersFor(kid).keys()].map((id) => all.find((b) => b.id === id && b.buddy)).filter(Boolean);
+  const picked = pickVisitors(kid.id, all, today());
+  const seen = new Set();
+  return [...cheering, ...picked].filter((v) => !seen.has(v.id) && seen.add(v.id)).slice(0, MAX_VISITORS);
+}
+
+const cheerKey = (v, m) => `${v.id}|${m.id}`;
+
+function sendCheer(kid, v) {
+  const m = v?.milestone;
+  if (!kid || !m) return;
+  const cheer = { name: kid.name, at: Date.now(), what: m };
+  kid.cheersSent = Object.fromEntries([...Object.entries(kid.cheersSent || {}), [cheerKey(v, m), today()]].slice(-30));
+  const local = kidById(v.id);
+  if (local) {
+    local.cheers = { ...(local.cheers || {}), [m.id]: { ...(local.cheers?.[m.id] || {}), [kid.id]: cheer } };
+  } else if (cloudCfg) {
+    loadCloud().then((mod) => mod.sendCheer(cloudCfg.familyId, v.id, m.id, kid.id, cheer)).catch((err) => console.error('Kid Quest cheer', err));
+  }
+  save();
+  sounds.day();
+  confetti(80, 1600);
+  live(liveKey(kid)).cheer();
+  live(`visit:${v.id}`).giggle();
+  toast(`Cheer sent! 🎉 Your buddy will go cheer for ${v.name}.`);
+  render();
+}
+
+/** The first time a friend's buddy comes to cheer, it dances and the kid hears about it. */
+function greetCheers() {
+  if (ui.view !== 'kid' || state.settings.questView === 'list') return;
+  const kid = kidById(ui.kidId);
+  if (!kid) return;
+  const fresh = [...cheersFor(kid)].filter(([from, c]) => !(kid.cheersSeen || []).includes(`${from}|${c.mid}`));
+  if (!fresh.length) return;
+  kid.cheersSeen = [...(kid.cheersSeen || []), ...fresh.map(([from, c]) => `${from}|${c.mid}`)].slice(-30);
+  save();
+  partyAll(fresh.map(([from]) => `visit:${from}`), 4000);
+  const names = fresh.map(([from, c]) => familyBuddies().find((b) => b.id === from)?.name || kid.cheers[c.mid][from].name);
+  toast(`🎉 ${names.join(' and ')} came to cheer for you!`);
 }
 
 /** How the whole family is doing today, and whether the map should party. */
@@ -1179,7 +1248,7 @@ function visitFeel(area, complete) {
 }
 
 function visitorsHtml(kid, s) {
-  const visitors = pickVisitors(kid.id, familyBuddies(), today());
+  const visitors = todaysVisitors(kid);
   if (!visitors.length) return { html: '', room: 0, areas: '' };
   const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
   // once the quest is done, every visitor wants to play (see playWith)
@@ -1189,6 +1258,18 @@ function visitorsHtml(kid, s) {
     const plan = visitPlan(kid, visitors);
     visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[gamesWith(kid, v, plan)[0]] : "That's all our games today! See you tomorrow"; });
   }
+  // milestones: a friend who came to cheer says so; a visitor with news mentions it, with a Cheer button
+  const cheers = cheersFor(kid);
+  const news = {};
+  visitors.forEach((v, i) => {
+    const c = cheers.get(v.id);
+    if (c) { lines[i] = milestoneCheer(c.what, kid.name); news[v.id] = 'cheering'; return; }
+    const m = v.milestone;
+    if (!milestoneFresh(m, today())) return;
+    if (kid.cheersSent?.[cheerKey(v, m)]) { lines[i] = 'Thanks for the cheer! 😊'; return; }
+    lines[i] = milestoneBrag(m);
+    news[v.id] = 'news';
+  });
   // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
   const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [22, 37], right: [78, 63] };
@@ -1224,11 +1305,11 @@ function visitorsHtml(kid, s) {
       cls = `playing play-${area.kind} ${solo ? 'solo' : `player-${a ? 'a' : 'b'}`} ${facesIn ? 'face-left' : ''}`;
     }
     return `
-      <div class="map-visitor ${i === 0 ? 'talking' : ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
+      <div class="map-visitor ${i === 0 || news[v.id] ? 'talking' : ''} ${news[v.id] || ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
         <div class="visitor-buddy">${liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` })}</div>
         ${extra}
         <div class="visitor-name">${esc(v.name)}</div>
-        <div class="visitor-bubble">${esc(lines[i])}</div>
+        <div class="visitor-bubble">${esc(lines[i])}${news[v.id] === 'news' ? `<button class="cheer-btn" data-action="send-cheer" data-id="${esc(v.id)}">🎉 Cheer</button>` : ''}</div>
       </div>`;
   }).join('');
   // the ball (or puck) goes back and forth between the two players
@@ -1410,7 +1491,8 @@ function habitsSection(kid) {
     return `<div class="habit-row ${h.mastered ? 'mastered' : ''}">
         <span class="habit-icon">${esc(h.task.icon)}</span>
         <span class="habit-text"><b>${esc(h.task.name)}</b>
-          ${h.mastered ? '<small>⭐ Mastered habit! It\'s part of who you are now.</small>' : `<span class="bar habit-bar"><span style="width:${pct}%"></span></span><small>${h.done} of ${h.goal} in the last 60 days</small>`}
+          ${h.mastered ? `<small class="stars">${'⭐'.repeat(Math.min(5, h.stars.length))}${h.stars.length > 5 ? ` ×${h.stars.length}` : ''} Mastered habit!</small>` : ''}
+          <span class="bar habit-bar"><span style="width:${pct}%"></span></span><small>${h.done} of ${h.goal} toward ${h.mastered ? 'the next star' : 'a star'}</small>
         </span>
       </div>`;
   }).join('');
@@ -1419,7 +1501,7 @@ function habitsSection(kid) {
         <h2>⭐ Habits <small class="muted">do it ${Math.round(0.85 * 100)}% of days for 60 days</small></h2>
         <button class="btn ghost plan-btn" data-action="plan" data-kid="${kid.id}">📝 Plan my day</button>
         ${rows}
-        <p class="muted small">A mastered habit keeps its star for good. It earns half as many coins from the next Monday, so more coins go to the habits you're still building.</p>
+        <p class="muted small">Stars stay for good, and each 60 days you keep a habit up earns another. Your weekly coins stay the same: a mastered habit's share goes to the habits you're still building.</p>
       </section>`;
 }
 
@@ -2205,14 +2287,13 @@ function render() {
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
-  shareToday();
-  const html = withMemo(() => (views[ui.view] || viewHome)());
+  const html = withMemo(() => { shareToday(); return (views[ui.view] || viewHome)(); });
   // load the sign-in code early, so a sign-in popup opens straight from the tap
   if (ui.view === 'setup' || (ui.view === 'parent' && ui.tab === 'settings')) loadCloud().catch(() => {});
   // Family sync can ask for a redraw many times a minute (another tablet saving, a piano timer
   // ticking). When nothing on screen changed, leave the page alone: the visitors don't arrive
   // again, the fish keep swimming and a half-scrolled row stays where it is.
-  if (html === lastHtml && $app.firstElementChild) { syncMusic(); maybeParty(); return; }
+  if (html === lastHtml && $app.firstElementChild) { syncMusic(); maybeParty(); greetCheers(); return; }
   const sameView = lastView === ui.view;
   const side = sameView ? [...$app.querySelectorAll(SIDE_SCROLLERS)].map((el) => el.scrollLeft) : [];
   $app.innerHTML = html;
@@ -2224,6 +2305,7 @@ function render() {
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
   maybeParty();
+  greetCheers();
 }
 
 /** Map music plays only on the quest map, with sound on and music not muted, while the app is visible. */
@@ -2846,7 +2928,8 @@ function nextVisitorTalks(pick) {
   if (all.length < 2 && !pick) return;
   const now = all.findIndex((el) => el.classList.contains('talking'));
   const next = pick || all[(now + 1) % all.length];
-  all.forEach((el) => el.classList.toggle('talking', el === next));
+  // a visitor with news (or who came to cheer) keeps talking
+  all.forEach((el) => el.classList.toggle('talking', el === next || el.classList.contains('news') || el.classList.contains('cheering')));
 }
 setInterval(() => { if (document.visibilityState === 'visible') nextVisitorTalks(); }, 4000);
 actions.visitor = (el) => {
@@ -2858,7 +2941,7 @@ actions.visitor = (el) => {
     if (s.complete && gamesLeftFor(kid) > 0) {
       sounds.tap();
       // the kid's own field starts its game; a visitor offers what there is to play
-      const games = gamesWith(kid, v, visitPlan(kid, pickVisitors(kid.id, familyBuddies(), today())));
+      const games = gamesWith(kid, v, visitPlan(kid, todaysVisitors(kid)));
       if (el.dataset.pick) playWith(kid, v, el.dataset.pick);
       else if (games.length === 1) playWith(kid, v, games[0]);
       else pickGame(kid, v, games);
@@ -3154,6 +3237,10 @@ Object.assign(actions, {
     toast('Plan saved! 📝');
   },
   'family-party': () => { if (familyToday().happy) startParty(); },
+  'send-cheer': (el) => {
+    const kid = kidById(el.closest('.map-visitors')?.dataset.host);
+    sendCheer(kid, familyBuddies().find((b) => b.id === el.dataset.id));
+  },
 });
 
 document.addEventListener('change', (e) => {

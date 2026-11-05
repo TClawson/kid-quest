@@ -59,6 +59,12 @@ async function open(page, s) {
 }
 const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
 const shot = async (page, name, opts = {}) => { if (shots) await page.screenshot({ path: join(shots, name), ...opts }); };
+/** The top of the quest map, where visitors stand. */
+const mapTop = async (page, name) => {
+  if (!shots) return;
+  const box = await page.evaluate(() => { const r = document.querySelector('.quest-map').getBoundingClientRect(); return { x: r.left + scrollX, y: r.top + scrollY - 90, width: r.width, height: 560 }; });
+  await page.screenshot({ path: join(shots, name), fullPage: true, clip: box });
+};
 
 try {
   for (const phone of [false, true]) {
@@ -159,6 +165,33 @@ try {
     await shot(page, `party-${tag}.png`);
     await page.waitForTimeout(5000);
     assert.equal(await page.$('.quest-map.party'), null, 'the party ends');
+
+    // 6. milestone cheers: Ben's buddy visits Ava and mentions Ben's 10 weeks in a row
+    const cheer = family({ benToday: 1 });
+    for (const k of cheer.kids) { k.seenMastered = k.tasks.flatMap((t) => [t.id, `${t.id}#2`]); k.lookbackSeen = weekStart(today); }
+    await open(page, cheer);
+    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await page.waitForSelector('.map-visitor.news .cheer-btn');
+    assert.match(await page.textContent('.map-visitor.news .visitor-bubble'), /Just did 10 weeks in a row/);
+    await page.waitForTimeout(500);
+    await mapTop(page, `cheer-button-${tag}.png`);
+    await page.click('.map-visitor.news .cheer-btn', { force: true }); // it pulses, so it is never "stable"
+    await page.waitForTimeout(300);
+    const s3 = await stored(page);
+    const benCheers = s3.kids.find((k) => k.id === 'kid_ben').cheers;
+    const [mid] = Object.keys(benCheers);
+    assert.match(mid, /^streak-/);
+    assert.equal(benCheers[mid].kid_ava.name, 'Ava');
+    assert.match(await page.textContent('.map-visitor[data-id="kid_ben"] .visitor-bubble'), /Thanks for the cheer/);
+    assert.equal(await page.$('.cheer-btn'), null);
+    // Ben opens his map: Ava's buddy came to cheer
+    await page.click('[data-action="home"]');
+    await page.click('[data-action="open-kid"][data-id="kid_ben"]');
+    await page.waitForSelector('.map-visitor.cheering[data-id="kid_ava"]');
+    assert.match(await page.textContent('.map-visitor.cheering .visitor-bubble'), /10 weeks in a row! Came to cheer/);
+    await page.waitForSelector('.toast:has-text("Ava came to cheer for you")');
+    await page.waitForTimeout(700);
+    await mapTop(page, `cheer-visit-${tag}.png`);
 
     assert.deepEqual(errors, []);
     await ctx.close();
