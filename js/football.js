@@ -8,8 +8,8 @@
 //      buddy throws, tap to stop it; the visitor stops its own (green 60%,
 //      yellow 30%, red 10%). Green throws go right to the cone, yellow ones land
 //      a little off, red ones a lot off.
-//   3. Only now the catcher starts running. The thrower waits WAIT seconds, then
-//      throws. The ball's shadow shows where it's coming down; longer throws are
+//   3. Only now the catcher starts running. The thrower waits just long enough
+//      for it to get there (waitFor), then throws. The ball's shadow shows where it's coming down; longer throws are
 //      in the air longer, so there's more time to get there.
 //   4. When your buddy catches: tap or drag to run (as in tag). A ring closes on
 //      the spot where the ball comes down; tap the ring right at the catch.
@@ -36,12 +36,19 @@ const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
  * sweep: seconds for the needle to cross the meter. win: catch windows scale.
  */
 export const ROUTES = {
-  short: { name: 'Short', pts: 5, at: 0.36, flight: 0.9, sweep: 0.9, win: 1 },
-  medium: { name: 'Medium', pts: 10, at: 0.6, flight: 1.3, sweep: 0.75, win: 0.8 },
-  deep: { name: 'Deep', pts: 25, at: 0.86, flight: 1.7, sweep: 0.6, win: 0.62 },
+  short: { name: 'Short', pts: 5, at: 0.36, flight: 0.9, sweep: 0.8, win: 1 },
+  medium: { name: 'Medium', pts: 10, at: 0.6, flight: 1.3, sweep: 0.65, win: 0.8 },
+  deep: { name: 'Deep', pts: 25, at: 0.86, flight: 1.7, sweep: 0.52, win: 0.62 },
 };
-/** Seconds the thrower waits after aiming, while the catcher gets going. */
-export const WAIT = 1.5;
+/**
+ * Seconds the thrower waits after aiming, while the catcher gets going: just
+ * enough for the catcher to get there. It runs to the cone, then over to where
+ * the ball really comes down, with SLACK seconds to spare (about one reaction).
+ */
+export const SLACK = 0.5;
+export function waitFor(toCone, coneToLand, flight) {
+  return clamp((toCone + coneToLand) / RUN + SLACK - flight, 0.3, 3);
+}
 /** How the visitor throws. */
 export const VIS_THROW = { green: 0.6, yellow: 0.3, red: 0.1 };
 /** How often the visitor hangs on to a throw of each color it gets to (before the route and ball). */
@@ -68,12 +75,13 @@ export function needle(held, sweep) {
   return ph < 1 ? ph : 2 - ph;
 }
 
-const greenHalf = (tier) => 0.07 + 0.015 * (Math.max(1, tier) - 1);
+// green is narrow: a perfect throw is hard (Taylor, 2026-11-05)
+const greenHalf = (tier) => 0.045 + 0.012 * (Math.max(1, tier) - 1);
 /** The color under the needle. tier: the ball (1-3); better balls widen green. */
 export function zoneAt(m, tier = 1) {
   const d = Math.abs(m - 0.5);
   if (d <= greenHalf(tier)) return 'green';
-  if (d <= 0.2) return 'yellow';
+  if (d <= 0.18) return 'yellow';
   return 'red';
 }
 
@@ -201,12 +209,15 @@ export class Football {
   /** The throw's color is set: the catcher takes off, the thrower waits, then throws. */
   aimed(zone, m) {
     const d = this.down;
-    d.zone = zone; d.meterStop = m; d.stage = 'wait'; d.throwAt = this.t + WAIT;
+    d.zone = zone; d.meterStop = m; d.stage = 'wait';
     const [cx, cy] = d.cones[d.route];
     // where it'll really come down
     const a = this.r() * Math.PI * 2; const miss = MISS[zone] * (0.75 + this.r() * 0.5);
     const f = this.f;
     d.land = [clamp(cx + Math.cos(a) * miss, this.qbX + 24, f.x1 - 6), clamp(cy + Math.sin(a) * miss, f.y0 + 16, f.y1 - 2)];
+    const c = d.catcher;
+    d.wait = waitFor(Math.hypot(cx - c.x, cy - c.y), Math.hypot(d.land[0] - cx, d.land[1] - cy), ROUTES[d.route].flight);
+    d.throwAt = this.t + d.wait;
     d.thrower.brain.set({ focus: 0.7 });
     this.pop(zone === 'green' ? 'Perfect aim!' : zone === 'yellow' ? 'A little off...' : 'Way off!', d.thrower.x, d.thrower.y + 8, ZONE_COLORS[zone]);
     if (d.catcher === this.vis) this.vis.goTo(cx, cy + 4); else this.pop('Run!', this.kid.x, this.kid.y - 36, '#ffffff');
@@ -273,7 +284,7 @@ export class Football {
   /** Where the visitor's needle stops for a color: somewhere in that color. */
   stopIn(zone) {
     const g = greenHalf(this.tier); const side = this.r() < 0.5 ? -1 : 1;
-    const d = zone === 'green' ? this.r() * g : zone === 'yellow' ? g + this.r() * (0.2 - g) : 0.2 + this.r() * 0.28;
+    const d = zone === 'green' ? this.r() * g : zone === 'yellow' ? g + this.r() * (0.18 - g) : 0.18 + this.r() * 0.3;
     return 0.5 + side * d;
   }
 
@@ -503,7 +514,7 @@ export class Football {
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
       text(`Time's up! ${this.score} points`, W / 2, cy - u * 2.6, u * 2.6, '#ffd43b');
       text(this.newBest ? 'New best!' : `Best ${this.best} points`, W / 2, cy, u * 1.8, this.newBest ? '#b2f2bb' : '#e9ecef');
-      text(`${this.caught} of ${this.plays} passes caught`, W / 2, cy + u * 2.1, u * 1.4, '#e9ecef');
+      text(`${this.caught} of ${this.plays} ${this.plays === 1 ? 'pass' : 'passes'} caught`, W / 2, cy + u * 2.1, u * 1.4, '#e9ecef');
       if (this.t - this.overAt > 1.2) text('Tap to play again', W / 2, cy + u * 3.8, u * 1.4, '#ffffff');
     }
   }

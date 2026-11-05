@@ -976,7 +976,7 @@ function visitorsHtml(kid, s) {
   // once the quest is done, every visitor wants to play (see playWith)
   if (s.complete) {
     const left = gamesLeftFor(kid);
-    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', fishing: 'Wanna go fishing? Tap me!', tag: 'Wanna play tag? Tap me!' };
+    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', tag: 'Wanna play tag? Tap me!' };
     const plan = visitPlan(kid, visitors);
     visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[gamesWith(kid, v, plan)[0]] : "That's all our games today! See you tomorrow"; });
   }
@@ -2630,8 +2630,10 @@ actions.visitor = (el) => {
 // ball game they own, the same one all day), and always tag. More than one
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 8, plus 2 a week of the current exercise streak (up to 3 weeks).
-const PLAY_KINDS = ['soccer', 'hockey'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', fishing: 'rod' };
+const PLAY_KINDS = ['soccer', 'hockey', 'football'];
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
+/** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
+const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).map((m) => m.move.id);
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
 const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks);
 
@@ -2688,7 +2690,7 @@ function gameTestCard() {
   return `
     <div class="card game-test">
       <h2>🎮 Try the games</h2>
-      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, fishing rod or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
+      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, football, fishing rod or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
       <div class="game-test-pick">
         <label>Playing <select id="gt-kid">${opt(ui.gtKid || kids[0].id, who)}</select></label>
         <label>Their gear <select id="gt-kid-gear">${opt(ui.gtKidGear || '1', tiers)}</select></label>
@@ -2697,7 +2699,7 @@ function gameTestCard() {
         <label>Fishing spot <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
       </div>
       <div class="row wrap">
-        ${['soccer', 'tag', 'hockey', 'fishing'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
+        ${['soccer', 'tag', 'hockey', 'football', 'fishing'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
       </div>
     </div>`;
 }
@@ -2716,8 +2718,8 @@ actions['game-test'] = (el) => {
   openPlay({
     kind,
     best: 0,
-    kid: { buddy: kid.buddy, name: kid.name, gear: gear(ui.gtKidGear) },
-    visitor: { buddy: other.buddy, name: visName, gear: gear(ui.gtVisGear) },
+    kid: { buddy: kid.buddy, name: kid.name, gear: gear(ui.gtKidGear), moves: moveIds(mover(kid)) },
+    visitor: { buddy: other.buddy, name: visName, gear: gear(ui.gtVisGear), moves: moveIds(mover(other)) },
     map: ui.gtMap || kidTheme(kid),
     day: today(),
     sounds,
@@ -2730,8 +2732,8 @@ function playWith(kid, v, kind) {
   openPlay({
     kind,
     best,
-    kid: { buddy: kid.buddy, name: kid.name, gear: bestGear(kid.owned || []) },
-    visitor: { buddy: v.buddy, name: v.name, gear },
+    kid: { buddy: kid.buddy, name: kid.name, gear: bestGear(kid.owned || []), moves: moveIds(mover(kid)) },
+    visitor: { buddy: v.buddy, name: v.name, gear, moves: moveIds(v) },
     map: kidTheme(kid),
     day: today(),
     sounds,
