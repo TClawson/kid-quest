@@ -36,6 +36,7 @@ test('a twitch hooks small fish 44% of the time, the biggest 20%', () => {
   assert.ok(Math.abs(strikeChance(0) - 0.55 * 0.8) < 1e-9);
   assert.ok(Math.abs(strikeChance(1) - 0.4 / 2) < 1e-9);
   assert.ok(strikeChance(0.5) < strikeChance(0) && strikeChance(0.5) > strikeChance(1));
+  assert.ok(strikeChance(1, 3) > strikeChance(1, 2) && strikeChance(1, 2) > strikeChance(1, 1), 'better rods spook fewer fish');
 });
 
 test('bigger fish are pickier', () => {

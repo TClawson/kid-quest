@@ -22,6 +22,8 @@ test('catching: smaller windows for deep and off-target throws, bigger with a be
   assert.ok(w('short', 'green', 3) > w('short', 'green', 1));
   for (const r of Object.keys(ROUTES)) assert.ok(catchWindows(r, 'green').yellow > catchWindows(r, 'green').green);
   assert.ok(reachFor(3) > reachFor(1));
+  assert.ok(catchWindows('short', 'green', 3).green >= 1.5 * catchWindows('short', 'green', 1).green, 'a super ball helps a lot');
+  assert.ok(share('green', 3) >= 2 * share('green', 1) * 0.99, 'a super ball doubles green');
   assert.ok(MISS.red > MISS.yellow && MISS.yellow > MISS.green);
 });
 
