@@ -704,9 +704,9 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
 }
 
 // ---------- games with visiting buddies ----------
-export const GAMES_PER_DAY = 8;
+export const GAMES_PER_DAY = 4;
 
-/** Games a kid may play with visitors in a day: 8, plus 2 for each week of the current exercise streak (up to 3). */
+/** Games a kid may play with visitors in a day: 4, plus 2 for each week of the current exercise streak (up to 3). */
 export function gamesPerDay(exerciseWeeks = 0) {
   return GAMES_PER_DAY + 2 * Math.min(3, Math.max(0, Math.floor(exerciseWeeks)));
 }

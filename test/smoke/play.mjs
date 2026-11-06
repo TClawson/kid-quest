@@ -69,10 +69,10 @@ try {
 
   // out of games for today: the visitors say so, and no game opens
   {
-    const { page, ctx, errors } = await open(devices['Galaxy Tab S4'], true, 8);
+    const { page, ctx, errors } = await open(devices['Galaxy Tab S4'], true, 4);
     await visit(page, 'kid_max');
     await page.waitForTimeout(300);
-    assert.equal(await page.locator('.playground').count(), 0, 'no game after 8 today');
+    assert.equal(await page.locator('.playground').count(), 0, 'no game after 4 today');
     assert.match(await page.locator('.map-visitor[data-id="kid_max"] .visitor-bubble').innerText(), /That's all our games today/);
     assert.deepEqual(errors, []);
     await ctx.close();
@@ -133,7 +133,7 @@ try {
     await visit(page, 'kid_lu', 'hockey');
     await page.waitForSelector('.playground');
     assert.match(await page.locator('.play-top').innerText(), /Hockey with Lu/);
-    assert.match(await page.locator('.play-left').innerText(), /6 games left today/);
+    assert.match(await page.locator('.play-left').innerText(), /2 games left today/);
     await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
     await page.waitForTimeout(1800);
     assert.equal(await page.locator('.playground').getAttribute('data-phase'), 'play');

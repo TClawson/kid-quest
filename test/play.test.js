@@ -46,14 +46,15 @@ test('the hockey meter sweeps back and forth over red, yellow and a thin green',
   for (const odds of Object.values(STEAL_ODDS)) assert.ok(Math.abs(odds.reduce((a, b) => a + b) - 1) < 1e-9);
 });
 
-test('8 games a day, plus 2 for each exercise-streak week up to 3', () => {
-  assert.deepEqual([0, 1, 2, 3, 5].map(gamesPerDay), [8, 10, 12, 14, 14]);
-  const kid = { playLog: { day: '2026-11-04', n: 5 } };
-  assert.equal(gamesLeft(kid, '2026-11-04', 0), 3);
-  assert.equal(gamesLeft(kid, '2026-11-04', 2), 7);
-  assert.equal(gamesLeft(kid, '2026-11-05', 0), 8, 'a new day starts fresh');
-  assert.equal(gamesLeft({ playLog: { day: '2026-11-04', n: 12 } }, '2026-11-04', 1), 0);
-  assert.equal(gamesLeft({}, '2026-11-04'), 8);
+test('4 games a day, plus 2 for each exercise-streak week up to 3', () => {
+  assert.deepEqual([0, 1, 2, 3, 5].map(gamesPerDay), [4, 6, 8, 10, 10]);
+  const kid = { playLog: { day: '2026-11-04', n: 3 } };
+  assert.equal(gamesLeft(kid, '2026-11-04', 0), 1);
+  assert.equal(gamesLeft(kid, '2026-11-04', 2), 5);
+  assert.equal(gamesLeft(kid, '2026-11-04', 0, 2), 3, 'treasure games add on top');
+  assert.equal(gamesLeft(kid, '2026-11-05', 0), 4, 'a new day starts fresh');
+  assert.equal(gamesLeft({ playLog: { day: '2026-11-04', n: 6 } }, '2026-11-04', 1), 0);
+  assert.equal(gamesLeft({}, '2026-11-04'), 4);
 });
 
 test('keepy-uppy gets harder: Perfect narrows most, and kick heights vary more', () => {

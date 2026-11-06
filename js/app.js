@@ -3105,7 +3105,7 @@ actions.visitor = (el) => {
 // kid's buddy is holding, the visitor's own game (the one on their field, or a
 // ball game they own, the same one all day), and always tag. More than one
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
-// gamesLeft() games a day: 8, plus 2 a week of the current exercise streak (up to 3 weeks).
+// gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
 const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
