@@ -537,6 +537,42 @@ label { color: var(--ink); }
 .play-close { pointer-events: auto; }
 .btn.store-locked { opacity: 0.7; font-size: 0.9em; }
 
+/* habits: month count, habit stars, the kid's plan, last week's look-back, the family party */
+.month-line { margin: 10px 0 0; }
+.habits h2 small { font-size: 0.8rem; }
+.habits .plan-btn { margin: 0 0 10px; }
+.habit-row { display: flex; gap: 10px; align-items: center; background: var(--card); border-radius: 12px; padding: 8px 10px; margin: 6px 0; }
+.habit-row.mastered { background: #fff9db; box-shadow: 0 0 0 2px #f0c040; }
+.habit-icon { font-size: 1.6rem; }
+.habit-text { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.habit-text small { color: var(--muted, #666); }
+.habit-bar { height: 10px; }
+.habit-bar span { background: #f0c040; }
+.family-banner { display: grid; gap: 6px; margin: 10px 0; padding: 8px 12px; border-radius: 12px; background: #e7f5ff; color: #1c3d5a; font-weight: 700; font-size: 0.95rem; cursor: default; }
+.family-banner.happy { background: #fff0f6; color: #8a1d4a; cursor: pointer; }
+.family-banner .bar { height: 10px; }
+.family-banner .bar span { background: #4dabf7; }
+.plan h1, .lookback h1 { font-size: 1.6rem; margin: 0 0 6px; }
+.plan h3 { margin: 14px 0 6px; }
+.plan-row { display: grid; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.plan-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.plan-name { font-weight: 700; min-width: 0; }
+.plan-move { display: flex; gap: 4px; flex: none; }
+.plan-move .btn { min-height: 36px; width: 36px; padding: 0; }
+.plan select { width: 100%; }
+.plan-say { color: #2b8a3e; font-weight: 700; }
+.look-rows { display: grid; gap: 6px; margin: 12px 0; }
+.look-row { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; padding: 6px 10px; border-radius: 10px; background: var(--bg, #f8f9fa); }
+.look-row small { grid-column: 1 / -1; color: var(--muted, #666); }
+.look-row.better small { color: #2b8a3e; font-weight: 700; }
+
+/* milestone news on visiting buddies, and the cheer button */
+.map-visitor.news, .map-visitor.cheering { z-index: 3; }
+.map-visitor.news .visitor-bubble, .map-visitor.cheering .visitor-bubble { background: #fff0f6; max-width: 150px; }
+.visitor-bubble .cheer-btn { pointer-events: auto; display: block; margin: 4px auto 0; font: inherit; font-size: 0.85rem; font-weight: 800; color: #fff; background: #e64980; border: 2px solid var(--px-ink); border-radius: 6px; padding: 3px 10px; box-shadow: 2px 2px 0 var(--px-ink); cursor: pointer; animation: cheer-pop 0.9s ease-in-out infinite alternate; }
+.visitor-bubble .cheer-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+@keyframes cheer-pop { from { transform: scale(1); } to { transform: scale(1.08); } }
+
 /* ---------- treasure chest, trophies and treasure maps (see treasure.js) ---------- */
 .pixel { image-rendering: pixelated; }
 .map-node.chest .node-icon { display: grid; place-items: center; }

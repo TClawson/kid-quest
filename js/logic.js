@@ -198,14 +198,15 @@ const splitCache = new Map();
  * that week, by size. Returns Map 'date|taskId' -> amount. Rounding is done on
  * the running total, so the parts always add up to exactly the amount.
  */
-export function weekSplit(kid, key, amount) {
+export function weekSplit(kid, key, amount, half = null) {
   const monday = weekStart(key);
-  const sig = `${kid.id}|${monday}|${amount}|${kid.tasks.map((t) => `${t.id}:${t.period}:${t.days.join('')}:${taskSize(t)}:${t.everyOtherWeek ?? ''}`).join(',')}`;
+  const weight = (t) => taskSize(t) * (half?.has(t.id) ? MASTERED_PAY : 1);
+  const sig = `${kid.id}|${monday}|${amount}|${kid.tasks.map((t) => `${t.id}:${t.period}:${t.days.join('')}:${weight(t)}:${t.everyOtherWeek ?? ''}`).join(',')}`;
   if (splitCache.has(sig)) return splitCache.get(sig);
   const slots = [];
   for (let i = 0; i < 7; i += 1) {
     const day = addDays(monday, i);
-    for (const t of questTasks(scheduledOn(kid, day))) slots.push([`${day}|${t.id}`, taskSize(t)]);
+    for (const t of questTasks(scheduledOn(kid, day))) slots.push([`${day}|${t.id}`, weight(t)]);
   }
   const total = slots.reduce((n, [, w]) => n + w, 0);
   const out = new Map();
@@ -232,10 +233,14 @@ export function taskPay(state, kid, key, task, today) {
   if (isExercise(task)) return { coins: 0, xp: taskXp(task), gems: taskGems(task) };
   const a = allowanceFor(state, kid);
   const since = state.settings?.allowance?.since;
+  // a habit mastered before this week gets a smaller share of the allowance; the week's total stays
+  // the same, so the rest goes to the habits the kid is still building
+  const half = masteredBefore(state, kid, weekStart(key), today);
+  // without the allowance, each task keeps the amount a parent typed: mastering one never lowers the total
   if (!a || (since && key < since)) return { coins: taskCoins(task), xp: taskXp(task), gems: 0 };
   // a task that is not on the setup that day (e.g. ticked from a past day's list) earns nothing extra
   const slot = `${key}|${task.id}`;
-  return { coins: weekSplit(kid, key, a.coins).get(slot) ?? 0, xp: weekSplit(kid, key, a.xp).get(slot) ?? 0, gems: 0 };
+  return { coins: weekSplit(kid, key, a.coins, half).get(slot) ?? 0, xp: weekSplit(kid, key, a.xp, half).get(slot) ?? 0, gems: 0 };
 }
 
 /** Bonuses a parent gave on a day: [{ id, coins, reason, by, at }]. A bonus adds the same XP as coins. */
@@ -379,44 +384,163 @@ export function storeOpen(state, kid, today) {
   return { open: s.excused || s.done >= s.total, left: Math.max(0, s.total - s.done - s.pending), waiting: s.pending };
 }
 
+// Results that are slow to work out (they replay a kid's whole history) can be
+// kept while one screen is drawn, since it asks for them many times and nothing
+// changes meanwhile. Outside withMemo they are always worked out fresh.
+let memo = null;
+export function withMemo(fn) {
+  if (memo) return fn();
+  memo = new Map();
+  try { return fn(); } finally { memo = null; }
+}
+function memoize(key, make) {
+  if (!memo) return make();
+  if (!memo.has(key)) memo.set(key, make());
+  return memo.get(key);
+}
+
+/** Coins (and the same XP) for finishing the whole day right after a missed day. */
+export const COMEBACK_BONUS = 15;
+
 /**
  * Replays every day from the kid's start date to today.
  * - A complete day adds 1 to the streak. Every 7 complete days in a row earn a freeze (max 2).
  * - An excused day keeps the streak as it is.
- * - A missed past day uses a freeze if one is available, otherwise the streak resets.
+ * - A missed past day uses a freeze if one is available. Otherwise the streak is
+ *   cut in half (not back to 0): research on streaks finds that losing all of it
+ *   makes kids give up, while a smaller setback keeps them going.
  * - Today never breaks the streak; it only adds once it is complete.
+ * - inARow counts real days in a row (a freeze or an excused day keeps it, a
+ *   miss starts it over). The weekly celebration and its reward go by it.
+ * - comebacks: complete days that came right after a missed day (frozen or not).
+ *   Each earns a small welcome-back bonus.
  * Because it is recomputed every time, a parent approving yesterday's tasks late fixes the streak.
  */
 export function streakInfo(state, kid, today) {
-  let streak = 0;
-  let best = 0;
-  let freezes = 0;
-  let run = 0; // complete days in a row, for earning freezes
-  const frozen = [];
-  const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
+  return memoize(`streak|${kid.id}|${today}`, () => {
+    let streak = 0;
+    let best = 0;
+    let freezes = 0;
+    let run = 0; // complete days in a row, for earning freezes
+    let inARow = 0;
+    let missed = false; // the day before was missed
+    const frozen = [];
+    const comebacks = [];
+    const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
+    for (let key = start; key <= today; key = addDays(key, 1)) {
+      const s = dayStatus(state, kid, key, today);
+      if (s.complete) {
+        if (missed) comebacks.push(key);
+        streak += 1;
+        inARow += 1;
+        run += 1;
+        if (run % PERFECT_DAYS_PER_FREEZE === 0) freezes = Math.min(MAX_FREEZES, freezes + 1);
+        missed = false;
+      } else if (key === today) {
+        // still in progress
+      } else if (s.excused) {
+        // keeps the streak, but the perfect run starts over
+        run = 0;
+        missed = false;
+      } else if (freezes > 0) {
+        freezes -= 1;
+        run = 0;
+        frozen.push(key);
+        missed = true;
+      } else {
+        streak = Math.floor(streak / 2);
+        inARow = 0;
+        run = 0;
+        missed = true;
+      }
+      best = Math.max(best, streak);
+    }
+    const todayStatus = dayStatus(state, kid, today, today);
+    return { streak, best, freezes, frozen, inARow, comebacks, todayComplete: todayStatus.complete };
+  });
+}
+
+/** Days complete (or excused) out of days so far this calendar month. */
+export function monthDays(state, kid, today) {
+  const first = `${today.slice(0, 8)}01`;
+  const start = kid.startDate && kid.startDate > first ? kid.startDate : first;
+  let done = 0;
+  let days = 0;
   for (let key = start; key <= today; key = addDays(key, 1)) {
     const s = dayStatus(state, kid, key, today);
-    if (s.complete) {
-      streak += 1;
-      run += 1;
-      if (run % PERFECT_DAYS_PER_FREEZE === 0) freezes = Math.min(MAX_FREEZES, freezes + 1);
-    } else if (key === today) {
-      // still in progress
-    } else if (s.excused) {
-      // keeps the streak, but the perfect run starts over
-      run = 0;
-    } else if (freezes > 0) {
-      freezes -= 1;
-      run = 0;
-      frozen.push(key);
-    } else {
-      streak = 0;
-      run = 0;
-    }
-    best = Math.max(best, streak);
+    if (key === today && !s.complete) continue;
+    days += 1;
+    if (s.complete || s.excused) done += 1;
   }
-  const todayStatus = dayStatus(state, kid, today, today);
-  return { streak, best, freezes, frozen, todayComplete: todayStatus.complete };
+  return { done, days };
+}
+
+// ---------- habit levels ----------
+//
+// Habits take about two months of steady repeats to form. A task a kid has done
+// on at least 85% of the days it was on their list over 60 days becomes a
+// mastered habit: it gets a star for good, and from the next Monday it gets half
+// the share of the weekly allowance (MASTERED_PAY). The week's total is the same:
+// the rest goes to the tasks the kid is still learning. After a star the count
+// starts over, so keeping it up for the next 60 days earns another star. Tasks that come up fewer than 20 times in 60 days
+// (about 3 days a week) are too rare to become habits this way.
+
+export const MASTERY_DAYS = 60;
+export const MASTERY_SHARE = 0.85;
+export const MASTERY_MIN = 20;
+export const MASTERED_PAY = 0.5;
+
+/** How many times a task comes up in 60 days on its current schedule. */
+export function timesPerWindow(task) {
+  const perWeek = (task.days || []).length / (isEveryOtherWeek(task) ? 2 : 1);
+  return Math.round((perWeek * MASTERY_DAYS) / 7);
+}
+
+/** Times a task must be done within 60 days to be mastered, or 0 if it is too rare to become one. */
+export function masteryGoal(task) {
+  const n = timesPerWindow(task);
+  return n >= MASTERY_MIN && !isExercise(task) ? Math.ceil(n * MASTERY_SHARE) : 0;
+}
+
+/**
+ * Every quest task on the kid's setup that can become a habit:
+ * Map taskId -> { task, done (times done toward the next star), goal, mastered (day of the first star, or null),
+ *   stars: [day of each star] }.
+ * Only done (parent-approved) days count. Today counts once it is done.
+ */
+export function habitInfo(state, kid, today) {
+  return memoize(`habit|${kid.id}|${today}`, () => {
+    const out = new Map();
+    for (const t of questTasks(kid.tasks || [])) {
+      const goal = masteryGoal(t);
+      if (goal) out.set(t.id, { task: t, done: 0, goal, mastered: null, stars: [], days: [] });
+    }
+    if (!out.size) return out;
+    const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
+    for (let key = start; key <= today; key = addDays(key, 1)) {
+      const entry = entryFor(state, kid.id, key);
+      const oldest = addDays(key, -(MASTERY_DAYS - 1));
+      for (const h of out.values()) {
+        if (entry?.tasks?.[h.task.id]?.status === 'done') h.days.push(key);
+        while (h.days.length && h.days[0] < oldest) h.days.shift();
+        if (h.days.length >= h.goal) {
+          // a star: the next one counts only days after this
+          h.stars.push(key);
+          h.mastered ||= key;
+          h.days = [];
+        }
+      }
+    }
+    for (const h of out.values()) { h.done = h.days.length; delete h.days; }
+    return out;
+  });
+}
+
+/** Task ids mastered before a day (a Monday), so that week pays them less. */
+export function masteredBefore(state, kid, day, today = day) {
+  const half = new Set();
+  for (const [id, h] of habitInfo(state, kid, today > day ? today : day)) if (h.mastered && h.mastered < day) half.add(id);
+  return half;
 }
 
 // Past days use that day's snapshot, so changing a task's reward later only
@@ -434,6 +558,7 @@ function totalEarned(state, kid, today, field) {
     // the treasure chest's coins or gems (see treasure.js); chests give no XP
     if (field !== 'xp') sum += entry.chest?.[field] || 0;
   }
+  if (field !== 'gems') sum += COMEBACK_BONUS * streakInfo(state, kid, today).comebacks.length;
   return sum;
 }
 
@@ -488,26 +613,41 @@ export function pianoDaysPerWeek(kid) {
   return days.size;
 }
 
+/** Piano days in a row that earn a piano freeze (about two weeks of Mon–Fri). Only one is kept. */
+export const PIANO_DAYS_PER_FREEZE = 10;
+
 /**
  * The piano streak counts piano days done in a row (parent-approved, like the main streak).
  * Days without piano don't break it, an excused day keeps it, and today only adds once done.
- * There are no freezes here: the piano rewards are for getting it done every time.
+ * Every 10 piano days in a row earn one piano freeze (only one is kept), which covers a
+ * missed piano day. A miss with no freeze cuts the streak in half.
  */
 export function pianoStreakInfo(state, kid, today) {
   let streak = 0;
   let best = 0;
+  let run = 0;
+  let freezes = 0;
   const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
   for (let key = start; key <= today; key = addDays(key, 1)) {
     const piano = tasksForDay(state, kid, key, today).filter(isPianoTask);
     if (!piano.length) continue;
     const entry = entryFor(state, kid.id, key);
-    if (piano.every((t) => entry?.tasks?.[t.id]?.status === 'done')) streak += 1;
-    else if (key === today || entry?.excused) {
+    if (piano.every((t) => entry?.tasks?.[t.id]?.status === 'done')) {
+      streak += 1;
+      run += 1;
+      if (run % PIANO_DAYS_PER_FREEZE === 0) freezes = 1;
+    } else if (key === today || entry?.excused) {
       // in progress, or excused: keep the streak
-    } else streak = 0;
+    } else if (freezes > 0) {
+      freezes = 0;
+      run = 0;
+    } else {
+      streak = Math.floor(streak / 2);
+      run = 0;
+    }
     best = Math.max(best, streak);
   }
-  return { streak, best, perWeek: pianoDaysPerWeek(kid) };
+  return { streak, best, freezes, perWeek: pianoDaysPerWeek(kid) };
 }
 
 // ---------- exercise streak ----------
@@ -576,3 +716,132 @@ export function gamesLeft(kid, today, exerciseWeeks = 0, extra = 0) {
   const used = kid?.playLog?.day === today ? kid.playLog.n || 0 : 0;
   return Math.max(0, gamesPerDay(exerciseWeeks) + extra - used);
 }
+
+// ---------- the kid's own plan ----------
+//
+// Kids pick the order of their tasks and a "cue" for each: the moment that
+// reminds them ("After snack, I'll do piano practice"). Planning when and where
+// is one of the best-studied ways to make a habit stick. kid.plan is
+// { order: [taskId], cues: { taskId: cue }, week: Monday it was last planned }.
+
+export const CUES = {
+  morning: ['When I wake up', 'After I get dressed', 'After breakfast', 'Before I leave'],
+  afternoon: ['When I get home', 'After snack', 'After homework', 'Before screens', 'After dinner', 'Before bed'],
+};
+
+/** The cue a kid picked for a task, if it is still one of the choices for its time of day. */
+export function cueFor(kid, task) {
+  const cue = kid.plan?.cues?.[task.id];
+  return cue && (CUES[task.period] || []).includes(cue) ? cue : '';
+}
+
+/** Tasks in the kid's planned order. Tasks not in the plan keep their place after the planned ones. */
+export function planOrder(kid, tasks) {
+  const order = kid.plan?.order || [];
+  const at = (t) => { const i = order.indexOf(t.id); return i < 0 ? order.length : i; };
+  return tasks.map((t, i) => [t, i]).sort((a, b) => at(a[0]) - at(b[0]) || a[1] - b[1]).map(([t]) => t);
+}
+
+/** "After snack, I'll do piano practice." */
+export function planSentence(cue, task) {
+  return `${cue}, I'll ${/^(do|play|make|brush|clear|practice|feed|walk|read|take|put|empty|set|wash|fold|vacuum|dust|tidy|clean|pack|water|help|unload|load)\b/i.test(task.name) ? task.name.charAt(0).toLowerCase() + task.name.slice(1) : `do ${task.name.charAt(0).toLowerCase()}${task.name.slice(1)}`}.`;
+}
+
+// ---------- the family's day ----------
+//
+// When the whole family has done most of today's chores (85%), everyone's map
+// has a little party. Each kid's device only loads its own days, so each kid
+// carries a small summary of today (kid.today = { day, done, total }) that the
+// other devices can read. done counts tasks done or waiting for a parent.
+
+export const FAMILY_GOAL = 0.85;
+
+/** Today's summary for a kid: { day, done, total }. An excused day has nothing to do. */
+export function todaySummary(state, kid, today) {
+  const s = dayStatus(state, kid, today, today);
+  return { day: today, done: s.excused ? 0 : s.done + s.pending, total: s.excused ? 0 : s.total };
+}
+
+/**
+ * How the family is doing today. kids: [{ id, today: summary }] (a kid with no summary for
+ * today has done nothing yet, but how much they have to do is unknown, so they keep the goal
+ * out of reach until their device has been opened today).
+ */
+export function familyDay(kids, today) {
+  let done = 0;
+  let total = 0;
+  let unknown = 0;
+  for (const k of kids) {
+    const t = k.today;
+    if (!t || t.day !== today) { unknown += 1; continue; }
+    done += Math.min(t.done, t.total);
+    total += t.total;
+  }
+  const share = total ? done / total : 0;
+  return { done, total, unknown, share, happy: !unknown && total > 0 && share >= FAMILY_GOAL };
+}
+
+// ---------- last week, looked back on ----------
+
+/**
+ * How last week went, task by task, next to four weeks before it:
+ * { from, days, daysDone, tasks: [{ task, done, of, before: { done, of } | null }] }.
+ * Only tasks still on the kid's setup are listed. Excused days are left out.
+ */
+export function weekLookback(state, kid, today) {
+  const from = addDays(weekStart(today), -7);
+  const count = (monday) => {
+    const per = new Map();
+    let days = 0;
+    let daysDone = 0;
+    for (let i = 0; i < 7; i += 1) {
+      const key = addDays(monday, i);
+      if (kid.startDate && key < kid.startDate) continue;
+      const s = dayStatus(state, kid, key, today);
+      if (s.excused) continue;
+      days += 1;
+      if (s.complete) daysDone += 1;
+      const entry = entryFor(state, kid.id, key);
+      for (const t of s.tasks) {
+        const p = per.get(t.id) || { done: 0, of: 0 };
+        p.of += 1;
+        if (entry?.tasks?.[t.id]?.status === 'done') p.done += 1;
+        per.set(t.id, p);
+      }
+    }
+    return { per, days, daysDone };
+  };
+  const last = count(from);
+  const before = kid.startDate && kid.startDate > addDays(from, -28) ? null : count(addDays(from, -28));
+  const tasks = questTasks(kid.tasks || []).filter((t) => last.per.has(t.id)).map((t) => {
+    const b = before?.per.get(t.id);
+    return { task: t, ...last.per.get(t.id), before: b ? { ...b } : null };
+  });
+  return { from, days: last.days, daysDone: last.daysDone, tasks };
+}
+
+// ---------- milestones the family can cheer ----------
+
+/**
+ * The kid's newest milestone from today or yesterday, or null:
+ * a habit star, a whole week (or weeks) in a row, or a welcome-back day.
+ * { id, kind: 'star' | 'streak' | 'back', day, n?, task? }. The id is the same on every device.
+ */
+export function milestoneFor(state, kid, today) {
+  for (const day of [today, addDays(today, -1)]) {
+    if (kid.startDate && day < kid.startDate) continue;
+    for (const h of habitInfo(state, kid, today).values()) {
+      const n = h.stars.indexOf(day) + 1;
+      if (n) return { id: `star-${h.task.id}-${n}`, kind: 'star', day, task: h.task.name, n };
+    }
+    const info = streakInfo(state, kid, day);
+    if (dayStatus(state, kid, day, today).complete && info.inARow > 0 && info.inARow % 7 === 0) {
+      return { id: `streak-${day}`, kind: 'streak', day, n: info.inARow };
+    }
+    if (info.comebacks.includes(day)) return { id: `back-${day}`, kind: 'back', day };
+  }
+  return null;
+}
+
+/** True while a milestone is new enough to talk about (its day or the next). */
+export const milestoneFresh = (m, today) => Boolean(m && m.day >= addDays(today, -1) && m.day <= today);

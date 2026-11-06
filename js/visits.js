@@ -116,3 +116,24 @@ export function planVisits(hostId, visitors, date, hostKind = null) {
   for (const v of visitors) if (!spots[v.id]) spots[v.id] = open.shift();
   return { areas, spots };
 }
+
+// ---------- milestones ----------
+// A visitor who just reached a milestone mentions it, the way a friend would,
+// and the host can send a cheer. The friend who cheered then comes to visit
+// and cheers back. Preset phrases only.
+
+const weeks = (n) => (n === 7 ? 'a whole week' : n % 7 === 0 ? `${n / 7} weeks` : `${n} days`);
+
+/** What a visitor says about its own milestone. */
+export function milestoneBrag(m) {
+  if (m.kind === 'star') return `Got ${m.n > 1 ? `star #${m.n}` : 'a habit star'} for ${m.task.toLowerCase()} ⭐`;
+  if (m.kind === 'streak') return `Just did ${weeks(m.n)} in a row 🔥`;
+  return 'Back on track today 💪';
+}
+
+/** What a friend who came to cheer says. */
+export function milestoneCheer(m, host) {
+  if (m.kind === 'star') return `${m.n > 1 ? `Star #${m.n}` : 'A habit star'} for ${m.task.toLowerCase()}! Go ${host}! ⭐`;
+  if (m.kind === 'streak') return `${weeks(m.n).replace(/^a /, 'A ')} in a row! Came to cheer 🎉`;
+  return `Welcome back, ${host}! Knew you could 💪`;
+}

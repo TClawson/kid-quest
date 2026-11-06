@@ -101,3 +101,12 @@ test("the host kid's held gear gets a field first, with a visitor who owns it or
   assert.deepEqual([...seen].sort(), ['c', 'd']);
   assert.deepEqual(planVisits('host', [], '2026-11-01', 'soccer').areas, []);
 });
+
+test('milestone lines are short preset phrases', async () => {
+  const { milestoneBrag, milestoneCheer } = await import('../js/visits.js');
+  assert.equal(milestoneBrag({ kind: 'streak', n: 7 }), 'Just did a whole week in a row 🔥');
+  assert.equal(milestoneBrag({ kind: 'streak', n: 14 }), 'Just did 2 weeks in a row 🔥');
+  assert.equal(milestoneBrag({ kind: 'star', task: 'Make bed' }), 'Got a habit star for make bed ⭐');
+  assert.equal(milestoneCheer({ kind: 'streak', n: 7 }, 'Ava'), 'A whole week in a row! Came to cheer 🎉');
+  assert.equal(milestoneCheer({ kind: 'back' }, 'Ava'), 'Welcome back, Ava! Knew you could 💪');
+});

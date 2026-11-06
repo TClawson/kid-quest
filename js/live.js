@@ -65,7 +65,24 @@ function applyFeel(st, now) {
   else if (st.idle && quiet > BORED_AFTER) extra = { valence: Math.min(st.base.valence, -0.15), arousal: 0.2, sleep: 0.35 };
   st.dozing = Boolean(extra.sleep);
   const { notes, ...base } = st.base;
-  st.brain.set({ ...base, ...extra });
+  // a party: silly happy face (giggly, beaming) and dancing to a made-up beat
+  let party = {};
+  if (st.party && now < st.party.until) party = { valence: 1, arousal: 1, dance: 1, giggle: 0.6, sleep: 0 };
+  else if (st.party) { st.party = null; party = { dance: base.dance || 0, giggle: 0 }; } // back to normal, once
+  st.brain.set({ ...base, ...extra, ...party });
+}
+
+const PARTY_BEAT = 430; // ms between beats, a happy bouncy tempo
+
+/** Every buddy with one of these keys has a party for ms: it dances and grins. */
+export function partyAll(keys, ms) {
+  const now = performance.now();
+  for (const key of new Set(keys)) {
+    const st = stateOf(key);
+    st.party = { at: now, until: now + ms };
+    st.touched = now;
+    st.brain.impulse('cheer', 1);
+  }
 }
 
 /** Reactions the app can trigger on a buddy by key. */
@@ -96,6 +113,10 @@ function wake(st, now) {
 }
 
 function beatNow(st, now) {
+  if (st.party && now < st.party.until) {
+    const phase = (now - st.party.at) / PARTY_BEAT;
+    return { index: Math.floor(phase), phase: phase % 1 };
+  }
   const b = st.beat;
   if (!b) return null;
   const phase = (now - b.at) / b.period;
