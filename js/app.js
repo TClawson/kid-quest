@@ -9,6 +9,7 @@ import {
   weekParity, isEveryOtherWeek, onWeek, weekStart,
   gamesLeft,
   carriedGames,
+  earlyGames,
   logGame,
   gamesPerDay,
   withMemo, monthDays, habitInfo, MASTERED_PAY, COMEBACK_BONUS, CUES, cueFor, planOrder, planSentence,
@@ -1359,6 +1360,10 @@ function visitorsHtml(kid, s) {
     const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', tag: 'Wanna play tag? Tap me!' };
     const plan = visitPlan(kid, visitors);
     visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[gamesWith(kid, v, plan)[0]] : "That's all our games today! See you tomorrow"; });
+  } else if (playableFor(kid, false) > 0) {
+    // chest games saved from yesterday can be played before today's chores
+    const n = playableFor(kid, false);
+    visitors.forEach((v, i) => { lines[i] = `${n} treasure game${n === 1 ? '' : 's'} left from yesterday! Tap me!`; });
   }
   // milestones: a friend who came to cheer says so; a visitor with news mentions it, with a Cheer button
   const cheers = cheersFor(kid);
@@ -1417,12 +1422,13 @@ function visitorsHtml(kid, s) {
   // the ball (or puck) goes back and forth between the two players
   // on their own, a player juggles, shoots at the far goal or throws it up and catches it.
   // The kid's own field can be tapped to play right away.
+  const playable = playableFor(kid, s.complete);
   const games = plan.areas.filter((a) => a.kind !== 'pond').map((a) => {
     const xs = [...GX[a.side]].sort((p, q) => p - q);
     const tiers = a.members.map((id) => gearOf(visitors.find((v) => v.id === id))[a.kind] || 1);
     if (a.host) tiers.push(bestGear(kid.owned || [])[a.kind] || 1);
     const solo = a.members.length === 1 ? `solo from-${a.side}` : '';
-    const tap = a.host && s.complete ? `data-action="visitor" data-id="${esc(a.members[0])}" data-pick="${a.kind}" role="button" aria-label="Play ${GAME_NAMES[a.kind]}"` : 'aria-hidden="true"';
+    const tap = a.host && playable > 0 ? `data-action="visitor" data-id="${esc(a.members[0])}" data-pick="${a.kind}" role="button" aria-label="Play ${GAME_NAMES[a.kind]}"` : 'aria-hidden="true"';
     return `<div class="map-game game-${a.kind} ${solo} ${a.host ? 'host-field' : ''}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" ${tap}><span class="game-ball">${ballSvg(a.kind, Math.max(...tiers))}</span></div>`;
   }).join('');
   const areas = plan.areas.map((a) => `${a.side}:${a.kind}`).join(',');
@@ -3084,7 +3090,7 @@ actions.visitor = (el) => {
   // once the day's quest is done, visitors want to play
   if (v && kid) {
     const s = dayStatus(state, kid, today(), today());
-    if (s.complete && gamesLeftFor(kid) > 0) {
+    if (playableFor(kid, s.complete) > 0) {
       sounds.tap();
       // the kid's own field starts its game; a visitor offers what there is to play
       const games = gamesWith(kid, v, visitPlan(kid, todaysVisitors(kid)));
@@ -3118,6 +3124,9 @@ const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
 const chestGames = (kid, day) => entryFor(state, kid.id, day)?.chest?.games || 0;
 const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks));
 const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));
+// Before today's chores are done, only last night's carried chest games can be played.
+const playableFor = (kid, complete = dayStatus(state, kid, today(), today()).complete) =>
+  complete ? gamesLeftFor(kid) : Math.min(gamesLeftFor(kid), earlyGames(kid, today(), carriedFor(kid)));
 
 /** The game the kid's buddy is holding a ball or stick for, if any. */
 function heldGame(kid) {
@@ -3219,7 +3228,7 @@ function playWith(kid, v, kind) {
     map: kidTheme(kid),
     day: today(),
     sounds,
-    gamesLeft: () => gamesLeftFor(kid),
+    gamesLeft: () => playableFor(kid),
     onStart: () => {
       kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
       save();

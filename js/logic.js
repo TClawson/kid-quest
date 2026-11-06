@@ -737,6 +737,17 @@ export function carriedGames(kid, today, chestYesterday = 0, fallbackCap = GAMES
   return Math.max(0, chestYesterday - Math.max(0, (log.n || 0) - cap));
 }
 
+/**
+ * Games a kid may play before today's chores are done: only the chest games
+ * carried over from yesterday (they were earned already, and run out tonight).
+ * Every game played today counts against them first, so the total for the day
+ * stays the same.
+ */
+export function earlyGames(kid, today, carried = 0) {
+  const used = kid?.playLog?.day === today ? kid.playLog.n || 0 : 0;
+  return Math.max(0, carried - used);
+}
+
 /** kid.playLog after one more game today. cap: today's games that run out at bedtime. */
 export function logGame(kid, today, cap) {
   const log = kid?.playLog;
