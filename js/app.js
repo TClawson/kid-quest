@@ -12,6 +12,8 @@ import {
   earlyGames,
   logGame,
   gamesPerDay,
+  GAMES_PER_DAY,
+  OLD_GAMES_PER_DAY,
   withMemo, monthDays, habitInfo, MASTERED_PAY, COMEBACK_BONUS, CUES, cueFor, planOrder, planSentence,
   todaySummary, familyDay, FAMILY_GOAL, weekLookback, isPianoTask, milestoneFor, milestoneFresh,
 } from './logic.js';
@@ -3122,7 +3124,8 @@ const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).map((m)
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
 // Chest games keep until the end of the next day (carriedGames).
 const chestGames = (kid, day) => entryFor(state, kid.id, day)?.chest?.games || 0;
-const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks));
+// A log with no cap is from before the limit dropped from 8 to 4, so yesterday's daily games were 8 (plus exercise).
+const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks) + OLD_GAMES_PER_DAY - GAMES_PER_DAY);
 const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));
 // Before today's chores are done, only last night's carried chest games can be played.
 const playableFor = (kid, complete = dayStatus(state, kid, today(), today()).complete) =>
