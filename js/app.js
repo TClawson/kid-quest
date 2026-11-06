@@ -8,6 +8,9 @@ import {
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
   gamesLeft,
+  carriedGames,
+  logGame,
+  gamesPerDay,
   withMemo, monthDays, habitInfo, MASTERED_PAY, COMEBACK_BONUS, CUES, cueFor, planOrder, planSentence,
   todaySummary, familyDay, FAMILY_GOAL, weekLookback, isPianoTask, milestoneFor, milestoneFresh,
 } from './logic.js';
@@ -590,7 +593,7 @@ function openChest(kid, key) {
   if (!c.ready) return;
   const found = treasureFound(state.log, kid.id);
   const maps = mapsNeedingPieces(unlockedMaps(kid), kidTheme(kid), found);
-  // extra games are only any use today, with visitors to play with
+  // extra games are only any use with visitors to play with (they keep until tomorrow)
   const games = key === today() && pickVisitors(kid.id, familyBuddies(), today()).length > 0;
   const prize = chestPrize({ seed: `${kid.id}|${key}`, tier: c.tier, found, maps, games });
   entryFor(state, kid.id, key, true).chest = { ...prize, at: Date.now() };
@@ -3111,7 +3114,10 @@ const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishi
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
 const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).map((m) => m.move.id);
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
-const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, entryFor(state, kid.id, today())?.chest?.games || 0);
+// Chest games keep until the end of the next day (carriedGames).
+const chestGames = (kid, day) => entryFor(state, kid.id, day)?.chest?.games || 0;
+const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks));
+const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));
 
 /** The game the kid's buddy is holding a ball or stick for, if any. */
 function heldGame(kid) {
@@ -3215,9 +3221,7 @@ function playWith(kid, v, kind) {
     sounds,
     gamesLeft: () => gamesLeftFor(kid),
     onStart: () => {
-      const day = today();
-      const n = kid.playLog?.day === day ? kid.playLog.n || 0 : 0;
-      kid.playLog = { day, n: n + 1 };
+      kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
       save();
     },
     // the map's bubbles change when the games run out

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gameFor, levelObstacles, rng, kickWindows, heightSpread } from '../js/play.js';
 import { needle, zoneAt, SHOT_ODDS, STEAL_ODDS, Z } from '../js/hockey.js';
-import { gamesPerDay, gamesLeft } from '../js/logic.js';
+import { gamesPerDay, gamesLeft, carriedGames, logGame } from '../js/logic.js';
 
 test('visitors play their ball game or go fishing, the same one all day, or tag', () => {
   assert.equal(gameFor({}), 'tag');
@@ -69,4 +69,32 @@ test('keepy-uppy gets harder: Perfect narrows most, and kick heights vary more',
   assert.ok(kickWindows(20, 3).perfect > kickWindows(20, 1).perfect, 'a better ball is easier');
   assert.equal(heightSpread(0), 0.12);
   assert.equal(heightSpread(100), 0.3);
+});
+
+test('chest games keep for one more day', () => {
+  const t = '2026-11-06', y = '2026-11-05';
+  // opened late yesterday, no games played since: both carry over
+  assert.equal(carriedGames({ playLog: { day: y, n: 4, cap: 4 } }, t, 2), 2);
+  // yesterday's daily games used, then one chest game
+  assert.equal(carriedGames({ playLog: { day: y, n: 5, cap: 4 } }, t, 2), 1);
+  assert.equal(carriedGames({ playLog: { day: y, n: 9, cap: 4 } }, t, 2), 0);
+  // nothing played yesterday
+  assert.equal(carriedGames({ playLog: { day: '2026-11-01', n: 3 } }, t, 2), 2);
+  assert.equal(carriedGames({}, t, 2), 2);
+  assert.equal(carriedGames({ playLog: { day: y, n: 1 } }, t, 0), 0, 'no chest games, nothing carried');
+  // they only keep one day
+  assert.equal(carriedGames({ playLog: { day: y, n: 0 } }, '2026-11-07', 0), 0);
+  // old logs without cap use the daily games
+  assert.equal(carriedGames({ playLog: { day: y, n: 5 } }, t, 2, 4), 1);
+  // playing today keeps yesterday's log, so the carry-over stays put
+  let kid = { playLog: { day: y, n: 5, cap: 4 } };
+  const cap = 4 + carriedGames(kid, t, 2);
+  kid = { playLog: logGame(kid, t, cap) };
+  assert.deepEqual(kid.playLog, { day: t, n: 1, cap: 5, prev: { day: y, n: 5, cap: 4 } });
+  kid = { playLog: logGame(kid, t, 5) };
+  assert.equal(kid.playLog.n, 2);
+  assert.equal(carriedGames(kid, t, 2), 1);
+  assert.equal(gamesLeft(kid, t, 0, 0 + carriedGames(kid, t, 2)), 3);
+  // carried games are used before today's chest games, so tomorrow only today's unused chest games carry
+  assert.equal(carriedGames({ playLog: { day: t, n: 6, cap: 5 } }, '2026-11-07', 2), 1);
 });
