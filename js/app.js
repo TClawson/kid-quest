@@ -1143,7 +1143,7 @@ function viewHome() {
       <button class="kid-card" data-action="open-kid" data-id="${kid.id}" style="--kid:${kid.color}">
         ${buddyHtml(kid, moodFor(kid), 'md', { live: true })}
         <div class="kid-name">${esc(kid.name)}</div>
-        <div class="streak ${info.streak ? '' : 'cold'}">🔥 ${info.streak}</div>
+        <div class="streak ${info.streak ? '' : 'cold'}">🔥 ${info.streak} <small class="best" title="Best streak">🏆 ${info.best}</small></div>
         <div class="bar"><span style="width:${pct}%"></span></div>
         <div class="muted">${s.complete ? 'Quest complete! 🌟' : `${s.done} of ${s.total} done`}</div>
       </button>`;
@@ -1544,7 +1544,7 @@ function viewKid() {
         <button class="btn ghost round" data-action="home" aria-label="Back">←</button>
         <div class="kid-title"><b>${esc(kid.name)}</b><small>Level ${lv.level} · <span class="xpbar"><span style="width:${lv.into}%"></span></span></small></div>
         <div class="chips">
-          <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak">🔥 ${info.streak}</span>
+          <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak (best ${info.best})">🔥 ${info.streak}</span>
           <span class="chip ice" title="Streak freezes">❄️ ${info.freezes}</span>
           <span class="chip coin" title="Coins">🪙 ${Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0))}</span>
           ${exTasks.length || kid.gemsSpent ? `<span class="chip gem" title="Gems">💎 ${Math.max(0, totalGems(state, kid, t) - (kid.gemsSpent || 0))}</span>` : ''}
@@ -1576,13 +1576,21 @@ function viewKid() {
       ${section('afternoon', '☀️ After school', state.settings.bedtime)}` : questMap(kid, s, entry, mood)}
       <section>
         <h2>This week</h2>
+        ${streakLine(kid, info)}
         ${weekDots(kid, info)}
         ${monthLine(kid)}
         ${weekCoinsHtml(kid)}
-        <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Miss a day without one and your streak is cut in half, not lost, and finishing the next day earns a welcome-back bonus. Best streak: ${info.best} days.</p>
+        <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Miss a day without one and you lose a quarter of your streak (at least 1 day), not all of it, and finishing the next day earns a welcome-back bonus.</p>
       </section>
       ${habitsSection(kid)}
     </div>`;
+}
+
+/** "🔥 Streak 5 days · 🏆 Best 12 days" (plus the piano streak when there is one). */
+function streakLine(kid, info) {
+  const days = (n) => `${n} ${n === 1 ? 'day' : 'days'}`;
+  const piano = pianoStreakInfo(state, kid, today());
+  return `<p class="streak-line"><span>🔥 Streak <b>${days(info.streak)}</b></span><span>🏆 Best <b>${days(info.best)}</b></span>${piano.perWeek ? `<span>🎹 Piano <b>${days(piano.streak)}</b> (best ${piano.best})</span>` : ''}</p>`;
 }
 
 /** "This month: 18 of 20 days done 💪" */
@@ -1948,7 +1956,7 @@ function viewWardrobe() {
     <div class="screen wardrobe" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="wardrobe-back" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days` : ''}</small></div>
+        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Streak ${prog.streak} days · best ${prog.best}${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days (best ${prog.pianoBest})` : ''}</small></div>
       </header>
       <div class="wardrobe-top">
         <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, 'happy', 'lg', { live: true, feel: { valence: 0.8, arousal: 0.6 } })}</button>

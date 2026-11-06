@@ -407,7 +407,7 @@ export const COMEBACK_BONUS = 15;
  * - A complete day adds 1 to the streak. Every 7 complete days in a row earn a freeze (max 2).
  * - An excused day keeps the streak as it is.
  * - A missed past day uses a freeze if one is available. Otherwise the streak is
- *   cut in half (not back to 0): research on streaks finds that losing all of it
+ *   loses a quarter, rounded up (so at least 1 day, never back to 0): research on streaks finds that losing all of it
  *   makes kids give up, while a smaller setback keeps them going.
  * - Today never breaks the streak; it only adds once it is complete.
  * - inARow counts real days in a row (a freeze or an excused day keeps it, a
@@ -448,7 +448,7 @@ export function streakInfo(state, kid, today) {
         frozen.push(key);
         missed = true;
       } else {
-        streak = Math.floor(streak / 2);
+        streak -= Math.ceil(streak / 4);
         inARow = 0;
         run = 0;
         missed = true;
@@ -620,7 +620,7 @@ export const PIANO_DAYS_PER_FREEZE = 10;
  * The piano streak counts piano days done in a row (parent-approved, like the main streak).
  * Days without piano don't break it, an excused day keeps it, and today only adds once done.
  * Every 10 piano days in a row earn one piano freeze (only one is kept), which covers a
- * missed piano day. A miss with no freeze cuts the streak in half.
+ * missed piano day. A miss with no freeze loses a quarter of the streak, rounded up.
  */
 export function pianoStreakInfo(state, kid, today) {
   let streak = 0;
@@ -642,7 +642,7 @@ export function pianoStreakInfo(state, kid, today) {
       freezes = 0;
       run = 0;
     } else {
-      streak = Math.floor(streak / 2);
+      streak -= Math.ceil(streak / 4);
       run = 0;
     }
     best = Math.max(best, streak);

@@ -106,7 +106,7 @@ test('xp and pending approvals', () => {
   assert.equal(pending[0].task.name, 'Chore of the week');
 });
 
-test('piano streak skips non-piano days, keeps excused days, uses its freeze, then halves on a miss', async () => {
+test('piano streak skips non-piano days, keeps excused days, uses its freeze, then loses a quarter on a miss', async () => {
   const L = await import('../js/logic.js');
   const s = L.emptyState();
   const kid = { id: 'k', name: 'A', tasks: L.defaultTasks(), startDate: '2026-10-05' }; // a Monday
@@ -127,9 +127,9 @@ test('piano streak skips non-piano days, keeps excused days, uses its freeze, th
   info = L.pianoStreakInfo(s, kid, '2026-10-22');
   assert.equal(info.streak, 11);
   assert.equal(info.freezes, 0);
-  // Thursday missed too, with no freeze left: cut in half, best stays
+  // Thursday missed too, with no freeze left: loses a quarter rounded up (11 -> 8), best stays
   info = L.pianoStreakInfo(s, kid, '2026-10-23');
-  assert.equal(info.streak, 5);
+  assert.equal(info.streak, 8);
   assert.equal(info.best, 11);
   // today not done yet doesn't break it
   assert.equal(L.pianoStreakInfo(s, kid, '2026-10-20').streak, 11);
@@ -435,14 +435,14 @@ test('buddy store opens when today\'s chores are done and approved, excused days
   assert.equal(storeOpen(state, kid, MONDAY).open, true);
 });
 
-test('a missed day with no freeze halves the streak; the next full day earns a welcome-back bonus', async () => {
+test('a missed day with no freeze loses a quarter of the streak (rounded up); the next full day earns a welcome-back bonus', async () => {
   const L = await import('../js/logic.js');
   const { state, kid } = setup();
   // six perfect days (no freeze yet), then a miss, then a full day
   for (let i = 0; i < 6; i += 1) finishDay(state, kid, addDays(MONDAY, i), addDays(MONDAY, 8));
   finishDay(state, kid, addDays(MONDAY, 7), addDays(MONDAY, 8));
   const info = streakInfo(state, kid, addDays(MONDAY, 8));
-  assert.equal(info.streak, 4); // 6 -> 3, then +1
+  assert.equal(info.streak, 5); // 6 -> 4 (lose ceil(6/4) = 2), then +1
   assert.equal(info.best, 6);
   assert.equal(info.inARow, 1);
   assert.deepEqual(info.comebacks, [addDays(MONDAY, 7)]);
