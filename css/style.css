@@ -503,9 +503,9 @@ label { color: var(--ink); }
 .listen-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; padding: 6px 0; }
 .listen-line { position: relative; height: 18px; background: #0001; border-radius: 4px; overflow: hidden; }
 .listen-line .dot { position: absolute; top: 4px; margin-left: -5px; }
-.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
-.dot.piano { background: #2f9e44; }
-.dot.other { background: #f76707; }
+span.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+span.dot.piano { background: #2f9e44; }
+span.dot.other { background: #f76707; }
 .listen-error { background: #ffe3e3; border: 2px solid #c92a2a; border-radius: 6px; padding: 10px; }
 .listen-tries li { margin: 4px 0; }
 .listen-actions { display: flex; justify-content: center; margin: 8px 0; }
@@ -541,6 +541,8 @@ label { color: var(--ink); }
 
 /* habits: month count, habit stars, the kid's plan, last week's look-back, the family party */
 .month-line { margin: 10px 0 0; }
+.reward-line { margin: 10px 0 0; }
+.reward-line.earned { color: var(--kid, inherit); font-size: 1.1em; }
 .habits h2 small { font-size: 0.8rem; }
 .habits .plan-btn { margin: 0 0 10px; }
 .habit-row { display: flex; gap: 10px; align-items: center; background: var(--card); border-radius: 12px; padding: 8px 10px; margin: 6px 0; }

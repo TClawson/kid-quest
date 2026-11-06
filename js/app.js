@@ -1,6 +1,6 @@
 import {
   DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
-  tasksForDay, snapshotToday, dayStatus, storeOpen, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
+  tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, storeOpen, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
@@ -523,19 +523,36 @@ function celebrateIfDue(kid) {
   const t = today();
   const info = streakInfo(state, kid, t);
   const after = () => setTimeout(() => showUnlocks(kid), 250);
-  if (!info.todayComplete) return showUnlocks(kid);
   const seen = state.celebrations[kid.id];
-  if (seen?.day === t) return showUnlocks(kid);
-  state.celebrations[kid.id] = { day: t, streak: info.streak };
+  // the weekly reward shows once a week, as soon as it is earned: on Friday, or
+  // later in the weekend if a parent approves a day's chores late
+  const reward = state.settings.weeklyReward?.trim() ? weeklyRewardInfo(state, kid, t) : null;
+  const rewardNew = Boolean(reward?.earned && seen?.reward !== reward.monday);
+  const dayNew = info.todayComplete && seen?.day !== t;
+  if (!rewardNew && !dayNew) return showUnlocks(kid);
+  const next = { ...(seen || {}) };
+  if (info.todayComplete) { next.day = t; next.streak = info.streak; }
+  if (rewardNew) next.reward = reward.monday;
+  state.celebrations[kid.id] = next;
   save();
-  if (info.inARow > 0 && info.inARow % 7 === 0) {
-    const weeks = info.inARow / 7;
+  if (rewardNew) {
     celebrate({
       kid,
       onClose: after,
       emoji: '🏆',
+      title: 'WEEKLY REWARD!',
+      text: `You did every chore Monday to Friday! Your reward: ${state.settings.weeklyReward}. Show a parent!${dayNew ? ' Then tap your treasure chest!' : ''}`,
+      sound: sounds.week,
+      big: true,
+    });
+  } else if (info.inARow > 0 && info.inARow % 7 === 0) {
+    const weeks = info.inARow / 7;
+    celebrate({
+      kid,
+      onClose: after,
+      emoji: '🔥',
       title: weeks === 1 ? 'A WHOLE WEEK!' : `${weeks} WEEKS IN A ROW!`,
-      text: `${info.inARow} days in a row! Your reward: ${state.settings.weeklyReward}. Show a parent!${info.freezes ? ' You also have a streak freeze ❄️ saved up.' : ''} Then tap your treasure chest!`,
+      text: `${info.inARow} days in a row!${info.freezes ? ' You have a streak freeze ❄️ saved up.' : ''} Tap your treasure chest!`,
       sound: sounds.week,
       big: true,
     });
@@ -1596,12 +1613,30 @@ function viewKid() {
       <section>
         <h2>This week</h2>
         ${weekDots(kid, info)}
+        ${rewardLine(kid)}
         ${monthLine(kid)}
         ${weekCoinsHtml(kid)}
         <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Miss a day without one and your streak is cut in half, not lost, and finishing the next day earns a welcome-back bonus. Best streak: ${info.best} days.</p>
       </section>
       ${habitsSection(kid)}
     </div>`;
+}
+
+/** How this week's real-world reward is going: it lands on Friday when Monday to Friday are all done. */
+function rewardLine(kid) {
+  const name = state.settings.weeklyReward?.trim();
+  if (!name) return '';
+  const t = today();
+  const r = weeklyRewardInfo(state, kid, t);
+  if (r.earned) return `<p class="reward-line earned">🏆 <b>Weekly reward earned: ${esc(name)}!</b> Show a parent.</p>`;
+  if (r.lost) {
+    return t > r.friday
+      ? `<p class="reward-line">🏆 Next week: do every chore Monday to Friday to earn <b>${esc(name)}</b>.</p>`
+      : `<p class="reward-line">🏆 This week's reward got away, but <b>${esc(name)}</b> is back next week. Keep going!</p>`;
+  }
+  const ok = r.days.filter((d) => d.state === 'done' || d.state === 'excused').length;
+  const of = r.days.filter((d) => d.state !== 'before').length;
+  return `<p class="reward-line">🏆 Do every chore Monday to Friday and on Friday you get: <b>${esc(name)}</b>. <b>${ok} of ${of}</b> days done.</p>`;
 }
 
 /** "This month: 18 of 20 days done 💪" */
@@ -2117,10 +2152,11 @@ function parentKids() {
       ${state.kids.map((kid) => {
     const w = weekEarnings(state, kid, t);
     const week = w.allowance ? `🪙 ${w.coins} of ${w.allowance.coins} this week${w.bonus ? ` + ${w.bonus} bonus` : ''}` : `${kid.tasks.length} tasks${w.bonus ? ` · ${w.bonus} bonus this week` : ''}`;
+    const reward = state.settings.weeklyReward?.trim() && weeklyRewardInfo(state, kid, t).earned ? ` · 🏆 earned ${state.settings.weeklyReward.trim()}` : '';
     return `
         <div class="list-row">
           ${buddyChip(kid)}
-          <div class="grow"><b>${esc(kid.name)}</b><small class="muted">${week}</small></div>
+          <div class="grow"><b>${esc(kid.name)}</b><small class="muted">${week}${esc(reward)}</small></div>
           <button class="btn ghost" data-action="bonus" data-kid="${kid.id}" ${w.bonusLeft ? '' : 'disabled'}>🎁 Bonus</button>
           <button class="btn ghost" data-action="edit-kid" data-id="${kid.id}">Edit</button>
         </div>`;
@@ -2283,7 +2319,7 @@ function parentSettings() {
   const notif = 'Notification' in window ? Notification.permission : 'unsupported';
   return `
     <div class="card">
-      <label class="block">Weekly reward (shown when a kid finishes 7 days in a row)
+      <label class="block">Weekly reward (on Friday, for a kid who did every chore Monday to Friday; excused days don't count against it)
         <input data-setting="weeklyReward" value="${esc(st.weeklyReward)}"></label>
       <div class="row wrap">
         <label>Morning tasks by <input type="time" data-setting="morningBy" value="${esc(st.morningBy)}"></label>
