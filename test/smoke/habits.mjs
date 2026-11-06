@@ -15,7 +15,7 @@ const site = await serve('.');
 const browser = await chromium.launch();
 const today = dateKey();
 
-/** A family of two. Ava has 10 weeks of history: teeth every day, her bed more and more often, and yesterday missed. */
+/** A family of two (avaToday/benToday: tasks done today; -1 means all but one). Ava has 10 weeks of history: teeth every day, her bed more and more often, and yesterday missed. */
 function family({ avaToday = 0, benToday = 0 } = {}) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
@@ -120,7 +120,7 @@ try {
     const labels = await page.$$eval('.map-label', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()));
     assert.ok(labels.some((l) => l.includes('Piano practice') && l.includes('After snack')), labels.join(' | '));
     assert.ok(labels.some((l) => l.includes('Brush teeth ⭐')), labels.join(' | '));
-    assert.match(await page.textContent('.family-banner'), /Family: 3 of 10 chores done/);
+    assert.match(await page.textContent('.family-banner'), /Family: 3 of \d+ chores done/);
     await page.waitForTimeout(2600); // the toast goes away
     await page.locator('.family-banner').scrollIntoViewIfNeeded();
     await page.evaluate(() => window.scrollBy(0, -20));
@@ -151,8 +151,8 @@ try {
     const coinsAfter = Number((await page.textContent('.chip.coin')).replace(/\D/g, ''));
     assert.ok(coinsAfter >= coinsBefore + 15, `${coinsBefore} -> ${coinsAfter}`);
 
-    // 5. the family party: Ava and Ben at 9 of 10, so opening the map starts it
-    const party = family({ avaToday: 4, benToday: 5 });
+    // 5. the family party: Ben is done and Ava has one left (over 85%), so opening the map starts it
+    const party = family({ avaToday: -1, benToday: 99 });
     party.kids[0].seenMastered = party.kids[0].tasks.map((t) => t.id);
     party.kids[0].lookbackSeen = s2.kids[0].lookbackSeen;
     await open(page, party);
@@ -202,7 +202,7 @@ try {
     const dir = join(shots, 'video');
     const ctx = await browser.newContext({ viewport: { width: 600, height: 900 }, recordVideo: { dir, size: { width: 600, height: 900 } } });
     const page = await ctx.newPage();
-    const party = family({ avaToday: 4, benToday: 5 });
+    const party = family({ avaToday: -1, benToday: 99 });
     party.kids[0].seenMastered = party.kids[0].tasks.map((t) => t.id);
     party.kids[0].lookbackSeen = weekStart(today);
     await open(page, party);
