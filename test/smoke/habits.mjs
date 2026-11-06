@@ -130,6 +130,14 @@ try {
     const habits = await page.textContent('.habits');
     assert.match(habits, /Mastered habit/);
     assert.match(habits, /Make bed/);
+    assert.match(await page.textContent('.streak-line'), /Streak \d+ days?.*Best \d+ days?/);
+    await page.locator('.streak-line').scrollIntoViewIfNeeded();
+    await shot(page, `streak-line-${tag}.png`);
+    // the week boxes keep their size and sit above the month line (a stray .dot rule once squashed them)
+    const dotBox = await page.locator('.week .dot span').first().boundingBox();
+    const monthBox = await page.locator('.month-line').boundingBox();
+    assert.ok(dotBox.width > 30, `week box is ${dotBox.width}px wide`);
+    assert.ok(dotBox.y + dotBox.height <= monthBox.y, 'week boxes overlap the month line');
     assert.match(await page.textContent('.month-line'), /This month: \d+ of \d+ days done/);
     await page.locator('.habits').scrollIntoViewIfNeeded();
     await shot(page, `habits-${tag}.png`);
