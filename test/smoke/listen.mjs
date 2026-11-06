@@ -134,6 +134,12 @@ try {
   await withMic(melody, {}, async (page) => {
     await waitNum(page, 'ls-piano', 8);
     assert.match(await page.textContent('#ls-mic'), /voice filters off.*notes from every sample/);
+    // the "dance earlier" slider starts at the usual lead and is kept for the timer
+    assert.equal(await page.textContent('[data-dance-lead-out]'), '120 ms');
+    await page.fill('[data-dance-lead]', '180');
+    assert.equal(await page.textContent('[data-dance-lead-out]'), '180 ms');
+    assert.equal(await page.evaluate(() => localStorage.getItem('kidquest.danceLead')), '180');
+    await page.fill('[data-dance-lead]', '120');
     assert.ok(await num(page, 'ls-since') < 3);
     // the end of the file (one fading echo per loop) may count as another sound
     const [p, o] = [await num(page, 'ls-piano'), await num(page, 'ls-other')];

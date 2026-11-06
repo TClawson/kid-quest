@@ -498,6 +498,8 @@ label { color: var(--ink); }
 .listen-meter i { background: #adb5bd; transition: width 0.08s; }
 .listen-meter i.loud { background: #40c057; }
 .listen-bar em, .listen-meter em { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--px-ink); }
+.dance-lead { display: grid; gap: 6px; margin-bottom: 8px; }
+.dance-lead input[type=range] { width: 100%; accent-color: var(--brand); }
 .listen-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; padding: 6px 0; }
 .listen-line { position: relative; height: 18px; background: #0001; border-radius: 4px; overflow: hidden; }
 .listen-line .dot { position: absolute; top: 4px; margin-left: -5px; }
