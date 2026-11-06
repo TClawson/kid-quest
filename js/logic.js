@@ -460,6 +460,51 @@ export function streakInfo(state, kid, today) {
   });
 }
 
+/**
+ * The real-world weekly reward (settings.weeklyReward, like "Pick the Friday
+ * movie"). It lands on Friday once every school day, Monday to Friday, is done:
+ * all of that day's chores done and parent-approved, or the day excused by a
+ * parent. Off-week tasks aren't scheduled, so they never count, and exercise is
+ * optional. A missed day loses that week's reward even if a streak freeze saved
+ * the streak. Weekend chores still count for streaks and coins, but not for the
+ * reward. Days before the kid started don't count, and a week with no finished
+ * day at all (all excused) doesn't earn it. It is worked out again from the
+ * history each time, so a parent approving Thursday's chores late on Saturday
+ * still earns it; it stays earned through Sunday.
+ * days: one { key, state } per Monday to Friday: done, excused, missed, today, future or before (the kid's start).
+ */
+export function weeklyRewardInfo(state, kid, today) {
+  return memoize(`reward|${kid.id}|${today}`, () => {
+    const monday = weekStart(today);
+    const friday = addDays(monday, 4);
+    const days = [];
+    let done = 0;
+    let open = 0; // days not finished yet: today, or still to come
+    let lost = false;
+    for (let i = 0; i < 5; i += 1) {
+      const key = addDays(monday, i);
+      let st;
+      if (kid.startDate && key < kid.startDate) st = 'before';
+      else if (key > today) st = 'future';
+      else {
+        const s = dayStatus(state, kid, key, today);
+        if (s.complete) st = 'done';
+        else if (s.excused) st = 'excused';
+        else if (key === today) st = 'today';
+        else st = 'missed';
+      }
+      if (st === 'done') done += 1;
+      if (st === 'missed') lost = true;
+      if (st === 'today' || st === 'future') open += 1;
+      days.push({ key, state: st });
+    }
+    const earned = today >= friday && !lost && !open && done > 0;
+    // a kid who starts after Monday can still earn it, but one who starts on the weekend waits for next week
+    if (kid.startDate && kid.startDate > friday) lost = true;
+    return { monday, friday, days, done, earned, lost };
+  });
+}
+
 /** Days complete (or excused) out of days so far this calendar month. */
 export function monthDays(state, kid, today) {
   const first = `${today.slice(0, 8)}01`;
