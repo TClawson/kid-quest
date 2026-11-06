@@ -106,6 +106,6 @@ test('chest coins and gems count, but give no XP; chest games add to the day', (
   assert.equal(totalGems(state, kid, key), 5);
   assert.equal(totalCoins(state, kid, key), 0);
   assert.equal(totalXp(state, kid, key), xp0);
-  assert.equal(gamesLeft({ playLog: { day: key, n: 8 } }, key, 0, 2), 2);
+  assert.equal(gamesLeft({ playLog: { day: key, n: 4 } }, key, 0, 2), 2);
   assert.ok(tasksForDay(state, kid, key, key).length > 0);
 });

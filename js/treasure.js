@@ -150,7 +150,7 @@ export function prizeText(prize, mapName = (id) => id) {
   switch (prize.kind) {
     case 'coins': return { title: `${prize.coins} coins!`, text: 'Spend them in the shop.' };
     case 'gems': return { title: `${prize.gems} gems!`, text: 'Gems buy sports gear.' };
-    case 'games': return { title: `${prize.games} extra games!`, text: 'Play more with your visitors today.' };
+    case 'games': return { title: `${prize.games} extra games!`, text: 'Play more with your visitors today or tomorrow.' };
     case 'piece': return { title: 'A treasure map piece!', text: `It's part of the ${mapName(prize.map)} map.` };
     default: {
       const t = trophyById(prize.trophy);
