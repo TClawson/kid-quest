@@ -704,17 +704,45 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
 }
 
 // ---------- games with visiting buddies ----------
-export const GAMES_PER_DAY = 8;
+export const GAMES_PER_DAY = 4;
 
-/** Games a kid may play with visitors in a day: 8, plus 2 for each week of the current exercise streak (up to 3). */
+/** Games a kid may play with visitors in a day: 4, plus 2 for each week of the current exercise streak (up to 3). */
 export function gamesPerDay(exerciseWeeks = 0) {
   return GAMES_PER_DAY + 2 * Math.min(3, Math.max(0, Math.floor(exerciseWeeks)));
 }
 
-/** Games left today. kid.playLog is { day, n }: games started on that day. extra: games from today's treasure chest. */
+/**
+ * Games left today. kid.playLog is { day, n, cap, prev }: games started on that
+ * day, how many of that day's games ran out at bedtime (the daily games plus
+ * games carried over from the day before), and the log of the day before.
+ * extra: treasure chest games for today (today's chest plus carriedGames()).
+ */
 export function gamesLeft(kid, today, exerciseWeeks = 0, extra = 0) {
   const used = kid?.playLog?.day === today ? kid.playLog.n || 0 : 0;
   return Math.max(0, gamesPerDay(exerciseWeeks) + extra - used);
+}
+
+/**
+ * Treasure chest games keep for one more day, since kids often open the chest
+ * late. A day's games are used first, then games carried in from the day
+ * before, then that day's chest games. This is what is left of yesterday's
+ * chest games. fallbackCap: yesterday's daily games, for logs saved before cap.
+ */
+export function carriedGames(kid, today, chestYesterday = 0, fallbackCap = GAMES_PER_DAY) {
+  if (!chestYesterday) return 0;
+  const y = addDays(today, -1);
+  const log = kid?.playLog?.day === y ? kid.playLog : kid?.playLog?.day === today && kid.playLog.prev?.day === y ? kid.playLog.prev : null;
+  if (!log) return chestYesterday;
+  const cap = Number.isFinite(log.cap) ? log.cap : fallbackCap;
+  return Math.max(0, chestYesterday - Math.max(0, (log.n || 0) - cap));
+}
+
+/** kid.playLog after one more game today. cap: today's games that run out at bedtime. */
+export function logGame(kid, today, cap) {
+  const log = kid?.playLog;
+  if (log?.day === today) return { ...log, n: (log.n || 0) + 1, cap };
+  const prev = log?.day ? { day: log.day, n: log.n || 0, ...(Number.isFinite(log.cap) ? { cap: log.cap } : {}) } : undefined;
+  return { day: today, n: 1, cap, ...(prev ? { prev } : {}) };
 }
 
 // ---------- the kid's own plan ----------
