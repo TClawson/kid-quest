@@ -113,6 +113,29 @@ test('strong notes count more than soft ones in between', () => {
   }
 });
 
+test('with a lead, each beat is handed out early enough to start the move before it', () => {
+  // the move is started lead ms before the beat, so it shows on the beat after the tablet's delays
+  for (const seed of [1, 2, 3]) {
+    const perf = perform([{ bpm: 100, beats: 32, rhythm: R.MIX }], rng(seed * 7919));
+    const run = (lead) => {
+      const f = createBeatFollower({ rng: rng(seed * 104729) });
+      const got = [];
+      let i = 0;
+      for (let now = 0; now < perf.end + 3000; now += 20) {
+        while (i < perf.notes.length && perf.notes[i] <= now) f.note(perf.notes[i++]);
+        for (const b of f.beats(now, undefined, lead)) got.push({ b, early: b - now });
+      }
+      return got;
+    };
+    const plain = run(0), early = run(120);
+    assert.ok(early.length >= 20, `seed ${seed}: ${early.length} beats`);
+    const inTime = early.filter((x) => x.early >= 95).length;
+    assert.ok(inTime / early.length >= 0.8, `seed ${seed}: only ${inTime} of ${early.length} handed out early`);
+    const same = early.filter((x) => plain.some((y) => Math.abs(y.b - x.b) < 70)).length;
+    assert.ok(same / early.length >= 0.85, `seed ${seed}: the beats themselves moved (${same} of ${early.length} the same)`);
+  }
+});
+
 test('playing with no beat: the buddy dances much less than to a steady piece', () => {
   // it leans towards dancing (a kid playing steadily must not be told otherwise), so
   // random notes get some dancing, but far less than real playing

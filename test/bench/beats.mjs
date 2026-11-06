@@ -11,7 +11,8 @@
 // strength when there is one. "judged" passes on only the notes the listener calls piano.
 // Settings: BEAT_TUNE='{"salience":1}' and ONSET_TUNE='{"delta":1.2}' try others,
 // ONSET_CACHE=<dir> keeps the notes found between runs, NO_SOUNDING=1 doesn't tell the follower
-// whether the piano sounds, NEVER_LOUD=1 tells it the piano is always quiet (a stuck loudness).
+// whether the piano sounds, NEVER_LOUD=1 tells it the piano is always quiet (a stuck loudness),
+// LEAD=<ms> starts each move that much before the beat it worked out (the app's "dance earlier").
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -62,6 +63,7 @@ export function soundingOf(x) {
 }
 
 /** The buddy's dance moves, as the timer page makes them (a frame every 20 ms). */
+const lead = Number(process.env.LEAD || 0);
 export function dance(onsets, ms, seed, sounding) {
   const f = createFollower({ rng: rng(seed), tune: beatTune });
   const moves = [];
@@ -72,7 +74,8 @@ export function dance(onsets, ms, seed, sounding) {
     while (i < onsets.length && (onsets[i].heard ?? onsets[i].at) <= now) { f.note(onsets[i].at, onsets[i], now); if (f.following(now + 1)) live++; i++; }
     // the buddy moves when the frame comes, not at the beat time it worked out
     const k = Math.floor((now - 2048 / RATE * 1000) / 20);
-    for (const _ of f.beats(now, process.env.NEVER_LOUD ? false : sounding ? !!sounding[Math.max(0, k)] : undefined)) moves.push(now);
+    // LEAD=ms: beats are handed out early and each move is started at its beat minus the lead
+    for (const b of f.beats(now, process.env.NEVER_LOUD ? false : sounding ? !!sounding[Math.max(0, k)] : undefined, lead)) moves.push(lead ? Math.max(now, b - lead) : now);
   }
   return { moves, dancing: live / Math.max(1, onsets.length) };
 }

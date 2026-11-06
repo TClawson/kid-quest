@@ -100,6 +100,9 @@ export function live(key) {
     beat: (p) => {
       const now = performance.now();
       st.beat = { at: now, period: Math.max(250, p), index: (st.beat?.index ?? -1) + 1 };
+      // draw the beat's bounce now, not at the next of the 12 frames a second (up to 83 ms late)
+      st.frame = null;
+      liveStart();
     },
     noBeat: () => { st.beat = null; },
     touch: () => wake(st, performance.now()),

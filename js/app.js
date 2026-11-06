@@ -1033,7 +1033,15 @@ function onEarsFrame(listener, events, now) {
       if (!builtin && !dancing && piano && !ears.asleep) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
     } else if (ev.type === 'piano' && builtin && !dancing) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
   }
-  if (beat.beats(now, listener.state.loud).length && piano && !ears.asleep) { danceBeat(ears, $b, null, beat.period); earsBuddy()?.beat(beat.period); }
+  const lead = danceLead();
+  for (const b of beat.beats(now, listener.state.loud, lead)) {
+    if (!piano || ears.asleep) continue;
+    atBeat(b, lead, now, () => {
+      if (ears.run?.listener !== listener) return;
+      danceBeat(ears, document.querySelector('.timer .timer-buddy'), null, beat.period);
+      earsBuddy()?.beat(beat.period);
+    });
+  }
 
   if (!ears.run.running) {
     // Chrome keeps the sound off until the screen is tapped (after the app reopened)
@@ -1763,6 +1771,7 @@ function viewListen() {
         <small class="muted"><span class="dot piano"></span> piano &nbsp; <span class="dot other"></span> talking or other noise</small>
         <p class="muted small" id="ls-mic">${listenTest.settings ? micNote(listenTest.settings) : ''}</p>
       </div>
+      <div class="card">${danceLeadSlider()}</div>
       <div class="card">
         <h2>Things to try</h2>
         <ol class="small listen-tries">
@@ -1785,7 +1794,7 @@ function micNote(st) {
   const on = ['echoCancellation', 'noiseSuppression', 'autoGainControl'].filter((k) => st[k] === true);
   return on.length
     ? `⚠️ Chrome kept these voice filters on: ${on.join(', ')}. They can hide held piano notes.`
-    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}${st.notesFrom ? ` · notes from ${st.notesFrom}` : ''}.`;
+    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}${st.notesFrom ? ` · notes from ${st.notesFrom}` : ''}${st.latency > 0 ? ` · Chrome says the mic is ${Math.round(st.latency * 1000)} ms behind` : ''}.`;
 }
 
 async function startListenTest() {
@@ -1846,6 +1855,40 @@ function buddyStep($b, cls, ms) {
  * A beat (p ms long): the buddy steps to the other side, and the metronome ticks
  * and swings over. st keeps which side it is on.
  */
+// The buddy is seen dancing a little after the kid plays: the mic, the note finder
+// (about 30 ms) and the screen each take their time. The beat follower foretells the beats,
+// so each dance move starts this many ms early and lands on the beat the kid played. The
+// delay differs from tablet to tablet; a parent can change it on the listening test page.
+const DANCE_LEAD_KEY = 'kidquest.danceLead';
+const DANCE_LEAD = { normal: 120, min: 0, max: 400, step: 10 };
+function danceLead() {
+  if (ui.danceLead == null) {
+    let v = null;
+    try { v = localStorage.getItem(DANCE_LEAD_KEY); } catch { /* private window */ }
+    const n = v == null ? NaN : Number(v);
+    ui.danceLead = Number.isFinite(n) ? Math.min(DANCE_LEAD.max, Math.max(DANCE_LEAD.min, n)) : DANCE_LEAD.normal;
+  }
+  return ui.danceLead;
+}
+
+/** The "dance earlier" slider on the listening test page. */
+function danceLeadSlider() {
+  const v = danceLead();
+  return `
+    <label class="dance-lead">
+      <span class="row"><b class="grow">Dance earlier</b><b data-dance-lead-out>${v} ms</b></span>
+      <input type="range" min="${DANCE_LEAD.min}" max="${DANCE_LEAD.max}" step="${DANCE_LEAD.step}" value="${v}" data-dance-lead aria-label="Dance earlier, in milliseconds">
+    </label>
+    <small class="muted">The tablet hears, works out and shows each beat a little late, so the dancing buddy starts each move this much early. Play a steady song: if the buddy bounces just after your notes, slide right; if just before, slide left. It counts for the piano timer on this tablet too (it starts at ${DANCE_LEAD.normal} ms).</small>`;
+}
+
+/** Runs fn when the beat at b (ms, as the follower heard it) should show: lead ms early. */
+function atBeat(b, lead, now, fn) {
+  const wait = b - lead - now;
+  if (wait <= 4) fn();
+  else setTimeout(fn, wait);
+}
+
 function danceBeat(st, $b, $m, p) {
   st.side = -(st.side || 1);
   buddyStep($b, st.side < 0 ? 'dance-l' : 'dance-r', Math.min(450, p * 0.85));
@@ -1891,7 +1934,14 @@ function onListenFrame(listener, events, now) {
     }
   }
   // beats come due between frames; one step per frame, and only while piano is playing
-  if (beat?.beats(now, listener.state.loud).length && pianoNow(listener, now)) danceBeat(listenTest, document.querySelector('.listen-buddy'), document.getElementById('ls-metro'), beat.period);
+  const lead = danceLead();
+  for (const b of beat?.beats(now, listener.state.loud, lead) || []) {
+    if (!pianoNow(listener, now)) continue;
+    atBeat(b, lead, now, () => {
+      if (listenTest.run?.listener !== listener) return;
+      danceBeat(listenTest, document.querySelector('.listen-buddy'), document.getElementById('ls-metro'), beat.period);
+    });
+  }
   if (!builtin && wasAsleep && listener.hearingPiano(now)) listenTest.woke = now;
   while (listenTest.events.length && now - listenTest.events[0].at > 60000) listenTest.events.shift();
   if (now - listenTest.lastUi > 100) { listenTest.lastUi = now; updateListenUi(listener, now); }
@@ -3400,6 +3450,14 @@ Object.assign(actions, {
     const kid = kidById(el.closest('.map-visitors')?.dataset.host);
     sendCheer(kid, familyBuddies().find((b) => b.id === el.dataset.id));
   },
+});
+
+// the "dance earlier" slider: takes effect at once, and is kept on this tablet
+document.addEventListener('input', (e) => {
+  if (!e.target.matches?.('[data-dance-lead]')) return;
+  ui.danceLead = Math.min(DANCE_LEAD.max, Math.max(DANCE_LEAD.min, Number(e.target.value) || 0));
+  try { localStorage.setItem(DANCE_LEAD_KEY, String(ui.danceLead)); } catch { /* lasts while the app is open */ }
+  document.querySelectorAll('[data-dance-lead-out]').forEach(($o) => { $o.textContent = `${ui.danceLead} ms`; });
 });
 
 document.addEventListener('change', (e) => {
