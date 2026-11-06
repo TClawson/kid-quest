@@ -705,6 +705,8 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
 
 // ---------- games with visiting buddies ----------
 export const GAMES_PER_DAY = 4;
+/** The daily games before 2026-11-06 (PR #55), when play logs had no cap yet. */
+export const OLD_GAMES_PER_DAY = 8;
 
 /** Games a kid may play with visitors in a day: 4, plus 2 for each week of the current exercise streak (up to 3). */
 export function gamesPerDay(exerciseWeeks = 0) {
