@@ -1,6 +1,6 @@
 import {
   DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
-  tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, storeOpen, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
+  tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, rewardsToGive, markRewardGiven, storeOpen, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
@@ -207,13 +207,21 @@ function formatTime(hhmm) {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-function toast(text) {
+// action: an optional { label, run } button on the toast, like Undo.
+function toast(text, action) {
   document.querySelectorAll('.toast').forEach((t) => t.remove()); // one at a time
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = text;
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'toast-btn';
+    b.textContent = action.label;
+    b.addEventListener('click', () => { el.remove(); action.run(); });
+    el.append(' ', b);
+  }
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2600);
+  setTimeout(() => el.remove(), action ? 6000 : 2600);
 }
 
 function floatText(text, anchor) {
@@ -1190,7 +1198,7 @@ function viewHome() {
           <p>No kids yet. A parent needs to add them.</p>
         </div>`}
       <footer class="bottom">
-        <button class="btn ghost" data-action="parent">🔒 Parents${pendingApprovals(state, today()).length ? ` <span class="badge">${pendingApprovals(state, today()).length}</span>` : ''}</button>
+        <button class="btn ghost" data-action="parent">🔒 Parents${parentBadge() ? ` <span class="badge">${parentBadge()}</span>` : ''}</button>
       </footer>
     </div>`;
 }
@@ -2098,6 +2106,32 @@ function movesList(kid, prog) {
 
 // ----- parent area -----
 
+/** Chores to check plus weekly rewards to hand over: the number on the Parents button. */
+function parentBadge() {
+  const t = today();
+  return pendingApprovals(state, t).length + rewardsToGive(state, t).length;
+}
+
+/**
+ * Weekly rewards earned and not handed over yet. It sits above the tabs on
+ * every parent tab until a parent taps Given, on any parent's phone.
+ */
+function rewardReminders() {
+  const t = today();
+  const due = rewardsToGive(state, t);
+  if (!due.length) return '';
+  const name = esc(state.settings.weeklyReward.trim());
+  const thisWeek = weekStart(t);
+  return `<section class="reward-remind">
+      ${due.map(({ kid, monday }) => `
+        <div class="list-row">
+          ${buddyChip(kid)}
+          <div class="grow"><b>🏆 ${esc(kid.name)} earned ${name}!</b><small class="muted">${monday === thisWeek ? 'Every chore done this week.' : 'Earned last week, not given yet.'} Tap Given once ${esc(kid.name)} has it.</small></div>
+          <button class="btn" data-action="reward-given" data-kid="${kid.id}" data-monday="${monday}">✓ Given</button>
+        </div>`).join('')}
+    </section>`;
+}
+
 function viewParent() {
   const pending = pendingApprovals(state, today());
   const tabs = [
@@ -2117,6 +2151,7 @@ function viewParent() {
         <h1>Parent area</h1>
         <button class="btn" data-action="parent-exit">Done</button>
       </header>
+      ${rewardReminders()}
       <nav class="tabs">${tabs.map(([id, label]) => `<button class="${ui.tab === id ? 'on' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav>
       ${body}
     </div>`;
@@ -2152,7 +2187,8 @@ function parentKids() {
       ${state.kids.map((kid) => {
     const w = weekEarnings(state, kid, t);
     const week = w.allowance ? `🪙 ${w.coins} of ${w.allowance.coins} this week${w.bonus ? ` + ${w.bonus} bonus` : ''}` : `${kid.tasks.length} tasks${w.bonus ? ` · ${w.bonus} bonus this week` : ''}`;
-    const reward = state.settings.weeklyReward?.trim() && weeklyRewardInfo(state, kid, t).earned ? ` · 🏆 earned ${state.settings.weeklyReward.trim()}` : '';
+    const reward = state.settings.weeklyReward?.trim() && weeklyRewardInfo(state, kid, t).earned
+      ? ` · 🏆 earned ${state.settings.weeklyReward.trim()}${kid.rewardsGiven?.[weekStart(t)] ? ' (given)' : ''}` : '';
     return `
         <div class="list-row">
           ${buddyChip(kid)}
@@ -2563,6 +2599,14 @@ const actions = {
   'parent-exit': () => { ui.view = 'home'; ui.editKidId = null; render(); },
   tab: (el) => { ui.tab = el.dataset.tab; ui.editKidId = null; render(); },
   approve: (el) => approve(el.dataset.kid, el.dataset.key, el.dataset.task),
+  'reward-given': (el) => {
+    const kid = kidById(el.dataset.kid);
+    const { monday } = el.dataset;
+    if (!kid) return;
+    markRewardGiven(kid, monday, Date.now());
+    save(); sounds.task(); render();
+    toast(`${kid.name}'s reward is checked off`, { label: 'Undo', run: () => { const k = kidById(kid.id); if (k) { markRewardGiven(k, monday, null); save(); render(); } } });
+  },
   'approve-all': () => {
     for (const { kid, key, task } of pendingApprovals(state, today())) setTask(kid, key, task, { status: 'done', by: 'parent', at: Date.now() });
     sounds.task(); render();
