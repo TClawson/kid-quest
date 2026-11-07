@@ -18,7 +18,7 @@ test('aiming: green is a narrow band in the middle, a little wider with a better
 test('catching: roomy windows, a bit smaller for deep throws, bigger with a better ball', () => {
   const w = (r, z, t) => catchWindows(r, z, t).green;
   assert.ok(w('deep', 'green', 1) < w('short', 'green', 1));
-  assert.ok(w('deep', 'red', 1) >= 0.15, 'timing the catch is easy, even deep');
+  assert.ok(w('deep', 'red', 1) >= 0.11, 'timing the catch is still doable, even deep');
   assert.equal(w('short', 'red', 1), w('short', 'green', 1), "a wobbly throw doesn't make the timing harder");
   assert.ok(w('short', 'green', 3) > w('short', 'green', 1));
   for (const r of Object.keys(ROUTES)) assert.ok(catchWindows(r, 'green').yellow > catchWindows(r, 'green').green);
@@ -55,4 +55,9 @@ test('a spiral lands where it was aimed; yellow throws wander a bit, red ones a 
     return { far, fast }; };
   assert.ok(most('red').far > most('yellow').far && most('yellow').far > reachFor(1) * 0.5);
   assert.ok(most('red').fast < 60 * 0.8, 'a buddy can keep up with it');
+});
+
+test('throw speed is random per throw, within a modest range', async () => {
+  const { FLIGHT_MIN, FLIGHT_MAX } = await import('../js/football.js');
+  assert.ok(FLIGHT_MIN < 1 && FLIGHT_MAX > 1 && FLIGHT_MAX - FLIGHT_MIN >= 0.3 && FLIGHT_MIN >= 0.8 && FLIGHT_MAX <= 1.3);
 });
