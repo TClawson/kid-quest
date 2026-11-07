@@ -118,7 +118,9 @@ try {
     // the map shows the cues and the star, and the family's progress
     await page.waitForTimeout(400);
     const labels = await page.$$eval('.map-label', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()));
-    assert.ok(labels.some((l) => l.includes('Piano practice') && l.includes('After snack')), labels.join(' | '));
+    // piano is a weekday task, so check the cue on brush teeth (every day), and on piano when it's on today's map
+    assert.ok(labels.some((l) => l.includes('Brush teeth') && l.includes('After breakfast')), labels.join(' | '));
+    if (labels.some((l) => l.includes('Piano practice'))) assert.ok(labels.some((l) => l.includes('Piano practice') && l.includes('After snack')), labels.join(' | '));
     assert.ok(labels.some((l) => l.includes('Brush teeth ⭐')), labels.join(' | '));
     assert.match(await page.textContent('.family-banner'), /Family: 3 of \d+ chores done/);
     await page.waitForTimeout(2600); // the toast goes away
