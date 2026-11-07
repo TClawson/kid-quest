@@ -53,7 +53,8 @@ export function waitFor(toCone, coneToLand, flight) {
   return clamp((toCone + coneToLand) / RUN + SLACK - flight, 0.3, 3);
 }
 /** How the visitor throws. */
-export const VIS_THROW = { green: 0.6, yellow: 0.3, red: 0.1 };
+/** How the visitor throws: perfect spirals are rarer (Taylor, 2026-11-07; was 60/30/10). */
+export const VIS_THROW = { green: 0.35, yellow: 0.4, red: 0.25 };
 /** How often the visitor hangs on to a throw of each color it gets to (before the route and ball). */
 export const VIS_CATCH = { green: 0.9, yellow: 0.6, red: 0.3 };
 const ROUTE_CATCH = { short: 0, medium: -0.05, deep: -0.1 };
@@ -66,7 +67,7 @@ const CATCH_GREEN = 0.2; const CATCH_YELLOW = 0.38;
 /** How far from the cone (pixels) a throw of each color lands. */
 export const MISS = { green: 0, yellow: 12, red: 26 };
 /** How far (pixels) the landing marker wanders while the ball is up: a spiral stays put. */
-export const WANDER = { green: 0, yellow: 9, red: 18 };
+export const WANDER = { green: 0, yellow: 13, red: 20 };
 const WANDER_IN = 0.4; // seconds for the wandering to build up after the throw
 /**
  * How far the landing spot has wandered `s` seconds after the throw. ph: four
@@ -82,7 +83,10 @@ export function wanderAt(zone, s, ph) {
   ];
 }
 /** How close (pixels) the catcher has to be to where the ball comes down. */
-export const reachFor = (tier = 1) => 8 + 3 * (Math.max(1, tier) - 1);
+// was 8 px, a third of a buddy's width: it looked like a catch and wasn't (Taylor, 2026-11-07)
+export const reachFor = (tier = 1) => 12 + 3 * (Math.max(1, tier) - 1);
+/** A tap this close (pixels) to the landing marker sends the buddy right onto it. */
+const MARK_SNAP = 12;
 const BUTTON_R = 10; // the CATCH button's radius (pixels); taps a bit outside still count
 const RUN = 60; // pixels a second, as in tag
 const GRAV = 90; // makes the ball look high enough without leaving the screen
@@ -97,7 +101,8 @@ export function needle(held, sweep) {
 
 // green is narrow: a perfect throw is hard (Taylor, 2026-11-05)
 // a better ball widens it a lot: about 1.5x with a good one, 2x with a super one
-const greenHalf = (tier) => 0.045 + 0.025 * (Math.max(1, tier) - 1);
+// and narrower again on 2026-11-07 (was 0.045 + 0.025 a tier), with the needle starting somewhere new each throw
+const greenHalf = (tier) => 0.032 + 0.02 * (Math.max(1, tier) - 1);
 /** The color under the needle. tier: the ball (1-3); better balls widen green. */
 export function zoneAt(m, tier = 1) {
   const d = Math.abs(m - 0.5);
@@ -225,19 +230,27 @@ export class Football {
     return left > 0 ? 'red' : 'late';
   }
 
-  runTo(x, y) { const f = this.f; this.kid.goTo(clamp(x, f.x0 + 4, f.x1 - 4), clamp(y + 6, f.y0 + 16, f.y1)); }
+  runTo(x, y) {
+    const f = this.f; const b = this.ball;
+    // tapping the landing marker puts your buddy's feet right on it (where it is now: a wobbly one moves on)
+    if (b.state === 'air' && Math.hypot(x - b.tx, y - b.ty) <= MARK_SNAP) { this.kid.goTo(b.tx, b.ty); return; }
+    // anywhere else, like tag: the tap is on your buddy's body, so its feet go a little lower
+    this.kid.goTo(clamp(x, f.x0 + 4, f.x1 - 4), clamp(y + 6, f.y0 + 16, f.y1));
+  }
 
   /** A route is picked: the thrower aims (the catcher waits). */
   aim(route) {
     const d = this.down;
     d.route = route; d.stage = 'aim'; d.aimAt = this.t;
+    d.start = this.r() * 2; d.pace = 0.85 + this.r() * 0.3;
     if (d.thrower === this.vis) {
       d.zone = pickZone(this.r, VIS_THROW);
       d.aiAt = this.t + 0.7 + this.r() * 0.8;
     }
   }
 
-  meter() { const d = this.down; return d.meterStop ?? needle(this.t - d.aimAt, ROUTES[d.route].sweep); }
+  /** The needle starts at a random spot and speed each throw, so there's no rhythm to learn. */
+  meter() { const d = this.down; const sw = ROUTES[d.route].sweep * d.pace; return d.meterStop ?? needle(this.t - d.aimAt + d.start * sw, sw); }
 
   /** The throw's color is set: the catcher takes off, the thrower waits, then throws. */
   aimed(zone, m) {
@@ -455,7 +468,7 @@ export class Football {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.field, 0, 0);
     const d = this.down; const b = this.ball;
-    const ring = (cx, cy, rad, col, n = Math.max(10, Math.round(rad * 6))) => { ctx.fillStyle = col; for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(cx + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(cy + Math.sin((a / n) * Math.PI * 2) * rad * 0.6), 1, 1); };
+    const ring = (cx, cy, rad, col, n = Math.max(10, Math.round(rad * 6)), squash = 0.6) => { ctx.fillStyle = col; for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(cx + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(cy + Math.sin((a / n) * Math.PI * 2) * rad * squash), 1, 1); };
     const cone = (cx, cy) => { ctx.fillStyle = '#1b1430'; ctx.fillRect(cx - 2, cy - 4, 5, 5); ctx.fillStyle = '#ff922b'; ctx.fillRect(cx - 1, cy - 4, 3, 4); ctx.fillRect(cx - 2, cy - 1, 5, 1); ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - 1, cy - 2, 3, 1); };
     if (this.phase === 'play') {
       if (d.stage === 'pick') {
@@ -469,7 +482,7 @@ export class Football {
     // where it's coming down: a cross with a ring as big as the catcher's reach
     if (b.state === 'air') {
       const mx = Math.round(b.tx); const my = Math.round(b.ty);
-      ring(mx, my, this.reach, 'rgba(255,255,255,0.45)');
+      ring(mx, my, this.reach, 'rgba(255,255,255,0.45)', undefined, 1);
       ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(mx - 2, my, 5, 1); ctx.fillRect(mx, my - 1, 1, 3);
     }
     // the CATCH button: gray until the throw, then red, yellow, green

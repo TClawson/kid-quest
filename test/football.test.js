@@ -28,8 +28,8 @@ test('catching: roomy windows, a bit smaller for deep throws, bigger with a bett
   assert.ok(MISS.red > MISS.yellow && MISS.yellow > MISS.green);
 });
 
-test('the visitor throws green 60%, catches good throws more often, and less on long routes', () => {
-  assert.equal(VIS_THROW.green, 0.6);
+test('the visitor throws green about a third of the time, catches good throws more often, and less on long routes', () => {
+  assert.ok(VIS_THROW.green <= 0.4, 'the visitor throws a perfect spiral about a third of the time');
   assert.ok(visCatch('short', 'green') > visCatch('short', 'yellow') && visCatch('short', 'yellow') > visCatch('short', 'red'));
   assert.ok(visCatch('deep', 'green') < visCatch('short', 'green'));
 });
