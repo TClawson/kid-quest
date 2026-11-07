@@ -505,6 +505,36 @@ export function weeklyRewardInfo(state, kid, today) {
   });
 }
 
+/**
+ * Weekly rewards a parent still has to hand over, oldest first: one { kid, monday }
+ * for each kid who earned this week's reward or last week's, and that no parent
+ * has marked given yet (kid.rewardsGiven[monday]). Last week's is checked as of
+ * its Sunday, so a reward forgotten over the weekend keeps reminding all the
+ * next week. The mark lives on the kid's doc, so both parents' phones see it.
+ */
+export function rewardsToGive(state, today) {
+  if (!state.settings.weeklyReward?.trim()) return [];
+  const thisMonday = weekStart(today);
+  const out = [];
+  for (const monday of [addDays(thisMonday, -7), thisMonday]) {
+    const asOf = monday === thisMonday ? today : addDays(monday, 6);
+    for (const kid of state.kids) {
+      if (kid.rewardsGiven?.[monday]) continue;
+      if (weeklyRewardInfo(state, kid, asOf).earned) out.push({ kid, monday });
+    }
+  }
+  return out;
+}
+
+/** Marks a kid's weekly reward handed over (at = a timestamp), or not (at = null). Drops marks older than a month. */
+export function markRewardGiven(kid, monday, at) {
+  const given = { ...(kid.rewardsGiven || {}) };
+  if (at) given[monday] = at;
+  else delete given[monday];
+  for (const k of Object.keys(given)) if (k < addDays(monday, -28)) delete given[k];
+  kid.rewardsGiven = given;
+}
+
 /** Days complete (or excused) out of days so far this calendar month. */
 export function monthDays(state, kid, today) {
   const first = `${today.slice(0, 8)}01`;

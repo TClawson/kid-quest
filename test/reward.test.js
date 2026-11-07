@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, defaultTasks, addDays, entryFor, tasksForDay, newId, weeklyRewardInfo } from '../js/logic.js';
+import { emptyState, defaultTasks, addDays, entryFor, tasksForDay, newId, weeklyRewardInfo, rewardsToGive, markRewardGiven } from '../js/logic.js';
 
 const MONDAY = '2026-11-02';
 const FRIDAY = addDays(MONDAY, 4);
@@ -70,4 +70,31 @@ test('a kid who starts midweek can earn it; a fully excused week does not', () =
   const { state, kid } = setup();
   for (let i = 0; i < 5; i += 1) entryFor(state, kid.id, addDays(MONDAY, i), true).excused = true;
   assert.equal(weeklyRewardInfo(state, kid, SATURDAY).earned, false);
+});
+
+test('parents get reminded to hand over an earned reward until one marks it given', () => {
+  const { state, kid } = setup();
+  finishWeek(state, kid, FRIDAY, 4);
+  assert.deepEqual(rewardsToGive(state, FRIDAY), []);
+  finishDay(state, kid, FRIDAY, FRIDAY);
+  assert.deepEqual(rewardsToGive(state, FRIDAY).map((r) => [r.kid.id, r.monday]), [[kid.id, MONDAY]]);
+  // forgotten over the weekend: it keeps reminding into next week
+  assert.equal(rewardsToGive(state, addDays(MONDAY, 9)).length, 1);
+  // but not forever
+  assert.equal(rewardsToGive(state, addDays(MONDAY, 14)).length, 0);
+  markRewardGiven(kid, MONDAY, 123);
+  assert.deepEqual(rewardsToGive(state, SATURDAY), []);
+  assert.deepEqual(rewardsToGive(state, addDays(MONDAY, 9)), []);
+  // undo brings it back
+  markRewardGiven(kid, MONDAY, null);
+  assert.equal(rewardsToGive(state, SATURDAY).length, 1);
+  // no reward set, no reminder
+  state.settings.weeklyReward = '';
+  assert.deepEqual(rewardsToGive(state, SATURDAY), []);
+});
+
+test('old given marks get tidied away', () => {
+  const kid = { rewardsGiven: { '2026-09-07': 1, '2026-10-26': 2 } };
+  markRewardGiven(kid, MONDAY, 3);
+  assert.deepEqual(Object.keys(kid.rewardsGiven).sort(), ['2026-10-26', MONDAY]);
 });
