@@ -92,7 +92,7 @@ export function openPlay(opts) {
     if (e.target.closest('.play-close')) return;
     e.preventDefault();
     const p = at(e);
-    if (!game.holdAnywhere && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
+    if (!game.holdAnywhere && game.press && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
     down = e.pointerId;
     game.tap(...p);
     listen();

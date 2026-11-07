@@ -138,6 +138,16 @@ try {
     assert.equal(await page.evaluate(() => document.querySelector('.playground').game.down.stage), 'wait', 'the tap set the aim');
     await page.waitForFunction(() => document.querySelector('.playground').game.ball.state === 'air');
     if (shots) await page.screenshot({ path: `${shots}/football-${name}.png` });
+    // a real finger on the CATCH button (not a direct tap() call) must count as a catch tap
+    await page.waitForFunction(() => { const g = document.querySelector('.playground').game; return g.down.stage === 'pick' && g.down.catcher === g.kid && g.ready(); }, null, { timeout: 15000 });
+    const cone2 = await page.evaluate(() => document.querySelector('.playground').game.down.cones.short);
+    await page.mouse.click(...at(...cone2));
+    await page.waitForFunction(() => { const g = document.querySelector('.playground').game; return g.down.catcher === g.kid && g.down.stage === 'air' && !g.down.tried; }, null, { timeout: 15000 });
+    const bt = await page.evaluate(() => document.querySelector('.playground').game.button());
+    await page.mouse.click(...at(bt.x, bt.y));
+    const tapped = await page.evaluate(() => { const d = document.querySelector('.playground').game.down; return [d.tried, d.tap]; });
+    assert.equal(tapped[0], true, 'pressing the CATCH button with a finger registers the tap');
+    assert.ok(tapped[1], 'the tap has a timing color');
     // end the session early and check the best score is kept
     await page.waitForFunction(() => document.querySelector('.playground').game.down.stage === 'result');
     await page.evaluate(() => { const g = document.querySelector('.playground').game; g.score = 35; g.left = 0.05; });
