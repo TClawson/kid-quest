@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { ITEMS } from '../../js/items.js';
 import { emptyState, defaultTasks, dateKey, addDays, fallbackHash, tasksForDay, questTasks, weekStart } from '../../js/logic.js';
+import { seenSaturday } from '../helpers/seed.mjs';
 
 const shots = process.env.SHOTS_DIR;
 if (shots) mkdirSync(shots, { recursive: true });
@@ -54,7 +55,7 @@ function family({ avaToday = 0, benToday = 0 } = {}) {
 
 async function open(page, s) {
   await page.goto(site.url);
-  await page.evaluate((x) => localStorage.setItem('kidquest.v1', JSON.stringify(x)), s);
+  await page.evaluate((x) => localStorage.setItem('kidquest.v1', JSON.stringify(x)), seenSaturday(s));
   await page.reload();
 }
 const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));

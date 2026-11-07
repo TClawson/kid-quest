@@ -753,6 +753,10 @@ export const GAMES_PER_DAY = 4;
 /** The daily games before 2026-11-06 (PR #55), when play logs had no cap yet. */
 export const OLD_GAMES_PER_DAY = 8;
 
+/** Free extra games every Saturday, kept and used just like treasure chest games. */
+export const SATURDAY_GAMES = 2;
+export const freeGamesOn = (key) => (dayOfWeek(key) === 6 ? SATURDAY_GAMES : 0);
+
 /** Games a kid may play with visitors in a day: 4, plus 2 for each week of the current exercise streak (up to 3). */
 export function gamesPerDay(exerciseWeeks = 0) {
   return GAMES_PER_DAY + 2 * Math.min(3, Math.max(0, Math.floor(exerciseWeeks)));

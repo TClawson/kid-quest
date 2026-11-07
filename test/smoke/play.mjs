@@ -5,7 +5,8 @@
 import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, dateKey, fallbackHash, freeGamesOn } from '../../js/logic.js';
+import { seenSaturday } from '../helpers/seed.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -33,9 +34,11 @@ async function open(device, done, played = 0, held = null, tweak = null) {
   s.settings.sound = false;
   const tasks = defaultTasks();
   s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: ['sport-shoes-regular'], buddy: { species: 'fox', outfit: { background: 'bg-meadow', hat: 'hat-cap' } } });
-  if (played) s.kids[0].playLog = { day: dateKey(), n: played };
+  // Saturday's free games would change every count below, so use them up first
+  if (played || freeGamesOn(dateKey())) s.kids[0].playLog = { day: dateKey(), n: played + freeGamesOn(dateKey()) };
   if (held) { s.kids[0].owned.push(held); s.kids[0].buddy.outfit.sport = held; }
   if (tweak) tweak(s, tasks);
+  seenSaturday(s);
   if (done) s.log[dateKey()] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
   await page.evaluate((st) => {
     localStorage.setItem('kidquest.v1', JSON.stringify(st));
@@ -177,7 +180,7 @@ try {
     if (shots) await page.screenshot({ path: `${shots}/play-hockey-${name}.png` });
     await page.click('.play-close');
     const after = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud.cache')));
-    assert.equal(after.kids[0].playLog.n, 3, 'each game started counts toward the day');
+    assert.equal(after.kids[0].playLog.n, 3 + freeGamesOn(dateKey()), 'each game started counts toward the day');
 
     assert.deepEqual(errors, []);
     await ctx.close();
@@ -214,7 +217,7 @@ try {
     s.settings.sound = false;
     s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: {} } });
     s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'cat', outfit: {} }, playLog: { day: dateKey(), n: 99 } });
-    await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), s);
+    await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), seenSaturday(s));
     await page.reload();
     await page.click('[data-action="parent"]');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
