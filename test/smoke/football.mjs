@@ -41,7 +41,7 @@ try {
               if (d.stage === 'air') {
                 seenAir ??= g.t;
                 if (g.t - seenAir > 0.15) g.drag(g.ball.tx, g.ball.ty - 6);
-                if (g.t >= d.catchAt && !d.tried) g.tap(g.ball.tx, g.ball.ty);
+                if (g.t >= d.catchAt - 0.05 && !d.tried) { const bt = g.button(); g.tap(bt.x, bt.y); }
               } else seenAir = null;
             }
             g.step(1 / 30);

@@ -11,12 +11,15 @@
 //   3. Only now the catcher starts running. The thrower waits just long enough
 //      for it to get there (waitFor), then throws. The ball's shadow shows where it's coming down; longer throws are
 //      in the air longer, so there's more time to get there.
-//   4. When your buddy catches: tap or drag to run (as in tag). A ring closes on
-//      the spot where the ball comes down; tap the ring right at the catch.
-//      Green is a catch, yellow a bobble (50/50), red or no tap a drop, and your
-//      buddy has to be close to the spot or it's out of reach. Off-target throws
-//      have smaller windows. The visitor catches 90/60/30% of green/yellow/red
-//      throws (a bit less on longer routes) if it gets there in time.
+//   4. When your buddy catches: tap or drag to run (as in tag). A marker shows
+//      where the ball comes down. A perfect spiral's marker stays put; a yellow
+//      throw's marker wanders a bit while the ball is in the air, and a red one
+//      wobbles a lot, and the ball comes down wherever the marker is. Getting
+//      there is the hard part (Taylor, 2026-11-07). Catching is the CATCH button
+//      in the bottom-left corner: red (too early), then yellow (a bobble, 50/50),
+//      then green (a catch), with roomy windows. Your buddy has to be close to
+//      the spot or it's out of reach. The visitor follows the marker and catches
+//      90/60/30% of green/yellow/red throws (a bit less on longer routes).
 //
 // A better football (the better of the two kids' balls) widens the green on the
 // meter, the catch windows and the reach. Buddy moves the kids unlocked show up
@@ -37,8 +40,8 @@ const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
  */
 export const ROUTES = {
   short: { name: 'Short', pts: 5, at: 0.36, flight: 0.9, sweep: 0.8, win: 1 },
-  medium: { name: 'Medium', pts: 10, at: 0.6, flight: 1.3, sweep: 0.65, win: 0.8 },
-  deep: { name: 'Deep', pts: 25, at: 0.86, flight: 1.7, sweep: 0.52, win: 0.62 },
+  medium: { name: 'Medium', pts: 10, at: 0.6, flight: 1.3, sweep: 0.65, win: 0.9 },
+  deep: { name: 'Deep', pts: 25, at: 0.86, flight: 1.7, sweep: 0.52, win: 0.8 },
 };
 /**
  * Seconds the thrower waits after aiming, while the catcher gets going: just
@@ -54,16 +57,33 @@ export const VIS_THROW = { green: 0.6, yellow: 0.3, red: 0.1 };
 /** How often the visitor hangs on to a throw of each color it gets to (before the route and ball). */
 export const VIS_CATCH = { green: 0.9, yellow: 0.6, red: 0.3 };
 const ROUTE_CATCH = { short: 0, medium: -0.05, deep: -0.1 };
-/** Catch windows for the kid, in seconds either side of the catch. */
-const CATCH_GREEN = 0.075; const CATCH_YELLOW = 0.17;
-/** Off-target throws shrink the windows this much. */
-const THROW_WINDOW = { green: 1, yellow: 0.8, red: 0.6 };
+/**
+ * Catch windows for the kid, in seconds either side of the catch. Roomy: the
+ * timing is meant to be easy, running to the spot is the hard part (Taylor,
+ * 2026-11-07; they were 0.075 / 0.17 and shrank on off-target throws).
+ */
+const CATCH_GREEN = 0.2; const CATCH_YELLOW = 0.38;
 /** How far from the cone (pixels) a throw of each color lands. */
 export const MISS = { green: 0, yellow: 12, red: 26 };
+/** How far (pixels) the landing marker wanders while the ball is up: a spiral stays put. */
+export const WANDER = { green: 0, yellow: 9, red: 18 };
+const WANDER_IN = 0.4; // seconds for the wandering to build up after the throw
+/**
+ * How far the landing spot has wandered `s` seconds after the throw. ph: four
+ * random phases per throw. Two slow waves per axis keep it smooth and below
+ * the buddies' running speed (about 20 px/s yellow, 40 px/s red at most).
+ */
+export function wanderAt(zone, s, ph) {
+  const a = WANDER[zone] * Math.min(1, Math.max(0, s) / WANDER_IN);
+  if (!a) return [0, 0];
+  return [
+    a * (0.6 * Math.sin(1.7 * s + ph[0]) + 0.4 * Math.sin(2.9 * s + ph[1])),
+    a * (0.6 * Math.sin(1.5 * s + ph[2]) + 0.4 * Math.sin(3.1 * s + ph[3])),
+  ];
+}
 /** How close (pixels) the catcher has to be to where the ball comes down. */
 export const reachFor = (tier = 1) => 8 + 3 * (Math.max(1, tier) - 1);
-const RING_LEAD = 0.8; // the catch ring shows this long before the catch
-const RING_TAP = 16; // a tap this close to the ring is a catch; farther away it's running
+const BUTTON_R = 10; // the CATCH button's radius (pixels); taps a bit outside still count
 const RUN = 60; // pixels a second, as in tag
 const GRAV = 90; // makes the ball look high enough without leaving the screen
 const HANDS = 9; // catch height
@@ -86,9 +106,9 @@ export function zoneAt(m, tier = 1) {
   return 'red';
 }
 
-/** The kid's catch windows (seconds either side), for a route, the throw's color and the ball. */
+/** The kid's catch windows (seconds either side), for a route and the ball. The throw's color doesn't change them any more. */
 export function catchWindows(route, zone, tier = 1) {
-  const k = ROUTES[route].win * THROW_WINDOW[zone] * (1 + 0.25 * (Math.max(1, tier) - 1));
+  const k = ROUTES[route].win * (1 + 0.25 * (Math.max(1, tier) - 1));
   return { green: CATCH_GREEN * k, yellow: CATCH_YELLOW * k };
 }
 
@@ -178,20 +198,32 @@ export class Football {
       return;
     }
     if (d.catcher !== this.kid || (d.stage !== 'wait' && d.stage !== 'air')) return;
-    // tapping the ring as it closes is the catch; anywhere else, run there
-    const b = this.ball;
-    const left = d.catchAt - this.t;
-    if (d.stage === 'air' && !d.tried && left <= RING_LEAD && Math.hypot(x - b.tx, y - b.ty) < RING_TAP) {
+    // the CATCH button catches (it does nothing before the throw); anywhere else, run there
+    if (this.onButton(x, y)) {
+      if (d.stage !== 'air' || d.tried) return;
       d.tried = true; d.tapAt = this.t;
-      const w = catchWindows(d.route, d.zone, this.tier);
-      const off = Math.abs(left);
-      d.tap = off <= w.green ? 'green' : off <= w.yellow ? 'yellow' : left > 0 ? 'early' : 'late';
-      if (d.tap === 'early') this.pop('Too early!', this.kid.x, this.kid.y - 28, ZONE_COLORS.red);
+      d.tap = this.buttonColor();
+      if (d.tap === 'red') { d.tap = 'early'; this.pop('Too early!', this.kid.x, this.kid.y - 28, ZONE_COLORS.red); }
+      return;
     }
     this.runTo(x, y);
   }
 
-  drag(x, y) { const d = this.down; if (this.phase === 'play' && d.catcher === this.kid && (d.stage === 'wait' || d.stage === 'air')) this.runTo(x, y); }
+  drag(x, y) { const d = this.down; if (this.phase === 'play' && d.catcher === this.kid && (d.stage === 'wait' || d.stage === 'air') && !this.onButton(x, y)) this.runTo(x, y); }
+
+  /** The CATCH button, in the bottom-left corner behind the line, where nobody needs to run. */
+  button() { return { x: this.f.x0 + BUTTON_R + 3, y: this.f.y1 - BUTTON_R - 3, r: BUTTON_R }; }
+
+  onButton(x, y) { const b = this.button(); return Math.hypot(x - b.x, y - b.y) <= b.r + 4; }
+
+  /** The button's color right now: red is too early, yellow a bobble, green a catch (late is past green). */
+  buttonColor() {
+    const d = this.down; const left = d.catchAt - this.t;
+    const w = catchWindows(d.route, d.zone, this.tier);
+    if (Math.abs(left) <= w.green) return 'green';
+    if (left > w.green && left <= w.yellow) return 'yellow';
+    return left > 0 ? 'red' : 'late';
+  }
 
   runTo(x, y) { const f = this.f; this.kid.goTo(clamp(x, f.x0 + 4, f.x1 - 4), clamp(y + 6, f.y0 + 16, f.y1)); }
 
@@ -229,6 +261,7 @@ export class Football {
     d.stage = 'air';
     const b = this.ball;
     b.state = 'air'; b.x0 = th.x + 4; b.y0 = th.y; b.h0 = HANDS + 2; [b.tx, b.ty] = d.land; b.t0 = this.t; b.T = R.flight;
+    d.ph = [0, 1, 2, 3].map(() => this.r() * Math.PI * 2);
     b.vh = (HANDS - b.h0) / b.T + (GRAV * b.T) / 2; // comes down at hands height
     b.spiral = d.zone === 'green' && th.moves.has('spiral');
     d.catchAt = this.t + b.T;
@@ -254,7 +287,8 @@ export class Football {
       }
       if (d.stage === 'wait' && this.t >= d.throwAt) this.throwBall();
       if (d.stage === 'air') {
-        if (d.catcher === this.kid && !d.tried && this.t > d.catchAt + catchWindows(d.route, d.zone, this.tier).yellow) { d.tried = true; d.tap = 'late'; }
+        if (!d.landed) this.wander();
+        if (d.catcher === this.kid && !d.tried && this.t > d.catchAt + catchWindows(d.route, d.zone, this.tier).green) { d.tried = true; d.tap = 'late'; }
         if (this.t >= d.catchAt && (d.catcher === this.vis || d.tried) && !d.landed) this.land();
       }
       if (d.stage === 'result' && this.t >= d.nextAt) {
@@ -280,6 +314,14 @@ export class Football {
       d.catcher.brain.impulse('kick', 1);
     }
     this.stepBall(dt);
+  }
+
+  /** A wobbly throw: the spot it comes down on drifts around where it was aimed; the visitor follows it. */
+  wander() {
+    const d = this.down; const b = this.ball; const f = this.f;
+    const [dx, dy] = wanderAt(d.zone, Math.min(this.t, d.catchAt) - b.t0, d.ph);
+    b.tx = clamp(d.land[0] + dx, this.qbX + 24, f.x1 - 6); b.ty = clamp(d.land[1] + dy, f.y0 + 16, f.y1 - 2);
+    if (d.catcher === this.vis) this.vis.goTo(b.tx, b.ty);
   }
 
   /** Where the visitor's needle stops for a color: somewhere in that color. */
@@ -424,16 +466,23 @@ export class Football {
       }
     }
     for (const p of [this.kid, this.vis]) p.paint(this.t);
-    // the catch ring, closing on where the ball comes down
-    if (b.state === 'air' && d.catcher === this.kid && !d.tried) {
-      const left = d.catchAt - this.t;
-      if (left < RING_LEAD) {
-        const w = catchWindows(d.route, d.zone, this.tier);
-        ring(b.tx, b.ty, 2 + 13 * Math.max(0, left) / RING_LEAD, Math.abs(left) <= w.green ? '#40c057' : Math.abs(left) <= w.yellow ? '#fcc419' : 'rgba(255,255,255,0.9)');
-      }
+    // where it's coming down: a cross with a ring as big as the catcher's reach
+    if (b.state === 'air') {
+      const mx = Math.round(b.tx); const my = Math.round(b.ty);
+      ring(mx, my, this.reach, 'rgba(255,255,255,0.45)');
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(mx - 2, my, 5, 1); ctx.fillRect(mx, my - 1, 1, 3);
     }
-    // where it's coming down: a small mark under the ball's path end
-    if (b.state === 'air') { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(Math.round(b.tx) - 2, Math.round(b.ty), 5, 1); ctx.fillRect(Math.round(b.tx), Math.round(b.ty) - 1, 1, 3); }
+    // the CATCH button: gray until the throw, then red, yellow, green
+    if (this.phase === 'play' && d.catcher === this.kid && (d.stage === 'wait' || d.stage === 'air')) {
+      const bt = this.button();
+      const col = d.stage === 'wait' ? '#868e96' : d.tried ? '#495057' : { red: '#fa5252', yellow: '#fcc419', green: '#40c057', late: '#495057' }[this.buttonColor()];
+      const disc = (rad, from, to, shrink = 0) => {
+        for (let yy = from; yy <= to; yy += 1) { const hw = Math.round(Math.sqrt(Math.max(0, rad * rad - yy * yy))) - shrink; if (hw > 0) ctx.fillRect(bt.x - hw, bt.y + yy, hw * 2 + 1, 1); }
+      };
+      ctx.fillStyle = '#1b1430'; disc(bt.r + 1, -bt.r - 1, bt.r + 1);
+      ctx.fillStyle = col; disc(bt.r, -bt.r, bt.r);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; disc(bt.r, -bt.r + 2, -bt.r + 3, 3);
+    }
     const things = [this.kid, this.vis].map((p) => ({ y: p.y, draw: () => this.drawPlayer(ctx, p) }));
     if (this.phase !== 'ready') {
       // the ball's shadow, then the ball
@@ -498,7 +547,8 @@ export class Football {
         if (d.stage === 'aim') hint(th === this.kid ? 'Tap to aim the throw!' : `${th.name} is aiming...`);
       }
       if (d.stage === 'wait' && d.catcher === this.kid) hint('Run to the cone! Tap or drag.');
-      if (d.stage === 'air' && d.catcher === this.kid && !d.tried) hint(d.catchAt - this.t < RING_LEAD ? 'Tap the ring to catch!' : 'Get under the ball!');
+      if (d.stage === 'air' && d.catcher === this.kid && !d.tried) hint(this.buttonColor() === 'red' ? (d.zone === 'green' ? 'Get to the spot!' : 'It wobbles! Stay under it!') : 'Tap CATCH!');
+      if (d.catcher === this.kid && (d.stage === 'wait' || d.stage === 'air')) { const bt = this.button(); text('CATCH', bt.x * S, bt.y * S, u * 1.3, '#ffffff'); }
     }
     for (const p of this.pops) {
       const age = (this.t - p.at) / 1.1;
