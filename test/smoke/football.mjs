@@ -61,6 +61,27 @@ try {
       assert.ok(r.score > 0, `${where}: catches score points`);
       assert.equal(r.offField, 0, `${where}: buddies stay on the field`);
     }
+    // the miss messages tell timing from position: force each kid-catch case and read the pops
+    const said = await page.evaluate(async () => {
+      const { Football } = await import('./js/football.js');
+      const run = (tap, atBall) => {
+        const g = new Football({ W: 213, H: 120, seed: 5, kid: { name: 'A', buddy: { species: 'fox', outfit: {} } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} } } });
+        g.down = { ...g.down, catcher: g.kid, thrower: g.vis, stage: 'air', route: 'short', zone: 'green', tap, tried: true, catchAt: 0, nextAt: 0 };
+        g.ball = { ...g.ball, tx: 100, ty: 80, x0: 40, y0: 80, T: 1, t0: 0, state: 'air' };
+        g.kid.x = atBall ? 100 : 20; g.kid.y = 80;
+        g.r = () => 0.9; g.pops = [];
+        g.land();
+        return g.pops.map((q) => q.text);
+      };
+      return { early: run('early', true), late: run('late', true), none: run(null, true), fumble: run('yellow', true), wrong: run('green', false), both: run('late', false), great: run('green', true) };
+    });
+    assert.deepEqual(said.early, ['Too early!']);
+    assert.deepEqual(said.late, ['Too late!']);
+    assert.deepEqual(said.none, ['Too late!']);
+    assert.deepEqual(said.fumble, ['Fumbled!']);
+    assert.deepEqual(said.wrong, ['Missed!']);
+    assert.deepEqual(said.both.slice().sort(), ['Missed!', 'Too late!']);
+    assert.deepEqual(said.great, ['Great catch!', '+5']);
     console.log(results.map((r) => `${r.W}x${r.H}/${r.seed}: ${r.score} pts, plays ${r.plays.kid}+${r.plays.vis}`).join('; '));
     assert.deepEqual(errors, []);
     await page.close();
