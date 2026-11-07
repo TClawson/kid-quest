@@ -9,6 +9,8 @@ import {
   weekParity, isEveryOtherWeek, onWeek, weekStart,
   gamesLeft,
   carriedGames,
+  freeGamesOn,
+  SATURDAY_GAMES,
   earlyGames,
   logGame,
   gamesPerDay,
@@ -519,8 +521,32 @@ function showNewMoves(kid) {
   return true;
 }
 
+/** Saturday morning: two free games pop up like a chest prize. */
+function showSaturdayGames(kid, onClose) {
+  const words = prizeText({ kind: 'games', games: SATURDAY_GAMES });
+  sounds.tap();
+  openModal(`
+    <div class="celebrate chest-card chest-wood">
+      <div class="chest-shake">${chestSvg('wood', false, 7)}</div>
+      <div class="chest-reveal">
+        <div class="chest-behind">${chestSvg('wood', true, 5)}</div>
+        <div class="prize-art"><div class="prize-emoji">⚽</div></div>
+        <h1>Saturday: ${esc(words.title.replace(/^(\d+) extra/, '$1 free'))}</h1>
+        <p>${esc(words.text)}</p>
+        <button class="btn huge" data-action="modal-close">Awesome!</button>
+      </div>
+    </div>`, onClose);
+  setTimeout(() => { sounds.day(); confetti(90, 2200); }, 1000);
+}
+
 function celebrateIfDue(kid) {
   const t = today();
+  const sat = state.celebrations[kid.id];
+  if (freeGamesOn(t) && sat?.sat !== t && $modal.hidden) {
+    state.celebrations[kid.id] = { ...(sat || {}), sat: t };
+    save();
+    return showSaturdayGames(kid, () => setTimeout(() => celebrateIfDue(kid), 250));
+  }
   const info = streakInfo(state, kid, t);
   const after = () => setTimeout(() => showUnlocks(kid), 250);
   const seen = state.celebrations[kid.id];
@@ -3209,7 +3235,8 @@ const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishi
 const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).map((m) => m.move.id);
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
 // Chest games keep until the end of the next day (carriedGames).
-const chestGames = (kid, day) => entryFor(state, kid.id, day)?.chest?.games || 0;
+// Saturday also brings free games, which are not tied to the chest.
+const chestGames = (kid, day) => (entryFor(state, kid.id, day)?.chest?.games || 0) + freeGamesOn(day);
 // A log with no cap is from before the limit dropped from 8 to 4, so yesterday's daily games were 8 (plus exercise).
 const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks) + OLD_GAMES_PER_DAY - GAMES_PER_DAY);
 const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));

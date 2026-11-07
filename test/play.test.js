@@ -114,3 +114,10 @@ test('chest games from before the cap was saved keep under the old 8-game day', 
   // last night: 6 games under the old limit of 8, no cap saved, +2 from the chest
   assert.equal(carriedGames({ playLog: { day: '2026-11-05', n: 6 } }, '2026-11-06', 2, 8), 2);
 });
+
+test('Saturday brings two free games, other days none', async () => {
+  const { freeGamesOn, SATURDAY_GAMES } = await import('../js/logic.js');
+  assert.equal(SATURDAY_GAMES, 2);
+  assert.equal(freeGamesOn('2026-11-07'), 2); // a Saturday
+  for (const d of ['2026-11-06', '2026-11-08', '2026-11-09', '2026-11-04']) assert.equal(freeGamesOn(d), 0);
+});

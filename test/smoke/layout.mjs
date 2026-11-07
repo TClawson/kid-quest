@@ -6,6 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { seenSaturday } from '../helpers/seed.mjs';
 
 const shots = process.env.SHOTS;
 if (shots) mkdirSync(shots, { recursive: true });
@@ -65,7 +66,7 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
-    await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), seed());
+    await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), seenSaturday(seed()));
     await page.reload();
     // Android's "text size" setting makes every font bigger; FONT_SCALE=1.3 tries that
     if (process.env.FONT_SCALE) await page.addStyleTag({ content: `html { font-size: ${process.env.FONT_SCALE * 100}%; }` });

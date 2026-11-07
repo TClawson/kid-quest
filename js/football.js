@@ -63,11 +63,12 @@ const ROUTE_CATCH = { short: 0, medium: -0.05, deep: -0.1 };
  * timing is meant to be easy, running to the spot is the hard part (Taylor,
  * 2026-11-07; they were 0.075 / 0.17 and shrank on off-target throws).
  */
-const CATCH_GREEN = 0.2; const CATCH_YELLOW = 0.38;
+const CATCH_GREEN = 0.15; const CATCH_YELLOW = 0.3;
 /** How far from the cone (pixels) a throw of each color lands. */
 export const MISS = { green: 0, yellow: 12, red: 26 };
 /** How far (pixels) the landing marker wanders while the ball is up: a spiral stays put. */
-export const WANDER = { green: 0, yellow: 13, red: 20 };
+export const WANDER = { green: 0, yellow: 15, red: 20 };
+export const FLIGHT_MIN = 0.85; export const FLIGHT_MAX = 1.25; // random speed of a throw, times the route's flight time
 const WANDER_IN = 0.4; // seconds for the wandering to build up after the throw
 /**
  * How far the landing spot has wandered `s` seconds after the throw. ph: four
@@ -84,7 +85,7 @@ export function wanderAt(zone, s, ph) {
 }
 /** How close (pixels) the catcher has to be to where the ball comes down. */
 // was 8 px, a third of a buddy's width: it looked like a catch and wasn't (Taylor, 2026-11-07)
-export const reachFor = (tier = 1) => 12 + 3 * (Math.max(1, tier) - 1);
+export const reachFor = (tier = 1) => 10 + 3 * (Math.max(1, tier) - 1);
 /** A tap this close (pixels) to the landing marker sends the buddy right onto it. */
 const MARK_SNAP = 12;
 const BUTTON_R = 10; // the CATCH button's radius (pixels); taps a bit outside still count
@@ -262,7 +263,8 @@ export class Football {
     const f = this.f;
     d.land = [clamp(cx + Math.cos(a) * miss, this.qbX + 24, f.x1 - 6), clamp(cy + Math.sin(a) * miss, f.y0 + 16, f.y1 - 2)];
     const c = d.catcher;
-    d.wait = waitFor(Math.hypot(cx - c.x, cy - c.y), Math.hypot(d.land[0] - cx, d.land[1] - cy), ROUTES[d.route].flight);
+    d.flight = ROUTES[d.route].flight * (FLIGHT_MIN + this.r() * (FLIGHT_MAX - FLIGHT_MIN)); // each throw is a little faster or slower
+    d.wait = waitFor(Math.hypot(cx - c.x, cy - c.y), Math.hypot(d.land[0] - cx, d.land[1] - cy), d.flight);
     d.throwAt = this.t + d.wait;
     d.thrower.brain.set({ focus: 0.7 });
     this.pop(zone === 'green' ? 'Perfect aim!' : zone === 'yellow' ? 'A little off...' : 'Way off!', d.thrower.x, d.thrower.y + 8, ZONE_COLORS[zone]);
@@ -273,7 +275,7 @@ export class Football {
     const d = this.down; const th = d.thrower; const R = ROUTES[d.route];
     d.stage = 'air';
     const b = this.ball;
-    b.state = 'air'; b.x0 = th.x + 4; b.y0 = th.y; b.h0 = HANDS + 2; [b.tx, b.ty] = d.land; b.t0 = this.t; b.T = R.flight;
+    b.state = 'air'; b.x0 = th.x + 4; b.y0 = th.y; b.h0 = HANDS + 2; [b.tx, b.ty] = d.land; b.t0 = this.t; b.T = d.flight;
     d.ph = [0, 1, 2, 3].map(() => this.r() * Math.PI * 2);
     b.vh = (HANDS - b.h0) / b.T + (GRAV * b.T) / 2; // comes down at hands height
     b.spiral = d.zone === 'green' && th.moves.has('spiral');

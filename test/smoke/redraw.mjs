@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
+import { seenSaturday } from '../helpers/seed.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
 
 const site = await serve('.');
@@ -28,7 +29,7 @@ try {
       { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', buddy: { species: 'cat', outfit: {} } },
       { id: 'kid_max', name: 'Max', color: '#51cf66', buddy: { species: 'bear', outfit: {} } },
     ]));
-  }, s);
+  }, seenSaturday(s));
   await page.reload();
   await page.click('[data-action="open-kid"]');
   await page.waitForSelector('.map-visitor');
