@@ -208,7 +208,7 @@ export class Football {
       if (d.stage !== 'air' || d.tried) return;
       d.tried = true; d.tapAt = this.t;
       d.tap = this.buttonColor();
-      if (d.tap === 'red') { d.tap = 'early'; this.pop('Too early!', this.kid.x, this.kid.y - 28, ZONE_COLORS.red); }
+      if (d.tap === 'red') d.tap = 'early'; // the message waits for the landing, so it says everything at once
       return;
     }
     this.runTo(x, y);
@@ -366,16 +366,21 @@ export class Football {
     const d = this.down; const c = d.catcher; const b = this.ball;
     d.landed = true;
     const near = Math.hypot(c.x - b.tx, c.y - b.ty) <= this.reach;
-    let caught; let words;
-    if (!near) { caught = false; words = 'Too far!'; }
+    let caught; let words; let timing = '';
+    // what went wrong with the tap, so the kid can tell it apart from standing in the wrong spot
+    const badTap = c === this.kid && d.tap !== 'green' && d.tap !== 'yellow';
+    if (badTap) timing = d.tap === 'early' ? 'Too early!' : 'Too late!';
+    if (!near) { caught = false; words = 'Missed!'; }
     else if (c === this.kid) {
       if (d.tap === 'green') { caught = true; words = 'Great catch!'; }
-      else if (d.tap === 'yellow') { caught = this.r() < 0.5; words = caught ? 'Bobbled... got it!' : 'Bobbled it!'; }
-      else { caught = false; words = d.tap === 'early' ? '' : 'Too late!'; }
+      else if (d.tap === 'yellow') { caught = this.r() < 0.5; words = caught ? 'Bobbled... got it!' : 'Fumbled!'; }
+      else { caught = false; words = timing; timing = ''; }
     } else {
       caught = this.r() < visCatch(d.route, d.zone, this.tier);
       words = caught ? 'Caught it!' : 'Dropped!';
     }
+    // wrong spot AND a bad tap: say both
+    if (timing) this.pop(timing, c.x, c.y - 44, ZONE_COLORS.red);
     // a perfect catch is a flip if that kid unlocked the flip catch
     c.flipAt = this.t; c.flipping = caught && (d.tap === 'green' || (c === this.vis && d.zone === 'green')) && c.moves.has('flipcatch');
     if (c.flipping) words = 'Flip catch!';
