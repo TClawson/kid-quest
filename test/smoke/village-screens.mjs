@@ -66,7 +66,7 @@ for (const [label, viewport] of [['tablet', { width: 800, height: 1280 }], ['pho
   await page.locator('.village').scrollIntoViewIfNeeded();
   await page.clock.runFor(1500);
   await shot('5-plan-start');
-  await page.evaluate(() => document.querySelector('.villager[data-kind="raccoon"]').click());
+  await page.evaluate(() => [...document.querySelectorAll('.villager:not(.keeper)')].pop().click());
   await page.clock.runFor(4000);
   await shot('6-plan-off-order');
   await page.click('.v-dialog [data-v="go"]');
