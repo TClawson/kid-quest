@@ -625,9 +625,10 @@ export function bowlCanvas(w, h, theme) {
   c.width = w; c.height = h;
   const ctx = c.getContext('2d');
   const px = (x, y, col, ww = 1, hh = 1) => { ctx.fillStyle = col; ctx.fillRect(x, y, ww, hh); };
-  const cx = w / 2; const cy = (h - 3) * 0.52; const rx = w / 2 - 0.5; const ry = (h - 3) * 0.54;
+  // the glass, then a thin collar (two rows) that sits on the shoulders
+  const glassBottom = h - 2;
+  const cx = w / 2; const cy = glassBottom * 0.52; const rx = w / 2 - 0.5; const ry = glassBottom * 0.54;
   const inside = (x, y) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1;
-  const glassBottom = h - 3;
   for (let y = 0; y < glassBottom; y += 1) {
     for (let x = 0; x < w; x += 1) {
       if (!inside(x, y)) continue;
@@ -648,10 +649,11 @@ export function bowlCanvas(w, h, theme) {
   // the collar
   const [dark, mid, light] = BOWL_COLLARS[theme] || BOWL_COLLARS['bg-space'];
   const cw = Math.round(w * 0.62); const x0 = Math.round(cx - cw / 2);
-  px(x0 - 1, glassBottom - 1, OUT, cw + 2, 4);
-  px(x0, glassBottom, mid, cw, 2);
-  px(x0, glassBottom, light, cw - 1, 1);
-  px(x0 + cw - 1, glassBottom, dark, 1, 2);
-  for (let x = x0 + 2; x < x0 + cw - 2; x += 4) px(x, glassBottom + 1, dark); // rivets
+  px(x0 - 1, glassBottom, OUT, cw + 2, 1);
+  px(x0 - 1, glassBottom + 1, OUT, 1, 1); px(x0 + cw, glassBottom + 1, OUT, 1, 1);
+  px(x0, glassBottom + 1, light, Math.round(cw * 0.4), 1);
+  px(x0 + Math.round(cw * 0.4), glassBottom + 1, mid, cw - Math.round(cw * 0.4) - 1, 1);
+  px(x0 + cw - 1, glassBottom + 1, dark, 1, 1);
+  for (let x = x0 + 3; x < x0 + cw - 2; x += 4) px(x, glassBottom + 1, dark); // rivets
   return c;
 }

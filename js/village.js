@@ -516,9 +516,9 @@ function mount(section, handlers) {
       b.style.cssText = `background-image:url(${urls.get(key)});width:${w}px;height:${h}px;${place}`;
       host.append(b);
     };
-    bowl(flip, 22, 21, 'left:1px;top:2px');
-    section.querySelectorAll('.v-vbuddy').forEach((el) => bowl(el, 22, 21, 'left:1px;top:2px'));
-    const folkBowl = (el, kind) => bowl(el, 20, villagerGrid(kind).length - 6 + 5, 'left:-2px;bottom:3px');
+    bowl(flip, 20, 20, 'left:2px;top:0');
+    section.querySelectorAll('.v-vbuddy').forEach((el) => bowl(el, 20, 20, 'left:2px;top:0'));
+    const folkBowl = (el, kind) => bowl(el, 20, villagerGrid(kind).length - 6 + 4, 'left:-2px;bottom:4px');
     for (const p of people) folkBowl(els.get(p.id), p.kind);
     if (keeperEl) folkBowl(keeperEl, 'badger');
   }
