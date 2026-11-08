@@ -18,9 +18,10 @@ import { MAP_THEMES } from './maparts.js';
 import { startMapLife } from './maplife.js';
 import { OAK, startOak } from './oakart.js';
 import { WRECK, startWreck } from './wreckart.js';
+import { GALLEON, startGalleon } from './galleonart.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
-const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck } };
+const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon } };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -563,7 +564,9 @@ function mount(section, handlers) {
   let atLandmark = false;
   const camTarget = () => {
     const fx = lm && (atLandmark || me.goal?.landmark) ? (Math.min(me.x - 12, lm.x) + Math.max(me.x + 12, lm.x + lm.w)) / 2 : me.x;
-    const tx = W * S <= vw ? -(vw / S - W) / 2 : Math.max(0, Math.min(W - vw / S, fx - vw / S / 2));
+    // if the buddy and a big landmark don't both fit (phones), the buddy always stays fully in view
+    const left = Math.max(me.x + 16 - vw / S, Math.min(me.x - 16, fx - vw / S / 2));
+    const tx = W * S <= vw ? -(vw / S - W) / 2 : Math.max(0, Math.min(W - vw / S, left));
     // while someone is talking, the buddy sits higher up, above the talk box
     const at = dialog.hidden ? 0.5 : 0.3;
     const ty = H * S <= vh ? -(vh / S - H) / 2 : Math.max(0, Math.min(H - vh / S, me.y - 12 - (vh / S) * at));

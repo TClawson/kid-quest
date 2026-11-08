@@ -17,6 +17,7 @@
 import { PROPS, waterDepth } from './villageprops.js';
 import { OAK } from './oakart.js';
 import { WRECK } from './wreckart.js';
+import { GALLEON } from './galleonart.js';
 
 const W = 448;
 
@@ -147,27 +148,31 @@ export const VILLAGE_MAPS = {
     crossings: [{ at: [252, 372], dir: 'v', kind: 'stone', pal: { plank: '#bcaaa4', dark: '#8d6e63', rail: '#d7ccc8' } }],
     paths: [
       [[224, 119], [224, 180], [252, 230], [252, 540]], [[224, 160], [82, 160], [82, 152]], [[224, 160], [372, 160], [372, 142]],
-      [[252, 470], [362, 470], [362, 524]], [[252, 470], [140, 470]],
+      [[252, 470], [362, 470], [362, 524]], [[252, 498], [206, 498]],
     ],
     plazas: [[224, 186, 26], [252, 548, 26]],
     props: [
       p('stall', 46, 196, { pal: { a: '#f783ac', b: '#fff0f6', wood: '#bcaaa4', goods: [['#ffd43b', '#fff3bf'], ['#fff0f6', '#ffffff'], ['#ff8787', '#ffc9c9']] } }),
       p('laundry', 108, 410, { w: 76 }),
       p('clam', 300, 196), p('anchor', 404, 210), p('coral', 140, 110, { c: '#ffa94d' }), p('coral', 290, 110, { c: '#f783ac' }),
-      p('kelp', 260, 236), p('rock', 30, 250, { c: '#748ffc' }), 
-      p('rock', 180, 520, { c: '#748ffc' }), p('kelp', 200, 404), p('clam', 50, 380),
+      p('kelp', 260, 236), p('rock', 30, 250, { c: '#748ffc' }),
+      p('kelp', 200, 404), p('clam', 50, 380),
+      // the sea's little things
+      p('mermaid', 144, 60), p('sunkboat', 372, 236), p('helmet', 270, 500), p('anemone', 24, 404),
+      p('boot', 288, 548), p('urchins', 130, 368), p('seahorse', 218, 398), p('seavent', 412, 272),
     ],
     shop: { x: 68, y: 244 },
     green: {
       left: { x: 104, y: 240, w: 116, h: 44 }, right: { x: 278, y: 262, w: 118, h: 44 },
       idle: [{ x: 240, y: 300 }, { x: 180, y: 302 }, { x: 330, y: 230 }, { x: 410, y: 316 }],
     },
-    landmark: { x: 24, y: 488, stand: { x: 160, y: 540 } },
+    // the Kraken's ship, drawn for the village (galleonart.js): broken in two in the south-west corner
+    landmark: { x: 20, y: 456, w: GALLEON.w, h: GALLEON.h, art: 'galleon', foot: [6, 44, 172, 76], stand: { x: 208, y: 498 } },
     chest: { x: 252, y: 556 },
     start: { x: 224, y: 130 },
     slots: {
       morning: [[150, 150], [300, 150], [60, 176], [400, 170], [180, 210], [350, 230], [110, 210], [260, 220]],
-      afternoon: [[300, 520, MUSIC], [146, 450, LAUNDRY], [200, 456], [290, 420], [60, 450], [414, 552], [190, 380], [130, 540]],
+      afternoon: [[300, 520, MUSIC], [146, 450, LAUNDRY], [226, 440], [290, 420], [60, 450], [414, 552], [190, 380], [330, 560]],
     },
     labels: { morning: [110, 330, '⬆ 🌅 Morning quests'], afternoon: [370, 410, '⬇ ☀️ After-school quests'] },
     pond: { lip: '#c9a35d', water: '#163e73', deep: '#0f2d57', light: '#1c5d99', shine: '#4dabf7', pads: false },
