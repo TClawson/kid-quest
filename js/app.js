@@ -24,6 +24,7 @@ import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { liveHtml, live, liveStart, feel, partyAll } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
+import { villageHtml, mountVillages } from './village.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
@@ -38,7 +39,7 @@ import { startListening, buddyState, TUNING } from './listen.js';
 import { createBeatFollower } from './beat.js';
 import { loadRecognizer } from './hear.js';
 import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
-import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, SECRETS } from './treasure-art.js';
+import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, secretSize, SECRETS } from './treasure-art.js';
 import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
@@ -1385,11 +1386,11 @@ function maybeParty() {
   startParty();
 }
 function startParty() {
-  const keys = [...$app.querySelectorAll('.quest-map canvas.live-buddy')].map((c) => c.dataset.live);
+  const keys = [...$app.querySelectorAll('.quest-map canvas.live-buddy, .village canvas.live-buddy')].map((c) => c.dataset.live);
   partyAll(keys, PARTY_MS);
   mapParty(PARTY_MS);
-  $app.querySelector('.quest-map')?.classList.add('party');
-  setTimeout(() => $app.querySelector('.quest-map')?.classList.remove('party'), PARTY_MS);
+  $app.querySelectorAll('.quest-map, .village').forEach((el) => el.classList.add('party'));
+  setTimeout(() => $app.querySelectorAll('.quest-map, .village').forEach((el) => el.classList.remove('party')), PARTY_MS);
 }
 
 const visitorsArrived = new Set();
@@ -1403,9 +1404,10 @@ function visitFeel(area, complete) {
   return { valence: 0.6, arousal: 0.55 };
 }
 
-function visitorsHtml(kid, s) {
+/** Today's visitors, what each one says, and who has news (shared by the map and the village). */
+function visitorInfo(kid, s) {
   const visitors = todaysVisitors(kid);
-  if (!visitors.length) return { html: '', room: 0, areas: '' };
+  if (!visitors.length) return { visitors, lines: [], news: {} };
   const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
   // once the quest is done, every visitor wants to play (see playWith)
   if (s.complete) {
@@ -1430,6 +1432,12 @@ function visitorsHtml(kid, s) {
     lines[i] = milestoneBrag(m);
     news[v.id] = 'news';
   });
+  return { visitors, lines, news };
+}
+
+function visitorsHtml(kid, s) {
+  const { visitors, lines, news } = visitorInfo(kid, s);
+  if (!visitors.length) return { html: '', room: 0, areas: '' };
   // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
   const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [25, 40], right: [75, 60] };
@@ -1575,6 +1583,105 @@ function questMap(kid, s, entry, mood) {
     </section>`;
 }
 
+// The village: the same chores as the map, as quests from villagers (see village.js).
+function villageView(kid, s, entry, mood) {
+  const tasks = ['morning', 'afternoon'].flatMap((period) => planOrder(kid, s.tasks.filter((x) => x.period === period)));
+  let current = false;
+  // a kid who made their own plan sees its steps numbered, and the village follows them
+  const planned = Boolean(kid.plan?.order?.length);
+  const list = tasks.map((t, i) => {
+    const status = entry?.tasks?.[t.id];
+    let st = status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo';
+    if (st === 'todo' && !current) { st = 'current'; current = true; }
+    let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'A parent checks this one' : 'Tap "I did it" when it\'s done';
+    if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
+      const sec = status?.seconds || 0;
+      const left = t.minutes * 60 - sec;
+      sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left on the timer` : `${t.minutes} minute timer`;
+    }
+    const cue = cueFor(kid, t);
+    return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
+  });
+  const c = chestFor(kid, today());
+  // each map has its own village; a finished treasure map for it puts up its landmark
+  const theme = kidTheme(kid);
+  const lm = SECRETS[theme] && treasureFound(state.log, kid.id).maps.has(theme) ? SECRETS[theme] : null;
+  const size = lm ? secretSize(theme) : null;
+  const store = storeOpen(state, kid, today());
+  return villageHtml({
+    theme,
+    visit: villageVisit(kid, s),
+    // drawn twice as big, with fine pixels like the rest of the village
+    landmark: lm ? { html: secretSvg(theme, 1, { smooth: 2 }), name: lm.name, w: size.w * 2, h: size.h * 2 } : null,
+    shop: { open: store.open, left: store.left || 0 },
+    kidId: kid.id,
+    kidName: kid.name,
+    kidColor: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
+    buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
+    tasks: list,
+    planned,
+    chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
+  });
+}
+/** Today's visitors for the village green: the same ones, lines, games and gear as on the map. */
+function villageVisit(kid, s) {
+  const { visitors, lines, news } = visitorInfo(kid, s);
+  if (!visitors.length) return null;
+  const plan = visitPlan(kid, visitors);
+  const areaOf = (id) => plan.areas.find((a) => a.members.includes(id));
+  const version = (tier) => ['regular', 'good', 'super'][tier - 1];
+  const playable = playableFor(kid, s.complete);
+  return {
+    host: kid.id,
+    visitors: visitors.map((v, i) => {
+      const area = areaOf(v.id);
+      const gear = bestGear(v.owned);
+      let look = v.buddy;
+      if (area?.kind === 'pond') look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } };
+      else if (area) look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined } };
+      return { id: v.id, name: v.name, color: v.color, rod: gear.rod || 1, line: lines[i], news: news[v.id] || '', html: liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` }) };
+    }),
+    areas: plan.areas.map((a) => {
+      const tiers = a.members.map((id) => bestGear(visitors.find((v) => v.id === id).owned)[a.kind] || 1);
+      if (a.host) tiers.push(bestGear(kid.owned || [])[a.kind] || 1);
+      return { side: a.side, kind: a.kind, members: a.members, ball: a.kind === 'pond' ? '' : ballSvg(a.kind, Math.max(...tiers)), tap: Boolean(a.host && playable > 0 && a.kind !== 'pond') };
+    }),
+  };
+}
+
+/** A finished treasure map's landmark in the village: it talks, and its show plays over the view. */
+function villageLandmark(el, layer) {
+  const kid = kidById(ui.kidId);
+  const theme = kid ? kidTheme(kid) : 'bg-meadow';
+  const info = SECRETS[theme];
+  if (!info || !kid || !layer) return;
+  const bubble = el.querySelector('.v-lm-bubble');
+  bubble.textContent = info.lines[(ui.secretLine = ((ui.secretLine ?? -1) + 1) % info.lines.length)];
+  bubble.hidden = false;
+  clearTimeout(bubble.hideTimer);
+  bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
+  if (showPlaying(layer) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(kid.buddy, 'excited', { background: false }))}`;
+  const r = el.getBoundingClientRect(); const lr = layer.getBoundingClientRect();
+  const scale = Number(layer.dataset.scale) || 3;
+  const def = playShow(layer, theme, { buddy: img, scale, spot: { x: r.left + r.width / 2 - lr.left, y: r.top + r.height / 2 - lr.top }, onDone: () => layer.closest('.village')?.classList.remove('show-on') });
+  if (!def) return;
+  ui.lastShow = Date.now();
+  layer.closest('.village')?.classList.add('show-on');
+  if (state.settings.sound !== false) playShowAudio(theme, { music: state.settings.music !== false, sfx: def.sfx });
+}
+
+const villageHandlers = {
+  onTask: (id, el) => onTaskTap(id, el),
+  onChest: (el) => actions.chest(el),
+  onVisitor: (el) => actions.visitor(el),
+  onLandmark: (el, layer) => villageLandmark(el, layer),
+  fishCatch: (rod, theme) => catchFor(theme || 'bg-meadow', rod),
+  onShop: () => actions.wardrobe(),
+  sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
+};
+
 function viewKid() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
@@ -1585,18 +1692,9 @@ function viewKid() {
   const xp = totalXp(state, kid, t);
   const lv = levelFor(xp);
   const entry = entryFor(state, kid.id, t);
-  const section = (period, title, by) => {
-    const tasks = planOrder(kid, s.tasks.filter((x) => x.period === period));
-    if (!tasks.length) return '';
-    return `
-      <section>
-        <h2>${title} <small class="muted">${by ? `by ${esc(formatTime(by))}` : ''}</small></h2>
-        <div class="tiles">${tasks.map((x) => taskTile(kid, x, entry?.tasks?.[x.id])).join('')}</div>
-      </section>`;
-  };
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
   const mood = moodFor(kid);
-  const listMode = state.settings.questView === 'list';
+  const villageMode = state.settings.questView === 'village';
   const newCount = (kid.newItems || []).length;
   const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
   const late = lateChest(kid);
@@ -1629,13 +1727,12 @@ function viewKid() {
       </div>
       ${exerciseSection(kid, exTasks, entry)}
       <div class="view-toggle">
-        <button class="${listMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
-        <button class="${listMode ? 'on' : ''}" data-action="quest-mode" data-mode="list">📋 List</button>
+        <button class="${villageMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
+        <button class="${villageMode ? 'on' : ''}" data-action="quest-mode" data-mode="village">🏘️ Village</button>
       </div>
-      ${listMode || !state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
+      ${!state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
       ${familyBanner()}
-      ${listMode ? `${section('morning', '🌅 Morning', state.settings.morningBy)}
-      ${section('afternoon', '☀️ After school', state.settings.bedtime)}` : questMap(kid, s, entry, mood)}
+      ${villageMode ? villageView(kid, s, entry, mood) : questMap(kid, s, entry, mood)}
       <section>
         <h2>This week</h2>
         ${weekDots(kid, info)}
@@ -2537,6 +2634,7 @@ function render() {
   lastView = ui.view;
   $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
   paintQuestMaps($app);
+  mountVillages($app, villageHandlers);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);

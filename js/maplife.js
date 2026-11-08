@@ -83,29 +83,50 @@ const ALIEN = sprite(ALIEN_BODY);
 const ALIEN_STEP = sprite(swap(ALIEN_BODY, 13, ['..gg....gg', '..dd....dd']));
 const ALIEN_WAVE = sprite(swap(ALIEN_BODY, 8, ['...dggggd.g', '....dddd.g', '..ggggggg', '.g.gggggg']));
 
-// The rocket: r red, R dark red, w white, W shade, b window, B glint, g nozzle.
+// The rocket, about twice the size of the aliens: a red nose cone, a yellow band, a porthole,
+// red and yellow stripes, swept-back fins and a nozzle. r red, l light, R dark red, w white,
+// W shade, b window, B glint, g metal, G dark metal, y yellow.
 const ROCKET = sprite([
-  '.....rr',
-  '....lrrR',
-  '...lrrrrR',
-  '...wwwwwW',
-  '...wwbbwW',
-  '...wbBbbW',
-  '...wbbbbW',
-  '...wwbbwW',
-  '...wwwwwW',
-  '...rrrrrR',
-  '...wwwwwW',
-  '...wwwwwW',
-  '..rwwwwwWr',
-  '.rrwwwwwWrr',
-  'rrrwwwwwWrrR',
-  'rrR.gggg.rrR',
-  'rR...gg...rR',
+  '.........rR.........',
+  '........lrrR........',
+  '........lrrR........',
+  '.......lrrrrR.......',
+  '.......lrrrrR.......',
+  '......lrrrrrrR......',
+  '......lrrrrrrR......',
+  '.....lrrrrrrrrR.....',
+  '.....lrrrrrrrrR.....',
+  '....lrrrrrrrrrrR....',
+  '....yyyyyyyyyyyy....',
+  '....wwwwwwwwwwWW....',
+  '....wwwggggggwWW....',
+  '....wwgBBbbbbgWW....',
+  '....wwgBbbbbbgWW....',
+  '....wwgbbbbbbgWW....',
+  '....wwgbbbbbbgWW....',
+  '....wwwggggggwWW....',
+  '....wwwwwwwwwwWW....',
+  '....wwwwwwwwwwWW....',
+  '....rrrrrrrrrrRR....',
+  '....yyyyyyyyyyyy....',
+  '....rrrrrrrrrrRR....',
+  '....wwwwwwwwwwWW....',
+  '...rwwwwwwwwwwWWR...',
+  '..rrwwwwwwwwwwWWRR..',
+  '.rrrwwwwwwwwwwWWRRR.',
+  'rrrrwwwwwrRwwwWWRRRR',
+  'rrrrrrrrrrRrrrRRRRRR',
+  'rrR..ggggrRgggG..RRR',
+  'rR....gggggggG....RR',
+  '......gggggggG......',
+  '.......gggggG.......',
 ]);
+const ROCKET_W = ROCKET[0].length;
+const ROCKET_H = ROCKET.length;
+// the exhaust: two flickering frames, white hot in the middle
 const FLAME = [
-  sprite(['.....yy', '....fyyf', '.....ff', '.....f'], false),
-  sprite(['....fyyf', '...fyyyyf', '....fyyf', '....ffyf', '.....ff', '......f'], false),
+  sprite(['..fyyyyf', '.fyyWWyyf', '.fyyWWyyf', '..fyyyyf', '..ffyyff', '...fyyf', '...ffff', '....ff'], false),
+  sprite(['.fyyyyyyf', 'fyyWWWWyyf', '.fyyWWyyf', '.ffyyyyff', '..fyyyyf', '..ffyyff', '...fyyf', '...ffff', '....ff', '.....f'], false),
 ];
 
 // The dragon faces left: G green, L light, D shade, Y belly, y belly shade, h horns and claws,
@@ -462,8 +483,9 @@ function spaceLife(m) {
     if (spot) aliens.push({ ...spot, home: spot.x, dir: i % 2 ? 1 : -1, pal: pals[i % pals.length], wave: 0, pause: 0 });
   }
   // the pad sits below the village ponds and fields when buddies are visiting
-  const pad = { x: m.wall + 4, y: m.section.dataset.areas ? 74 : 48 };
-  const park = pad.y - 20; // the rocket's top when it stands on the pad
+  const pad = m.pad || { x: m.wall + 4, y: m.section.dataset.areas ? 74 : 48 };
+  const PW = ROCKET_W + 10; // the pad is a bit wider than the rocket
+  const park = pad.y - ROCKET_H + 2; // the rocket's top when it stands on the pad
   let rocket = { phase: 'away', t: 0, y: -40 };
   let next = 2500;
   return {
@@ -476,7 +498,7 @@ function spaceLife(m) {
         if (a.wave > 0) a.wave -= 1;
       }
       const r = rocket;
-      if (r.phase === 'away' && t > next) rocket = { phase: 'landing', y: pad.y - 70, v: 2.2 };
+      if (r.phase === 'away' && t > next) rocket = { phase: 'landing', y: pad.y - ROCKET_H - 80, v: 2.2 };
       else if (r.phase === 'landing') {
         r.v = Math.max(0.35, (park - r.y) / 12);
         r.y += r.v;
@@ -484,16 +506,19 @@ function spaceLife(m) {
       } else if (r.phase === 'parked' && t > r.until) rocket = { phase: 'launch', y: r.y, v: 0.2 };
       else if (r.phase === 'launch') {
         r.v *= 1.12; r.y -= r.v;
-        if (r.y < -80) { rocket = { phase: 'away' }; next = t + rand(14000, 22000); }
+        if (r.y < -ROCKET_H - 60) { rocket = { phase: 'away' }; next = t + rand(14000, 22000); }
       }
     },
     draw(ctx, frame) {
       // the landing pad
-      ctx.fillStyle = OUT; ctx.fillRect(pad.x - 1, pad.y - 4, 20, 8);
-      ctx.fillStyle = '#868e96'; ctx.fillRect(pad.x, pad.y - 3, 18, 6);
-      ctx.fillStyle = '#adb5bd'; ctx.fillRect(pad.x, pad.y - 3, 18, 1);
-      ctx.fillStyle = '#ffd43b'; ctx.fillRect(pad.x + 6, pad.y - 2, 1, 4); ctx.fillRect(pad.x + 11, pad.y - 2, 1, 4); ctx.fillRect(pad.x + 6, pad.y, 6, 1);
-      if (frame % 8 < 4) { ctx.fillStyle = '#ff6b6b'; ctx.fillRect(pad.x - 1, pad.y - 4, 2, 2); ctx.fillRect(pad.x + 17, pad.y - 4, 2, 2); }
+      ctx.fillStyle = OUT; ctx.fillRect(pad.x - 1, pad.y - 5, PW + 2, 10);
+      ctx.fillStyle = '#868e96'; ctx.fillRect(pad.x, pad.y - 4, PW, 8);
+      ctx.fillStyle = '#adb5bd'; ctx.fillRect(pad.x, pad.y - 4, PW, 2);
+      ctx.fillStyle = '#5c636a'; ctx.fillRect(pad.x, pad.y + 3, PW, 1);
+      // a yellow H to land on
+      const hx = pad.x + PW / 2;
+      ctx.fillStyle = '#ffd43b'; ctx.fillRect(hx - 5, pad.y - 3, 2, 6); ctx.fillRect(hx + 3, pad.y - 3, 2, 6); ctx.fillRect(hx - 3, pad.y - 1, 6, 2);
+      if (frame % 8 < 4) { ctx.fillStyle = '#ff6b6b'; ctx.fillRect(pad.x - 1, pad.y - 5, 2, 2); ctx.fillRect(pad.x + PW - 1, pad.y - 5, 2, 2); }
       for (const a of aliens) {
         const walking = a.pause <= 0;
         const look = a.wave > 0 && frame % 4 < 2 ? ALIEN_WAVE : walking && frame % 6 < 3 ? ALIEN_STEP : ALIEN;
@@ -501,11 +526,12 @@ function spaceLife(m) {
       }
       const r = rocket;
       if (r.phase === 'away') return;
-      const pal = { r: '#ff6b6b', R: '#c92a2a', l: '#ffa8a8', w: '#f8f9fa', W: '#ced4da', b: '#4dabf7', B: '#d0ebff', g: '#868e96', f: '#ff922b', y: '#ffe066' };
-      draw(ctx, pad.x + 3, r.y, ROCKET, pal);
-      if (r.phase !== 'parked') draw(ctx, pad.x + 4, r.y + 18, FLAME[frame % 2], pal);
-      if (r.phase === 'launch' && r.y > pad.y - 50) {
-        for (let i = 0; i < 6; i += 1) puff(ctx, pad.x - 4 + i * 5 + (frame % 2), pad.y + 2 - (i % 2) * 2, 1.6 + (i % 3) * 0.5, '#dee2e6', '#adb5bd');
+      const pal = { r: '#ff6b6b', R: '#c92a2a', l: '#ffa8a8', w: '#f8f9fa', W: '#ced4da', b: '#4dabf7', B: '#d0ebff', g: '#adb5bd', G: '#868e96', f: '#ff922b', y: '#ffe066' };
+      const rx = pad.x + Math.round((PW - ROCKET_W) / 2);
+      if (r.phase !== 'parked') { const fl = FLAME[frame % 2]; draw(ctx, rx + Math.round((ROCKET_W - fl[0].length) / 2), r.y + ROCKET_H - 2, fl, { f: '#ff922b', y: '#ffe066', W: '#fff9db' }); }
+      draw(ctx, rx, r.y, ROCKET, pal);
+      if (r.phase === 'launch' && r.y > pad.y - ROCKET_H - 30) {
+        for (let i = 0; i < Math.ceil((PW + 8) / 5); i += 1) puff(ctx, pad.x - 4 + i * 5 + (frame % 2), pad.y + 2 - (i % 2) * 2, 1.6 + (i % 3) * 0.5, '#dee2e6', '#adb5bd');
       }
     },
   };
@@ -523,15 +549,25 @@ function volcanoLife(m) {
   const tikis = [];
   // most of the village lives near the volcano, a few further up the map
   const n = Math.max(5, Math.floor(m.ah / 70));
-  for (let i = 0; i < n; i += 1) {
+  // a village says where its tiki folk live (m.tikiHomes); the map finds spots
+  if (m.tikiHomes) m.tikiHomes.forEach(([x, y], i) => tikis.push({ x, y, home: { x, y }, tx: x, ty: y, dir: i % 2 ? 1 : -1, pal: { ...masks[i % masks.length], e: '#ffffff', t: '#fff3bf', g: '#40c057', y: '#ffe066', r: '#ff6b6b', b: '#8a5a3c', G: '#94d82d' }, hop: i * 3 }));
+  for (let i = 0; i < (m.tikiHomes ? 0 : n); i += 1) {
     const near = i < 4;
     const band = near ? { top: Math.max(20, crater.y - 90), bottom: Math.min(m.ah - 24, crater.y + 40) } : { top: ((i - 4) * crater.y) / (n - 4) + 10, bottom: ((i - 3) * crater.y) / (n - 4) - 30 };
     const spot = m.openSpot(band);
     if (spot) tikis.push({ ...spot, home: { ...spot }, tx: spot.x, ty: spot.y, dir: i % 2 ? 1 : -1, pal: { ...masks[i % masks.length], e: '#ffffff', t: '#fff3bf', g: '#40c057', y: '#ffe066', r: '#ff6b6b', b: '#8a5a3c', G: '#94d82d' }, hop: i * 3 });
   }
   const wander = (k, far) => {
-    k.tx = Math.max(m.wall + 4, Math.min(m.aw - m.wall - 14, k.home.x + rand(-far, far)));
-    k.ty = Math.max(20, Math.min(m.ah - 24, k.home.y + rand(-far / 2, far / 2)));
+    // a village says where they may not run (m.canStand: not into the lava or a house)
+    for (let tries = 0; tries < 8; tries += 1) {
+      k.tx = Math.max(m.wall + 4, Math.min(m.aw - m.wall - 14, k.home.x + rand(-far, far)));
+      k.ty = Math.max(20, Math.min(m.ah - 24, k.home.y + rand(-far / 2, far / 2)));
+      if (!m.canStand) return;
+      let ok = true;
+      for (let f = 0.25; f <= 1 && ok; f += 0.25) ok = m.canStand(k.x + (k.tx - k.x) * f + 5, k.y + (k.ty - k.y) * f + 12);
+      if (ok) return;
+    }
+    k.tx = k.x; k.ty = k.y; // nowhere safe to run: stay put
   };
   const stepTikis = () => {
     if (panic > 0) panic -= 1;
@@ -854,6 +890,8 @@ function crabLife(m) {
     where: () => (crabs[0] ? { x: crabs[0].x + W / 2, y: crabs[0].y + H / 2 } : { x: m.aw / 2, y: 60 }),
     poke(x, y) {
       let any = false;
+      // in the village the tap has to be on a crab (a tap on the sand walks the buddy)
+      if (m.pokeNear && !crabs.some((c) => Math.hypot(c.x + W / 2 - x, c.y + H / 2 - y) < 14)) return false;
       for (const c of crabs) {
         if (Math.hypot(c.x + W / 2 - x, c.y + H / 2 - y) > REACH) continue;
         c.rush = Math.round(FPS * 2);
@@ -865,7 +903,26 @@ function crabLife(m) {
       return any;
     },
     step() {
+      // walk too close to a crab and it chases the buddy off (then waits a while before it does it again)
+      const b = m.buddy?.();
       for (const c of crabs) {
+        if (c.cool > 0) c.cool -= 1;
+        if (!b) continue;
+        if (c.chase > 0) {
+          c.chase -= 1;
+          c.tx = b.x - W / 2 + (c.x + W / 2 < b.x ? -6 : 6); c.ty = b.y - H + 1;
+          if (c.chase === 0) { c.tx = c.home.x; c.ty = c.home.y; c.rest = 0; }
+        } else if (!c.rush && !(c.cool > 0) && Math.hypot(c.x + W / 2 - b.x, c.y + H / 2 - (b.y - 3)) < 22) {
+          if (m.flee?.(c.x + W / 2, c.y + H / 2)) { c.chase = Math.round(FPS * 2); c.cool = Math.round(FPS * 10); }
+        }
+      }
+      for (const c of crabs) {
+        if (c.chase > 0) {
+          const dx = c.tx - c.x; const dy = c.ty - c.y; const d = Math.hypot(dx, dy);
+          c.moving = d >= 0.5;
+          if (d <= 3.2) { c.x = c.tx; c.y = c.ty; } else { c.x += (dx / d) * 3.2; c.y += (dy / d) * 3.2; }
+          continue;
+        }
         if (c.rush > 0) {
           c.rush -= 1;
           if (c.rush === 0) { c.tx = c.home.x; c.ty = c.home.y; c.rest = 0; } // and home again
@@ -884,9 +941,10 @@ function crabLife(m) {
     },
     draw(ctx, frame) {
       for (const c of crabs) {
-        const legs = c.moving && (c.rush > 0 ? frame % 2 : Math.floor(frame / 2) % 2) ? 1 : 0;
-        const snap = c.rush > 0 ? frame % 2 : Math.floor(frame / 8) % 4 === 0 ? 1 : 0;
-        draw(ctx, c.x, c.y - (c.rush > 0 && frame % 2 ? 1 : 0), CRAB[legs][snap], c.pal);
+        const busy = c.rush > 0 || c.chase > 0;
+        const legs = c.moving && (busy ? frame % 2 : Math.floor(frame / 2) % 2) ? 1 : 0;
+        const snap = busy ? frame % 2 : Math.floor(frame / 8) % 4 === 0 ? 1 : 0;
+        draw(ctx, c.x, c.y - (busy && frame % 2 ? 1 : 0), CRAB[legs][snap], c.pal);
         if (c.rush > 0 && !c.moving && frame % 2) {
           // snip snip
           ctx.fillStyle = '#ffffff';
@@ -1067,8 +1125,8 @@ export function waterfallAt(band, wall, side) {
 function jungleLife(m) {
   let fall = m.falls;
   // vines to hang from, kept clear of the river and the waterfall
-  const vines = [];
-  for (let y = 84; y < m.ah - 60; y += 230) {
+  const vines = m.vines ? [...m.vines] : [];
+  if (!m.vines) for (let y = 84; y < m.ah - 60; y += 230) {
     const yy = fall && Math.abs(y - fall.base) < 60 ? fall.base + (y < fall.base ? -60 : 60) : y;
     if (yy > 60 && yy < m.ah - 60) vines.push(yy);
   }
@@ -1240,7 +1298,7 @@ function jungleLife(m) {
     s.splash = s.splash.filter((p) => p.life > 0);
   };
 
-  const underBridge = (o) => fall && o.x + 12 > fall.bridge[0] && o.x < fall.bridge[1];
+  const underBridge = (o) => fall && (fall.under ? fall.under(o.x + 6, o.y + 5) : o.x + 12 > fall.bridge[0] && o.x < fall.bridge[1]);
   const stepFalls = (t) => {
     if (!fall) return;
     if (t > s.nextThing) {
@@ -1261,11 +1319,19 @@ function jungleLife(m) {
       } else {
         // bob along down the river, under the bridge and away
         const wait = o.kind === 'capy' ? 16 : 0;
-        if (o.t > wait) o.x += fall.dir * (o.kind === 'capy' ? 0.3 : 0.4);
-        o.y = fall.wave(o.x + 6) - 5;
+        const speed = o.t > wait ? (o.kind === 'capy' ? 0.3 : 0.4) : 0;
+        if (fall.along) {
+          // a river that winds down the village: follow it, by distance from the foot of the falls
+          o.s = (o.s || 0) + speed;
+          const p = fall.along(o.s);
+          if (p) { o.x = p.x - 6; o.y = p.y - 5; } else o.gone = true;
+        } else {
+          o.x += fall.dir * speed;
+          o.y = fall.wave(o.x + 6) - 5;
+        }
       }
     }
-    s.things = s.things.filter((o) => o.x > -20 && o.x < m.aw + 6);
+    s.things = s.things.filter((o) => !o.gone && o.x > -20 && o.x < m.aw + 6);
   };
 
   // one dance for everyone, on the beat of the song (about 6 frames a beat): left, both, right, both
@@ -1283,7 +1349,8 @@ function jungleLife(m) {
         ctx.fillRect(x, y, 1, 3);
       }
     }
-    for (let i = 0; i < 5; i += 1) puff(ctx, fall.x0 + 0.5 + i * 2.2, fall.base - 1 + ((frame + i) % 3 === 0 ? -1 : 0), 1.4 + ((frame + i) % 2) * 0.5, '#ffffff');
+    const foam = Math.max(5, Math.round((fall.x1 - fall.x0) / 2.2) + 1);
+    for (let i = 0; i < foam; i += 1) puff(ctx, fall.x0 + 0.5 + i * 2.2, fall.base - 1 + ((frame + i) % 3 === 0 ? -1 : 0), 1.4 + ((frame + i) % 2) * 0.5, '#ffffff');
   };
 
   return {
@@ -1443,8 +1510,9 @@ const kept = new Map();
 export function startMapLife(m) {
   const old = running.get(m.section);
   if (old) clearInterval(old);
-  let canvas = m.section.querySelector('canvas.map-life');
-  if (!LIVES[m.life]) { canvas?.remove(); return; }
+  // the village brings its own canvas (m.canvas) and says what the kid can see (m.view)
+  let canvas = m.canvas || m.section.querySelector('canvas.map-life');
+  if (!LIVES[m.life]) { if (!m.canvas) canvas?.remove(); return; }
   if (!canvas) {
     canvas = document.createElement('canvas');
     canvas.className = 'map-life';
@@ -1455,12 +1523,14 @@ export function startMapLife(m) {
   const Z = m.z || 1;
   canvas.width = m.aw * Z;
   canvas.height = m.ah * Z;
-  canvas.style.width = `${m.aw * m.scale}px`;
-  canvas.style.height = `${m.ah * m.scale}px`;
+  if (!m.canvas) {
+    canvas.style.width = `${m.aw * m.scale}px`;
+    canvas.style.height = `${m.ah * m.scale}px`;
+  }
   const ctx = canvas.getContext('2d');
   ctx.setTransform(Z, 0, 0, Z, 0, 0);
   ctx.fine = Z;
-  const key = `${m.section.dataset.seed || ''}|${m.life}`;
+  const key = m.key || `${m.section.dataset.seed || ''}|${m.life}`;
   let keep = kept.get(key);
   if (keep) {
     Object.assign(keep.geo, m); // the actors read the map's size and spots from here
@@ -1471,18 +1541,20 @@ export function startMapLife(m) {
   }
   const { actor, t0 } = keep;
   m.section.mapLife = actor; // lets the preview script find the unicorn
-  const view = () => {
+  const view = m.view || (() => {
     const r = m.section.getBoundingClientRect();
     const top = Math.max(0, -r.top) / m.scale;
     const bottom = Math.min(r.height, (window.innerHeight || r.height) - r.top) / m.scale;
     return bottom > top + 30 ? { top, bottom } : { top: 0, bottom: m.ah };
-  };
+  });
   if (actor.poke) {
-    m.section.addEventListener('click', (e) => {
-      if (e.target.closest('button, .map-visitor')) return;
-      const r = m.section.getBoundingClientRect();
-      actor.poke((e.clientX - r.left) / m.scale, (e.clientY - r.top) / m.scale);
-    });
+    // the village's view handles its own taps, so it listens on the way down (m.host, capture)
+    (m.host || m.section).addEventListener('click', (e) => {
+      if (e.target.closest('button, .map-visitor, .v-dialog')) return;
+      const at = m.toMap ? m.toMap(e) : (() => { const r = m.section.getBoundingClientRect(); return { x: (e.clientX - r.left) / m.scale, y: (e.clientY - r.top) / m.scale }; })();
+      // in the village a tap on a critter only pokes it; the buddy stays put
+      if (actor.poke(at.x, at.y) && m.host) { e.stopPropagation(); e.preventDefault(); }
+    }, Boolean(m.host));
   }
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const tick = () => {

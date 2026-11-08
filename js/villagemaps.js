@@ -1,0 +1,565 @@
+// Where everything stands in each map's village (village.js walks it, villageprops.js paints
+// it). Every Places background has its own village: its own ground, its own water between
+// the morning and the after-school quests, its own houses and things, laid out its own way.
+// Numbers are village pixels (one canvas pixel each; 3 screen pixels on a tablet).
+//
+// Each map lists:
+//   home: the kid's house (its roof is the kid's color); houses: the rest (one is the music
+//   hall, music: true, where piano quests are given); water: bands [{ pts, w, kind, colors }]
+//   the buddy can't walk across; crossings: bridges { at: [x, y], dir: 'v' or 'h', kind };
+//   paths, plazas; props: [kind, x, y, extra]; shop: the stall where the shopkeeper stands;
+//   green: the visitors' two play spots (left, right) and idle spots; landmark: where a
+//   finished treasure map's landmark stands, and where the buddy stands to look at it;
+//   chest; start: where the buddy starts; slots: where quest givers stand, in order, for the
+//   morning and after school; labels: the "Morning quests" signs.
+
+import { PROPS, waterDepth } from './villageprops.js';
+
+const W = 448;
+
+const TREE = { kind: 'tree' };
+const RIVER_COLORS = { bank: '#3c9a3c', edge: '#8b5a2b', deep: '#1f6fc0', water: '#2b8adf', shine: '#9fd0ff' };
+const MUSIC = /piano|music|practice|violin|guitar|sing|instrument/i;
+const LAUNDRY = /laundry|clothes|fold|wash/i;
+
+const p = (kind, x, y, extra = {}) => ({ kind, x, y, ...extra });
+
+export const VILLAGE_MAPS = {
+  // ---------- Forest Village: cottages round a well, a river and a wooden bridge ----------
+  'bg-meadow': {
+    H: 556,
+    seed: 1234,
+    ground: { kind: 'grass', c: ['#5cbd52', '#4aa842', '#7bd66b'], edge: ['#2f7d32', '#357f36'] },
+    scatter: { kind: 'flowers', every: 260 },
+    border: { kinds: [TREE] },
+    pathStyle: { edge: '#a4743f', fill: '#d9a86c' },
+    home: { x: 174, y: 30, w: 100, h: 78, style: 'cottage', shutter: '#4c6ef5' },
+    houses: [
+      { x: 34, y: 50, w: 80, h: 66, roof: '#4c6ef5', shutter: '#e03131' },
+      { x: 334, y: 50, w: 80, h: 66, roof: '#2f9e44', shutter: '#f08c00' },
+      { x: 30, y: 376, w: 96, h: 74, roof: '#7048e8', shutter: '#fcc419', sign: 'note', music: true },
+    ],
+    water: [{ pts: [[-10, 329], [458, 329]], w: 26, kind: 'river', colors: RIVER_COLORS, reeds: '#2b8a3e' }],
+    crossings: [{ at: [224, 329], dir: 'v', kind: 'wood' }],
+    paths: [
+      [[224, 111], [224, 524]], [[224, 132], [74, 132], [74, 119]], [[224, 132], [374, 132], [374, 119]],
+      [[224, 468], [78, 468], [78, 453]], [[224, 392], [372, 392]],
+    ],
+    plazas: [[224, 166, 30], [224, 504, 30]],
+    props: [
+      p('well', 211, 140), p('garden', 34, 150), p('stall', 348, 154), p('laundry', 330, 358, { w: 84 }),
+      p('flowers', 160, 98), p('flowers', 276, 98), p('flowers', 150, 376), p('flowers', 270, 520),
+      p('bush', 152, 70, { berries: true }), p('bush', 278, 70), p('bush', 150, 444, { berries: true }), p('bush', 250, 428), p('bush', 118, 528, { berries: true }),
+      p('tree', 118, 66), p('tree', 298, 66), p('tree', 380, 190), p('tree', 140, 384), p('tree', 40, 476),
+    ],
+    shop: { x: 370, y: 202 },
+    green: {
+      left: { x: 54, y: 234, w: 116, h: 44 }, right: { x: 272, y: 234, w: 126, h: 44 },
+      idle: [{ x: 202, y: 250 }, { x: 246, y: 296 }, { x: 202, y: 296 }, { x: 246, y: 250 }],
+    },
+    landmark: { x: 336, y: 438, stand: { x: 318, y: 526 } },
+    chest: { x: 224, y: 512 },
+    start: { x: 224, y: 122 },
+    slots: {
+      morning: [[150, 120], [74, 140], [116, 176], [172, 206], [276, 206], [318, 168], [374, 140], [298, 120]],
+      afternoon: [[78, 488, MUSIC], [300, 420, LAUNDRY], [170, 382], [290, 384], [170, 496], [282, 496], [64, 366], [130, 530]],
+    },
+    labels: { morning: [158, 216, '⬆ 🌅 Morning quests'], afternoon: [296, 352, '⬇ ☀️ After-school quests'] },
+  },
+
+  // ---------- Sunset Beach: huts on the sand, a lagoon down the middle, the sea at the bottom ----------
+  'bg-sunset': {
+    H: 560,
+    seed: 2201,
+    ground: { kind: 'sand', c: ['#f3c98b', '#e5b574', '#fde3b6'] },
+    scatter: { kind: 'shells', every: 300 },
+    border: { kinds: [{ kind: 'palm' }], sides: ['top', 'left', 'right'] },
+    pathStyle: { edge: '#7a4a26', fill: '#c98a4b', kind: 'planks' },
+    plazaStyle: { a: '#e0a96d', b: '#c98a4b', gap: '#7a4a26', rim: '#5c3a1e' },
+    home: { x: 36, y: 34, w: 104, h: 82, style: 'hut', wall: '#ffd8a8' },
+    houses: [
+      { x: 316, y: 40, w: 92, h: 74, style: 'hut', roof: '#c08a3e', wall: '#ffe8cc' },
+      { x: 324, y: 290, w: 96, h: 80, style: 'hut', roof: '#d4a24c', wall: '#ffd8a8', sign: 'note', music: true },
+    ],
+    water: [
+      { pts: [[232, -20], [214, 110], [246, 230], [222, 360], [238, 470], [236, 560]], w: 30, kind: 'river', colors: { bank: '#e5b574', edge: '#d9a35f', deep: '#1098ad', water: '#3bc9db', shine: '#e3fafc' } },
+      { pts: [[-20, 572], [468, 572]], w: 84, kind: 'sea', colors: { bank: '#fde3b6', edge: '#ffffff', deep: '#1098ad', water: '#22b8cf', shine: '#e3fafc' } },
+    ],
+    crossings: [{ at: [236, 214], dir: 'h', kind: 'wood', pal: { plank: '#c98a4b', dark: '#7a4a26', rail: '#e0a96d' } }],
+    paths: [
+      [[88, 118], [88, 214], [204, 214]], [[268, 214], [362, 214], [362, 116]], [[362, 214], [372, 214], [372, 372]],
+      [[372, 260], [300, 260], [300, 470]], [[300, 470], [360, 470]],
+    ],
+    plazas: [[372, 476, 26]],
+    props: [
+      p('stall', 140, 40, { pal: { a: '#22b8cf', b: '#fff9db', wood: '#e0a96d', goods: [['#ff8787', '#ffc9c9'], ['#ffd43b', '#fff3bf'], ['#69db7c', '#d3f9d8']] } }),
+      p('laundry', 264, 400, { w: 70 }),
+      p('palm', 150, 120), p('palm', 20, 260), p('palm', 270, 300), p('palm', 400, 380),
+      p('umbrella', 130, 470, { c: '#ff6b6b' }), p('umbrella', 300, 500, { c: '#4dabf7' }), p('sandcastle', 186, 480),
+      p('surfboard', 20, 140, { c: '#ff922b' }), p('surfboard', 412, 150, { c: '#4dabf7' }), p('surfboard', 424, 160, { c: '#f783ac' }),
+      p('rock', 180, 300, { c: '#ced4da' }), p('rock', 420, 250, { c: '#ced4da', w: 18, h: 13 }),
+    ],
+    shop: { x: 162, y: 88 },
+    green: {
+      left: { x: 54, y: 300, w: 116, h: 44 }, right: { x: 278, y: 136, w: 118, h: 44 },
+      idle: [{ x: 186, y: 372 }, { x: 290, y: 240 }, { x: 130, y: 376 }, { x: 398, y: 250 }],
+    },
+    landmark: { x: 30, y: 404, stand: { x: 160, y: 444 } },
+    chest: { x: 372, y: 484 },
+    start: { x: 88, y: 130 },
+    slots: {
+      morning: [[150, 164], [50, 176], [160, 254], [60, 250], [190, 400], [110, 210], [40, 380], [196, 330]],
+      afternoon: [[300, 386, MUSIC], [330, 440, LAUNDRY], [340, 252], [420, 214], [270, 460], [420, 452], [258, 500], [400, 420]],
+    },
+    labels: { morning: [104, 282, '⬅ 🌅 Morning quests'], afternoon: [346, 196, '➡ ☀️ After-school quests'] },
+    pond: { lip: '#d9a35f', water: '#3bc9db', deep: '#1098ad', light: '#66d9e8', shine: '#e3fafc', pads: false },
+    clearing: { fill: ['#e5b574', '#d9a35f', '#fde3b6'], grass: '#fde3b6' },
+  },
+
+  // ---------- Under the Sea: domes on the seabed, a dark trench and a stone arch ----------
+  'bg-ocean': {
+    H: 600,
+    seed: 3307,
+    ground: { kind: 'seabed', c: ['#2f86c9', '#2878b6', '#4fa3e3'], edge: ['#24689e', '#226296'] },
+    scatter: { kind: 'sea', every: 240 },
+    border: { kinds: [{ kind: 'kelp' }, { kind: 'coral', c: '#ff8787' }, { kind: 'kelp' }, { kind: 'coral', c: '#f783ac' }] },
+    pathStyle: { edge: '#c9a35d', fill: '#f0d9a0' },
+    plazaStyle: { a: '#fff4d1', b: '#ffe8cc', gap: '#e5b574', rim: '#c9a35d' },
+    home: { x: 174, y: 34, w: 100, h: 82, style: 'dome', wall: '#fff0f6', glass: '#74c0fc' },
+    houses: [
+      { x: 40, y: 80, w: 84, h: 70, style: 'dome', roof: '#ffa94d', wall: '#fff0f6', glass: '#74c0fc' },
+      { x: 330, y: 70, w: 84, h: 70, style: 'dome', roof: '#da77f2', wall: '#fff0f6', glass: '#74c0fc' },
+      { x: 312, y: 440, w: 100, h: 82, style: 'dome', roof: '#ffd43b', wall: '#fff0f6', glass: '#74c0fc', sign: 'note', music: true },
+    ],
+    water: [{ pts: [[-20, 300], [120, 322], [250, 372], [360, 384], [470, 352]], w: 36, kind: 'trench', colors: { bank: '#24689e', edge: '#1c5d99', deep: '#0f2d57', water: '#163e73', shine: '#4dabf7' } }],
+    crossings: [{ at: [252, 372], dir: 'v', kind: 'stone', pal: { plank: '#bcaaa4', dark: '#8d6e63', rail: '#d7ccc8' } }],
+    paths: [
+      [[224, 119], [224, 180], [252, 230], [252, 540]], [[224, 160], [82, 160], [82, 152]], [[224, 160], [372, 160], [372, 142]],
+      [[252, 470], [362, 470], [362, 524]], [[252, 470], [140, 470]],
+    ],
+    plazas: [[224, 186, 26], [252, 548, 26]],
+    props: [
+      p('stall', 46, 196, { pal: { a: '#f783ac', b: '#fff0f6', wood: '#bcaaa4', goods: [['#ffd43b', '#fff3bf'], ['#fff0f6', '#ffffff'], ['#ff8787', '#ffc9c9']] } }),
+      p('laundry', 108, 410, { w: 76 }),
+      p('clam', 300, 196), p('anchor', 404, 210), p('coral', 140, 110, { c: '#ffa94d' }), p('coral', 290, 110, { c: '#f783ac' }),
+      p('kelp', 260, 236), p('rock', 30, 250, { c: '#748ffc' }), 
+      p('rock', 180, 520, { c: '#748ffc' }), p('kelp', 200, 404), p('clam', 50, 380),
+    ],
+    shop: { x: 68, y: 244 },
+    green: {
+      left: { x: 104, y: 240, w: 116, h: 44 }, right: { x: 278, y: 262, w: 118, h: 44 },
+      idle: [{ x: 240, y: 300 }, { x: 180, y: 302 }, { x: 330, y: 230 }, { x: 410, y: 316 }],
+    },
+    landmark: { x: 24, y: 488, stand: { x: 160, y: 540 } },
+    chest: { x: 252, y: 556 },
+    start: { x: 224, y: 130 },
+    slots: {
+      morning: [[150, 150], [300, 150], [60, 176], [400, 170], [180, 210], [350, 230], [110, 210], [260, 220]],
+      afternoon: [[300, 520, MUSIC], [146, 450, LAUNDRY], [200, 456], [290, 420], [60, 450], [414, 552], [190, 380], [130, 540]],
+    },
+    labels: { morning: [110, 330, '⬆ 🌅 Morning quests'], afternoon: [370, 410, '⬇ ☀️ After-school quests'] },
+    pond: { lip: '#c9a35d', water: '#163e73', deep: '#0f2d57', light: '#1c5d99', shine: '#4dabf7', pads: false },
+    clearing: { fill: ['#f0d9a0', '#c9a35d', '#fff4d1'], grass: '#4fa3e3' },
+  },
+
+  // ---------- Moon Base: domes and dishes, a starry canyon and a metal gangway ----------
+  'bg-space': {
+    H: 560,
+    seed: 4409,
+    ground: { kind: 'moon', c: ['#7d82a8', '#6a6f96', '#9a9fc4'], edge: ['#5c5f8a', '#62658f'] },
+    scatter: { kind: 'pebbles', every: 200, colors: ['#5c6088', '#a5aacf'] },
+    border: { kinds: [{ kind: 'boulder', c: '#6a6f96' }, { kind: 'crystal', c: '#99e9f2', C: '#3bc9db' }, { kind: 'boulder', c: '#5c5f8a' }] },
+    pathStyle: { edge: '#495057', fill: '#adb5bd', kind: 'planks' },
+    plazaStyle: { a: '#ced4da', b: '#adb5bd', gap: '#495057', rim: '#ffd43b' },
+    home: { x: 40, y: 40, w: 100, h: 80, style: 'dome', wall: '#ced4da', glass: '#ff6b6b' },
+    houses: [
+      { x: 300, y: 36, w: 92, h: 76, style: 'dome', roof: '#63e6be', wall: '#ced4da', glass: '#ffd43b' },
+      { x: 50, y: 360, w: 100, h: 80, style: 'dome', roof: '#74c0fc', wall: '#ced4da', glass: '#ffd43b', sign: 'note', music: true },
+    ],
+    water: [{ pts: [[-20, 236], [110, 252], [200, 300], [300, 296], [470, 250]], w: 30, kind: 'stars', colors: { bank: '#6a6f96', edge: '#45476b', deep: '#0b1026', water: '#1b1f4b', shine: '#ffffff' } }],
+    crossings: [{ at: [300, 296], dir: 'v', kind: 'metal', pal: { plank: '#868e96', dark: '#495057', rail: '#ffd43b' } }],
+    paths: [
+      [[90, 122], [90, 170], [300, 170], [300, 430], [380, 430]], [[300, 170], [346, 170], [346, 114]],
+      [[300, 410], [100, 410], [100, 442]],
+    ],
+    plazas: [[380, 430, 22], [180, 170, 22]],
+    props: [
+      p('stall', 196, 36, { pal: { a: '#ffd43b', b: '#495057', wood: '#868e96', goods: [['#74c0fc', '#d0ebff'], ['#ff6b6b', '#ffc9c9'], ['#69db7c', '#d3f9d8']] } }),
+      p('laundry', 180, 450, { w: 84 }),
+      p('dish', 400, 140), p('dish', 160, 320), p('lamp', 150, 100, { c: '#74c0fc' }), p('lamp', 270, 160, { c: '#74c0fc' }),
+      p('lamp', 330, 470, { c: '#74c0fc' }), p('flag', 240, 90, { c: '#ff6b6b' }),
+      p('crater', 110, 200), p('crater', 370, 320, { w: 44, h: 20 }), p('crater', 230, 500, { w: 30, h: 16 }), p('crater', 30, 290, { w: 28, h: 14 }),
+      p('crystal', 420, 200), p('crystal', 20, 470, { c: '#ffd8a8', C: '#ff922b' }), p('rock', 250, 360, { c: '#6a6f96' }),
+    ],
+    shop: { x: 218, y: 84 },
+    life: { pad: { x: 394, y: 104 } }, // the rocket's landing pad
+    green: {
+      left: { x: 50, y: 182, w: 110, h: 40 }, right: { x: 312, y: 190, w: 86, h: 40 },
+      idle: [{ x: 196, y: 210 }, { x: 250, y: 210 }, { x: 200, y: 250 }, { x: 280, y: 236 }],
+    },
+    landmark: { x: 300, y: 474, stand: { x: 290, y: 534 } },
+    chest: { x: 380, y: 436 },
+    start: { x: 90, y: 134 },
+    slots: {
+      morning: [[150, 136], [40, 150], [240, 136], [380, 134], [330, 150], [424, 196], [250, 110], [180, 236]],
+      afternoon: [[120, 466, MUSIC], [220, 494, LAUNDRY], [200, 380], [360, 376], [250, 330], [60, 330], [420, 410], [160, 530]],
+    },
+    labels: { morning: [210, 260, '⬆ 🌅 Morning quests'], afternoon: [400, 300, '⬇ ☀️ After school'] },
+    pond: { lip: '#45476b', water: '#37b24d', deep: '#2b8a3e', light: '#69db7c', shine: '#b2f2bb', pads: false },
+    clearing: { fill: ['#9a9fc4', '#6a6f96', '#b4b8d8'], grass: '#7d82a8' },
+  },
+
+  // ---------- Royal Castle: the keep inside a moat, the town outside the drawbridge ----------
+  'bg-castle': {
+    H: 660,
+    seed: 5501,
+    ground: { kind: 'grass', c: ['#5cbd52', '#4aa842', '#7bd66b'] },
+    walls: 'castle',
+    scatter: { kind: 'flowers', every: 300 },
+    pathStyle: { edge: '#868e96', fill: '#ced4da', kind: 'cobble' },
+    plazaStyle: { a: '#dee2e6', b: '#e9ecef', gap: '#adb5bd', rim: '#868e96' },
+    home: { x: 164, y: 34, w: 120, h: 96, style: 'keep' },
+    houses: [
+      { x: 30, y: 290, w: 84, h: 70, roof: '#e64980', shutter: '#7048e8' },
+      { x: 334, y: 290, w: 84, h: 70, roof: '#1c7ed6', shutter: '#fcc419' },
+      { x: 30, y: 516, w: 96, h: 76, roof: '#7048e8', shutter: '#fcc419', sign: 'note', music: true },
+    ],
+    water: [{ pts: [[100, -10], [100, 236], [348, 236], [348, -10]], w: 24, kind: 'river', colors: { bank: '#868e96', edge: '#495057', deep: '#364fc7', water: '#3b5bdb', shine: '#bac8ff' } }],
+    crossings: [{ at: [224, 236], dir: 'v', kind: 'wood', pal: { plank: '#8b5a2b', dark: '#5c3a1e', rail: '#495057' } }],
+    paths: [
+      [[224, 132], [224, 600]], [[224, 170], [150, 170]], [[224, 170], [300, 170]],
+      [[224, 376], [72, 376], [72, 362]], [[224, 376], [376, 376], [376, 362]], [[224, 610], [78, 610], [78, 594]],
+    ],
+    plazas: [[224, 300, 28], [224, 600, 24]],
+    props: [
+      p('fountain', 204, 278), p('stall', 120, 250, { pal: { a: '#7048e8', b: '#fff3bf', wood: '#c98a4b' } }),
+      p('laundry', 120, 476, { w: 80 }), p('banner', 140, 60, { c: '#7048e8' }), p('banner', 296, 60, { c: '#e64980' }),
+      p('haybale', 260, 470), p('haybale', 40, 230), p('bush', 140, 200, { berries: true }), p('bush', 290, 200),
+      p('tree', 396, 210), p('tree', 26, 120), p('tree', 390, 110), p('flowers', 260, 140), p('flowers', 170, 140),
+      p('garden', 30, 40, { w: 56, h: 30 }), p('tree', 380, 450), p('bush', 26, 460, { berries: true }), p('flowers', 300, 260),
+    ],
+    shop: { x: 142, y: 300 },
+    life: { knightPost: { x: 370, y: 256, side: 1 } }, // where the knight keeps watch
+    green: {
+      left: { x: 54, y: 400, w: 110, h: 44 }, right: { x: 284, y: 400, w: 110, h: 44 },
+      idle: [{ x: 196, y: 410 }, { x: 252, y: 430 }, { x: 196, y: 446 }, { x: 252, y: 396 }],
+    },
+    landmark: { x: 300, y: 524, stand: { x: 288, y: 626 } },
+    chest: { x: 224, y: 606 },
+    start: { x: 224, y: 146 },
+    slots: {
+      morning: [[150, 156], [300, 156], [140, 210], [310, 210], [180, 196], [270, 196], [130, 110], [320, 110]],
+      afternoon: [[146, 590, MUSIC], [160, 520, LAUNDRY], [300, 330], [80, 470], [340, 480], [270, 520], [80, 400], [400, 400]],
+    },
+    labels: { morning: [224, 262, '⬆ 🌅 Morning quests in the castle'], afternoon: [224, 350, '⬇ ☀️ After-school quests in town'] },
+    pond: {},
+  },
+
+  // ---------- Volcano Island: a smoking volcano, a lava flow and a stone bridge ----------
+  'bg-volcano': {
+    H: 560,
+    seed: 6607,
+    ground: { kind: 'ash', c: ['#5b4b45', '#4b3d38', '#75645c'], edge: ['#3d3330', '#433834'] },
+    scatter: { kind: 'embers', every: 260 },
+    border: { kinds: [{ kind: 'tree', pal: { G: '#2b8a3e', g: '#51cf66', d: '#1b5e20', T: '#5c3a1e' } }, { kind: 'boulder', c: '#3d3330' }] },
+    pathStyle: { edge: '#2b211d', fill: '#8a7466', kind: 'cobble' },
+    plazaStyle: { a: '#868e96', b: '#adb5bd', gap: '#495057', rim: '#343a40' },
+    home: { x: 40, y: 36, w: 100, h: 80, style: 'hut', roof: '#2f9e44', wall: '#d9a86c', glass: '#ff922b' },
+    houses: [
+      { x: 170, y: 40, w: 84, h: 70, style: 'hut', roof: '#5c940d', wall: '#d9a86c', glass: '#ff922b' },
+      { x: 320, y: 400, w: 96, h: 80, style: 'hut', roof: '#2f9e44', wall: '#d9a86c', glass: '#ff922b', sign: 'note', music: true },
+    ],
+    water: [{ pts: [[340, 108], [310, 190], [240, 250], [130, 276], [-20, 290]], w: 26, kind: 'lava', colors: { bank: '#2b211d', edge: '#3d3330', deep: '#e03131', water: '#ff6b1a', shine: '#ffe066' } }],
+    crossings: [{ at: [150, 272], dir: 'v', kind: 'stone', pal: { plank: '#868e96', dark: '#495057', rail: '#adb5bd' } }],
+    paths: [
+      [[90, 118], [90, 160], [150, 200], [150, 420], [240, 470]], [[90, 160], [212, 160], [212, 112]],
+      [[150, 360], [368, 360], [368, 482]], [[240, 470], [300, 470]],
+    ],
+    plazas: [[240, 478, 26]],
+    props: [
+      p('volcano', 300, 16), p('stall', 30, 170, { pal: { a: '#ff922b', b: '#fff3bf', wood: '#8b5a2b' } }),
+      p('laundry', 180, 390, { w: 84 }),
+      p('torch', 70, 120), p('torch', 120, 120), p('torch', 330, 350), p('torch', 400, 350),
+      p('vent', 400, 290),
+      p('palm', 20, 360), p('palm', 280, 120), p('boulder', 250, 190, { c: '#3d3330' }), p('rock', 70, 480, { c: '#3d3330' }), p('palm', 200, 500),
+    ],
+    shop: { x: 52, y: 218 },
+    life: { goal: { x: 360, y: 54 }, tikiHomes: [[364, 128], [410, 170], [372, 222], [320, 236], [160, 318], [60, 420], [140, 470]] }, // the crater is 26 px above goal
+    green: {
+      left: { x: 50, y: 312, w: 100, h: 44 }, right: { x: 220, y: 300, w: 120, h: 44 },
+      idle: [{ x: 360, y: 250 }, { x: 410, y: 250 }, { x: 180, y: 300 }, { x: 370, y: 300 }],
+    },
+    landmark: { x: 26, y: 400, stand: { x: 154, y: 494 } },
+    chest: { x: 240, y: 486 },
+    start: { x: 90, y: 130 },
+    slots: {
+      morning: [[150, 130], [40, 150], [260, 130], [120, 200], [200, 210], [90, 230], [250, 236], [20, 220]],
+      afternoon: [[300, 470, MUSIC], [220, 450, LAUNDRY], [200, 340], [80, 380], [300, 400], [420, 330], [110, 500], [420, 500]],
+    },
+    labels: { morning: [104, 256, '⬆ 🌅 Morning quests'], afternoon: [290, 262, '⬇ ☀️ After-school quests'] },
+    pond: { lip: '#2b211d', water: '#ff6b1a', deep: '#e03131', light: '#ff922b', shine: '#ffe066', pads: false },
+    clearing: { fill: ['#8a7466', '#75645c', '#b8a395'], grass: '#5b4b45' },
+  },
+
+  // ---------- Rainforest: huts on stilts, a winding river and a rope bridge ----------
+  'bg-rainforest': {
+    H: 580,
+    seed: 7703,
+    ground: { kind: 'grass', c: ['#237032', '#1b5e20', '#2f9e44'], edge: ['#174d1b', '#1a531e'] },
+    scatter: { kind: 'flowers', every: 300, colors: ['#ff6b6b', '#ffd43b', '#f783ac', '#ff922b'] },
+    border: { kinds: [{ kind: 'jungletree' }, { kind: 'jungletree', pal: { G: '#237032', g: '#40c057', d: '#174d1b' } }] },
+    pathStyle: { edge: '#5c3a1e', fill: '#8b5a2b' },
+    plazaStyle: { a: '#94a38f', b: '#a9b8a4', gap: '#5c7a5c', rim: '#3d5a3d' },
+    home: { x: 40, y: 34, w: 100, h: 96, style: 'stilts', wall: '#d9a066', glass: '#1c9c8c' },
+    houses: [
+      { x: 40, y: 400, w: 90, h: 90, style: 'stilts', roof: '#2b8a3e', wall: '#d9a066', glass: '#1c9c8c' },
+      { x: 320, y: 36, w: 96, h: 100, style: 'stilts', roof: '#5c940d', wall: '#d9a066', glass: '#1c9c8c', sign: 'note', music: true },
+    ],
+    water: [{ pts: [[214, -20], [244, 110], [204, 250], [246, 400], [222, 600]], w: 30, kind: 'river', colors: { bank: '#1b5e20', edge: '#6e4b2a', deep: '#127a6e', water: '#1c9c8c', shine: '#96f2d7' }, reeds: '#5c940d' }],
+    crossings: [{ at: [222, 300], dir: 'h', kind: 'rope', pal: { plank: '#a0612f', dark: '#6e4b2a', rail: '#5c940d' } }],
+    // the river pours over a mossy cliff at the top of the village (things come over it now and then)
+    falls: { x0: 218, x1: 236, lip: 4, base: 50, cliff: [184, 274] },
+    // the map's moving things (maplife.js): where the sloth's vines hang
+    life: { vines: [176, 360] },
+    paths: [
+      [[90, 132], [90, 300], [190, 300]], [[256, 300], [368, 300], [368, 138]], [[368, 300], [368, 400]], [[90, 300], [150, 330], [150, 504], [85, 504], [85, 492]],
+    ],
+    plazas: [[368, 400, 22], [90, 300, 20]],
+    props: [
+      p('stall', 140, 130, { pal: { a: '#5c940d', b: '#d8f5a2', wood: '#a0612f', goods: [['#ffd43b', '#fff3bf'], ['#ff6b6b', '#ffc9c9'], ['#ff922b', '#ffd8a8']] } }),
+      p('laundry', 266, 400, { w: 72 }),
+      p('jungletree', 290, 160), p('jungletree', 170, 470), p('jungletree', 396, 470),
+      p('fern', 30, 200), p('fern', 150, 360), p('fern', 300, 250), p('fern', 410, 200), p('fern', 290, 520),
+      p('bigflower', 120, 340, { c: '#ff6b6b' }), p('bigflower', 270, 360, { c: '#f783ac' }), p('bigflower', 400, 270, { c: '#ffd43b' }),
+    ],
+    shop: { x: 162, y: 178 },
+    green: {
+      left: { x: 50, y: 226, w: 96, h: 44 }, right: { x: 290, y: 196, w: 106, h: 40 },
+      idle: [{ x: 166, y: 236 }, { x: 280, y: 330 }, { x: 170, y: 290 }, { x: 330, y: 340 }],
+    },
+    landmark: { x: 290, y: 450, stand: { x: 276, y: 540 } },
+    chest: { x: 368, y: 406 },
+    start: { x: 90, y: 144 },
+    slots: {
+      morning: [[150, 120], [40, 160], [130, 300], [40, 330], [190, 380], [70, 530], [40, 290], [180, 430]],
+      afternoon: [[310, 150, MUSIC], [300, 440, LAUNDRY], [290, 270], [420, 250], [300, 366], [420, 400], [270, 210], [420, 160]],
+    },
+    labels: { morning: [104, 196, '⬅ 🌅 Morning quests'], afternoon: [346, 268, '➡ ☀️ After-school quests'] },
+    pond: { lip: '#6e4b2a', water: '#1c9c8c', deep: '#127a6e', light: '#38d9a9', shine: '#96f2d7', pads: true },
+    clearing: { fill: ['#8b5a2b', '#6e4b2a', '#b07443'], grass: '#2f9e44' },
+  },
+
+  // ---------- Rainbow Land: mushroom houses under a rainbow river's arch ----------
+  'bg-rainbow': {
+    H: 560,
+    seed: 8807,
+    ground: { kind: 'candy', c: ['#c3fae8', '#a6f0d8', '#e6fcf5'], edge: ['#96f2d7', '#a6f0d8'] },
+    scatter: { kind: 'candy', every: 1400 },
+    border: { kinds: [
+      { kind: 'candytree', pal: { G: '#faa2c1', g: '#fcc2d7', d: '#f06595', T: '#fff0f6' } },
+      { kind: 'candytree', pal: { G: '#b197fc', g: '#d0bfff', d: '#845ef7', T: '#fff0f6' } },
+      { kind: 'candytree', pal: { G: '#74c0fc', g: '#a5d8ff', d: '#4dabf7', T: '#fff0f6' } },
+    ] },
+    pathStyle: { layers: [[7, '#ff6b6b'], [6, '#ffa94d'], [5, '#ffd43b'], [4, '#69db7c'], [3, '#4dabf7'], [1, '#b197fc']] },
+    home: { x: 174, y: 40, w: 100, h: 84, style: 'mushroom', wall: '#fff9db' },
+    houses: [
+      { x: 40, y: 130, w: 80, h: 72, style: 'mushroom', roof: '#845ef7', wall: '#fff9db' },
+      { x: 330, y: 130, w: 80, h: 72, style: 'mushroom', roof: '#4dabf7', wall: '#fff9db' },
+      { x: 40, y: 420, w: 96, h: 84, style: 'mushroom', roof: '#f783ac', wall: '#fff9db', sign: 'note', music: true },
+    ],
+    water: [{ pts: [[-20, 400], [60, 320], [150, 276], [224, 266], [298, 276], [388, 320], [468, 400]], w: 26, kind: 'rainbow', colors: { bank: '#ffffff', edge: '#fcc2d7', deep: '#e64980', water: '#f783ac', shine: '#fff0f6' } }],
+    crossings: [{ at: [224, 266], dir: 'v', kind: 'rainbow' }],
+    paths: [[[224, 126], [224, 500]], [[224, 210], [80, 210], [80, 204]], [[224, 210], [370, 210], [370, 204]], [[224, 520], [88, 520], [88, 506]]],
+    plazas: [[224, 340, 24], [224, 200, 22], [224, 500, 24]],
+    plazaStyle: { a: '#fff0f6', b: '#ffffff', gap: '#fcc2d7', rim: '#f783ac' },
+    props: [
+      p('stall', 280, 300, { pal: { a: '#ff8787', b: '#ffffff', wood: '#fcc2d7', goods: [['#ff6b6b', '#ffc9c9'], ['#845ef7', '#d0bfff'], ['#4dabf7', '#d0ebff'], ['#ffd43b', '#fff3bf']] } }),
+      p('laundry', 300, 400, { w: 76 }),
+      p('lollipop', 150, 60, { c: '#ff6b6b' }), p('lollipop', 290, 60, { c: '#845ef7' }), p('lollipop', 170, 410, { c: '#4dabf7' }),
+      p('mushroom', 30, 250, { c: '#ff6b6b' }), p('mushroom', 400, 250, { c: '#845ef7' }), p('cloud', 120, 380), p('cloud', 250, 420),
+      p('candytree', 30, 330, { pal: { G: '#ffd43b', g: '#ffec99', d: '#fab005', T: '#fff0f6' } }), p('mushroom', 160, 520, { c: '#4dabf7' }),
+      p('cloud', 330, 90, { c: '#fff0f6' }), p('cloud', 60, 80, { c: '#f3f0ff' }),
+    ],
+    shop: { x: 302, y: 348 },
+    green: {
+      left: { x: 56, y: 208, w: 104, h: 40 }, right: { x: 290, y: 210, w: 104, h: 40 },
+      idle: [{ x: 180, y: 250 }, { x: 268, y: 250 }, { x: 180, y: 220 }, { x: 268, y: 290 }],
+    },
+    landmark: { x: 300, y: 448, stand: { x: 290, y: 522 } },
+    chest: { x: 224, y: 506 },
+    start: { x: 224, y: 136 },
+    slots: {
+      morning: [[150, 120], [300, 120], [80, 110], [370, 110], [150, 180], [300, 180], [40, 220], [410, 220]],
+      afternoon: [[150, 470, MUSIC], [340, 440, LAUNDRY], [150, 356], [400, 370], [60, 390], [260, 380], [110, 540], [350, 524]],
+    },
+    labels: { morning: [224, 236, '⬆ 🌅 Morning quests'], afternoon: [110, 336, '⬇ ☀️ After-school quests'] },
+    pond: { lip: '#ffffff', water: '#f783ac', deep: '#e64980', light: '#faa2c1', shine: '#fff0f6', pads: false },
+    clearing: { fill: ['#fff9db', '#ffec99', '#ffffff'], grass: '#c3fae8' },
+  },
+
+  // ---------- Golden Galaxy: golden domes, glowing spires and a stream of stars ----------
+  'bg-galaxy': {
+    H: 560,
+    seed: 9901,
+    ground: { kind: 'stars', c: ['#2a1a5e', '#21134d', '#3a2878'], edge: ['#1c1045', '#201249'] },
+    border: { kinds: [{ kind: 'spire', c: '#ffe066', C: '#f59f00' }, { kind: 'crystal', c: '#d0bfff', C: '#9775fa' }, { kind: 'spire', c: '#d0bfff', C: '#9775fa' }] },
+    pathStyle: { edge: '#e67700', fill: '#fcc419' },
+    home: { x: 320, y: 36, w: 100, h: 82, style: 'dome', wall: '#e5dbff', glass: '#ffd43b' },
+    houses: [
+      { x: 40, y: 50, w: 84, h: 70, style: 'dome', roof: '#b197fc', wall: '#e5dbff', glass: '#ffd43b' },
+      { x: 300, y: 430, w: 96, h: 80, style: 'dome', roof: '#ffa94d', wall: '#e5dbff', glass: '#ffd43b', sign: 'note', music: true },
+    ],
+    water: [{ pts: [[470, 150], [330, 230], [224, 262], [110, 300], [-20, 350]], w: 30, kind: 'stars', colors: { bank: '#3a2878', edge: '#5f3dc4', deep: '#4527a0', water: '#7950f2', shine: '#ffffff' } }],
+    crossings: [{ at: [224, 262], dir: 'v', kind: 'light' }],
+    paths: [[[370, 120], [370, 170], [224, 200], [224, 400], [100, 470]], [[224, 400], [348, 400], [348, 430]], [[224, 170], [82, 170], [82, 122]]],
+    plazas: [[100, 474, 24], [224, 190, 20]],
+    plazaStyle: { a: '#ffe066', b: '#fff3bf', gap: '#f59f00', rim: '#e67700' },
+    props: [
+      p('stall', 160, 60, { pal: { a: '#ffd43b', b: '#5f3dc4', wood: '#fab005', goods: [['#ffd43b', '#fff3bf'], ['#b197fc', '#e5dbff'], ['#63e6be', '#c3fae8']] } }),
+      p('laundry', 40, 380, { w: 84 }),
+      p('orb', 260, 80, { c: '#b197fc' }), p('orb', 390, 230, { c: '#63e6be' }), p('lamp', 150, 120, { c: '#ffd43b', post: '#fab005' }),
+      p('lamp', 290, 360, { c: '#ffd43b', post: '#fab005' }), p('crystal', 30, 220, { c: '#ffe066', C: '#f59f00' }), p('crystal', 420, 330, { c: '#d0bfff', C: '#9775fa' }),
+      p('spire', 180, 310, { c: '#ffe066', C: '#f59f00' }), p('orb', 30, 500, { c: '#ffa94d' }), p('crystal', 420, 500, { c: '#ffe066', C: '#f59f00' }),
+    ],
+    shop: { x: 182, y: 108 },
+    green: {
+      left: { x: 50, y: 200, w: 106, h: 44 }, right: { x: 274, y: 300, w: 120, h: 44 },
+      idle: [{ x: 180, y: 216 }, { x: 250, y: 300 }, { x: 160, y: 244 }, { x: 250, y: 344 }],
+    },
+    landmark: { x: 170, y: 452, stand: { x: 158, y: 520 } },
+    chest: { x: 100, y: 480 },
+    start: { x: 370, y: 132 },
+    slots: {
+      morning: [[300, 140], [420, 150], [120, 150], [250, 210], [60, 160], [330, 190], [190, 240], [400, 190]],
+      afternoon: [[300, 520, MUSIC], [80, 420, LAUNDRY], [170, 380], [300, 390], [100, 330], [400, 400], [240, 500], [420, 470]],
+    },
+    labels: { morning: [370, 196, '⬆ 🌅 Morning quests'], afternoon: [110, 360, '⬇ ☀️ After-school quests'] },
+    pond: { lip: '#5f3dc4', water: '#7950f2', deep: '#5f3dc4', light: '#9775fa', shine: '#ffffff', pads: false },
+    clearing: { fill: ['#5f3dc4', '#4527a0', '#7950f2'], grass: '#3a2878' },
+  },
+};
+
+// ---------- building a layout ----------
+
+/** The prop footprints round the edge: a forest, palms, kelp... */
+function borderProps(spec, H) {
+  const out = [];
+  const b = spec.border;
+  if (!b) return out;
+  const sides = b.sides || ['top', 'bottom', 'left', 'right'];
+  const kinds = b.kinds;
+  const k = (i) => kinds[i % kinds.length];
+  const size = (kk) => PROPS[kk.kind];
+  if (sides.includes('top')) { let i = 0; for (let x = -14; x < W; i += 1) { const kk = k(i); const s = size(kk); out.push({ ...kk, x, y: Math.round(22 - Math.min(s.base, s.h * 0.75) + (i % 2 ? 5 : 0)) }); x += Math.round(s.w * 0.8); } }
+  if (sides.includes('bottom')) { let i = 0; for (let x = -14; x < W; i += 1) { const kk = k(i + 1); const s = size(kk); out.push({ ...kk, x, y: Math.round(H - s.h * 0.75 + (i % 2 ? 0 : 6)) }); x += Math.round(s.w * 0.8); } }
+  for (const side of ['left', 'right']) {
+    if (!sides.includes(side)) continue;
+    let i = 0;
+    for (let y = 4; y < H - 30; i += 1) {
+      const kk = k(i + (side === 'right' ? 2 : 0)); const s = size(kk);
+      const x = side === 'left' ? Math.round(-s.w * 0.55 + (i % 2 ? 4 : 0)) : Math.round(W - s.w * 0.45 - (i % 2 ? 4 : 0));
+      out.push({ ...kk, x, y: Math.round(y + s.h - s.base - 6) });
+      y += Math.max(24, Math.round(s.h * 0.72));
+    }
+  }
+  // no trees standing in a river where it runs off the edge, or in front of a waterfall
+  const wet = (q) => { const sz = PROPS[q.kind]; const x = q.x + sz.w / 2; const y = q.y + (sz.base ?? sz.h); return spec.water.some((wa) => waterDepth(wa, x, y) > -8 || waterDepth(wa, q.x + 4, y) > -8 || waterDepth(wa, q.x + sz.w - 4, y) > -8); };
+  const f = spec.falls;
+  const atFalls = (q) => f && q.y < f.base && q.x + PROPS[q.kind].w > f.cliff[0] + 6 && q.x < f.cliff[1] - 6;
+  return out.filter((q) => !wet(q) && !atFalls(q));
+}
+
+const inRect = (x, y, [rx, ry, rw, rh], pad = 0) => x > rx - pad && x < rx + rw + pad && y > ry - pad && y < ry + rh + pad;
+function segDist(x, y, [x0, y0], [x1, y1]) {
+  const dx = x1 - x0; const dy = y1 - y0; const l = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / l));
+  return Math.hypot(x - (x0 + t * dx), y - (y0 + t * dy));
+}
+
+/** A bridge's box: across the water at `at`, from bank to bank. */
+function bridgeBox(c, water) {
+  const [ax, ay] = c.at;
+  const wet = (x, y) => water.some((wa) => waterDepth(wa, x, y) > -5);
+  const w = c.w || 32;
+  if (c.dir === 'h') {
+    let x0 = ax; let x1 = ax;
+    while (x0 > 0 && [ay - 10, ay, ay + 10].some((y) => wet(x0, y))) x0 -= 1;
+    while (x1 < W && [ay - 10, ay, ay + 10].some((y) => wet(x1, y))) x1 += 1;
+    return { ...c, x: x0 - 3, y: ay - w / 2, w: x1 - x0 + 6, h: w };
+  }
+  let y0 = ay; let y1 = ay;
+  while (y0 > 0 && [ax - 10, ax, ax + 10].some((x) => wet(x, y0))) y0 -= 1;
+  while (y1 < 2000 && [ax - 10, ax, ax + 10].some((x) => wet(x, y1))) y1 += 1;
+  return { ...c, x: ax - w / 2, y: y0 - 3, w, h: y1 - y0 + 6 };
+}
+
+const cache = new Map();
+
+/** The village layout for a Places background (the meadow's Forest Village when unknown). */
+export function villageLayout(theme) {
+  const id = VILLAGE_MAPS[theme] ? theme : 'bg-meadow';
+  if (cache.has(id)) return cache.get(id);
+  const spec = VILLAGE_MAPS[id];
+  const H = spec.H;
+  const props = [...borderProps(spec, H), ...spec.props];
+  const water = spec.water;
+  const crossings = spec.crossings.map((c) => bridgeBox(c, water));
+  const houses = spec.houses;
+  const home = spec.home;
+  // the landmark is drawn at twice its art size; its box comes from the art (see app.js)
+  const lm = spec.landmark;
+  const obstacles = [
+    [0, 0, W, 22], [0, H - 18, W, 18], [0, 0, 20, H], [W - 20, 0, 20, H],
+    ...[home, ...houses].map((h) => [h.x, h.y - 6, h.w, h.h + 4]),
+    ...props.map((q) => { const s = PROPS[q.kind]; if (!s?.foot) return null; const f = q.kind === 'garden' ? [0, 0, q.w || 62, (q.h || 34) + 14] : s.foot; return [q.x + f[0], q.y + f[1], f[2], f[3]]; }).filter(Boolean),
+    ...props.filter((q) => q.kind === 'laundry').flatMap((q) => [[q.x, q.y + 18, 4, 8], [q.x + (q.w || 84) - 4, q.y + 18, 4, 8]]),
+  ];
+  const inWater = (x, y, pad = 0) => water.some((wa) => waterDepth(wa, x, y) > -3 - pad);
+  const onBridge = (x, y) => crossings.some((b) => (b.dir === 'h' ? x > b.x - 6 && x < b.x + b.w + 6 && y > b.y + 2 && y < b.y + b.h - 2 : x > b.x + 2 && x < b.x + b.w - 2 && y > b.y - 6 && y < b.y + b.h + 6));
+  const L = {
+    id,
+    name: spec.name,
+    W,
+    H,
+    seed: spec.seed,
+    ground: spec.ground,
+    walls: spec.walls,
+    scatter: spec.scatter,
+    pathStyle: spec.pathStyle,
+    home,
+    houses,
+    water,
+    crossings,
+    paths: spec.paths,
+    plazas: spec.plazas,
+    plazaStyle: spec.plazaStyle,
+    props,
+    pond: spec.pond || {},
+    clearing: spec.clearing,
+    shop: spec.shop,
+    green: spec.green,
+    falls: spec.falls,
+    life: spec.life || {},
+    landmark: lm,
+    chest: spec.chest,
+    start: spec.start,
+    labels: spec.labels,
+    slots: {
+      morning: spec.slots.morning.map(([x, y, likes]) => ({ x, y, likes })),
+      afternoon: spec.slots.afternoon.map(([x, y, likes]) => ({ x, y, likes })),
+    },
+    obstacles,
+    inWater,
+    onBridge,
+    // anywhere a house or a standing prop is drawn (critters shouldn't wander over roofs)
+    covered: (x, y) => [home, ...houses].some((h) => inRect(x, y, [h.x - 4, h.y - 16, h.w + 8, h.h + 20])) ||
+      props.some((q) => { const sz = PROPS[q.kind]; return sz && !sz.flat && inRect(x, y, [q.x, q.y, q.w || sz.w, q.h || sz.h], 2); }),
+    blockedHard: (x, y, pad = 0) => obstacles.some((r) => inRect(x, y, r, pad)),
+    blocked: (x, y, pad = 0) => obstacles.some((r) => inRect(x, y, r, pad)) || (inWater(x, y, pad) && !onBridge(x, y)),
+    onPath: (x, y, d) => spec.paths.some((q) => q.some((pt, i) => i > 0 && segDist(x, y, q[i - 1], pt) < d)) || spec.plazas.some(([px, py, r]) => Math.hypot(x - px, y - py) < r + d),
+  };
+  cache.set(id, L);
+  return L;
+}
+
+export const VILLAGE_THEMES = Object.keys(VILLAGE_MAPS);
