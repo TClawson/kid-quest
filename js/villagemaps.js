@@ -192,6 +192,7 @@ export const VILLAGE_MAPS = {
       p('crystal', 420, 200), p('crystal', 20, 470, { c: '#ffd8a8', C: '#ff922b' }), p('rock', 250, 360, { c: '#6a6f96' }),
     ],
     shop: { x: 218, y: 84 },
+    life: { pad: { x: 402, y: 96 } }, // the rocket's landing pad
     green: {
       left: { x: 50, y: 182, w: 110, h: 40 }, right: { x: 312, y: 190, w: 86, h: 40 },
       idle: [{ x: 196, y: 210 }, { x: 250, y: 210 }, { x: 200, y: 250 }, { x: 280, y: 236 }],
@@ -238,6 +239,7 @@ export const VILLAGE_MAPS = {
       p('garden', 30, 40, { w: 56, h: 30 }), p('tree', 380, 450), p('bush', 26, 460, { berries: true }), p('flowers', 300, 260),
     ],
     shop: { x: 142, y: 300 },
+    life: { knightPost: { x: 370, y: 256, side: 1 } }, // where the knight keeps watch
     green: {
       left: { x: 54, y: 400, w: 110, h: 44 }, right: { x: 284, y: 400, w: 110, h: 44 },
       idle: [{ x: 196, y: 410 }, { x: 252, y: 430 }, { x: 196, y: 446 }, { x: 252, y: 396 }],
@@ -282,6 +284,7 @@ export const VILLAGE_MAPS = {
       p('palm', 20, 360), p('palm', 280, 120), p('boulder', 250, 190, { c: '#3d3330' }), p('rock', 70, 480, { c: '#3d3330' }), p('palm', 200, 500),
     ],
     shop: { x: 52, y: 218 },
+    life: { goal: { x: 360, y: 54 }, tikiHomes: [[364, 128], [410, 170], [372, 222], [320, 236], [160, 318], [60, 420], [140, 470]] }, // the crater is 26 px above goal
     green: {
       left: { x: 50, y: 312, w: 100, h: 44 }, right: { x: 220, y: 300, w: 120, h: 44 },
       idle: [{ x: 360, y: 250 }, { x: 410, y: 250 }, { x: 180, y: 300 }, { x: 370, y: 300 }],
@@ -314,6 +317,10 @@ export const VILLAGE_MAPS = {
     ],
     water: [{ pts: [[214, -20], [244, 110], [204, 250], [246, 400], [222, 600]], w: 30, kind: 'river', colors: { bank: '#1b5e20', edge: '#6e4b2a', deep: '#127a6e', water: '#1c9c8c', shine: '#96f2d7' }, reeds: '#5c940d' }],
     crossings: [{ at: [222, 300], dir: 'h', kind: 'rope', pal: { plank: '#a0612f', dark: '#6e4b2a', rail: '#5c940d' } }],
+    // the river pours over a mossy cliff at the top of the village (things come over it now and then)
+    falls: { x0: 218, x1: 236, lip: 4, base: 50, cliff: [184, 274] },
+    // the map's moving things (maplife.js): where the sloth's vines hang
+    life: { vines: [176, 360] },
     paths: [
       [[90, 132], [90, 300], [190, 300]], [[256, 300], [368, 300], [368, 138]], [[368, 300], [368, 400]], [[90, 300], [150, 330], [150, 504], [85, 504], [85, 492]],
     ],
@@ -455,7 +462,11 @@ function borderProps(spec, H) {
       y += Math.max(24, Math.round(s.h * 0.72));
     }
   }
-  return out;
+  // no trees standing in a river where it runs off the edge, or in front of a waterfall
+  const wet = (q) => { const sz = PROPS[q.kind]; const x = q.x + sz.w / 2; const y = q.y + (sz.base ?? sz.h); return spec.water.some((wa) => waterDepth(wa, x, y) > -8 || waterDepth(wa, q.x + 4, y) > -8 || waterDepth(wa, q.x + sz.w - 4, y) > -8); };
+  const f = spec.falls;
+  const atFalls = (q) => f && q.y < f.base && q.x + PROPS[q.kind].w > f.cliff[0] + 6 && q.x < f.cliff[1] - 6;
+  return out.filter((q) => !wet(q) && !atFalls(q));
 }
 
 const inRect = (x, y, [rx, ry, rw, rh], pad = 0) => x > rx - pad && x < rx + rw + pad && y > ry - pad && y < ry + rh + pad;
@@ -527,6 +538,8 @@ export function villageLayout(theme) {
     clearing: spec.clearing,
     shop: spec.shop,
     green: spec.green,
+    falls: spec.falls,
+    life: spec.life || {},
     landmark: lm,
     chest: spec.chest,
     start: spec.start,

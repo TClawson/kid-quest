@@ -746,6 +746,7 @@ export function paintVillage(canvas, L, opts = {}) {
     else if (a.kind === 'hockey') frozen(px, a);
     else clearingOf(px, a, a.kind, L.clearing);
   });
+  if (L.falls) fallsOf(px, L.falls);
   L.crossings.forEach((b) => bridgeOf(px, b));
   L.props.filter((p) => PROPS[p.kind]?.flat).forEach((p) => PROPS[p.kind].draw(px, p, rnd));
   if (L.walls === 'castle') castleWall(px, L);
@@ -769,6 +770,41 @@ export function paintVillage(canvas, L, opts = {}) {
   ].sort((a, b) => a.y - b.y);
   things.forEach((t) => t.draw());
   return canvas;
+}
+
+/** A mossy cliff at the top of the village with the river pouring over it (maplife.js animates the water). */
+function fallsOf(px, f) {
+  const [c0, c1] = f.cliff;
+  const bottom = f.base - 2;
+  for (let y = 0; y <= bottom; y += 1) {
+    // the cliff bulges out a little towards its foot
+    const grow = Math.round(Math.sin((y / bottom) * Math.PI * 0.5) * 6);
+    const a = c0 - grow; const b = c1 + grow;
+    px(a, y, OUT, b - a, 1);
+    if (y === bottom) continue;
+    px(a + 1, y, '#6c757d', b - a - 2, 1);
+    for (let x = a + 1; x < b - 1; x += 1) {
+      const h = hashXY(x, y);
+      if (h < 0.08) px(x, y, '#495057');
+      else if (h > 0.94) px(x, y, '#868e96');
+    }
+    // light on the left of each ledge, shade on the right
+    if (y % 9 === 3) { px(a + 1, y, '#adb5bd', Math.round((b - a) * 0.4), 1); px(a + Math.round((b - a) * 0.6), y + 1, '#495057', Math.round((b - a) * 0.4) - 1, 1); }
+  }
+  // moss over the top, hanging down in strands
+  px(c0 - 1, 0, '#1b5e20', c1 - c0 + 2, 7);
+  for (let x = c0; x < c1; x += 1) {
+    const h = hashXY(x, 3);
+    const len = 2 + Math.floor(h * 7);
+    if (x % 2 === 0) px(x, 7, h > 0.5 ? '#2f9e44' : '#237032', 1, len);
+    if (h > 0.7) px(x, 1 + (x % 3), '#51cf66');
+  }
+  px(c0 - 1, 7, OUT, 1, 3); px(c1, 7, OUT, 1, 3);
+  // the water coming over the edge
+  px(f.x0 - 1, f.lip - 1, OUT, f.x1 - f.x0 + 3, f.base - f.lip + 1);
+  px(f.x0, f.lip - 1, '#1c9c8c', f.x1 - f.x0 + 1, f.base - f.lip);
+  px(f.x0 + 2, f.lip - 1, '#3bc9db', f.x1 - f.x0 - 3, f.base - f.lip);
+  px(f.x0, f.lip - 1, '#c5f6fa', f.x1 - f.x0 + 1, 2);
 }
 
 /** A worn clearing for soccer or football in the ground's own colors, with goals or posts. */

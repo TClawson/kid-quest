@@ -14,6 +14,8 @@
 import { drawVillager, VILLAGER_KINDS, villagerGrid } from './villageart.js';
 import { paintVillage } from './villageprops.js';
 import { villageLayout } from './villagemaps.js';
+import { MAP_THEMES } from './maparts.js';
+import { startMapLife } from './maplife.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -236,6 +238,7 @@ export function villageHtml(v) {
       <div class="village-view">
         <div class="village-world" style="width:${L.W}px;height:${L.H}px">
           <canvas class="village-land" width="${L.W}" height="${L.H}" aria-hidden="true"></canvas>
+          <canvas class="v-life" width="${L.W}" height="${L.H}" style="width:${L.W}px;height:${L.H}px" aria-hidden="true"></canvas>
           <div class="v-label home-label" style="left:${L.home.x + L.home.w / 2}px;top:${L.home.y + 10}px">${esc(v.kidName)}'s house</div>
           ${am ? `<div class="v-label period" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
           ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
@@ -252,6 +255,74 @@ export function villageHtml(v) {
         <div class="v-dialog" hidden></div>
       </div>
     </section>`;
+}
+
+// ---------- the map's moving things ----------
+// The same critters as the map (maplife.js): crabs on the beach, fish and a shark under the sea,
+// aliens and a rocket, the knight and the dragon, the volcano and its tiki villagers, the sloth,
+// toucan, monkeys and jaguar (and the waterfall), the unicorn, and the golden saucers. They are
+// drawn one art pixel to one village pixel, like everything else in the village.
+
+function startLife(section, L, data, people, cam) {
+  const life = MAP_THEMES[L.id]?.life;
+  const canvas = section.querySelector('.v-life');
+  if (!life || !canvas) return;
+  const hints = L.life || {};
+  const near = (x, y, d) => people.some((p) => Math.hypot(p.x - x, p.y - y) < d) || (L.shop && Math.hypot(L.shop.x - x, L.shop.y - y) < d);
+  const onGreen = (x, y) => ['left', 'right'].some((k) => { const g = L.green[k]; return x > g.x - 10 && x < g.x + g.w + 10 && y > g.y - 10 && y < g.y + g.h + 10; });
+  const lm = data.landmark;
+  const onLandmark = (x, y) => lm && x > lm.x - 6 && x < lm.x + lm.w + 6 && y > lm.y - 6 && y < lm.y + lm.h + 6;
+  const falls = L.falls ? riverFalls(L) : null;
+  startMapLife({
+    section, canvas, host: cam.host, view: cam.view, toMap: cam.toMap,
+    key: `village|${data.kid}|${L.id}`,
+    aw: L.W, ah: L.H, scale: 1, z: 1, life, wall: 20, falls,
+    goal: hints.goal || L.chest,
+    knightPost: hints.knightPost || { x: L.W - 50, y: L.H / 2, side: 1 },
+    pad: hints.pad,
+    vines: hints.vines,
+    tikiHomes: hints.tikiHomes,
+    // a straight run between two open spots must not cross water (the lava) either
+    canStand: (x, y) => !L.blocked(x, y, 2) && !L.inWater(x, y, 8),
+    openSpot: ({ top, bottom }) => {
+      for (let tries = 0; tries < 40; tries += 1) {
+        const x = 26 + Math.random() * (L.W - 70);
+        const y = Math.max(28, top) + Math.random() * Math.max(1, Math.min(L.H - 40, bottom) - Math.max(28, top) - 16);
+        const cx = x + 8; const cy = y + 12;
+        if (L.blocked(cx, cy, 4) || L.inWater(cx, cy, 6) || near(cx, cy, 20) || onGreen(cx, cy) || onLandmark(cx, cy)) continue;
+        return { x, y };
+      }
+      return null;
+    },
+  });
+}
+
+/** The waterfall at the head of a village river, and the way down the river from its foot. */
+function riverFalls(L) {
+  const f = L.falls;
+  const pts = L.water[0].pts;
+  // the river's line from the foot of the falls on
+  const line = [];
+  for (let i = 1; i < pts.length; i += 1) {
+    const [x0, y0] = pts[i - 1]; const [x1, y1] = pts[i];
+    if (y1 < f.base) continue;
+    if (y0 < f.base) { const k = (f.base - y0) / (y1 - y0); line.push([x0 + (x1 - x0) * k, f.base]); }
+    line.push([x1, y1]);
+  }
+  return {
+    ...f, dir: 1,
+    along(s) {
+      let left = s;
+      for (let i = 1; i < line.length; i += 1) {
+        const [x0, y0] = line[i - 1]; const [x1, y1] = line[i];
+        const d = Math.hypot(x1 - x0, y1 - y0);
+        if (left <= d) { const y = y0 + ((y1 - y0) * left) / d; return y > L.H + 10 ? null : { x: x0 + ((x1 - x0) * left) / d, y }; }
+        left -= d;
+      }
+      return null;
+    },
+    under: (x, y) => L.onBridge(x, y),
+  };
 }
 
 // ---------- walking ----------
@@ -774,6 +845,11 @@ function mount(section, handlers) {
     requestAnimationFrame(tick);
   };
   window.addEventListener('resize', () => { measure(); }, { passive: true });
+  startLife(section, L, data, people, {
+    host: view,
+    view: () => ({ top: cam.y, bottom: cam.y + vh / S }),
+    toMap: (e) => { const r = world.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; },
+  });
   place();
   requestAnimationFrame(tick);
 
