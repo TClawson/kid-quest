@@ -51,6 +51,8 @@ export const VILLAGE_MAPS = {
       p('flowers', 160, 98), p('flowers', 276, 98), p('flowers', 150, 376), p('flowers', 270, 520),
       p('bush', 152, 70, { berries: true }), p('bush', 278, 70), p('bush', 150, 444, { berries: true }), p('bush', 250, 428), p('bush', 118, 528, { berries: true }),
       p('tree', 118, 66), p('tree', 298, 66), p('tree', 380, 190), p('tree', 140, 384), p('tree', 40, 476),
+      p('mailbox', 198, 100), p('birdhouse', 152, 38), p('lantern', 232, 198), p('lantern', 180, 424), p('scarecrow', 34, 128),
+      p('bench', 350, 294), p('barrow', 252, 452), p('mushrooms', 404, 222), p('snail', 110, 300),
     ],
     shop: { x: 370, y: 202 },
     green: {
