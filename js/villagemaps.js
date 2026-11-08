@@ -18,6 +18,7 @@ import { PROPS, waterDepth } from './villageprops.js';
 import { OAK } from './oakart.js';
 import { WRECK } from './wreckart.js';
 import { GALLEON } from './galleonart.js';
+import { CAVE } from './caveart.js';
 
 const W = 448;
 
@@ -185,7 +186,8 @@ export const VILLAGE_MAPS = {
     seed: 4409,
     ground: { kind: 'moon', c: ['#7d82a8', '#6a6f96', '#9a9fc4'], edge: ['#5c5f8a', '#62658f'] },
     scatter: { kind: 'pebbles', every: 200, colors: ['#5c6088', '#a5aacf'] },
-    border: { kinds: [{ kind: 'boulder', c: '#6a6f96' }, { kind: 'crystal', c: '#99e9f2', C: '#3bc9db' }, { kind: 'boulder', c: '#5c5f8a' }] },
+    // no boulders along the top: there the far rim meets the black sky, with the Earth in it (spaceart.js)
+    border: { sides: ['bottom', 'left', 'right'], kinds: [{ kind: 'boulder', c: '#6a6f96' }, { kind: 'crystal', c: '#99e9f2', C: '#3bc9db' }, { kind: 'boulder', c: '#5c5f8a' }] },
     pathStyle: { edge: '#495057', fill: '#adb5bd', kind: 'planks' },
     plazaStyle: { a: '#ced4da', b: '#adb5bd', gap: '#495057', rim: '#ffd43b' },
     home: { x: 40, y: 40, w: 100, h: 80, style: 'dome', wall: '#ced4da', glass: '#ff6b6b' },
@@ -204,9 +206,12 @@ export const VILLAGE_MAPS = {
       p('stall', 196, 36, { pal: { a: '#ffd43b', b: '#495057', wood: '#868e96', goods: [['#74c0fc', '#d0ebff'], ['#ff6b6b', '#ffc9c9'], ['#69db7c', '#d3f9d8']] } }),
       p('laundry', 180, 450, { w: 84 }),
       p('dish', 400, 140), p('dish', 160, 320), p('lamp', 150, 100, { c: '#74c0fc' }), p('lamp', 270, 160, { c: '#74c0fc' }),
-      p('lamp', 330, 470, { c: '#74c0fc' }), p('flag', 240, 90, { c: '#ff6b6b' }),
-      p('crater', 110, 200), p('crater', 370, 320, { w: 44, h: 20 }), p('crater', 230, 500, { w: 30, h: 16 }), p('crater', 30, 290, { w: 28, h: 14 }),
+      p('flag', 240, 90, { c: '#ff6b6b' }),
+      p('crater', 110, 200), p('crater', 370, 320, { w: 44, h: 20 }), p('crater', 176, 508, { w: 30, h: 16 }), p('crater', 30, 290, { w: 28, h: 14 }),
       p('crystal', 420, 200), p('crystal', 20, 470, { c: '#ffd8a8', C: '#ff922b' }), p('rock', 250, 360, { c: '#6a6f96' }),
+      // moon-base whimsy (spaceart.js)
+      p('greenhouse', 150, 44), p('telescope', 262, 52), p('rover', 40, 496), p('solar', 92, 500), p('satellite', 372, 318),
+      p('robot', 318, 392), p('cheese', 208, 338), p('prints', 190, 100),
     ],
     shop: { x: 218, y: 84 },
     life: { pad: { x: 394, y: 104 } }, // the rocket's landing pad
@@ -214,7 +219,8 @@ export const VILLAGE_MAPS = {
       left: { x: 50, y: 182, w: 110, h: 40 }, right: { x: 312, y: 190, w: 86, h: 40 },
       idle: [{ x: 196, y: 210 }, { x: 250, y: 210 }, { x: 200, y: 250 }, { x: 280, y: 236 }],
     },
-    landmark: { x: 300, y: 474, stand: { x: 290, y: 534 } },
+    // the moon worm's cave in its crater (caveart.js); its foot is the rocky hill and the crater round it
+    landmark: { x: 266, y: 450, w: CAVE.w, h: CAVE.h, art: 'cave', foot: [4, 34, 156, 72], stand: { x: 254, y: 514 } },
     chest: { x: 380, y: 436 },
     start: { x: 90, y: 134 },
     slots: {

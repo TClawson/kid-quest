@@ -9,6 +9,7 @@ import {
 } from './villageart.js';
 import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrowB, mushroomsB, snailB } from './meadowart.js';
 import { paintOcean, anemoneB, helmetB, mermaidB, sunkboatB, bootB, urchinsB, seahorseB, seaventB } from './oceanart.js';
+import { paintSpace, roverB, solarB, satelliteB, telescopeB, cheeseB, robotB, greenhouseB, printsB } from './spaceart.js';
 import { paintSunset, hammockB, rowboatB, gullB, tidepoolB, driftwoodB, tikiB, coconutsB } from './sunsetart.js';
 
 // ---------- a lit shape ----------
@@ -554,6 +555,15 @@ export const PROPS = {
   urchins: { w: 12, h: 7, foot: null, flat: true, draw: (px, p) => urchinsB(px, p.x, p.y) },
   seahorse: { w: 8, h: 14, foot: null, flat: true, draw: (px, p) => seahorseB(px, p.x, p.y) },
   seavent: { w: 16, h: 12, foot: [2, 4, 12, 8], base: 11, draw: (px, p) => seaventB(px, p.x, p.y) },
+  // the Moon Base's little things (spaceart.js)
+  rover: { w: 36, h: 24, foot: [2, 10, 32, 13], base: 23, draw: (px, p) => roverB(px, p.x, p.y) },
+  solar: { w: 32, h: 22, foot: [3, 14, 26, 8], base: 21, draw: (px, p) => solarB(px, p.x, p.y) },
+  satellite: { w: 34, h: 22, foot: [6, 10, 22, 11], base: 21, draw: (px, p) => satelliteB(px, p.x, p.y) },
+  telescope: { w: 18, h: 26, foot: [4, 20, 10, 6], base: 25, draw: (px, p) => telescopeB(px, p.x, p.y) },
+  cheese: { w: 22, h: 16, foot: [1, 7, 20, 8], base: 15, draw: (px, p) => cheeseB(px, p.x, p.y) },
+  robot: { w: 20, h: 24, foot: [4, 16, 12, 7], base: 23, draw: (px, p) => robotB(px, p.x, p.y) },
+  greenhouse: { w: 36, h: 30, foot: [1, 14, 34, 15], base: 29, draw: (px, p) => greenhouseB(px, p.x, p.y) },
+  prints: { w: 44, h: 14, foot: null, flat: true, draw: (px, p) => printsB(px, p.x, p.y) },
 };
 
 // ---------- the ground ----------
@@ -758,6 +768,8 @@ export function paintVillage(canvas, L, opts = {}) {
   if (L.id === 'bg-sunset') return paintSunset(canvas, L, opts, { waterDepth, PROPS });
   // ...and so does Under the Sea (oceanart.js)
   if (L.id === 'bg-ocean') return paintOcean(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does the Moon Base (spaceart.js)
+  if (L.id === 'bg-space') return paintSpace(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');
