@@ -334,11 +334,13 @@ function painter(ctx, w, h) {
   };
   // A sprite in fine pixels: outlines one fine pixel thin on the inside of the shape,
   // fills with a light top edge, a shaded bottom edge and a little texture.
-  const sprite = (x0, y0, rows, pal) => {
+  // cell: fine pixels per sprite cell (Z, or 3 for houses a size and a half)
+  const sprite = (x0, y0, rows, pal, cell = Z) => {
     const X0 = Math.round(x0) * Z; const Y0 = Math.round(y0) * Z;
     if (rows === TREE) return fineTree(fine, X0, Y0, pal, 1);
     if (rows === BUSH) return fineTree(fine, X0, Y0, pal, 0);
     if (rows === HOUSE) return fineHouse(fine, X0, Y0, pal);
+    const C = cell;
     const at = (x, y) => (y < 0 || y >= rows.length || x < 0 || x >= rows[y].length ? '.' : rows[y][x]);
     const fill = (x, y) => { const ch = at(x, y); return ch !== '.' && ch !== 'K' && Boolean(pal[ch]); };
     const X = Math.round(x0) * Z; const Y = Math.round(y0) * Z;
@@ -346,21 +348,21 @@ function painter(ctx, w, h) {
       for (let x = 0; x < rows[y].length; x += 1) {
         const ch = rows[y][x];
         if (ch === '.') continue;
-        for (let b = 0; b < Z; b += 1) {
-          for (let a = 0; a < Z; a += 1) {
-            const fx = X + x * Z + a; const fy = Y + y * Z + b;
+        for (let b = 0; b < C; b += 1) {
+          for (let a = 0; a < C; a += 1) {
+            const fx = X + x * C + a; const fy = Y + y * C + b;
             if (ch === 'K') {
-              const nx = a < Z / 2 ? x - 1 : x + 1; const ny = b < Z / 2 ? y - 1 : y + 1;
+              const nx = a < C / 2 ? x - 1 : x + 1; const ny = b < C / 2 ? y - 1 : y + 1;
               const inner = fill(nx, y) || fill(x, ny) || fill(nx, ny);
-              const outerSide = !fill(a < Z / 2 ? x + 1 : x - 1, y) && !fill(x, b < Z / 2 ? y + 1 : y - 1);
+              const outerSide = !fill(a < C / 2 ? x + 1 : x - 1, y) && !fill(x, b < C / 2 ? y + 1 : y - 1);
               if (inner || !outerSide) fine(fx, fy, OUT);
               continue;
             }
             const base = pal[ch]; if (!base) continue;
             let c = base;
             if (b === 0 && !fill(x, y - 1)) c = shade(base, 0.22);
-            else if (b === Z - 1 && !fill(x, y + 1)) c = shade(base, -0.18);
-            else if (a === Z - 1 && !fill(x + 1, y)) c = shade(base, -0.08);
+            else if (b === C - 1 && !fill(x, y + 1)) c = shade(base, -0.18);
+            else if (a === C - 1 && !fill(x + 1, y)) c = shade(base, -0.08);
             else { const hsh = hashXY(fx, fy); if (hsh < 0.1) c = shade(base, -0.1); else if (hsh > 0.94) c = shade(base, 0.12); }
             fine(fx, fy, c);
           }
@@ -406,37 +408,70 @@ function fineTree(fine, X, Y, pal, big) {
   }
 }
 
-/** A cottage (the size of HOUSE, 20 x 18 fine pixels): shingled roof, chimney, window and door. */
+/** How big a village house is, in map pixels (a size and a half of the HOUSE grid). */
+const HOUSE_W = 15;
+const HOUSE_H = 14;
+
+/**
+ * A cottage (30 x 28 fine pixels): a shingled roof with a chimney, two windows with
+ * flower boxes, a door with a step, a timber frame and a shadow on the ground.
+ */
 function fineHouse(fine, X, Y, pal) {
   const R = pal.R; const r = pal.r || shade(R, 0.3); const W = pal.W || '#fff3d6'; const B = pal.B || '#4dabf7'; const D = pal.D || '#8b4513';
-  const K = '#2a1838';
-  // chimney
-  fine(X + 13, Y - 1, K, 4, 6); fine(X + 14, Y, '#adb5bd', 2, 5); fine(X + 14, Y, '#ced4da', 2, 1);
-  // roof: rows of shingles, wider as they go down
-  for (let y = 0; y < 9; y += 1) {
-    const half = 3 + y * 0.85; const x0 = Math.round(10 - half); const x1 = Math.round(10 + half);
+  const K = OUT;
+  // shadow on the ground
+  fine(X + 2, Y + 28, 'rgba(27,20,48,0.2)', 28, 1); fine(X + 28, Y + 15, 'rgba(27,20,48,0.16)', 2, 13);
+  // chimney with a little smoke
+  fine(X + 20, Y - 3, K, 6, 9); fine(X + 21, Y - 2, '#adb5bd', 4, 8); fine(X + 21, Y - 2, '#dee2e6', 4, 1); fine(X + 24, Y - 1, '#868e96', 1, 7);
+  fine(X + 21, Y - 1, '#868e96', 4, 1);
+  // roof: rows of shingles, wider as they go down, lit on the left
+  for (let y = 0; y < 13; y += 1) {
+    const half = 4 + y * 0.92; const x0 = Math.round(15 - half); const x1 = Math.round(15 + half);
     fine(X + x0 - 1, Y + y, K, x1 - x0 + 2, 1);
     for (let x = x0; x < x1; x += 1) {
-      let c = (x + (y % 2) * 2) % 4 === 0 ? shade(R, -0.2) : R;
-      if (y % 3 === 2) c = shade(R, -0.12);
-      if (x < 10 && x - x0 < 2) c = r;
+      let c = R;
+      if (y % 3 === 2) c = shade(R, -0.16); // the shadow under each row of shingles
+      else if ((x + Math.floor(y / 3) * 2) % 4 === 0) c = shade(R, -0.1); // gaps between shingles
+      if (x - x0 < 2 && y % 3 !== 2) c = r; // lit edge
+      if (x1 - x < 2) c = shade(R, -0.22); // shaded edge
       fine(X + x, Y + y, c);
     }
   }
-  fine(X + 3, Y - 1, K, 14, 1);
-  fine(X + 4, Y, r, 12, 1);
-  fine(X, Y + 9, K, 20, 1); fine(X + 1, Y + 8, shade(R, -0.3), 18, 1);
-  // walls with a timber edge and a shadow under the eaves
-  fine(X + 1, Y + 10, K, 18, 8);
-  fine(X + 2, Y + 10, W, 16, 7);
-  fine(X + 2, Y + 10, shade(W, -0.15), 16, 1);
-  fine(X + 2, Y + 16, shade(W, -0.08), 16, 1);
-  // a window with four panes and a sill
-  fine(X + 3, Y + 11, K, 6, 5); fine(X + 4, Y + 12, B, 4, 3); fine(X + 4, Y + 12, shade(B, 0.45), 2, 1); fine(X + 5, Y + 12, K, 1, 3); fine(X + 4, Y + 13, K, 4, 1);
-  fine(X + 3, Y + 16, shade(W, -0.3), 6, 1);
-  // the door with a knob and a step
-  fine(X + 11, Y + 11, K, 6, 7); fine(X + 12, Y + 12, D, 4, 6); fine(X + 12, Y + 12, shade(D, 0.2), 4, 1); fine(X + 13, Y + 13, shade(D, -0.2), 1, 4); fine(X + 15, Y + 15, '#fcc419');
-  fine(X + 10, Y + 18, '#adb5bd', 8, 1);
+  fine(X + 10, Y - 1, K, 10, 1);
+  fine(X + 11, Y, r, 8, 1); fine(X + 12, Y, '#ffffff', 2, 1);
+  fine(X, Y + 13, K, 30, 1); fine(X + 1, Y + 12, shade(R, -0.35), 28, 1);
+  // walls with a timber frame and a shadow under the eaves
+  fine(X + 2, Y + 14, K, 26, 14);
+  fine(X + 3, Y + 14, W, 24, 13);
+  fine(X + 3, Y + 14, shade(W, -0.2), 24, 2);
+  fine(X + 3, Y + 26, shade(W, -0.1), 24, 1);
+  for (let x = 4; x < 26; x += 5) for (let y = 17; y < 26; y += 3) fine(X + x + (y % 2), Y + y, shade(W, -0.06), 2, 1); // plaster
+  const window = (wx) => {
+    fine(X + wx, Y + 16, K, 7, 7); fine(X + wx + 1, Y + 17, B, 5, 5);
+    fine(X + wx + 1, Y + 17, shade(B, 0.5), 2, 1); fine(X + wx + 1, Y + 18, shade(B, 0.35), 1, 1);
+    fine(X + wx + 3, Y + 17, K, 1, 5); fine(X + wx + 1, Y + 19, K, 5, 1);
+    // a flower box under it
+    fine(X + wx - 1, Y + 23, K, 9, 2); fine(X + wx, Y + 23, '#a0612f', 7, 1);
+    for (let i = 0; i < 7; i += 2) fine(X + wx + i, Y + 22, i % 4 ? '#ffd43b' : '#ff6b6b');
+    fine(X + wx + 1, Y + 22, '#2f9e44'); fine(X + wx + 5, Y + 22, '#2f9e44');
+  };
+  window(4);
+  window(19);
+  // the door with a knob, a little arched top, and a step
+  fine(X + 12, Y + 17, K, 7, 11); fine(X + 13, Y + 17, K, 5, 1);
+  fine(X + 13, Y + 18, D, 5, 9); fine(X + 13, Y + 18, shade(D, 0.25), 5, 1);
+  fine(X + 15, Y + 19, shade(D, -0.25), 1, 8); fine(X + 17, Y + 22, '#fcc419');
+  fine(X + 11, Y + 27, '#adb5bd', 9, 1); fine(X + 11, Y + 28, '#868e96', 9, 1);
+}
+
+/** A little picket fence in fine pixels: posts with pointed tops and two rails. */
+function drawFence(fine, X, Y, w, c) {
+  fine(X, Y + 2, OUT, w, 4);
+  fine(X, Y + 3, c, w, 1);
+  for (let x = 0; x < w; x += 4) {
+    fine(X + x, Y, OUT, 3, 7); fine(X + x + 1, Y - 1, OUT, 1, 1);
+    fine(X + x + 1, Y, shade(c, 0.25), 1, 6);
+  }
 }
 
 /** Lighten (k > 0) or darken (k < 0) a #rrggbb color. */
@@ -544,7 +579,8 @@ function paintOne(section) {
   const spots = pondSpots(aw, wall);
   const ponds = (section.dataset.areas || '').split(',').filter(Boolean).map((a) => {
     const [side, kind] = a.split(':');
-    return { ...spots[side === 'right' ? 1 : 0], kind };
+    const spot = spots[side === 'right' ? 1 : 0];
+    return { ...(kind === 'pond' ? { ...spot, kind } : fieldSpot(spot, kind)), side };
   });
   const inPond = (x, y, pad) => ponds.some((p) => x > p.x - pad && x < p.x + p.w + pad && y > p.y - pad && y < p.y + p.h + pad);
 
@@ -604,14 +640,16 @@ function paintOne(section) {
   }
   if (band) drawBridge(px, band, th.bridge);
   ponds.forEach((p) => (p.kind === 'pond' ? drawPond(px, p, th, fine) : drawField(px, p, fine)));
+  placePlayers(section, ponds.filter((p) => p.kind !== 'pond'));
 
   // the village at the start: houses on both sides of the road, more on wide screens
   const homes = aw > 140 ? [0.2, 0.33, 0.67, 0.8] : [0.24, 0.76];
   homes.forEach((f, i) => {
-    const x = Math.round(aw * f - 5);
+    const x = Math.round(aw * f - HOUSE_W / 2);
     const y = 2 + (i % 2) * 5;
-    sprite(x, y, th.house, { ...th.houseBase, ...th.housePals[i % th.housePals.length] });
-    if (th.fence) for (let fx = x - 1; fx < x + 11; fx += 2) px(fx, y + 10, th.fence, 1, 2);
+    // other themes' houses are letter grids: draw them at a size and a half too
+    sprite(x, y, th.house, { ...th.houseBase, ...th.housePals[i % th.housePals.length] }, 3);
+    if (th.fence) drawFence(fine, x * Z - 4, (y + HOUSE_H) * Z + 1, HOUSE_W * Z + 8, th.fence);
   });
 
   // the big place at the treasure
@@ -680,7 +718,7 @@ function paintOne(section) {
  * Where the village ponds go, in map pixels. Visiting buddies stand above them
  * (see .map-visitor in style.css) and cast their lines in: keep the two in step.
  */
-export const POND_TOP = 38;
+export const POND_TOP = 46;
 export const POND_HEIGHT = 13;
 export function pondSpots(aw, wall) {
   const gap = 8; // room for the road
@@ -689,6 +727,42 @@ export function pondSpots(aw, wall) {
     { x: wall + 3, y: POND_TOP, w, h: POND_HEIGHT },
     { x: Math.ceil(aw / 2) + gap, y: POND_TOP, w, h: POND_HEIGHT },
   ];
+}
+
+/**
+ * A field sits in the middle of its pond spot, in proportions like the real thing:
+ * a soccer pitch about 3 by 2, a hockey rink and a football field a little over 2 by 1.
+ * On a narrow phone the spot sets the width, and the field gets as tall as it can.
+ */
+const FIELD_RATIO = { soccer: 1.5, hockey: 2.1, football: 2.2 };
+export const FIELD_HEIGHT = 20;
+export function fieldSpot(spot, kind) {
+  const ratio = FIELD_RATIO[kind] || 1.6;
+  const w = Math.min(spot.w, Math.round(FIELD_HEIGHT * ratio));
+  const h = Math.min(FIELD_HEIGHT, Math.max(14, Math.round(w / ratio)));
+  return { x: Math.round(spot.x + (spot.w - w) / 2), y: spot.y, w, h, kind };
+}
+
+/**
+ * Put the players and their ball on the field they play on: the outer player at the end
+ * near the wall, the inner one at the end near the road, feet a little below the middle.
+ */
+function placePlayers(section, fields) {
+  const S = SCALE;
+  for (const f of fields) {
+    const game = section.querySelector(`.map-game[data-side="${f.side}"]`);
+    if (game) {
+      Object.assign(game.style, { left: `${(f.x + 3) * S}px`, width: `${(f.w - 6) * S}px`, top: `${(f.y + f.h * 0.62) * S}px` });
+    }
+    section.querySelectorAll(`.map-visitor.playing[data-play-side="${f.side}"]`).forEach((el) => {
+      const outer = el.dataset.slot === '0';
+      const leftEnd = outer === (f.side === 'left');
+      el.style.left = `${(leftEnd ? f.x + 7 : f.x + f.w - 7) * S}px`;
+      const body = el.querySelector('.visitor-buddy');
+      const tall = body ? body.offsetHeight + (parseFloat(getComputedStyle(body).marginTop) || 0) : 48;
+      el.style.top = `${(f.y + f.h * 0.72) * S - tall}px`;
+    });
+  }
 }
 
 /** A round pond in the map's river colors: water, lava, goo or stardust, with a bit of theme on top. */
@@ -764,11 +838,27 @@ function drawField(px, { x, y, w, h, kind }, fine = null) {
 function drawFineField(px, fine, { x, y, w, h, kind }, f) {
   const X = x * Z; const Y = y * Z; const FW = w * Z; const FH = h * Z;
   // the edge: boards round a rink, a darker border round grass, with a light top
-  fine(X - 2, Y - 2, OUT, FW + 4, FH + 4);
-  fine(X - 1, Y - 1, f.edge, FW + 2, FH + 2);
-  if (kind === 'hockey') fine(X - 1, Y - 2, '#ffffff', FW + 2, 1);
+  // a rink has rounded corners: how far a fine pixel is outside the rounded ice (0 inside)
+  const R = kind === 'hockey' ? 9 : 0;
+  const out = (i, j) => {
+    if (!R) return Math.max(-i, i - FW + 1, -j, j - FH + 1, 0);
+    const cx = Math.min(Math.max(i, R), FW - 1 - R); const cy = Math.min(Math.max(j, R), FH - 1 - R);
+    return Math.max(0, Math.hypot(i - cx, j - cy) - R);
+  };
+  for (let i = -3; i < FW + 3; i += 1) {
+    for (let j = -3; j < FH + 3; j += 1) {
+      const d = out(i, j);
+      if (d === 0) continue;
+      // the boards: a light top rail on the rink, then the edge, then the outline
+      if (d <= 1) fine(X + i, Y + j, kind === 'hockey' && j < FH / 2 ? '#ffffff' : f.edge);
+      else if (d <= 2) fine(X + i, Y + j, f.edge);
+      else if (d <= 3 && kind === 'hockey') fine(X + i, Y + j, OUT);
+    }
+  }
+  if (kind !== 'hockey') fine(X - 2, Y - 2, OUT, FW + 4, 1), fine(X - 2, Y + FH + 1, OUT, FW + 4, 1), fine(X - 2, Y - 2, OUT, 1, FH + 4), fine(X + FW + 1, Y - 2, OUT, 1, FH + 4);
   for (let i = 0; i < FW; i += 1) {
     for (let j = 0; j < FH; j += 1) {
+      if (out(i, j) > 0) continue;
       let c = kind === 'hockey' ? (hashXY(i, j) < 0.05 ? '#ffffff' : (i + 2 * j) % 23 === 0 ? f.ground[1] : f.ground[0]) : f.ground[Math.floor(i / 6) % 2];
       if (kind !== 'hockey' && hashXY(i, j) < 0.07) c = shade(c, -0.1);
       fine(X + i, Y + j, c);
@@ -795,12 +885,16 @@ function drawFineField(px, fine, { x, y, w, h, kind }, f) {
   } else if (kind === 'hockey') {
     L(mid, Y, 2, FH);
     for (const bx of [X + Math.floor(FW / 3), X + Math.ceil((2 * FW) / 3)]) L(bx, Y, 2, FH, f.blue);
+    // red goal lines near each end, curving with the boards
+    for (const gl of [X + 6, X + FW - 7]) for (let j = 0; j < FH; j += 1) if (out(gl - X, j) === 0) fine(gl, Y + j, f.line);
+    // face-off dots in each end
+    for (const fx of [X + Math.round(FW * 0.18), X + Math.round(FW * 0.82)]) for (const fy of [Y + Math.round(FH * 0.27), Y + Math.round(FH * 0.73)]) fine(fx - 1, fy - 1, f.line, 2, 2);
     const cy = Y + FH / 2; const r = Math.min(FH * 0.22, 6);
     for (let a = 0; a < 360; a += 8) fine(Math.round(mid + Math.cos((a * Math.PI) / 180) * r), Math.round(cy + Math.sin((a * Math.PI) / 180) * r), f.blue);
     fine(mid - 1, Math.round(cy) - 1, f.line, 4, 3);
     for (const side of [0, 1]) {
       // goal crease and net
-      const gx = side ? X + FW - 8 : X + 4; const gy = Y + Math.round(FH * 0.36); const gh = Math.round(FH * 0.28);
+      const gx = side ? X + FW - 10 : X + 6; const gy = Y + Math.round(FH * 0.36); const gh = Math.round(FH * 0.28);
       for (let j = 0; j < gh; j += 1) fine(side ? gx - 3 : gx + 4, gy + j, '#a5d8ff', 3, 1);
       fine(gx, gy, f.goal, 4, 1); fine(gx, gy + gh, f.goal, 4, 1); fine(side ? gx + 3 : gx, gy, f.goal, 1, gh + 1);
       for (let j = 1; j < gh; j += 1) for (let i = 0; i < 3; i += 1) fine(gx + i + (side ? 0 : 1), gy + j, (i + j) % 2 ? '#ffffff' : '#ced4da');

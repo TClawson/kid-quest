@@ -1263,7 +1263,7 @@ function taskTile(kid, task, status) {
 
 // Board-game path: one stop per task, winding down the screen, ending at a treasure chest.
 const MAP_ROW = 124;
-const VILLAGE = 150; // extra room at the top of the map when buddies are visiting
+const VILLAGE = 225; // extra room at the top of the map when buddies are visiting
 
 // Everyone in the family who has a buddy: this device's kids plus, on a kid's
 // device, the others from the cloud.
@@ -1432,8 +1432,8 @@ function visitorsHtml(kid, s) {
   });
   // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
-  const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [22, 37], right: [78, 63] };
-  // players stand at the two ends of their field (see pondSpots in maparts.js)
+  const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [25, 40], right: [75, 60] };
+  // players stand at the two ends of their field; placePlayers in maparts.js puts them exactly on it
   const GX = wide ? { left: [16, 42], right: [84, 58] } : { left: [16, 41], right: [84, 59] };
   const gearOf = (v) => bestGear(v.owned);
   const plan = visitPlan(kid, visitors);
@@ -1465,7 +1465,7 @@ function visitorsHtml(kid, s) {
       cls = `playing play-${area.kind} ${solo ? 'solo' : `player-${a ? 'a' : 'b'}`} ${facesIn ? 'face-left' : ''}`;
     }
     return `
-      <div class="map-visitor ${i === 0 || news[v.id] ? 'talking' : ''} ${news[v.id] || ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
+      <div class="map-visitor ${i === 0 || news[v.id] ? 'talking' : ''} ${news[v.id] || ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} ${area && area.kind !== 'pond' ? `data-play-side="${spot.side}" data-slot="${solo ? 0 : spot.slot}"` : ''} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
         <div class="visitor-buddy">${liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` })}</div>
         ${extra}
         <div class="visitor-name">${esc(v.name)}</div>
@@ -1482,7 +1482,7 @@ function visitorsHtml(kid, s) {
     if (a.host) tiers.push(bestGear(kid.owned || [])[a.kind] || 1);
     const solo = a.members.length === 1 ? `solo from-${a.side}` : '';
     const tap = a.host && playable > 0 ? `data-action="visitor" data-id="${esc(a.members[0])}" data-pick="${a.kind}" role="button" aria-label="Play ${GAME_NAMES[a.kind]}"` : 'aria-hidden="true"';
-    return `<div class="map-game game-${a.kind} ${solo} ${a.host ? 'host-field' : ''}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" ${tap}><span class="game-ball">${ballSvg(a.kind, Math.max(...tiers))}</span></div>`;
+    return `<div class="map-game game-${a.kind} ${solo} ${a.host ? 'host-field' : ''}" data-side="${a.side}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" ${tap}><span class="game-ball">${ballSvg(a.kind, Math.max(...tiers))}</span></div>`;
   }).join('');
   const areas = plan.areas.map((a) => `${a.side}:${a.kind}`).join(',');
   // they walk in once a day per kid; later redraws show them already there
