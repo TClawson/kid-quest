@@ -7,6 +7,7 @@
 import {
   OUT, shade, hashXY, seeded, painter, bigTree, bush, cottage, well, fence, garden, laundry, plaza, flower, noteSign, pond, frozen,
 } from './villageart.js';
+import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrowB, mushroomsB, snailB } from './meadowart.js';
 
 // ---------- a lit shape ----------
 
@@ -525,6 +526,15 @@ export const PROPS = {
   cloud: { w: 32, h: 16, foot: [2, 5, 28, 10], base: 15, draw: (px, p) => cloud(px, p.x, p.y, p.c) },
   mushroom: { w: 22, h: 24, foot: [5, 14, 12, 10], base: 23, draw: (px, p) => mushroom(px, p.x, p.y, p.c) },
   orb: { w: 22, h: 30, foot: [4, 22, 14, 8], base: 29, draw: (px, p) => orb(px, p.x, p.y, p.c) },
+  // the Forest Village's little things, drawn in its storybook style (meadowart.js)
+  lantern: { w: 16, h: 34, foot: [1, 28, 7, 6], base: 33, draw: (px, p) => lanternB(px, p.x, p.y) },
+  birdhouse: { w: 12, h: 30, foot: [3, 25, 6, 5], base: 29, draw: (px, p) => birdhouseB(px, p.x, p.y) },
+  mailbox: { w: 12, h: 20, foot: [2, 15, 8, 5], base: 19, draw: (px, p) => mailboxB(px, p.x, p.y) },
+  scarecrow: { w: 22, h: 32, foot: [8, 26, 6, 6], base: 31, draw: (px, p) => scarecrowB(px, p.x, p.y) },
+  bench: { w: 24, h: 12, foot: [0, 4, 24, 8], base: 11, draw: (px, p) => benchB(px, p.x, p.y) },
+  barrow: { w: 26, h: 16, foot: [1, 6, 24, 10], base: 15, draw: (px, p) => barrowB(px, p.x, p.y) },
+  mushrooms: { w: 14, h: 9, foot: null, flat: true, draw: (px, p) => mushroomsB(px, p.x, p.y) },
+  snail: { w: 9, h: 6, foot: null, flat: true, draw: (px, p) => snailB(px, p.x, p.y) },
 };
 
 // ---------- the ground ----------
@@ -723,6 +733,8 @@ function castleWall(px, L) {
  * village pixel. opts: { homeRoof: the kid's color, areas: the green's ponds and play patches }.
  */
 export function paintVillage(canvas, L, opts = {}) {
+  // the Forest Village has its own storybook painter
+  if (L.id === 'bg-meadow') return paintMeadow(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');

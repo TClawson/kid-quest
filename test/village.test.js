@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { villageLayout, VILLAGE_THEMES } from '../js/villagemaps.js';
-import { placeVillagers, folkCaps, activeQuest, makeGrid, findPath, standSpot, visitorSpots } from '../js/village.js';
+import { placeVillagers, folkCaps, activeQuest, makeGrid, findPath, standSpot, visitorSpots, landmarkBlock } from '../js/village.js';
 import { secretSize } from '../js/treasure-art.js';
 import { MAP_THEMES } from '../js/maparts.js';
 
@@ -17,7 +17,7 @@ for (const theme of VILLAGE_THEMES) {
   test(`${theme}: every quest, the chest, the shop, the green and the landmark can be reached`, () => {
     const L = villageLayout(theme);
     const size = secretSize(theme);
-    const lm = { ...L.landmark, w: size.w * 2, h: size.h * 2 };
+    const lm = { ...L.landmark, w: L.landmark.w ?? size.w * 2, h: L.landmark.h ?? size.h * 2 };
     const folk = [...L.slots.morning.slice(0, 6), ...L.slots.afternoon.slice(0, 6)];
     // the busiest green: a pond and a play patch, four visitors
     const visit = { visitors: ['a', 'b', 'c', 'd'].map((id) => ({ id })), areas: [{ side: 'left', kind: 'pond', members: ['a', 'b'] }, { side: 'right', kind: 'soccer', members: ['c'] }] };
@@ -26,7 +26,7 @@ for (const theme of VILLAGE_THEMES) {
       [L.green.left.x - 2, L.green.left.y - 2, L.green.left.w + 4, L.green.left.h + 4],
       ...Object.values(spots).map((p) => [p.x - 7, p.y - 8, 14, 10]),
       [L.shop.x - 7, L.shop.y - 8, 14, 10],
-      [lm.x + 8, lm.y + lm.h * 0.5, lm.w - 16, lm.h * 0.45],
+      landmarkBlock(lm),
     ]);
     const from = L.start;
     const reach = (what, to) => {
@@ -46,7 +46,7 @@ for (const theme of VILLAGE_THEMES) {
   test(`${theme}: quest spots stand on open ground, apart from each other and the green`, () => {
     const L = villageLayout(theme);
     const size = secretSize(theme);
-    const lm = [L.landmark.x, L.landmark.y, size.w * 2, size.h * 2];
+    const lm = [L.landmark.x, L.landmark.y, L.landmark.w ?? size.w * 2, L.landmark.h ?? size.h * 2];
     const all = [...L.slots.morning.slice(0, 6).map((s) => ({ ...s, what: 'morning' })), ...L.slots.afternoon.slice(0, 6).map((s) => ({ ...s, what: 'afternoon' })), { ...L.shop, what: 'shop' }, { ...L.chest, what: 'chest' }];
     const inBox = (x, y, [bx, by, bw, bh], pad = 0) => x > bx - pad && x < bx + bw + pad && y > by - pad && y < by + bh + pad;
     for (const s of all) {

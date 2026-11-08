@@ -9,11 +9,13 @@
 //   the buddy can't walk across; crossings: bridges { at: [x, y], dir: 'v' or 'h', kind };
 //   paths, plazas; props: [kind, x, y, extra]; shop: the stall where the shopkeeper stands;
 //   green: the visitors' two play spots (left, right) and idle spots; landmark: where a
-//   finished treasure map's landmark stands, and where the buddy stands to look at it;
+//   finished treasure map's landmark stands, and where the buddy stands to look at it (one
+//   drawn for the village itself also gives its size w, h, its art and its foot box);
 //   chest; start: where the buddy starts; slots: where quest givers stand, in order, for the
 //   morning and after school; labels: the "Morning quests" signs.
 
 import { PROPS, waterDepth } from './villageprops.js';
+import { OAK } from './oakart.js';
 
 const W = 448;
 
@@ -43,28 +45,31 @@ export const VILLAGE_MAPS = {
     crossings: [{ at: [224, 329], dir: 'v', kind: 'wood' }],
     paths: [
       [[224, 111], [224, 524]], [[224, 132], [74, 132], [74, 119]], [[224, 132], [374, 132], [374, 119]],
-      [[224, 468], [78, 468], [78, 453]], [[224, 392], [372, 392]],
+      [[224, 468], [78, 468], [78, 453]], [[224, 392], [290, 392]],
     ],
     plazas: [[224, 166, 30], [224, 504, 30]],
     props: [
-      p('well', 211, 140), p('garden', 34, 150), p('stall', 348, 154), p('laundry', 330, 358, { w: 84 }),
-      p('flowers', 160, 98), p('flowers', 276, 98), p('flowers', 150, 376), p('flowers', 270, 520),
-      p('bush', 152, 70, { berries: true }), p('bush', 278, 70), p('bush', 150, 444, { berries: true }), p('bush', 250, 428), p('bush', 118, 528, { berries: true }),
+      p('well', 211, 140), p('garden', 34, 150), p('stall', 348, 154), p('laundry', 330, 350, { w: 84 }),
+      p('flowers', 160, 98), p('flowers', 276, 98), p('flowers', 150, 376), p('flowers', 100, 516),
+      p('bush', 152, 70, { berries: true }), p('bush', 278, 70), p('bush', 150, 444, { berries: true }), p('bush', 184, 518), p('bush', 118, 528, { berries: true }),
       p('tree', 118, 66), p('tree', 298, 66), p('tree', 380, 190), p('tree', 140, 384), p('tree', 40, 476),
+      p('mailbox', 198, 100), p('birdhouse', 152, 38), p('lantern', 232, 198), p('lantern', 180, 424), p('scarecrow', 34, 128),
+      p('bench', 350, 294), p('barrow', 262, 148), p('mushrooms', 404, 222), p('snail', 110, 300),
     ],
     shop: { x: 370, y: 202 },
     green: {
       left: { x: 54, y: 234, w: 116, h: 44 }, right: { x: 272, y: 234, w: 126, h: 44 },
       idle: [{ x: 202, y: 250 }, { x: 246, y: 296 }, { x: 202, y: 296 }, { x: 246, y: 250 }],
     },
-    landmark: { x: 336, y: 438, stand: { x: 318, y: 526 } },
+    // the Great Oak, drawn for the village (oakart.js): the biggest thing here, in the south-east corner
+    landmark: { x: 282, y: 378, w: OAK.w, h: OAK.h, art: 'oak', foot: [4, 8, 148, 152], stand: { x: 270, y: 506 } },
     chest: { x: 224, y: 512 },
     start: { x: 224, y: 122 },
     slots: {
       morning: [[150, 120], [74, 140], [116, 176], [172, 206], [276, 206], [318, 168], [374, 140], [298, 120]],
-      afternoon: [[78, 488, MUSIC], [300, 420, LAUNDRY], [170, 382], [290, 384], [170, 496], [282, 496], [64, 366], [130, 530]],
+      afternoon: [[78, 488, MUSIC], [296, 368, LAUNDRY], [170, 382], [262, 422], [170, 496], [252, 474], [64, 366], [130, 530]],
     },
-    labels: { morning: [158, 216, '⬆ 🌅 Morning quests'], afternoon: [296, 352, '⬇ ☀️ After-school quests'] },
+    labels: { morning: [158, 216, '⬆ 🌅 Morning quests'], afternoon: [120, 351, '⬇ ☀️ After-school quests'] },
   },
 
   // ---------- Sunset Beach: huts on the sand, a lagoon down the middle, the sea at the bottom ----------
@@ -506,7 +511,8 @@ export function villageLayout(theme) {
   const crossings = spec.crossings.map((c) => bridgeBox(c, water));
   const houses = spec.houses;
   const home = spec.home;
-  // the landmark is drawn at twice its art size; its box comes from the art (see app.js)
+  // the landmark is drawn at twice its art size, its box from the art (see app.js), unless the
+  // spec gives its own size (the meadow's Great Oak, drawn for the village in oakart.js)
   const lm = spec.landmark;
   const obstacles = [
     [0, 0, W, 22], [0, H - 18, W, 18], [0, 0, 20, H], [W - 20, 0, 20, H],
