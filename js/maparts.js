@@ -5,6 +5,7 @@
 // One art pixel is SCALE screen pixels, so the scene stays chunky at any screen size.
 
 import { startMapLife, waterfallAt } from './maplife.js';
+import { upscale, thinOutline } from './upscale.js';
 
 const SCALE = 4;
 // Each map pixel is drawn as Z x Z fine pixels (2 screen pixels each), so sprites get
@@ -340,33 +341,24 @@ function painter(ctx, w, h) {
     if (rows === TREE) return fineTree(fine, X0, Y0, pal, 1);
     if (rows === BUSH) return fineTree(fine, X0, Y0, pal, 0);
     if (rows === HOUSE) return fineHouse(fine, X0, Y0, pal);
-    const C = cell;
-    const at = (x, y) => (y < 0 || y >= rows.length || x < 0 || x >= rows[y].length ? '.' : rows[y][x]);
+    // the grid smoothed to fine pixels (Scale2x, or Scale3x for houses), with a thin outline
+    const g = thinOutline(upscale(rows, cell), cell - 1);
+    const at = (x, y) => (y < 0 || y >= g.length || x < 0 || x >= g[y].length ? '.' : g[y][x]);
     const fill = (x, y) => { const ch = at(x, y); return ch !== '.' && ch !== 'K' && Boolean(pal[ch]); };
-    const X = Math.round(x0) * Z; const Y = Math.round(y0) * Z;
-    for (let y = 0; y < rows.length; y += 1) {
-      for (let x = 0; x < rows[y].length; x += 1) {
-        const ch = rows[y][x];
+    for (let y = 0; y < g.length; y += 1) {
+      for (let x = 0; x < g[y].length; x += 1) {
+        const ch = g[y][x];
         if (ch === '.') continue;
-        for (let b = 0; b < C; b += 1) {
-          for (let a = 0; a < C; a += 1) {
-            const fx = X + x * C + a; const fy = Y + y * C + b;
-            if (ch === 'K') {
-              const nx = a < C / 2 ? x - 1 : x + 1; const ny = b < C / 2 ? y - 1 : y + 1;
-              const inner = fill(nx, y) || fill(x, ny) || fill(nx, ny);
-              const outerSide = !fill(a < C / 2 ? x + 1 : x - 1, y) && !fill(x, b < C / 2 ? y + 1 : y - 1);
-              if (inner || !outerSide) fine(fx, fy, OUT);
-              continue;
-            }
-            const base = pal[ch]; if (!base) continue;
-            let c = base;
-            if (b === 0 && !fill(x, y - 1)) c = shade(base, 0.22);
-            else if (b === C - 1 && !fill(x, y + 1)) c = shade(base, -0.18);
-            else if (a === C - 1 && !fill(x + 1, y)) c = shade(base, -0.08);
-            else { const hsh = hashXY(fx, fy); if (hsh < 0.1) c = shade(base, -0.1); else if (hsh > 0.94) c = shade(base, 0.12); }
-            fine(fx, fy, c);
-          }
-        }
+        const fx = X0 + x; const fy = Y0 + y;
+        if (ch === 'K') { fine(fx, fy, OUT); continue; }
+        const base = pal[ch]; if (!base) continue;
+        // lit along the top, shaded along the bottom and right, and a little texture
+        let c = base;
+        if (!fill(x, y - 1)) c = shade(base, 0.22);
+        else if (!fill(x, y + 1)) c = shade(base, -0.18);
+        else if (!fill(x + 1, y)) c = shade(base, -0.08);
+        else { const hsh = hashXY(fx, fy); if (hsh < 0.1) c = shade(base, -0.1); else if (hsh > 0.94) c = shade(base, 0.12); }
+        fine(fx, fy, c);
       }
     }
   };
@@ -639,7 +631,7 @@ function paintOne(section) {
     else if (th.road.pebble && rnd() < 0.5) px(r.x + (rnd() < 0.5 ? -2 : 2), r.y, th.road.pebble);
   }
   if (band) drawBridge(px, band, th.bridge);
-  ponds.forEach((p) => (p.kind === 'pond' ? drawPond(px, p, th, fine) : drawField(px, p, fine)));
+  ponds.forEach((p) => (p.kind === 'pond' ? drawPond(px, p, th, fine) : drawPatch(fine, p, th)));
   placePlayers(section, ponds.filter((p) => p.kind !== 'pond'));
 
   // the village at the start: houses on both sides of the road, more on wide screens
@@ -700,7 +692,7 @@ function paintOne(section) {
   const roadX = road.reduce((best, r) => (Math.abs(r.y - postY) < Math.abs(best.y - postY) ? r : best), road[0]).x;
   const side = roadX > aw / 2 ? -1 : 1;
   startMapLife({
-    section, aw, ah, scale: SCALE, life: th.life, wall, falls,
+    section, aw, ah, scale: SCALE, z: Z, life: th.life, wall, falls,
     goal: chest || { x: aw / 2, y: ah - 30 },
     knightPost: { x: side < 0 ? wall + 2 : aw - wall - 28, y: postY, side },
     openSpot: ({ top, bottom }) => {
@@ -730,17 +722,13 @@ export function pondSpots(aw, wall) {
 }
 
 /**
- * A field sits in the middle of its pond spot, in proportions like the real thing:
- * a soccer pitch about 3 by 2, a hockey rink and a football field a little over 2 by 1.
- * On a narrow phone the spot sets the width, and the field gets as tall as it can.
+ * Where visitors play: a patch in the middle of their pond spot, not a full-size pitch.
+ * Hockey is a frozen pond; soccer and football a worn clearing with little goals.
  */
-const FIELD_RATIO = { soccer: 1.5, hockey: 2.1, football: 2.2 };
-export const FIELD_HEIGHT = 20;
+export const FIELD_HEIGHT = 18;
 export function fieldSpot(spot, kind) {
-  const ratio = FIELD_RATIO[kind] || 1.6;
-  const w = Math.min(spot.w, Math.round(FIELD_HEIGHT * ratio));
-  const h = Math.min(FIELD_HEIGHT, Math.max(14, Math.round(w / ratio)));
-  return { x: Math.round(spot.x + (spot.w - w) / 2), y: spot.y, w, h, kind };
+  const w = Math.min(spot.w, 46);
+  return { x: Math.round(spot.x + (spot.w - w) / 2), y: spot.y, w, h: FIELD_HEIGHT, kind };
 }
 
 /**
@@ -800,6 +788,106 @@ function drawPond(px, { x, y, w, h }, th, fine = () => {}) {
   }
   const extra = POND_EXTRAS[th.pond] || POND_EXTRAS.lily;
   extra(px, { x, y, w, h, cx, cy }, undefined, fine);
+}
+
+/** Mix two #rrggbb colors (t = 0 gives a, 1 gives b). */
+function mix(a, b, t) {
+  const n = (h) => { const v = parseInt(h.slice(1), 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
+  const A = n(a); const B = n(b);
+  return `#${A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * A place to play that looks like part of the land: a frozen pond for hockey (a bank like
+ * the fishing pond's, ice with cracks and snow, two little nets), or a worn clearing in the
+ * grass, sand or moon dust for soccer (two small goals) and football (two goalposts).
+ */
+function drawPatch(fine, { x, y, w, h, kind, side }, th) {
+  const X = x * Z; const Y = y * Z; const FW = w * Z; const FH = h * Z;
+  const cx = X + FW / 2; const cy = Y + FH / 2;
+  const seed = side === 'right' ? 2.1 : 0.7;
+  // an uneven oval: how far out a fine pixel is (1 at the edge)
+  const reach = (fx, fy) => {
+    const dx = (fx + 0.5 - cx) / (FW / 2); const dy = (fy + 0.5 - cy) / (FH / 2);
+    const a = Math.atan2(dy, dx);
+    return Math.hypot(dx, dy) / (1 + 0.05 * Math.sin(3 * a + seed) + 0.035 * Math.sin(5 * a + seed * 3));
+  };
+  const [ground, groundDark, groundLight] = th.ground;
+  if (kind === 'hockey') {
+    const bank = (th.pondColors || th.river).bank;
+    const ice = '#d0ebff'; const iceLight = '#e7f5ff'; const iceDeep = '#a5d8ff';
+    for (let fy = Y - 4; fy < Y + FH + 4; fy += 1) {
+      for (let fx = X - 4; fx < X + FW + 4; fx += 1) {
+        const r = reach(fx, fy);
+        const ry = (fy - cy) / (FH / 2);
+        if (r > 1 + 3.2 / FH) continue;
+        if (r > 1) { fine(fx, fy, ry < 0 && r < 1 + 1.4 / FH ? shade(bank, 0.2) : bank); continue; }
+        let c = ice;
+        if (r > 1 - 2.2 / FH && ry < 0) c = '#ffffff'; // snow along the far edge
+        else if (r > 1 - 2.2 / FH) c = iceDeep; // a shadow under the near bank
+        else if ((fx - fy * 2 + 400) % 17 < 2 && r < 0.8) c = iceLight; // shine streaks
+        else if (hashXY(fx, fy) < 0.04) c = '#ffffff';
+        fine(fx, fy, c);
+      }
+    }
+    // a few cracks and skate scratches
+    for (const [sx, sy, len, dir] of [[0.3, 0.35, 7, 1], [0.62, 0.62, 6, -1], [0.45, 0.72, 4, 1]]) {
+      for (let k = 0; k < len; k += 1) fine(Math.round(X + FW * sx + k), Math.round(Y + FH * sy + dir * Math.floor(k / 2)), '#74c0fc');
+    }
+    // snow drifts poking onto the ice
+    for (const [sx, sy] of [[0.18, 0.18], [0.78, 0.15]]) { const fx = Math.round(X + FW * sx); const fy = Math.round(Y + FH * sy); fine(fx, fy, '#ffffff', 4, 1); fine(fx + 1, fy - 1, '#ffffff', 2, 1); }
+    // two little nets, one at each end, open toward the middle
+    for (const end of [0, 1]) {
+      const gx = end ? X + FW - 9 : X + 5; const gy = Math.round(cy - 4);
+      fine(gx, gy, OUT, 5, 9);
+      for (let j = 1; j < 8; j += 1) for (let i = 0; i < 3; i += 1) fine(gx + 1 + i, gy + j, (i + j) % 2 ? '#ffffff' : '#ced4da');
+      fine(gx, gy, '#e03131', 5, 1); fine(gx, gy + 8, '#e03131', 5, 1); fine(end ? gx + 4 : gx, gy, '#e03131', 1, 9);
+    }
+    return;
+  }
+  // a worn clearing: bare in the middle, short and patchy at the edge, blending into the ground
+  // bare earth on grass; elsewhere the ground just looks scuffed and packed down
+  const g = parseInt(ground.slice(1), 16); const grassy = ((g >> 8) & 255) > (g >> 16) + 20 && ((g >> 8) & 255) > (g & 255) + 20;
+  const worn = grassy ? mix(ground, '#b08350', 0.55) : mix(shade(ground, -0.12), '#b08350', 0.12); const wornDark = shade(worn, -0.12);
+  for (let fy = Y - 3; fy < Y + FH + 3; fy += 1) {
+    for (let fx = X - 3; fx < X + FW + 3; fx += 1) {
+      const r = reach(fx, fy); const n = hashXY(fx, fy);
+      if (r > 1.12 || (r > 0.96 && n > (1.12 - r) * 6)) continue; // a ragged edge
+      const ry = (fy - cy) / (FH / 2);
+      let c = r < 0.78 - n * 0.12 ? worn : groundDark;
+      if (c === worn && r > 0.6 && ry > 0) c = wornDark; // the near side in shadow
+      else if (c === worn && n > 0.9) c = shade(worn, 0.18); // pebbles and dust
+      else if (c === worn && n < 0.06) c = groundDark; // a stray tuft
+      else if (c === groundDark && n > 0.85) c = ground;
+      fine(fx, fy, c);
+    }
+  }
+  // grass tufts round the edge
+  for (let i = 0; i < 14; i += 1) {
+    const a = i * 2.39 + seed; const fx = Math.round(cx + Math.cos(a) * FW * 0.47); const fy = Math.round(cy + Math.sin(a) * FH * 0.47);
+    fine(fx, fy, groundLight); fine(fx + 2, fy, groundLight); fine(fx + 1, fy + 1, groundDark);
+  }
+  if (kind === 'football') {
+    // goalposts at each end: a crossbar on a post, with two uprights
+    for (const end of [0, 1]) {
+      const gx = end ? X + FW - 6 : X + 5; const gy = Math.round(cy);
+      fine(gx - 3, gy + 6, 'rgba(27,20,48,0.2)', 7, 1);
+      fine(gx - 1, gy - 1, OUT, 3, 8); fine(gx, gy, '#ffd43b', 1, 6);
+      fine(gx - 4, gy - 2, OUT, 9, 3); fine(gx - 3, gy - 1, '#ffd43b', 7, 1);
+      fine(gx - 4, gy - 11, OUT, 3, 10); fine(gx + 2, gy - 11, OUT, 3, 10);
+      fine(gx - 3, gy - 10, '#ffd43b', 1, 9); fine(gx + 3, gy - 10, '#ffd43b', 1, 9);
+      fine(gx - 3, gy - 10, '#fff3bf', 1, 2); fine(gx + 3, gy - 10, '#fff3bf', 1, 2);
+    }
+    return;
+  }
+  // soccer: two small goals with nets, facing each other
+  for (const end of [0, 1]) {
+    const gx = end ? X + FW - 9 : X + 2; const gy = Math.round(cy - 8);
+    fine(gx + 1, gy + 17, 'rgba(27,20,48,0.22)', 7, 1);
+    fine(gx, gy, OUT, 7, 17);
+    for (let j = 1; j < 16; j += 1) for (let i = 0; i < 5; i += 1) fine(gx + 1 + i, gy + j, (i + j) % 2 ? '#f1f3f5' : '#adb5bd');
+    fine(gx, gy, '#ffffff', 7, 2); fine(gx, gy + 15, '#ffffff', 7, 2); fine(end ? gx : gx + 5, gy, '#ffffff', 2, 17);
+  }
 }
 
 // Little fields for visitors playing together: grass with white lines and goals,

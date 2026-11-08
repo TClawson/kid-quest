@@ -62,9 +62,11 @@ const SETUPS = [
   ['meadow-hockey-football', 'bg-meadow', { kid_ben: ['sport-hockey-super'], kid_cy: ['sport-hockey-regular'], kid_dee: ['sport-football-good'], kid_eve: ['sport-football-super'] }, ['hockey', 'football']],
   ['volcano-hockey-football', 'bg-volcano', { kid_ben: ['sport-hockey-super'], kid_cy: ['sport-hockey-regular'], kid_dee: ['sport-football-good'], kid_eve: ['sport-football-super'] }, ['hockey', 'football']],
   ['castle-soccer-pond', 'bg-castle', { kid_ben: ['sport-rod-super', 'sport-soccer-good'], kid_cy: ['sport-soccer-super'], kid_dee: ['sport-rod-good'] }, ['soccer', 'pond']],
+  ...['sunset', 'ocean', 'space', 'rainbow', 'galaxy', 'rainforest'].map((t) => [`${t}-soccer-pond`, `bg-${t}`, { kid_ben: ['sport-rod-super', 'sport-soccer-good'], kid_cy: ['sport-soccer-super'], kid_dee: ['sport-rod-good'] }, ['soccer', 'pond']]),
+  ['meadow-football', 'bg-meadow', { kid_ben: ['sport-football-super'], kid_cy: ['sport-football-regular'], kid_dee: ['sport-rod-good'] }, [], 'left:hockey,right:football'],
 ].filter((s) => !ONLY || s[0].startsWith(ONLY));
 const keep = day;
-for (const [name, theme, gear, want] of SETUPS) {
+for (const [name, theme, gear, want, force] of SETUPS) {
   const all = ['kid_ava', 'kid_ben', 'kid_cy', 'kid_dee', ...(gear.kid_eve ? ['kid_eve'] : [])];
   for (day = keep; ; day = addDays(day, 1)) {
     const vis = pickVisitors('kid_ava', all.map((id) => ({ id, buddy: {} })), day);
@@ -84,6 +86,9 @@ for (const [name, theme, gear, want] of SETUPS) {
     await page.clock.runFor(1500);
     while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
     await page.clock.runFor(4000);
+    // show the land for areas the plan did not pick (players stay where they were)
+    if (force) await page.evaluate(async (a) => { const s = document.querySelector('.quest-map'); s.dataset.areas = a; (await import('./js/maparts.js')).paintQuestMaps(); }, force);
+    console.log(name, label, await page.locator(".quest-map").getAttribute("data-areas"));
     const box = await page.locator('.quest-map').boundingBox();
     await page.screenshot({ path: `${out}/${name}-${label}.png`, clip: { x: box.x, y: box.y, width: box.width, height: Math.min(box.height, 620) }, fullPage: true });
     await ctx.close();

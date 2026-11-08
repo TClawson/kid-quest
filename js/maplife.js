@@ -5,6 +5,7 @@
 
 import { sounds, setRain } from './fx.js';
 import { duckMusic } from './music.js';
+import { upscale, thinOutline } from './upscale.js';
 
 const OUT = '#2a1838';
 const FPS = 12.5;
@@ -336,14 +337,18 @@ export function draw(ctx, x0, y0, rows, pal, flip = false) {
       for (const [dy, r] of HEART.entries()) for (let i = 0; i < r.length; i += 1) if (r[i] === 'r') { ctx.fillStyle = '#ff6b9a'; ctx.fillRect(hx + i, hy + dy, 1, 1); }
     }
   }
-  rows.forEach((r, yy) => {
+  // on a fine canvas (see startMapLife) the sprite is smoothed to half-size pixels
+  const n = ctx.fine || 1;
+  const g = n > 1 ? thinOutline(upscale(rows, n), n - 1) : rows;
+  const u = 1 / n;
+  g.forEach((r, yy) => {
     for (let i = 0; i < r.length; i += 1) {
       const ch = r[i];
       if (ch === '.') continue;
       const c = ch === 'K' ? OUT : pal[ch];
       if (!c) continue;
       ctx.fillStyle = c;
-      ctx.fillRect(x + (flip ? r.length - 1 - i : i), y + yy, 1, 1);
+      ctx.fillRect(x + (flip ? r.length - 1 - i : i) * u, y + yy * u, u, u);
     }
   });
 }
@@ -456,7 +461,8 @@ function spaceLife(m) {
     const spot = m.openSpot({ top: (i * m.ah) / n + 10, bottom: ((i + 1) * m.ah) / n - 10 });
     if (spot) aliens.push({ ...spot, home: spot.x, dir: i % 2 ? 1 : -1, pal: pals[i % pals.length], wave: 0, pause: 0 });
   }
-  const pad = { x: m.wall + 4, y: 48 };
+  // the pad sits below the village ponds and fields when buddies are visiting
+  const pad = { x: m.wall + 4, y: m.section.dataset.areas ? 74 : 48 };
   const park = pad.y - 20; // the rocket's top when it stands on the pad
   let rocket = { phase: 'away', t: 0, y: -40 };
   let next = 2500;
@@ -1445,11 +1451,15 @@ export function startMapLife(m) {
     canvas.setAttribute('aria-hidden', 'true');
     m.section.querySelector('canvas.map-land').after(canvas);
   }
-  canvas.width = m.aw;
-  canvas.height = m.ah;
+  // twice the map's pixels, like the land: sprites are drawn with half-size pixels
+  const Z = m.z || 1;
+  canvas.width = m.aw * Z;
+  canvas.height = m.ah * Z;
   canvas.style.width = `${m.aw * m.scale}px`;
   canvas.style.height = `${m.ah * m.scale}px`;
   const ctx = canvas.getContext('2d');
+  ctx.setTransform(Z, 0, 0, Z, 0, 0);
+  ctx.fine = Z;
   const key = `${m.section.dataset.seed || ''}|${m.life}`;
   let keep = kept.get(key);
   if (keep) {
