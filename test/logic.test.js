@@ -556,3 +556,14 @@ test('milestones: a week in a row, then a welcome-back day', async () => {
   assert.ok(L.milestoneFresh(m, addDays(MONDAY, 7)));
   assert.ok(!L.milestoneFresh(m, addDays(MONDAY, 8)));
 });
+
+import { lendLeft, logLend, LEND_GAMES } from '../js/logic.js';
+test('a visitor lends gear for two games a day, per kind of gear', () => {
+  const kid = {};
+  assert.equal(lendLeft(kid, '2026-11-08', 'hockey'), LEND_GAMES);
+  kid.lendLog = logLend(kid, '2026-11-08', 'hockey');
+  kid.lendLog = logLend(kid, '2026-11-08', 'hockey');
+  assert.equal(lendLeft(kid, '2026-11-08', 'hockey'), 0);
+  assert.equal(lendLeft(kid, '2026-11-08', 'soccer'), 2);
+  assert.equal(lendLeft(kid, '2026-11-09', 'hockey'), 2);
+});

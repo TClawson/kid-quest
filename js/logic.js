@@ -807,6 +807,27 @@ export function logGame(kid, today, cap) {
   return { day: today, n: 1, cap, ...(prev ? { prev } : {}) };
 }
 
+// ---------- borrowing a visitor's gear ----------
+// A visitor with a ball, stick or rod that the kid doesn't own lends it for a
+// couple of games a day, so the kid can try it. kid.lendLog is { day, counts: { gear: games } }.
+
+export const LEND_GAMES = 2;
+
+/** Borrowed games left today with a kind of gear (soccer, hockey, football, rod). */
+export function lendLeft(kid, today, gear) {
+  const log = kid?.lendLog;
+  const used = log?.day === today ? log.counts?.[gear] || 0 : 0;
+  return Math.max(0, LEND_GAMES - used);
+}
+
+/** kid.lendLog after one more borrowed game today. */
+export function logLend(kid, today, gear) {
+  const log = kid?.lendLog;
+  const counts = log?.day === today ? { ...log.counts } : {};
+  counts[gear] = (counts[gear] || 0) + 1;
+  return { day: today, counts };
+}
+
 // ---------- the kid's own plan ----------
 //
 // Kids pick the order of their tasks and a "cue" for each: the moment that
