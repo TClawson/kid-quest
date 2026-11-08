@@ -36,14 +36,14 @@ try {
             g.step(1 / 30);
             for (const f of g.fish) {
               const v = seen.get(f);
-              if (!v) { if (f.x - f.pic.width / 2 < W) popIn += 1; seen.set(f, { face: f.face, at: g.t }); continue; }
+              if (!v) { if (f.x - f.pw / 2 < W) popIn += 1; seen.set(f, { face: f.face, at: g.t }); continue; }
               if (f.face !== v.face && f.state !== 'hooked') { if (g.t - v.at < 0.69) quick += 1; v.face = f.face; v.at = g.t; }
               if (f.state !== 'hooked' && f.y > g.bedAt(f.x) + 1) buried += 1;
             }
             for (const Ln of Object.values(g.lines)) {
               if (Ln.state !== 'fight') continue;
               hooked += 1;
-              const f = Ln.fish; const nose = f.x - f.pic.width / 2 + 1; // pictures face left: the nose is the left end
+              const f = Ln.fish; const nose = f.x - f.pw / 2 + 1; // pictures face left: the nose is the left end
               if (f.face !== -1 || Math.abs(nose - Ln.x) > 2) mouth += 1;
             }
           }
