@@ -8,6 +8,7 @@ import {
   OUT, shade, hashXY, seeded, painter, bigTree, bush, cottage, well, fence, garden, laundry, plaza, flower, noteSign, pond, frozen,
 } from './villageart.js';
 import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrowB, mushroomsB, snailB } from './meadowart.js';
+import { paintSunset, hammockB, rowboatB, gullB, tidepoolB, driftwoodB, tikiB, coconutsB } from './sunsetart.js';
 
 // ---------- a lit shape ----------
 
@@ -535,6 +536,14 @@ export const PROPS = {
   barrow: { w: 26, h: 16, foot: [1, 6, 24, 10], base: 15, draw: (px, p) => barrowB(px, p.x, p.y) },
   mushrooms: { w: 14, h: 9, foot: null, flat: true, draw: (px, p) => mushroomsB(px, p.x, p.y) },
   snail: { w: 9, h: 6, foot: null, flat: true, draw: (px, p) => snailB(px, p.x, p.y) },
+  // Sunset Beach's little things (sunsetart.js)
+  hammock: { w: 44, h: 22, foot: null, base: 18, draw: (px, p) => hammockB(px, p.x, p.y, p.w || 44, p.dy ?? 6) },
+  tiki: { w: 10, h: 34, foot: [2, 28, 6, 6], base: 33, draw: (px, p) => tikiB(px, p.x, p.y) },
+  coconuts: { w: 12, h: 6, foot: null, flat: true, draw: (px, p) => coconutsB(px, p.x, p.y) },
+  driftwood: { w: 32, h: 12, foot: [2, 4, 28, 7], base: 11, draw: (px, p) => driftwoodB(px, p.x, p.y) },
+  tidepool: { w: 30, h: 16, foot: [2, 2, 26, 12], flat: true, draw: (px, p) => tidepoolB(px, p.x, p.y) },
+  rowboat: { w: 56, h: 16, foot: null, flat: true, draw: (px, p) => rowboatB(px, p.x, p.y) },
+  gull: { w: 9, h: 8, foot: null, flat: true, draw: (px, p) => gullB(px, p.x, p.y) },
 };
 
 // ---------- the ground ----------
@@ -735,6 +744,8 @@ function castleWall(px, L) {
 export function paintVillage(canvas, L, opts = {}) {
   // the Forest Village has its own storybook painter
   if (L.id === 'bg-meadow') return paintMeadow(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does Sunset Beach (sunsetart.js)
+  if (L.id === 'bg-sunset') return paintSunset(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');

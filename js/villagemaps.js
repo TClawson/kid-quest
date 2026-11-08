@@ -16,6 +16,7 @@
 
 import { PROPS, waterDepth } from './villageprops.js';
 import { OAK } from './oakart.js';
+import { WRECK } from './wreckart.js';
 
 const W = 448;
 
@@ -100,16 +101,22 @@ export const VILLAGE_MAPS = {
       p('stall', 140, 40, { pal: { a: '#22b8cf', b: '#fff9db', wood: '#e0a96d', goods: [['#ff8787', '#ffc9c9'], ['#ffd43b', '#fff3bf'], ['#69db7c', '#d3f9d8']] } }),
       p('laundry', 264, 400, { w: 70 }),
       p('palm', 150, 120), p('palm', 20, 260), p('palm', 270, 300), p('palm', 400, 380),
-      p('umbrella', 130, 470, { c: '#ff6b6b' }), p('umbrella', 300, 500, { c: '#4dabf7' }), p('sandcastle', 186, 480),
+      p('umbrella', 142, 380, { c: '#ff6b6b' }), p('umbrella', 300, 500, { c: '#4dabf7' }), p('sandcastle', 186, 480),
       p('surfboard', 20, 140, { c: '#ff922b' }), p('surfboard', 412, 150, { c: '#4dabf7' }), p('surfboard', 424, 160, { c: '#f783ac' }),
       p('rock', 180, 300, { c: '#ced4da' }), p('rock', 420, 250, { c: '#ced4da', w: 18, h: 13 }),
+      // the beach's little things
+      p('palm', 234, 44), p('palm', 276, 50), p('hammock', 252, 64, { w: 42, dy: 6 }),
+      p('tiki', 68, 110), p('tiki', 102, 110), p('coconuts', 168, 160),
+      p('driftwood', 58, 398), p('tidepool', 396, 506), p('rowboat', 336, 536),
+      p('gull', 280, 518), p('gull', 404, 238),
     ],
     shop: { x: 162, y: 88 },
     green: {
-      left: { x: 54, y: 300, w: 116, h: 44 }, right: { x: 278, y: 136, w: 118, h: 44 },
+      left: { x: 54, y: 300, w: 116, h: 44 }, right: { x: 256, y: 136, w: 94, h: 44 },
       idle: [{ x: 186, y: 372 }, { x: 290, y: 240 }, { x: 130, y: 376 }, { x: 398, y: 250 }],
     },
-    landmark: { x: 30, y: 404, stand: { x: 160, y: 444 } },
+    // the ghost ship wreck, drawn for the village (wreckart.js): run aground in the south-west corner
+    landmark: { x: 16, y: 418, w: WRECK.w, h: WRECK.h, art: 'wreck', foot: [8, 30, 156, 72], stand: { x: 194, y: 458 } },
     chest: { x: 372, y: 484 },
     start: { x: 88, y: 130 },
     slots: {

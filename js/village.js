@@ -17,6 +17,10 @@ import { villageLayout } from './villagemaps.js';
 import { MAP_THEMES } from './maparts.js';
 import { startMapLife } from './maplife.js';
 import { OAK, startOak } from './oakart.js';
+import { WRECK, startWreck } from './wreckart.js';
+
+// landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
+const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck } };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -208,7 +212,8 @@ export function villageHtml(v) {
   const L = villageLayout(v.theme);
   const people = placeVillagers(v.tasks, L);
   const quest = (t) => ({ id: t.id, st: t.st, verify: t.verify, timer: Boolean(t.timer), icon: t.icon, task: t.name, sub: t.sub, step: t.step || 0, plan: t.plan || '' });
-  // most landmarks are their treasure-map art drawn twice as big; the meadow's Great Oak is drawn for the village (oakart.js)
+  // most landmarks are their treasure-map art drawn twice as big; the meadow's Great Oak (oakart.js) and the
+  // sunset's ghost ship wreck (wreckart.js) are drawn for the village
   const lm = v.landmark ? { ...L.landmark, w: L.landmark.w || v.landmark.w, h: L.landmark.h || v.landmark.h } : null;
   const shop = v.shop || { open: false, left: 0 };
   const data = {
@@ -246,7 +251,7 @@ export function villageHtml(v) {
           ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
           ${folk}${keeper}
           ${visitorsMarkup(v.visit, L)}
-          ${lm ? `<button class="v-landmark${lm.art ? ` art-${lm.art}` : ''}" style="left:${lm.x}px;top:${lm.y}px;width:${lm.w}px;z-index:${lm.y + lm.h}" aria-label="${esc(v.landmark.name)}">${lm.art === 'oak' ? `<canvas class="v-art" width="${OAK.w}" height="${OAK.h}" aria-hidden="true"></canvas>` : v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
+          ${lm ? `<button class="v-landmark${lm.art ? ` art-${lm.art}` : ''}" style="left:${lm.x}px;top:${lm.y}px;width:${lm.w}px;z-index:${lm.y + lm.h}" aria-label="${esc(v.landmark.name)}">${LANDMARK_ART[lm.art] ? `<canvas class="v-art" width="${LANDMARK_ART[lm.art].size.w}" height="${LANDMARK_ART[lm.art].size.h}" aria-hidden="true"></canvas>` : v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
           <span class="v-critter b1" aria-hidden="true"></span><span class="v-critter b2" aria-hidden="true"></span>
           <button class="v-chest ${v.chest.ready ? 'ready' : ''} ${v.chest.opened ? 'opened' : ''}" style="left:${L.chest.x}px;top:${L.chest.y}px;z-index:${L.chest.y}" aria-label="Treasure">${v.chest.html}</button>
           <div class="v-buddy" style="z-index:500"><div class="v-flip">${v.buddy}</div></div>
@@ -700,7 +705,7 @@ function mount(section, handlers) {
       visitorTap(goal.visitor);
     } else if (goal.landmark) {
       me.face = lm && lm.x + lm.w / 2 >= me.x ? 1 : -1;
-      goal.landmark.dataset.wake = String(performance.now()); // the Great Oak wakes up to say hello
+      goal.landmark.dataset.wake = String(performance.now()); // a landmark drawn for the village wakes up to say hello
       atLandmark = true;
       handlers.onLandmark?.(goal.landmark, section.querySelector('.v-show'));
     } else if (goal.flee) {
@@ -882,8 +887,8 @@ function mount(section, handlers) {
   };
 
   // ---- the loop ----
-  const oakEl = section.querySelector('.v-landmark canvas.v-art');
-  const oakStep = oakEl ? startOak(oakEl, oakEl.parentElement) : null;
+  const artEl = section.querySelector('.v-landmark canvas.v-art');
+  const artStep = artEl && lm?.art ? LANDMARK_ART[lm.art].start(artEl, artEl.parentElement) : null;
   let last = performance.now();
   const tick = (now) => {
     if (!section.isConnected) { mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face; return; }
@@ -905,7 +910,7 @@ function mount(section, handlers) {
     mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face;
     place();
     drawArrows();
-    oakStep?.(now);
+    artStep?.(now);
     requestAnimationFrame(tick);
   };
   window.addEventListener('resize', () => { measure(); }, { passive: true });
