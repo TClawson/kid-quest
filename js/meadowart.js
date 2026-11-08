@@ -40,7 +40,7 @@ const EDGE = {
   awnR: ['#9a2a3c', '#7a1e34'], awnC: ['#b89a8a', '#94788c'], mail: ['#8a2434', '#6a1a30'], gold: ['#9a6a1a', '#7a4a1e'], white: [St[2], St[1]], red: ['#8a2434', '#6a1a30'],
 };
 const GROUNDED = new Set(['wall', 'stone', 'door', 'wood', 'pot', 'sand', 'leaf', 'metal', 'mail', 'gold', 'white', 'red']);
-function selective(tag, side) {
+export function selective(tag, side) {
   const base = (tag || '').split(':')[0];
   const e = EDGE[base] || [INK, INK];
   if (side === 'bottom') return GROUNDED.has(base) ? INK : e[1];
@@ -48,7 +48,7 @@ function selective(tag, side) {
 }
 
 /** A soft round shadow on the ground (see-through, so the grass shows through it). */
-function groundShadow(px, cx, cy, rx, ry, a = 0.2) {
+export function groundShadow(px, cx, cy, rx, ry, a = 0.2) {
   for (let y = Math.floor(cy - ry); y <= cy + ry; y += 1) {
     for (let x = Math.floor(cx - rx); x <= cx + rx; x += 1) {
       const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
@@ -58,7 +58,7 @@ function groundShadow(px, cx, cy, rx, ry, a = 0.2) {
 }
 
 /** Draws a sprite into a buffer, outlines it selectively, and puts it on the village. */
-function propB(px, X, Y, w, h, draw, o = {}) {
+export function propB(px, X, Y, w, h, draw, o = {}) {
   const b = new Buf(w, h, o.pad ?? 4);
   const put = (tag) => (x, y, c) => b.set(x, y, c, tag);
   draw(b, put);
@@ -209,7 +209,7 @@ function pathsB(px, lines, seed, o = {}) {
 }
 
 /** One flat stone set in the ground. */
-function stoneB(px, cx, cy, rx, ry, mossy, seed) {
+export function stoneB(px, cx, cy, rx, ry, mossy, seed) {
   const b = new Buf(Math.ceil(rx * 2) + 2, Math.ceil(ry * 2) + 2, 2);
   const ox = Math.ceil(rx) + 1; const oy = Math.ceil(ry) + 1;
   b.fill(0, 0, ox * 2, oy * 2, (x, y) => {
@@ -563,7 +563,7 @@ function stoneRow(b, x0, y0, w, h, rnd, tag = 'stone') {
 }
 
 /** A curl of chimney smoke: round puffs, no outline, a cool shade on the bottom-right. */
-function smokeB(px, x, y) {
+export function smokeB(px, x, y) {
   const puffs = [[3.5, 26, 2.2], [6, 20, 3], [4, 13, 3.3], [8, 6.5, 2.7], [12, 1.8, 1.8]];
   const b = new Buf(18, 30, 3);
   puffs.forEach(([cx, cy, rr]) => b.fill(-2, -2, 22, 34, (xx, yy) => (inEll(xx, yy, cx, cy, rr, rr * 0.9) ? ((xx + 0.5 - cx) + (yy + 0.5 - cy) > rr * 0.5 ? '#d6d0e4' : (xx + 0.5 - cx) + (yy + 0.5 - cy) < -rr * 0.6 ? '#ffffff' : '#f2eef6') : null)));
@@ -993,7 +993,7 @@ function stallB(px, X, Y) {
 }
 
 /** The laundry line: two T posts, a sagging rope, shirts and socks pegged on it. */
-function laundryB(px, X, Y, w) {
+export function laundryB(px, X, Y, w) {
   const sag = (x) => Math.round(Math.sin(((x - X) / (w - 6)) * Math.PI) * 3);
   groundShadow(px, X + 2, Y + 26, 4, 1.3, 0.2); groundShadow(px, X + w - 2, Y + 26, 4, 1.3, 0.2);
   for (const x of [X, X + w - 4]) {
