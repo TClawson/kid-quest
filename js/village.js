@@ -17,41 +17,53 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(
 // ---------- layout (village pixels) ----------
 
 const W = 448;
-const H = 480;
+// the village green (where visitors play, by the river) pushes everything south of it down by G
+const G = 76;
+const H = 480 + G;
 const CX = W / 2;
 
 const HOME = { x: CX - 50, y: 30, w: 100, h: 78 };
 const COTTAGES = [
   { x: 34, y: 50, w: 80, h: 66, roof: '#4c6ef5', shutter: '#e03131' },
   { x: W - 114, y: 50, w: 80, h: 66, roof: '#2f9e44', shutter: '#f08c00' },
-  { x: 30, y: 300, w: 96, h: 74, roof: '#7048e8', shutter: '#fcc419', sign: 'note' }, // the music hall
+  { x: 30, y: 300 + G, w: 96, h: 74, roof: '#7048e8', shutter: '#fcc419', sign: 'note' }, // the music hall
 ];
 const WELL = { x: CX - 13, y: 140 };
-const RIVER = { y0: 240, y1: 266 };
-const BRIDGE = { x: CX - 16, y0: 236, y1: 270, w: 32 };
+const RIVER = { y0: 240 + G, y1: 266 + G };
+const BRIDGE = { x: CX - 16, y0: 236 + G, y1: 270 + G, w: 32 };
 const PATHS = [
-  [[CX, HOME.y + HOME.h + 3], [CX, 448]],
+  [[CX, HOME.y + HOME.h + 3], [CX, 448 + G]],
   [[CX, 132], [74, 132], [74, 119]],
   [[CX, 132], [W - 74, 132], [W - 74, 119]],
-  [[CX, 392], [78, 392], [78, 377]],
-  [[CX, 316], [W - 70, 316], [W - 70, 336]],
+  [[CX, 392 + G], [78, 392 + G], [78, 377 + G]],
+  [[CX, 316 + G], [W - 70, 316 + G], [W - 70, 336 + G]],
 ];
-const PLAZAS = [[CX, 166, 30], [CX, 428, 30]];
+const PLAZAS = [[CX, 166, 30], [CX, 428 + G, 30]];
 const GARDENS = [{ x: 34, y: 150, w: 62, h: 34 }];
 const FENCES = [{ x: 32, y: 188, w: 66 }];
 const STALLS = [{ x: W - 100, y: 154 }];
-const LAUNDRY = [{ x: W - 112, y: 340, w: 84 }];
+const LAUNDRY = [{ x: W - 112, y: 340 + G, w: 84 }];
 const SIGNS = [];
-const FLOWER_BEDS = [[HOME.x - 14, HOME.y + HOME.h - 10], [HOME.x + HOME.w + 2, HOME.y + HOME.h - 10], [150, 300], [290, 452]];
-const BUSHES = [[HOME.x - 22, HOME.y + 40, true], [HOME.x + HOME.w + 4, HOME.y + 40, false], [128, 214, false], [300, 214, true], [150, 368, true], [250, 352, false], [330, 440, false], [118, 452, true]];
+const FLOWER_BEDS = [[HOME.x - 14, HOME.y + HOME.h - 10], [HOME.x + HOME.w + 2, HOME.y + HOME.h - 10], [150, 300 + G], [290, 452 + G]];
+const BUSHES = [[HOME.x - 22, HOME.y + 40, true], [HOME.x + HOME.w + 4, HOME.y + 40, false], [150, 368 + G, true], [250, 352 + G, false], [118, 452 + G, true]];
 // the forest round the edge, plus a few trees inside
 const TREES = (() => {
   const t = [];
   for (let x = -14; x < W; x += 26) { t.push([x, -16 + ((x / 26) % 2 ? 5 : 0)]); t.push([x, H - 30 + ((x / 26) % 2 ? 0 : 6)]); }
   for (let y = 4; y < H - 30; y += 30) { t.push([-18 + ((y / 30) % 2 ? 4 : 0), y]); t.push([W - 14 - ((y / 30) % 2 ? 4 : 0), y]); }
-  t.push([118, 66], [298, 66], [380, 190], [140, 308], [360, 386], [40, 400], [290, 362]);
+  t.push([118, 66], [298, 66], [380, 190], [140, 308 + G], [40, 400 + G], [290, 362 + G]);
   return t;
 })();
+
+// The village green: a fishing pond or a play patch each side of the path, on days when
+// visitors use one (see planVisits in visits.js), and spots for visitors who just hang out.
+export const GREEN = {
+  left: { x: 54, y: 234, w: 116, h: 44 },
+  right: { x: 272, y: 234, w: 126, h: 44 },
+  idle: [{ x: 202, y: 250 }, { x: 246, y: 296 }, { x: 202, y: 296 }, { x: 246, y: 250 }],
+};
+// a finished treasure map's landmark stands in a clearing by the chest
+export const LANDMARK = { x: 372, y: 468, w: 46, h: 46 };
 
 // where quest givers stand (their feet), in the order quests fill them: a loop out from the
 // house (and from the bridge), so a kid's plan is also a walk round the village
@@ -61,13 +73,13 @@ const SLOTS = {
     { x: 276, y: 206 }, { x: 332, y: 186 }, { x: W - 74, y: 140 }, { x: 298, y: 120 },
   ],
   afternoon: [
-    { x: 78, y: 412, likes: /piano|music|practice|violin|guitar|sing|instrument/i },
-    { x: W - 60, y: 372, likes: /laundry|clothes|fold|wash/i },
-    { x: 170, y: 306 }, { x: 64, y: 290 }, { x: 170, y: 420 }, { x: 290, y: 420 },
-    { x: 384, y: 300 }, { x: 290, y: 306 },
+    { x: 78, y: 412 + G, likes: /piano|music|practice|violin|guitar|sing|instrument/i },
+    { x: W - 60, y: 372 + G, likes: /laundry|clothes|fold|wash/i },
+    { x: 170, y: 306 + G }, { x: 64, y: 290 + G }, { x: 170, y: 420 + G }, { x: 290, y: 420 + G },
+    { x: 384, y: 300 + G }, { x: 290, y: 306 + G },
   ],
 };
-const CHEST = { x: CX, y: 436 };
+const CHEST = { x: CX, y: 436 + G };
 const START = { x: CX, y: HOME.y + HOME.h + 14 };
 
 // Obstacles the buddy walks round: [x, y, w, h]
@@ -161,7 +173,7 @@ export function placeVillagers(tasks) {
     list.forEach((t) => {
       if (at.has(t.id)) return;
       let s = slots.find((x) => !x.taken && !x.likes) || slots.find((x) => !x.taken);
-      if (!s) { const n = at.size; s = { x: 80 + (n % 5) * 70, y: period === 'morning' ? 196 : 446 - 30 * Math.floor(n / 5) }; }
+      if (!s) { const n = at.size; s = { x: 80 + (n % 5) * 70, y: period === 'morning' ? 196 : 446 + G - 30 * Math.floor(n / 5) }; }
       s.taken = true;
       at.set(t.id, s);
     });
@@ -174,16 +186,76 @@ export const villagerName = (kind) => `${NAMES[kind]} ${SPECIES_NAMES[kind]}`;
 
 // ---------- markup ----------
 
+/** Where each visitor stands, which way they face, and what they're doing on the green. */
+export function visitorSpots(visit) {
+  const out = {};
+  let idle = 0;
+  for (const a of visit?.areas || []) {
+    const Z = GREEN[a.side];
+    const y = Math.round(Z.y + Z.h / 2 + 8);
+    if (a.kind === 'pond') {
+      a.members.forEach((id, i) => { out[id] = i ? { x: Z.x + Z.w + 4, y, face: -1, role: 'fish' } : { x: Z.x - 4, y, face: 1, role: 'fish' }; });
+    } else if (a.members.length === 1) {
+      out[a.members[0]] = a.side === 'left' ? { x: Z.x + Math.round(Z.w * 0.3), y, face: 1, role: 'solo' } : { x: Z.x + Math.round(Z.w * 0.7), y, face: -1, role: 'solo' };
+    } else {
+      a.members.forEach((id, i) => { out[id] = i ? { x: Z.x + Z.w - 10, y, face: -1, role: 'b' } : { x: Z.x + 10, y, face: 1, role: 'a' }; });
+    }
+  }
+  for (const v of visit?.visitors || []) {
+    if (out[v.id]) continue;
+    const g = GREEN.idle[idle % GREEN.idle.length];
+    out[v.id] = { x: g.x + Math.floor(idle / GREEN.idle.length) * 14, y: g.y, face: idle % 2 ? -1 : 1, role: 'idle' };
+    idle += 1;
+  }
+  return out;
+}
+
+/** The pond or play patch for each visitor area, in village pixels. */
+export const greenAreas = (visit) => (visit?.areas || []).map((a) => ({ ...GREEN[a.side], kind: a.kind, side: a.side }));
+
+function visitorsMarkup(visit) {
+  if (!visit?.visitors?.length) return '';
+  const spots = visitorSpots(visit);
+  const areas = (visit.areas || []).map((a) => {
+    const Z = GREEN[a.side];
+    const solo = a.members.length === 1 ? `solo from-${a.side}` : '';
+    const spot = a.members.length === 1 ? spots[a.members[0]] : null;
+    const tap = a.tap ? `data-id="${esc(a.members[0])}" data-pick="${a.kind}" role="button" aria-label="Play"` : 'aria-hidden="true"';
+    return a.kind === 'pond' ? '' : `<div class="v-area v-area-${a.kind} ${solo} ${a.tap ? 'tap' : ''}" style="left:${Z.x}px;top:${Z.y}px;width:${Z.w}px;height:${Z.h}px;--solo-x:${spot ? spot.x - Z.x : 0}px" ${tap}><span class="v-ball">${a.ball || ''}</span></div>`;
+  }).join('');
+  const people = visit.visitors.map((v, i) => {
+    const sp = spots[v.id];
+    // a fishing line from the rod's tip to a bobber in the pond
+    let line = '';
+    if (sp.role === 'fish') {
+      const tip = { x: sp.x + sp.face * 11, y: sp.y - 19 }; const bob = { x: sp.x + sp.face * 22, y: sp.y - 4 };
+      const len = Math.hypot(bob.x - tip.x, bob.y - tip.y); const ang = Math.atan2(bob.y - tip.y, bob.x - tip.x) * (180 / Math.PI);
+      // the visitor's box starts 12 px left of and 23 px above its feet
+      const ox = 12 - sp.x; const oy = 23 - sp.y;
+      line = `<span class="v-line" style="left:${tip.x + ox}px;top:${tip.y + oy}px;width:${len.toFixed(1)}px;transform:rotate(${ang.toFixed(1)}deg)"></span><span class="v-bobber" style="left:${bob.x + ox}px;top:${bob.y + oy}px"></span><span class="v-catch" style="left:${12 + sp.face * 26 - 9}px"></span>`;
+    }
+    return `<div class="v-visitor role-${sp.role} ${v.news || ''} ${i === 0 || v.news ? 'talking' : ''} ${sp.role === 'fish' ? 'fishing' : ''}" data-id="${esc(v.id)}" data-rod="${v.rod || 1}" style="left:${sp.x}px;top:${sp.y}px;z-index:${sp.y};--kid:${esc(v.color || '#4dabf7')}">
+        <div class="v-vbuddy" style="${sp.face < 0 ? 'transform:scaleX(-1)' : ''}">${v.html}</div>
+        ${line}
+        <div class="visitor-name">${esc(v.name)}</div>
+        <div class="visitor-bubble">${esc(v.line)}${v.news === 'news' ? `<button class="cheer-btn" data-action="send-cheer" data-id="${esc(v.id)}">🎉 Cheer</button>` : ''}</div>
+      </div>`;
+  }).join('');
+  return `<div class="map-visitors v-visitors" data-host="${esc(visit.host)}" aria-label="Visiting buddies">${areas}${people}</div>`;
+}
+
 /**
  * The village for a kid. v: {
  *   kidId, kidName, kidColor, buddy: live buddy markup,
  *   tasks: [{ id, name, icon, period, st: 'todo'|'current'|'pending'|'done', sub, verify, timer }],
  *   chest: { html, ready, opened, title, sub },
+ *   visit: { host, visitors: [{ id, name, color, html, line, news, rod }], areas: [{ side, kind, members, ball, tap }] },
+ *   landmark: { html, name } or null: a finished treasure map's landmark,
  * }
  */
 export function villageHtml(v) {
   const people = placeVillagers(v.tasks);
-  const data = { kid: v.kidId, name: v.kidName, color: v.kidColor, people: people.map((p) => ({ id: p.task.id, kind: p.kind, period: p.task.period === 'morning' ? 'morning' : 'afternoon', x: p.x, y: p.y, st: p.task.st, verify: p.task.verify, timer: Boolean(p.task.timer), icon: p.task.icon, task: p.task.name, sub: p.task.sub, step: p.task.step || 0, plan: p.task.plan || '' })), planned: Boolean(v.planned), chest: { ready: v.chest.ready, opened: v.chest.opened, title: v.chest.title, sub: v.chest.sub } };
+  const data = { kid: v.kidId, name: v.kidName, color: v.kidColor, people: people.map((p) => ({ id: p.task.id, kind: p.kind, period: p.task.period === 'morning' ? 'morning' : 'afternoon', x: p.x, y: p.y, st: p.task.st, verify: p.task.verify, timer: Boolean(p.task.timer), icon: p.task.icon, task: p.task.name, sub: p.task.sub, step: p.task.step || 0, plan: p.task.plan || '' })), planned: Boolean(v.planned), chest: { ready: v.chest.ready, opened: v.chest.opened, title: v.chest.title, sub: v.chest.sub }, areas: greenAreas(v.visit), spots: visitorSpots(v.visit), landmark: Boolean(v.landmark) };
   const folk = people.map((p) => {
     const st = p.task.st;
     const badge = st === 'done' ? '<span class="v-badge">✓</span>' : st === 'pending' ? '<span class="v-badge wait">⏳</span>' : '';
@@ -201,13 +273,17 @@ export function villageHtml(v) {
         <div class="village-world" style="width:${W}px;height:${H}px">
           <canvas class="village-land" width="${W}" height="${H}" aria-hidden="true"></canvas>
           <div class="v-label home-label" style="left:${CX}px;top:${HOME.y + 10}px">${esc(v.kidName)}'s house</div>
-          ${am ? `<div class="v-label period" style="left:${CX - 64}px;top:${RIVER.y0 - 20}px">⬆ 🌅 Morning quests</div>` : ''}
+          ${am ? `<div class="v-label period" style="left:${CX - 66}px;top:${216}px">⬆ 🌅 Morning quests</div>` : ''}
           ${pm ? `<div class="v-label period" style="left:${CX + 72}px;top:${RIVER.y1 + 10}px">⬇ ☀️ After-school quests</div>` : ''}
           ${folk}
+          ${visitorsMarkup(v.visit)}
+          ${v.landmark ? `<button class="v-landmark" style="left:${LANDMARK.x}px;top:${LANDMARK.y}px;width:${LANDMARK.w}px" aria-label="${esc(v.landmark.name)}">${v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
+          <span class="v-butterfly b1" aria-hidden="true"></span><span class="v-butterfly b2" aria-hidden="true"></span>
           <button class="v-chest ${v.chest.ready ? 'ready' : ''} ${v.chest.opened ? 'opened' : ''}" style="left:${CHEST.x}px;top:${CHEST.y}px;z-index:${CHEST.y}" aria-label="Treasure">${v.chest.html}</button>
           <div class="v-buddy" style="z-index:500"><div class="v-flip">${v.buddy}</div></div>
           <span class="v-target" hidden></span>
         </div>
+        <div class="v-show"><canvas class="map-land" data-z="1" width="1" height="1"></canvas></div>
         <div class="v-arrows"></div>
         <div class="v-dialog" hidden></div>
       </div>
@@ -221,9 +297,9 @@ const COLS = Math.ceil(W / CELL);
 const ROWS = Math.ceil(H / CELL);
 const SPEED = 100; // village pixels a second
 
-function makeGrid(people) {
+function makeGrid(people, extra = []) {
   const block = new Uint8Array(COLS * ROWS);
-  const solid = [...OBSTACLES, RIVER_BLOCK, ...people.map((p) => [p.x - 7, p.y - 8, 14, 10]), [CHEST.x - 12, CHEST.y - 12, 24, 14]];
+  const solid = [...OBSTACLES, RIVER_BLOCK, ...people.map((p) => [p.x - 7, p.y - 8, 14, 10]), [CHEST.x - 12, CHEST.y - 12, 24, 14], ...extra];
   for (let r = 0; r < ROWS; r += 1) {
     for (let c = 0; c < COLS; c += 1) {
       const x = c * CELL + CELL / 2; const y = r * CELL + CELL / 2;
@@ -330,8 +406,9 @@ function spriteUrl(kind, happy) {
 }
 
 let landCache = { key: '', canvas: null };
-function land(color) {
-  if (landCache.key !== color) landCache = { key: color, canvas: paintVillage(document.createElement('canvas'), LAYOUT, { homeRoof: color }) };
+function land(color, areas = []) {
+  const key = `${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}`;
+  if (landCache.key !== key) landCache = { key, canvas: paintVillage(document.createElement('canvas'), LAYOUT, { homeRoof: color, areas }) };
   return landCache.canvas;
 }
 
@@ -362,7 +439,7 @@ function mount(section, handlers) {
 
   // the land and the villagers' faces
   const canvas = section.querySelector('.village-land');
-  canvas.getContext('2d').drawImage(land(data.color || '#e03131'), 0, 0);
+  canvas.getContext('2d').drawImage(land(data.color || '#e03131', data.areas), 0, 0);
   for (const p of people) {
     const c = els.get(p.id).querySelector('.v-sprite');
     const src = spriteUrl(p.kind, p.st === 'done');
@@ -372,15 +449,23 @@ function mount(section, handlers) {
 
   const mem = memory.get(data.kid) || { x: START.x, y: START.y, seen: {} };
   memory.set(data.kid, mem);
-  const grid = makeGrid(people);
+  // ponds can't be walked through; visitors and the landmark are stood round
+  const grid = makeGrid(people, [
+    ...data.areas.filter((a) => a.kind === 'pond').map((a) => [a.x - 2, a.y - 2, a.w + 4, a.h + 4]),
+    ...Object.values(data.spots).map((p) => [p.x - 7, p.y - 8, 14, 10]),
+    ...(data.landmark ? [[LANDMARK.x + 2, LANDMARK.y + 8, LANDMARK.w - 4, LANDMARK.h - 10]] : []),
+  ]);
   const me = { x: mem.x, y: mem.y, path: [], goal: null, face: mem.face || 1 };
   let S = 3;
   let cam = { x: 0, y: 0 };
   let vw = 0; let vh = 0;
 
+  const showLand = section.querySelector('.v-show canvas.map-land');
   const measure = () => {
     vw = view.clientWidth; vh = view.clientHeight;
     S = vw >= 600 ? 3 : 2;
+    // the treasure map's show plays over the view (mapshow.js sizes itself from this canvas)
+    if (showLand) { showLand.width = Math.ceil(vw / S); showLand.height = Math.ceil(vh / S); showLand.parentElement.dataset.scale = S; }
   };
   const camTarget = () => {
     const tx = W * S <= vw ? -(vw / S - W) / 2 : Math.max(0, Math.min(W - vw / S, me.x - vw / S / 2));
@@ -477,6 +562,11 @@ function mount(section, handlers) {
       say(p);
     } else if (goal.chest) {
       handlers.onChest(chestEl);
+    } else if (goal.visitor) {
+      me.face = goal.x >= me.x ? 1 : -1;
+      visitorTap(goal.visitor);
+    } else if (goal.landmark) {
+      handlers.onLandmark?.(goal.landmark, section.querySelector('.v-show'));
     }
   };
   const walkTo = (x, y, goal = null) => {
@@ -505,10 +595,68 @@ function mount(section, handlers) {
     walkTo(spot.x, spot.y, { chest: true });
   };
 
+  // ---- visitors ----
+  // a visitor (or the kid's own play patch) does what it does on the map; its bubble then shows a while
+  const talkUntil = new Map();
+  const visitorTap = (el) => {
+    handlers.onVisitor?.(el);
+    const who = el.classList.contains('v-visitor') ? el : null;
+    if (who) { talkUntil.set(who, performance.now() + 5000); section.querySelectorAll('.v-visitor').forEach((x) => x.classList.toggle('talking', x === who || x.classList.contains('news') || x.classList.contains('cheering'))); }
+  };
+  const goVisitor = (el) => {
+    const sp = data.spots[el.dataset.id];
+    if (!sp) return;
+    // stand on the near side, or behind a fisher (the pond is in front)
+    const spot = sp.role === 'fish' ? { x: sp.x - sp.face * 22, y: sp.y + 2 } : standBy(sp.x, sp.y);
+    if (Math.hypot(me.x - spot.x, me.y - spot.y) < 22) { visitorTap(el); return; }
+    walkTo(spot.x, spot.y, { visitor: el, x: sp.x });
+  };
+  // visitors take turns talking, one bubble at a time (news always shows)
+  const visitors = [...section.querySelectorAll('.v-visitor')];
+  let talker = 0;
+  const talkTimer = setInterval(() => {
+    if (!section.isConnected) { clearInterval(talkTimer); return; }
+    if (visitors.length < 2 || document.visibilityState !== 'visible') return;
+    if (visitors.some((x) => (talkUntil.get(x) || 0) > performance.now())) return;
+    talker = (talker + 1) % visitors.length;
+    visitors.forEach((x, i) => x.classList.toggle('talking', i === talker || x.classList.contains('news') || x.classList.contains('cheering')));
+  }, 4000);
+  // now and then a fisher reels something in
+  const fishers = visitors.filter((x) => x.classList.contains('fishing'));
+  const fishTimer = fishers.length && handlers.fishCatch ? setInterval(() => {
+    if (!section.isConnected) { clearInterval(fishTimer); return; }
+    if (document.visibilityState !== 'visible' || Math.random() > 0.4) return;
+    const el = fishers[Math.floor(Math.random() * fishers.length)];
+    if (el.classList.contains('reeling')) return;
+    const got = handlers.fishCatch(Number(el.dataset.rod) || 1);
+    if (!got) return;
+    el.querySelector('.v-catch').innerHTML = got.svg;
+    el.classList.add('reeling');
+    setTimeout(() => {
+      el.querySelector('.visitor-bubble').firstChild.textContent = `${got.rare ? 'WOW! ' : ''}I caught ${/^[aeiou]/i.test(got.name) ? 'an' : 'a'} ${got.name}! ${got.icon}`;
+      talkUntil.set(el, performance.now() + 4000);
+      visitors.forEach((x) => x.classList.toggle('talking', x === el || x.classList.contains('news') || x.classList.contains('cheering')));
+    }, 900);
+    setTimeout(() => el.classList.remove('reeling'), 3400);
+  }, 9000) : 0;
+
   // ---- taps ----
   view.addEventListener('click', (e) => {
     if (e.target.closest('.v-dialog')) return;
+    // the Cheer button in a visitor's bubble is the app's
+    if (e.target.closest('.v-visitor [data-action]')) return;
     e.stopPropagation();
+    const vis = e.target.closest('.v-visitor');
+    if (vis) { handlers.sound?.('tap'); goVisitor(vis); return; }
+    const area = e.target.closest('.v-area.tap');
+    if (area) {
+      const a = data.areas.find((z) => Math.abs(z.x - parseFloat(area.style.left)) < 1);
+      handlers.sound?.('tap');
+      if (a) walkTo(a.x + a.w / 2, a.y + a.h + 12, { visitor: area, x: a.x + a.w / 2 });
+      return;
+    }
+    const lm = e.target.closest('.v-landmark');
+    if (lm) { handlers.sound?.('tap'); walkTo(LANDMARK.x + LANDMARK.w / 2, LANDMARK.y + LANDMARK.h + 10, { landmark: lm }); return; }
     const arrow = e.target.closest('.v-arrow');
     if (arrow) { handlers.sound?.('tap'); if (arrow.dataset.vid === 'chest') goChest(); else goTalk(personById(arrow.dataset.vid)); return; }
     const who = e.target.closest('.villager');

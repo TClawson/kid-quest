@@ -501,6 +501,92 @@ function flower(px, x, y, c) {
   px(x - 1, y, c); px(x + 1, y, c); px(x, y - 1, c); px(x, y + 1, c); px(x, y, '#fff3bf');
 }
 
+
+/** An oval in a box: is (x, y) inside, and how far in (0 at the edge, 1 at the middle). */
+const oval = (Z, x, y) => { const dx = (x + 0.5 - (Z.x + Z.w / 2)) / (Z.w / 2); const dy = (y + 0.5 - (Z.y + Z.h / 2)) / (Z.h / 2); const d = dx * dx + dy * dy; return d <= 1 ? 1 - d : -1; };
+
+/** The village fishing pond: deep middle, a sandy lip, lily pads and reeds. */
+function pond(px, Z, rnd) {
+  for (let y = Z.y - 3; y < Z.y + Z.h + 3; y += 1) {
+    for (let x = Z.x - 3; x < Z.x + Z.w + 3; x += 1) {
+      const big = { x: Z.x - 3, y: Z.y - 3, w: Z.w + 6, h: Z.h + 6 };
+      if (oval(big, x, y) < 0) continue;
+      const k = oval(Z, x, y);
+      if (k < 0) { px(x, y, oval({ x: Z.x - 2, y: Z.y - 2, w: Z.w + 4, h: Z.h + 4 }, x, y) < 0 ? OUT : '#c9a46a'); continue; }
+      let c = k > 0.55 ? '#1f6fc0' : k > 0.12 ? '#2b8adf' : '#4dabf7';
+      if (k > 0.12 && k < 0.2 && y < Z.y + Z.h / 2) c = '#74c0fc';
+      px(x, y, c);
+    }
+  }
+  for (let i = 0; i < 9; i += 1) { const x = Z.x + 12 + Math.floor(rnd() * (Z.w - 30)); const y = Z.y + 8 + Math.floor(rnd() * (Z.h - 16)); px(x, y, '#a5d8ff', 4 + Math.floor(rnd() * 4), 1); }
+  // lily pads, one with a flower
+  [[0.2, 0.62], [0.72, 0.3], [0.8, 0.7]].forEach(([fx, fy], i) => {
+    const x = Math.round(Z.x + fx * Z.w); const y = Math.round(Z.y + fy * Z.h);
+    px(x - 1, y - 1, OUT, 9, 5); px(x, y, '#2f9e44', 7, 3); px(x + 1, y, '#69db7c', 4, 1); px(x + 5, y, '#1f6fc0', 2, 1);
+    if (!i) { px(x + 2, y - 2, '#ff8fab', 3, 2); px(x + 3, y - 3, '#fff0f6'); }
+  });
+  // reeds at the ends
+  for (const [x, y] of [[Z.x + 4, Z.y + 4], [Z.x + Z.w - 8, Z.y + Z.h - 8], [Z.x + Z.w - 12, Z.y + 2]]) {
+    for (let i = 0; i < 3; i += 1) { px(x + i * 2, y - 6 + i, '#2b8a3e', 1, 7 - i); px(x + i * 2, y - 8 + i, '#7a4a26', 1, 3); }
+  }
+}
+
+/** A frozen pond for hockey: ice with snow round the edge, cracks, two little nets. */
+function frozen(px, Z) {
+  for (let y = Z.y - 4; y < Z.y + Z.h + 4; y += 1) {
+    for (let x = Z.x - 6; x < Z.x + Z.w + 6; x += 1) {
+      const snow = oval({ x: Z.x - 6, y: Z.y - 4, w: Z.w + 12, h: Z.h + 8 }, x, y);
+      if (snow < 0) continue;
+      const k = oval(Z, x, y);
+      if (k < 0) { px(x, y, snow < 0.08 ? '#dee2e6' : hashXY(x, y) < 0.2 ? '#e7f5ff' : '#f8f9fa'); continue; }
+      let c = k < 0.08 ? '#a5d8ff' : '#d0ebff';
+      if (hashXY(x, y) > 0.93) c = '#ffffff';
+      if ((x - Z.x) % 23 === Math.floor((y - Z.y) / 2) % 23 && k > 0.2) c = '#a5d8ff';
+      px(x, y, c);
+    }
+  }
+  const mid = Math.round(Z.y + Z.h / 2);
+  px(Z.x + Z.w / 2 - 1, Z.y + 3, '#ffa8a8', 1, Z.h - 6);
+  const net = (x, dir) => { px(x, mid - 6, OUT, 4, 13); px(x + (dir > 0 ? 1 : 0), mid - 5, '#f1f3f5', 3, 11); for (let y = mid - 5; y < mid + 6; y += 2) px(x + (dir > 0 ? 1 : 0), y, '#adb5bd', 3, 1); px(x + (dir > 0 ? 0 : 3), mid - 6, '#e03131', 1, 13); };
+  net(Z.x + 6, 1); net(Z.x + Z.w - 10, -1);
+}
+
+/** A worn clearing for soccer or football, with small goals or yellow goalposts. */
+function clearing(px, Z, kind) {
+  for (let y = Z.y - 2; y < Z.y + Z.h + 2; y += 1) {
+    for (let x = Z.x - 2; x < Z.x + Z.w + 2; x += 1) {
+      const k = oval({ x: Z.x - 2, y: Z.y - 2, w: Z.w + 4, h: Z.h + 4 }, x, y);
+      if (k < 0) continue;
+      const h = hashXY(x, y);
+      // worn to dirt in the middle, grass breaking through round the edge
+      if (k < 0.25 && h < 0.6 - k * 2) continue;
+      px(x, y, h < 0.15 ? '#c99a5f' : h > 0.9 ? '#e8c590' : '#d9b07a');
+      if (k < 0.3 && h > 0.75) px(x, y, '#7bd66b');
+    }
+  }
+  const mid = Math.round(Z.y + Z.h / 2);
+  if (kind === 'football') {
+    const post = (x) => { px(x, mid - 16, OUT, 3, 20); px(x + 1, mid - 15, '#fcc419', 1, 18); px(x - 5, mid - 10, OUT, 13, 3); px(x - 4, mid - 9, '#fcc419', 11, 1); px(x - 5, mid - 18, OUT, 3, 9); px(x + 5, mid - 18, OUT, 3, 9); px(x - 4, mid - 17, '#fcc419', 1, 8); px(x + 6, mid - 17, '#fcc419', 1, 8); };
+    post(Z.x + 4); post(Z.x + Z.w - 7);
+  } else {
+    const goal = (x, dir) => {
+      px(x, mid - 7, OUT, 8, 15); px(x + 1, mid - 6, '#f8f9fa', 6, 13);
+      for (let y = mid - 6; y < mid + 7; y += 2) px(x + 1, y, '#ced4da', 6, 1);
+      for (let xx = x + 1; xx < x + 7; xx += 2) px(xx, mid - 6, '#ced4da', 1, 13);
+      px(dir > 0 ? x + 6 : x + 1, mid - 6, '#ffffff', 1, 13);
+    };
+    goal(Z.x, 1); goal(Z.x + Z.w - 8, -1);
+    px(Z.x + Z.w / 2 - 3, mid - 3, '#f1e3c8', 6, 6);
+  }
+}
+
+/** The village green's areas (see GREEN in village.js): a pond or a play patch. */
+function greenArea(px, a, rnd) {
+  if (a.kind === 'pond') pond(px, a, rnd);
+  else if (a.kind === 'hockey') frozen(px, a);
+  else clearing(px, a, a.kind);
+}
+
 /**
  * Paints the whole village onto a canvas, one canvas pixel per village pixel.
  * L is the layout from village.js: { W, H, home, cottages, river, paths, plazas, trees, ... }.
@@ -528,10 +614,11 @@ export function paintVillage(canvas, L, opts = {}) {
   L.paths.forEach((p) => path(px, p, 12, rnd));
   L.plazas.forEach(([x, y, r]) => plaza(px, x, y, r));
   river(px, L.W, L.river.y0, L.river.y1, rnd);
+  (opts.areas || []).forEach((a) => greenArea(px, a, rnd));
   bridge(px, L.bridge.x, L.bridge.y0, L.bridge.y1, L.bridge.w);
 
   // flowers on open grass, away from paths and buildings
-  const busy = (x, y) => L.blocked(x, y, 6) || L.onPath(x, y, 10);
+  const busy = (x, y) => L.blocked(x, y, 6) || L.onPath(x, y, 10) || (opts.areas || []).some((a) => x > a.x - 8 && x < a.x + a.w + 8 && y > a.y - 8 && y < a.y + a.h + 8);
   const colors = ['#ff8fa3', '#ffd43b', '#ffffff', '#b197fc'];
   for (let i = 0; i < (L.W * L.H) / 260; i += 1) {
     const x = Math.floor(rnd() * L.W); const y = Math.floor(rnd() * L.H);

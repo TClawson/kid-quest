@@ -122,3 +122,69 @@
 .v-step { position: absolute; left: -4px; top: -4px; width: 7px; height: 7px; border-radius: 50%; display: grid; place-items: center; font: 700 5px/1 var(--px-text); color: #fff; background: #7048e8; border: 1px solid var(--px-ink); }
 .villager.st-current .v-step { background: #e67700; }
 .v-quest .v-plan { color: #7048e8; font-style: italic; margin-top: 2px; }
+
+/* ---------- visitors on the village green (in village pixels) ---------- */
+.village .v-visitors { position: absolute; inset: 0; height: auto; z-index: auto; }
+.v-visitor { position: absolute; width: 24px; height: 24px; transform: translate(-50%, -96%); cursor: pointer; }
+.v-visitor::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; background: rgba(27, 20, 48, 0.22); border-radius: 50%; z-index: -1; }
+.v-vbuddy, .v-vbuddy canvas, .v-vbuddy svg { width: 24px; height: 24px; display: block; image-rendering: pixelated; }
+.v-vbuddy { position: relative; }
+.v-vbuddy svg { position: absolute; inset: 0; }
+.v-visitor .visitor-name { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 1px; font: 700 5px/1.3 var(--px-font); padding: 0 2px; border-width: 1px; border-radius: 1px; white-space: nowrap; pointer-events: none; }
+.v-visitor .visitor-bubble {
+  top: auto; bottom: 100%; margin: 0 0 3px; max-width: 70px; font: 700 5px/1.25 var(--px-text); padding: 1.5px 2.5px;
+  border-width: 1px; border-radius: 2px; box-shadow: 1px 1px 0 var(--px-ink); transform: translateX(-50%) scale(0.6); transform-origin: 50% 100%;
+}
+.v-visitor .visitor-bubble::before { top: auto; bottom: -3px; margin-left: -2px; border: 2px solid transparent; border-top-color: var(--px-ink); border-bottom: 0; }
+.v-visitor.talking .visitor-bubble { opacity: 1; transform: translateX(-50%) scale(1); }
+.v-visitor.talking .cheer-btn { pointer-events: auto; }
+.v-visitor .cheer-btn { display: block; margin: 1.5px auto 0; font: 700 5px/1 var(--px-font); padding: 1.5px 3px; border: 1px solid var(--px-ink); border-radius: 2px; background: #ffd43b; color: var(--px-ink); }
+.v-visitor.news .visitor-bubble, .v-visitor.cheering .visitor-bubble { background: #fff3bf; }
+.v-visitor.doing-move { z-index: 900 !important; }
+/* fishing: a line to a bobber, and now and then a catch */
+.v-line { position: absolute; height: 0.5px; background: #f8f9fa; transform-origin: 0 50%; pointer-events: none; }
+.v-bobber { position: absolute; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: #e03131; box-shadow: inset 0 -1.5px 0 #fff; animation: v-bob 1.6s ease-in-out infinite; }
+@keyframes v-bob { 50% { transform: translateY(0.8px); } }
+.v-visitor.reeling .v-bobber { animation: v-bob 0.25s steps(2, end) infinite; }
+.v-catch { position: absolute; top: 4px; width: 18px; pointer-events: none; opacity: 0; }
+.v-catch svg { width: 100%; height: auto; display: block; }
+.v-visitor.reeling .v-catch { animation: v-catch 2.4s ease-out 0.5s both; }
+@keyframes v-catch { 0% { opacity: 0; transform: translateY(14px); } 20% { opacity: 1; transform: translateY(-4px); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+
+/* play patches: the ball goes back and forth between two players, or up and down for one */
+.v-area { position: absolute; pointer-events: none; }
+.v-area.tap { pointer-events: auto; cursor: pointer; }
+.v-ball { position: absolute; left: 12px; top: 50%; width: 8px; height: 8px; margin: -6px 0 0 -4px; animation: v-pass 2.2s ease-in-out infinite alternate; }
+.v-ball svg { width: 8px; height: 8px; display: block; }
+@keyframes v-pass { from { left: 14px; } to { left: calc(100% - 14px); } }
+.v-area-football .v-ball { animation-name: v-throw; }
+@keyframes v-throw { 0% { left: 14px; transform: translateY(0); } 50% { transform: translateY(-14px); } 100% { left: calc(100% - 14px); transform: translateY(0); } }
+.v-area.solo .v-ball { left: var(--solo-x); animation: v-juggle 0.9s ease-in-out infinite; }
+.v-area.solo.from-left .v-ball { margin-left: 6px; } .v-area.solo.from-right .v-ball { margin-left: -14px; }
+@keyframes v-juggle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+
+/* a finished treasure map's landmark */
+.v-landmark { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; z-index: 470; }
+.v-landmark svg { display: block; width: 100%; height: auto; }
+.v-lm-bubble { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); width: max-content; max-width: 80px; font: 700 5px/1.25 var(--px-text); background: #fff8e7; color: var(--px-ink); border: 1px solid var(--px-ink); border-radius: 2px; padding: 1.5px 2.5px; }
+.v-show { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
+.v-show canvas.map-land { display: none; }
+
+/* butterflies over the flowers */
+.v-butterfly { position: absolute; width: 3px; height: 2px; pointer-events: none; z-index: 600; background: #ff8fab; box-shadow: 3px 0 0 #ff8fab, 1.5px 1px 0 var(--px-ink); animation: v-flit 14s linear infinite, v-flap 0.3s steps(2, end) infinite; }
+.v-butterfly.b2 { background: #fcc419; box-shadow: 3px 0 0 #fcc419, 1.5px 1px 0 var(--px-ink); animation-duration: 19s, 0.25s; animation-delay: -6s, 0s; }
+@keyframes v-flap { 50% { transform: scaleX(0.4); } }
+@keyframes v-flit {
+  0% { left: 120px; top: 100px; } 20% { left: 190px; top: 70px; } 40% { left: 300px; top: 110px; }
+  60% { left: 260px; top: 200px; } 80% { left: 150px; top: 180px; } 100% { left: 120px; top: 100px; }
+}
+.v-butterfly.b2 { animation-name: v-flit2, v-flap; }
+@keyframes v-flit2 {
+  0% { left: 100px; top: 380px; } 25% { left: 180px; top: 420px; } 50% { left: 320px; top: 400px; }
+  75% { left: 280px; top: 480px; } 100% { left: 100px; top: 380px; }
+}
+
+/* the family party: everyone in the village hops */
+.village.party .villager .v-sprite, .village.party .v-visitor .v-vbuddy { animation: v-hop 0.4s steps(2, end) infinite; }
+.village.party .village-view { animation: v-glow 1s steps(2, end) infinite; }
+@keyframes v-glow { 50% { box-shadow: inset 0 0 0 4px #ffd43b; } }

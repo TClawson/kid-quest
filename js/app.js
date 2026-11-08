@@ -1386,11 +1386,11 @@ function maybeParty() {
   startParty();
 }
 function startParty() {
-  const keys = [...$app.querySelectorAll('.quest-map canvas.live-buddy')].map((c) => c.dataset.live);
+  const keys = [...$app.querySelectorAll('.quest-map canvas.live-buddy, .village canvas.live-buddy')].map((c) => c.dataset.live);
   partyAll(keys, PARTY_MS);
   mapParty(PARTY_MS);
-  $app.querySelector('.quest-map')?.classList.add('party');
-  setTimeout(() => $app.querySelector('.quest-map')?.classList.remove('party'), PARTY_MS);
+  $app.querySelectorAll('.quest-map, .village').forEach((el) => el.classList.add('party'));
+  setTimeout(() => $app.querySelectorAll('.quest-map, .village').forEach((el) => el.classList.remove('party')), PARTY_MS);
 }
 
 const visitorsArrived = new Set();
@@ -1404,9 +1404,10 @@ function visitFeel(area, complete) {
   return { valence: 0.6, arousal: 0.55 };
 }
 
-function visitorsHtml(kid, s) {
+/** Today's visitors, what each one says, and who has news (shared by the map and the village). */
+function visitorInfo(kid, s) {
   const visitors = todaysVisitors(kid);
-  if (!visitors.length) return { html: '', room: 0, areas: '' };
+  if (!visitors.length) return { visitors, lines: [], news: {} };
   const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
   // once the quest is done, every visitor wants to play (see playWith)
   if (s.complete) {
@@ -1431,6 +1432,12 @@ function visitorsHtml(kid, s) {
     lines[i] = milestoneBrag(m);
     news[v.id] = 'news';
   });
+  return { visitors, lines, news };
+}
+
+function visitorsHtml(kid, s) {
+  const { visitors, lines, news } = visitorInfo(kid, s);
+  if (!visitors.length) return { html: '', room: 0, areas: '' };
   // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
   const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [25, 40], right: [75, 60] };
@@ -1596,7 +1603,11 @@ function villageView(kid, s, entry, mood) {
     return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
   });
   const c = chestFor(kid, today());
+  // a finished Forest Village treasure map puts its landmark by the chest
+  const lm = SECRETS['bg-meadow'] && treasureFound(state.log, kid.id).maps.has('bg-meadow') ? SECRETS['bg-meadow'] : null;
   return villageHtml({
+    visit: villageVisit(kid, s),
+    landmark: lm ? { html: secretSvg('bg-meadow', 1), name: lm.name } : null,
     kidId: kid.id,
     kidName: kid.name,
     kidColor: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
@@ -1606,9 +1617,60 @@ function villageView(kid, s, entry, mood) {
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
   });
 }
+/** Today's visitors for the village green: the same ones, lines, games and gear as on the map. */
+function villageVisit(kid, s) {
+  const { visitors, lines, news } = visitorInfo(kid, s);
+  if (!visitors.length) return null;
+  const plan = visitPlan(kid, visitors);
+  const areaOf = (id) => plan.areas.find((a) => a.members.includes(id));
+  const version = (tier) => ['regular', 'good', 'super'][tier - 1];
+  const playable = playableFor(kid, s.complete);
+  return {
+    host: kid.id,
+    visitors: visitors.map((v, i) => {
+      const area = areaOf(v.id);
+      const gear = bestGear(v.owned);
+      let look = v.buddy;
+      if (area?.kind === 'pond') look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } };
+      else if (area) look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined } };
+      return { id: v.id, name: v.name, color: v.color, rod: gear.rod || 1, line: lines[i], news: news[v.id] || '', html: liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` }) };
+    }),
+    areas: plan.areas.map((a) => {
+      const tiers = a.members.map((id) => bestGear(visitors.find((v) => v.id === id).owned)[a.kind] || 1);
+      if (a.host) tiers.push(bestGear(kid.owned || [])[a.kind] || 1);
+      return { side: a.side, kind: a.kind, members: a.members, ball: a.kind === 'pond' ? '' : ballSvg(a.kind, Math.max(...tiers)), tap: Boolean(a.host && playable > 0 && a.kind !== 'pond') };
+    }),
+  };
+}
+
+/** A finished treasure map's landmark in the village: it talks, and its show plays over the view. */
+function villageLandmark(el, layer) {
+  const info = SECRETS['bg-meadow'];
+  const kid = kidById(ui.kidId);
+  if (!info || !kid || !layer) return;
+  const bubble = el.querySelector('.v-lm-bubble');
+  bubble.textContent = info.lines[(ui.secretLine = ((ui.secretLine ?? -1) + 1) % info.lines.length)];
+  bubble.hidden = false;
+  clearTimeout(bubble.hideTimer);
+  bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
+  if (showPlaying(layer) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(kid.buddy, 'excited', { background: false }))}`;
+  const r = el.getBoundingClientRect(); const lr = layer.getBoundingClientRect();
+  const scale = Number(layer.dataset.scale) || 3;
+  const def = playShow(layer, 'bg-meadow', { buddy: img, scale, spot: { x: r.left + r.width / 2 - lr.left, y: r.top + r.height / 2 - lr.top }, onDone: () => layer.closest('.village')?.classList.remove('show-on') });
+  if (!def) return;
+  ui.lastShow = Date.now();
+  layer.closest('.village')?.classList.add('show-on');
+  if (state.settings.sound !== false) playShowAudio('bg-meadow', { music: state.settings.music !== false, sfx: def.sfx });
+}
+
 const villageHandlers = {
   onTask: (id, el) => onTaskTap(id, el),
   onChest: (el) => actions.chest(el),
+  onVisitor: (el) => actions.visitor(el),
+  onLandmark: (el, layer) => villageLandmark(el, layer),
+  fishCatch: (rod) => catchFor('bg-meadow', rod),
   sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
 };
 
