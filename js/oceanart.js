@@ -279,7 +279,7 @@ function domeB(px, X, Y, w, h, o = {}) {
     // kelp and a tuft of coral at its foot
     grid((x, y, c) => b.set(x, y, c, 'kelp'), 2, h - 11, ['.k.', 'kK.', '.kk', '.Kk', 'kk.', '.k.', 'kK.', '.k.', '.k.', 'kk.'], { k: KP[3], K: KP[5] });
     grid((x, y, c) => b.set(x, y, c, 'coral'), w - 9, h - 6, ['o.o.o', 'oOoOo', '.ooo.', '..o..'], { o: '#ff8a6a', O: '#ffd0b0' });
-  }, { outline: (t, side) => (t === 'glass' ? (side === 'bottom' || side === 'right' ? G[0] : G[1]) : t === 'door' ? D[0] : t === 'flag' ? null : t === 'kelp' || t === 'coral' || t === 'sign' ? (t === 'sign' ? BR[1] : null) : sel(t, side)) });
+  }, { pad: 14, outline: (t, side) => (t === 'glass' ? (side === 'bottom' || side === 'right' ? G[0] : G[1]) : t === 'door' ? D[0] : t === 'flag' ? null : t === 'kelp' || t === 'coral' || t === 'sign' ? (t === 'sign' ? BR[1] : null) : sel(t, side)) });
   // bubbles rising from the vent
   [[0, -8, 2], [2, -14, 1], [-1, -19, 2], [1, -25, 1]].forEach(([dx, dy, r]) => {
     const bx = Math.round(X + cx + dx); const by = Y + dy;
