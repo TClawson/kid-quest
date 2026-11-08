@@ -7,6 +7,9 @@
 import { startMapLife, waterfallAt } from './maplife.js';
 
 const SCALE = 4;
+// Each map pixel is drawn as Z x Z fine pixels (2 screen pixels each), so sprites get
+// thin outlines, light top edges and texture while the layout stays in map pixels.
+const Z = 2;
 const OUT = '#2a1838';
 
 // ---------- sprites (letter grids; K is the outline, . is see-through) ----------
@@ -140,7 +143,7 @@ export const MAP_THEMES = {
     houseBase: { W: '#fff3d6', B: '#4dabf7', D: '#8b4513' },
     fence: '#8b5a2b',
     goal: temple({ hi: '#ced4da', roof: '#e9ecef', lo: '#adb5bd', crest: '#fcc419', col: '#f1f3f5', colLo: '#ced4da', step1: '#dee2e6', step2: '#ced4da' }),
-    sparkle: { colors: ['#ff8fa3', '#ffd43b', '#ffffff', '#b197fc'], every: 180 },
+    sparkle: { colors: ['#ff8fa3', '#ffd43b', '#ffffff', '#b197fc'], every: 180, flowers: true },
   },
 
   'bg-sunset': {
@@ -320,20 +323,129 @@ function seeded(text) {
 }
 
 function painter(ctx, w, h) {
+  // ctx is scaled by Z: px() works in map pixels, fine() in fine pixels
   const px = (x, y, c, ww = 1, hh = 1) => {
     ctx.fillStyle = c;
     ctx.fillRect(Math.round(x), Math.round(y), ww, hh);
   };
-  const sprite = (x0, y0, rows, pal) => rows.forEach((r, y) => {
-    for (let x = 0; x < r.length; x += 1) {
-      const ch = r[x];
-      if (ch === '.') continue;
-      const c = ch === 'K' ? OUT : pal[ch];
-      if (c) px(x0 + x, y0 + y, c);
+  const fine = (fx, fy, c, ww = 1, hh = 1) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(Math.round(fx) / Z, Math.round(fy) / Z, ww / Z, hh / Z);
+  };
+  // A sprite in fine pixels: outlines one fine pixel thin on the inside of the shape,
+  // fills with a light top edge, a shaded bottom edge and a little texture.
+  const sprite = (x0, y0, rows, pal) => {
+    const X0 = Math.round(x0) * Z; const Y0 = Math.round(y0) * Z;
+    if (rows === TREE) return fineTree(fine, X0, Y0, pal, 1);
+    if (rows === BUSH) return fineTree(fine, X0, Y0, pal, 0);
+    if (rows === HOUSE) return fineHouse(fine, X0, Y0, pal);
+    const at = (x, y) => (y < 0 || y >= rows.length || x < 0 || x >= rows[y].length ? '.' : rows[y][x]);
+    const fill = (x, y) => { const ch = at(x, y); return ch !== '.' && ch !== 'K' && Boolean(pal[ch]); };
+    const X = Math.round(x0) * Z; const Y = Math.round(y0) * Z;
+    for (let y = 0; y < rows.length; y += 1) {
+      for (let x = 0; x < rows[y].length; x += 1) {
+        const ch = rows[y][x];
+        if (ch === '.') continue;
+        for (let b = 0; b < Z; b += 1) {
+          for (let a = 0; a < Z; a += 1) {
+            const fx = X + x * Z + a; const fy = Y + y * Z + b;
+            if (ch === 'K') {
+              const nx = a < Z / 2 ? x - 1 : x + 1; const ny = b < Z / 2 ? y - 1 : y + 1;
+              const inner = fill(nx, y) || fill(x, ny) || fill(nx, ny);
+              const outerSide = !fill(a < Z / 2 ? x + 1 : x - 1, y) && !fill(x, b < Z / 2 ? y + 1 : y - 1);
+              if (inner || !outerSide) fine(fx, fy, OUT);
+              continue;
+            }
+            const base = pal[ch]; if (!base) continue;
+            let c = base;
+            if (b === 0 && !fill(x, y - 1)) c = shade(base, 0.22);
+            else if (b === Z - 1 && !fill(x, y + 1)) c = shade(base, -0.18);
+            else if (a === Z - 1 && !fill(x + 1, y)) c = shade(base, -0.08);
+            else { const hsh = hashXY(fx, fy); if (hsh < 0.1) c = shade(base, -0.1); else if (hsh > 0.94) c = shade(base, 0.12); }
+            fine(fx, fy, c);
+          }
+        }
+      }
     }
-  });
-  return { px, sprite, w, h };
+  };
+  return { px, fine, sprite, w, h };
 }
+
+/**
+ * A leafy tree (big = 1, 16 x 18 fine pixels, the size of TREE) or a bush (big = 0, the
+ * size of BUSH): round clumps of leaves lit from the top left, a trunk, and a soft shadow.
+ */
+function fineTree(fine, X, Y, pal, big) {
+  const G = pal.G; const g = pal.g || shade(G, 0.25); const d = pal.d || shade(G, -0.25); const T = pal.T || '#7a4a26';
+  const clumps = big
+    ? [[8, 3.6, 3.8], [4.4, 6.8, 4], [11.6, 6.8, 4], [8, 8.6, 4.4], [6, 4.6, 3], [10, 4.6, 3]]
+    : [[3.2, 4, 2.8], [6.8, 4, 2.8], [5, 2.8, 2.6]];
+  const W = big ? 16 : 10; const H = big ? 14 : 8;
+  const inside = (x, y) => clumps.findIndex(([cx, cy, r]) => (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= r * r);
+  if (big) {
+    // shadow on the ground, then the trunk
+    for (let x = 3; x < 13; x += 1) fine(X + x, Y + 17, 'rgba(27,20,48,0.18)');
+    fine(X + 6, Y + 12, '#2a1838', 4, 6); fine(X + 7, Y + 12, T, 2, 5); fine(X + 8, Y + 12, shade(T, -0.25), 1, 5); fine(X + 5, Y + 16, T, 1, 1); fine(X + 10, Y + 16, shade(T, -0.25), 1, 1);
+  } else for (let x = 2; x < 9; x += 1) fine(X + x, Y + 7, 'rgba(27,20,48,0.18)');
+  for (let y = -1; y <= H; y += 1) {
+    for (let x = -1; x <= W; x += 1) {
+      const k = inside(x, y);
+      if (k < 0) {
+        if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => inside(x + dx, y + dy) >= 0)) fine(X + x, Y + y, '#2a1838');
+        continue;
+      }
+      const [cx, cy, r] = clumps[k];
+      // light from the top left of each clump, shade at the bottom right
+      const l = ((cx - (x + 0.5)) + (cy - (y + 0.5))) / r;
+      const th = ((x * 3 + y * 7) % 4) / 4 - 0.4;
+      let c = l > 0.55 + th * 0.3 ? g : l < -0.5 + th * 0.3 ? d : G;
+      if (c === G && hashXY(X + x, Y + y) < 0.12) c = d; // leaves
+      if (c === g && hashXY(X + x, Y + y) > 0.9) c = '#ffffff';
+      fine(X + x, Y + y, c);
+    }
+  }
+}
+
+/** A cottage (the size of HOUSE, 20 x 18 fine pixels): shingled roof, chimney, window and door. */
+function fineHouse(fine, X, Y, pal) {
+  const R = pal.R; const r = pal.r || shade(R, 0.3); const W = pal.W || '#fff3d6'; const B = pal.B || '#4dabf7'; const D = pal.D || '#8b4513';
+  const K = '#2a1838';
+  // chimney
+  fine(X + 13, Y - 1, K, 4, 6); fine(X + 14, Y, '#adb5bd', 2, 5); fine(X + 14, Y, '#ced4da', 2, 1);
+  // roof: rows of shingles, wider as they go down
+  for (let y = 0; y < 9; y += 1) {
+    const half = 3 + y * 0.85; const x0 = Math.round(10 - half); const x1 = Math.round(10 + half);
+    fine(X + x0 - 1, Y + y, K, x1 - x0 + 2, 1);
+    for (let x = x0; x < x1; x += 1) {
+      let c = (x + (y % 2) * 2) % 4 === 0 ? shade(R, -0.2) : R;
+      if (y % 3 === 2) c = shade(R, -0.12);
+      if (x < 10 && x - x0 < 2) c = r;
+      fine(X + x, Y + y, c);
+    }
+  }
+  fine(X + 3, Y - 1, K, 14, 1);
+  fine(X + 4, Y, r, 12, 1);
+  fine(X, Y + 9, K, 20, 1); fine(X + 1, Y + 8, shade(R, -0.3), 18, 1);
+  // walls with a timber edge and a shadow under the eaves
+  fine(X + 1, Y + 10, K, 18, 8);
+  fine(X + 2, Y + 10, W, 16, 7);
+  fine(X + 2, Y + 10, shade(W, -0.15), 16, 1);
+  fine(X + 2, Y + 16, shade(W, -0.08), 16, 1);
+  // a window with four panes and a sill
+  fine(X + 3, Y + 11, K, 6, 5); fine(X + 4, Y + 12, B, 4, 3); fine(X + 4, Y + 12, shade(B, 0.45), 2, 1); fine(X + 5, Y + 12, K, 1, 3); fine(X + 4, Y + 13, K, 4, 1);
+  fine(X + 3, Y + 16, shade(W, -0.3), 6, 1);
+  // the door with a knob and a step
+  fine(X + 11, Y + 11, K, 6, 7); fine(X + 12, Y + 12, D, 4, 6); fine(X + 12, Y + 12, shade(D, 0.2), 4, 1); fine(X + 13, Y + 13, shade(D, -0.2), 1, 4); fine(X + 15, Y + 15, '#fcc419');
+  fine(X + 10, Y + 18, '#adb5bd', 8, 1);
+}
+
+/** Lighten (k > 0) or darken (k < 0) a #rrggbb color. */
+function shade(hex, k) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255]; const t = k > 0 ? [255, 255, 255] : [27, 20, 48]; const a = Math.abs(k);
+  return `#${c.map((v, i) => Math.round(v + (t[i] - v) * a).toString(16).padStart(2, '0')).join('')}`;
+}
+const hashXY = (i, j) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return h - Math.floor(h); };
 
 /** The road follows the same curves as the stops: a cubic between each pair of points. */
 function roadSamples(pts) {
@@ -374,12 +486,14 @@ function paintOne(section) {
   if (!W || !H) return;
   const aw = Math.ceil(W / SCALE);
   const ah = Math.ceil(H / SCALE);
-  canvas.width = aw;
-  canvas.height = ah;
+  canvas.width = aw * Z;
+  canvas.dataset.z = Z;
+  canvas.height = ah * Z;
   canvas.style.width = `${aw * SCALE}px`;
   canvas.style.height = `${ah * SCALE}px`;
   const ctx = canvas.getContext('2d');
-  const { px, sprite } = painter(ctx, aw, ah);
+  ctx.setTransform(Z, 0, 0, Z, 0, 0);
+  const { px, fine, sprite } = painter(ctx, aw, ah);
   const rnd = seeded(section.dataset.seed || 'map');
   const th = mapTheme(section.dataset.theme);
 
@@ -402,9 +516,13 @@ function paintOne(section) {
   for (let i = 0; i < tufts; i += 1) {
     const x = Math.floor(rnd() * aw);
     const y = Math.floor(rnd() * ah);
-    px(x, y, groundDark, 2, 1);
-    px(x + 1, y - 1, groundLight);
+    // a tuft of grass blades (or ripples, sand, dust) in fine pixels
+    const fx = x * Z; const fy = y * Z;
+    fine(fx, fy, groundDark, 3, 1); fine(fx + 1, fy - 1, groundDark); fine(fx + 3, fy - 1, groundDark);
+    fine(fx + 1, fy - 2, groundLight); fine(fx + 3, fy - 2, groundLight);
   }
+  // fine speckle all over, so open ground is not flat
+  for (let i = 0; i < tufts * 3; i += 1) fine(Math.floor(rnd() * aw * Z), Math.floor(rnd() * ah * Z), rnd() < 0.5 ? groundDark : groundLight);
 
   // walls down both sides: trees, palms, kelp, boulders... or the castle's stone walls
   if (typeof th.walls === 'function') {
@@ -469,6 +587,14 @@ function paintOne(section) {
     if (r.y > hereY || inBand(r)) continue;
     px(r.x - (ws >> 1), r.y - (ws >> 1), th.road.walked, ws, ws);
   }
+  // the road's edge in fine pixels, and grit on it
+  const [, roadTop] = th.road.layers[th.road.layers.length - 1];
+  for (const r of road) {
+    if (inBand(r, 1)) continue;
+    const g = hashXY(Math.round(r.x * 7), Math.round(r.y * 3));
+    if (g < 0.5) fine((r.x - 2) * Z + Math.floor(g * 8), (r.y - 1) * Z + Math.floor(g * 5), shade(r.y > hereY ? roadTop : th.road.walked, -0.12));
+    else if (g > 0.85) fine((r.x - 1) * Z + Math.floor(g * 4), r.y * Z, shade(r.y > hereY ? roadTop : th.road.walked, 0.15));
+  }
   // pebbles along a dirt road, or planks and tiles across a built one
   for (let i = 0; i < road.length; i += th.road.stripes ? 4 : 7) {
     const r = road[i];
@@ -477,7 +603,7 @@ function paintOne(section) {
     else if (th.road.pebble && rnd() < 0.5) px(r.x + (rnd() < 0.5 ? -2 : 2), r.y, th.road.pebble);
   }
   if (band) drawBridge(px, band, th.bridge);
-  ponds.forEach((p) => (p.kind === 'pond' ? drawPond(px, p, th) : drawField(px, p)));
+  ponds.forEach((p) => (p.kind === 'pond' ? drawPond(px, p, th, fine) : drawField(px, p, fine)));
 
   // the village at the start: houses on both sides of the road, more on wide screens
   const homes = aw > 140 ? [0.2, 0.33, 0.67, 0.8] : [0.24, 0.76];
@@ -502,6 +628,13 @@ function paintOne(section) {
     if (band && y > band.top - 2 && y < band.bottom + 2) continue;
     if (inPond(x, y, 1)) continue;
     const c = sp.colors[i % sp.colors.length];
+    if (sp.flowers) {
+      // a little flower in fine pixels: petals round a center, with a stem
+      const fx = x * Z; const fy = y * Z;
+      fine(fx, fy + 2, shade(groundDark, -0.1), 1, 2);
+      fine(fx - 1, fy, c); fine(fx + 1, fy, c); fine(fx, fy - 1, c); fine(fx, fy + 1, c); fine(fx, fy, i % 2 ? '#fff3bf' : shade(c, -0.25));
+      continue;
+    }
     if (sp.bubbles && i % 5 === 0) {
       px(x, y - 1, c); px(x - 1, y, c); px(x + 1, y, c); px(x, y + 1, c);
     } else if (sp.plus && rnd() < sp.plus) {
@@ -559,7 +692,7 @@ export function pondSpots(aw, wall) {
 }
 
 /** A round pond in the map's river colors: water, lava, goo or stardust, with a bit of theme on top. */
-function drawPond(px, { x, y, w, h }, th) {
+function drawPond(px, { x, y, w, h }, th, fine = () => {}) {
   const c = th.pondColors || th.river;
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -579,8 +712,20 @@ function drawPond(px, { x, y, w, h }, th) {
     const sy = Math.round(cy - 2 + (i % 3));
     for (let k = 0; k < 3; k += 1) if (inside(x + i + k, sy, -1)) px(x + i + k, sy, c.shine);
   }
+  // fine detail: a light lip on the bank, ripples, and a darker band under the near bank
+  for (let fx = (x - 2) * Z; fx < (x + w + 2) * Z; fx += 1) {
+    for (let fy = (y - 3) * Z; fy < (y + h + 3) * Z; fy += 1) {
+      const X = fx / Z; const Y = fy / Z; const ins = (g) => ((X - cx) / (w / 2 + g)) ** 2 + ((Y - cy) / (h / 2 + g)) ** 2 <= 1;
+      if (ins(1.5) && !ins(1.5 - 1 / Z) && Y < cy) fine(fx, fy, shade(c.bank, 0.2));
+      else if (ins(0) && !ins(-1 / Z)) fine(fx, fy, Y < cy ? shade(c.water, -0.15) : shade(c.water, 0.18));
+    }
+  }
+  for (let i = 0; i < w; i += 5) {
+    const fx = (x + i) * Z + (i % 3); const fy = Math.round((cy + 1 + ((i * 7) % 5) - 2) * Z);
+    if (((fx / Z - cx) / (w / 2 - 1.5)) ** 2 + ((fy / Z - cy) / (h / 2 - 1.5)) ** 2 <= 1) fine(fx, fy, shade(c.water, 0.25), 3, 1);
+  }
   const extra = POND_EXTRAS[th.pond] || POND_EXTRAS.lily;
-  extra(px, { x, y, w, h, cx, cy });
+  extra(px, { x, y, w, h, cx, cy }, undefined, fine);
 }
 
 // Little fields for visitors playing together: grass with white lines and goals,
@@ -590,8 +735,9 @@ const FIELDS = {
   hockey: { ground: ['#e7f5ff', '#d0ebff'], line: '#e03131', edge: '#495057', goal: '#e03131', blue: '#4dabf7' },
   football: { ground: ['#2f9e44', '#37b24d'], line: '#ffffff', edge: '#1b6e2e', ends: ['#e03131', '#1c7ed6'] },
 };
-function drawField(px, { x, y, w, h, kind }) {
+function drawField(px, { x, y, w, h, kind }, fine = null) {
   const f = FIELDS[kind] || FIELDS.soccer;
+  if (fine) return drawFineField(px, fine, { x, y, w, h, kind }, f);
   // the edge: boards round a rink, a darker border round grass
   px(x - 1, y - 1, f.edge, w + 2, h + 2);
   for (let i = 0; i < w; i += 1) px(x + i, y, f.ground[Math.floor(i / 3) % 2], 1, h);
@@ -614,11 +760,71 @@ function drawField(px, { x, y, w, h, kind }) {
   }
 }
 
+/** The fields in fine pixels: mown stripes or ice, crisp one-fine-pixel lines, nets with mesh. */
+function drawFineField(px, fine, { x, y, w, h, kind }, f) {
+  const X = x * Z; const Y = y * Z; const FW = w * Z; const FH = h * Z;
+  // the edge: boards round a rink, a darker border round grass, with a light top
+  fine(X - 2, Y - 2, OUT, FW + 4, FH + 4);
+  fine(X - 1, Y - 1, f.edge, FW + 2, FH + 2);
+  if (kind === 'hockey') fine(X - 1, Y - 2, '#ffffff', FW + 2, 1);
+  for (let i = 0; i < FW; i += 1) {
+    for (let j = 0; j < FH; j += 1) {
+      let c = kind === 'hockey' ? (hashXY(i, j) < 0.05 ? '#ffffff' : (i + 2 * j) % 23 === 0 ? f.ground[1] : f.ground[0]) : f.ground[Math.floor(i / 6) % 2];
+      if (kind !== 'hockey' && hashXY(i, j) < 0.07) c = shade(c, -0.1);
+      fine(X + i, Y + j, c);
+    }
+  }
+  const mid = X + Math.floor(FW / 2);
+  const L = (a, b, ww, hh, c = f.line) => fine(a, b, c, ww, hh);
+  if (kind === 'soccer') {
+    L(X + 1, Y + 1, FW - 2, 1); L(X + 1, Y + FH - 2, FW - 2, 1); L(X + 1, Y + 1, 1, FH - 2); L(X + FW - 2, Y + 1, 1, FH - 2);
+    L(mid, Y + 1, 1, FH - 2);
+    // the center circle
+    const r = Math.min(FH * 0.28, 7); const cy = Y + FH / 2;
+    for (let a = 0; a < 360; a += 6) fine(Math.round(mid + Math.cos((a * Math.PI) / 180) * r), Math.round(cy + Math.sin((a * Math.PI) / 180) * r), f.line);
+    fine(mid - 1, Math.round(cy) - 1, f.line, 3, 2);
+    // penalty boxes and goals with nets
+    for (const side of [0, 1]) {
+      const bx = side ? X + FW - 2 - 7 : X + 1; const by = Y + Math.round(FH * 0.25);
+      L(bx, by, 8, 1); L(bx, Y + Math.round(FH * 0.75), 8, 1); L(side ? bx : bx + 7, by, 1, Math.round(FH * 0.5) + 1);
+      const gx = side ? X + FW : X - 4; const gy = Y + Math.round(FH * 0.32); const gh = Math.round(FH * 0.36);
+      fine(gx, gy, OUT, 4, gh + 1);
+      for (let j = 1; j < gh; j += 1) for (let i = 0; i < 3; i += 1) fine(gx + i + (side ? 0 : 1), gy + j, (i + j) % 2 ? '#dee2e6' : '#adb5bd');
+      fine(gx, gy, f.goal, 4, 1); fine(gx, gy + gh, f.goal, 4, 1);
+    }
+  } else if (kind === 'hockey') {
+    L(mid, Y, 2, FH);
+    for (const bx of [X + Math.floor(FW / 3), X + Math.ceil((2 * FW) / 3)]) L(bx, Y, 2, FH, f.blue);
+    const cy = Y + FH / 2; const r = Math.min(FH * 0.22, 6);
+    for (let a = 0; a < 360; a += 8) fine(Math.round(mid + Math.cos((a * Math.PI) / 180) * r), Math.round(cy + Math.sin((a * Math.PI) / 180) * r), f.blue);
+    fine(mid - 1, Math.round(cy) - 1, f.line, 4, 3);
+    for (const side of [0, 1]) {
+      // goal crease and net
+      const gx = side ? X + FW - 8 : X + 4; const gy = Y + Math.round(FH * 0.36); const gh = Math.round(FH * 0.28);
+      for (let j = 0; j < gh; j += 1) fine(side ? gx - 3 : gx + 4, gy + j, '#a5d8ff', 3, 1);
+      fine(gx, gy, f.goal, 4, 1); fine(gx, gy + gh, f.goal, 4, 1); fine(side ? gx + 3 : gx, gy, f.goal, 1, gh + 1);
+      for (let j = 1; j < gh; j += 1) for (let i = 0; i < 3; i += 1) fine(gx + i + (side ? 0 : 1), gy + j, (i + j) % 2 ? '#ffffff' : '#ced4da');
+    }
+  } else {
+    fine(X, Y, f.ends[0], 8, FH); fine(X + FW - 8, Y, f.ends[1], 8, FH);
+    for (let i = 8; i < FW - 8; i += 8) L(X + i, Y, 1, FH);
+    for (let i = 12; i < FW - 8; i += 8) { L(X + i, Y + 2, 1, 1); L(X + i, Y + FH - 3, 1, 1); }
+    L(X + 1, Y + 1, FW - 2, 1); L(X + 1, Y + FH - 2, FW - 2, 1);
+    for (const gx of [X + 2, X + FW - 3]) { fine(gx, Y - 7, '#ffd43b', 1, 7); fine(gx - 2, Y - 7, '#ffd43b', 5, 1); fine(gx - 2, Y - 11, '#ffd43b', 1, 4); fine(gx + 2, Y - 11, '#ffd43b', 1, 4); }
+  }
+}
+
 const POND_EXTRAS = {
   // lily pads with a pink flower
-  lily: (px, { x, y, w }) => {
-    px(x + 4, y + 3, '#40c057', 3, 2); px(x + 5, y + 3, '#ff8fa3');
-    px(x + w - 7, y + 8, '#40c057', 3, 2);
+  lily: (px, { x, y, w }, _c, fine) => {
+    if (!fine) { px(x + 4, y + 3, '#40c057', 3, 2); px(x + 5, y + 3, '#ff8fa3'); px(x + w - 7, y + 8, '#40c057', 3, 2); return; }
+    // round pads with a notch, one with a flower
+    for (const [lx, ly, flower] of [[x + 4, y + 3, true], [x + w - 7, y + 8, false], [x + Math.floor(w / 2) + 3, y + 2, false]]) {
+      const fx = lx * Z; const fy = ly * Z;
+      fine(fx, fy + 1, '#2b8a3e', 6, 3); fine(fx + 1, fy, '#2b8a3e', 4, 5);
+      fine(fx + 1, fy + 1, '#51cf66', 4, 2); fine(fx + 2, fy + 1, '#8ce99a', 2, 1); fine(fx + 3, fy + 2, '#2b8a3e', 2, 1);
+      if (flower) { fine(fx + 1, fy - 2, '#ffdeeb', 3, 2); fine(fx + 2, fy - 3, '#ff8fa3'); fine(fx + 2, fy - 1, '#ffd43b'); }
+    }
   },
   // lava bubbles popping
   lava: (px, { x, y, w }) => {
@@ -901,11 +1107,11 @@ function animateRiver(canvas, ctx, band, shine) {
   if (!band) return;
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const h = band.bottom - band.top + 1;
-  const base = ctx.getImageData(0, band.top, band.aw, h);
+  const base = ctx.getImageData(0, band.top * Z, band.aw * Z, h * Z);
   let phase = 0;
   const tick = () => {
     if (!canvas.isConnected) { clearInterval(timers.get(canvas)); return; }
-    ctx.putImageData(base, 0, band.top);
+    ctx.putImageData(base, 0, band.top * Z);
     ctx.fillStyle = shine;
     for (let x = 0; x < band.aw - 2; x += 1) {
       if ((x + phase) % 11 !== 0) continue;

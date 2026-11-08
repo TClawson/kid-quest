@@ -295,7 +295,7 @@ label { color: var(--ink); }
 
 .map-buddy { position: absolute; z-index: 3; transform: translate(-50%, -100%); margin-top: -28px; pointer-events: none; }
 .map-buddy .buddy { background: none; border-radius: 0; overflow: visible; }
-.buddy-mini { width: 86px; height: 86px; }
+.buddy-mini { width: 72px; height: 72px; } /* 3 screen pixels per buddy pixel */
 .map-buddy.hop { animation: buddy-arrive 0.6s ease-out; }
 
 @keyframes node-pulse { 0% { box-shadow: 0 7px 0 color-mix(in srgb, var(--kid) 60%, #000), 0 0 0 0 color-mix(in srgb, var(--kid) 50%, transparent); } 100% { box-shadow: 0 7px 0 color-mix(in srgb, var(--kid) 60%, #000), 0 0 0 22px transparent; } }
@@ -349,7 +349,7 @@ label { color: var(--ink); }
 .map-visitors.arrive .map-visitor.playing { animation-delay: 0.4s; }
 .map-visitor.inner { top: 84px; }
 /* live buddies (live.js) breathe and hop by themselves: no floating */
-.visitor-buddy { width: 58px; height: 58px; }
+.visitor-buddy { width: 48px; height: 48px; margin-top: 10px; } /* 2 screen pixels per buddy pixel, like the map */
 .visitor-buddy svg { width: 100%; height: 100%; display: block; }
 .visitor-name { margin-top: -4px; font-size: 0.7rem; font-weight: 800; color: #fff; background: var(--kid); border: 2px solid var(--px-ink); border-radius: 4px; padding: 0 5px; line-height: 1.4; }
 .visitor-bubble { position: absolute; top: 100%; left: 50%; width: max-content; max-width: 130px; margin-top: 6px; transform: translateX(-50%) scale(0.6); opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; font-size: 0.8rem; font-weight: 700; line-height: 1.2; text-align: center; background: #fff3d6; color: var(--px-ink); border: 2px solid var(--px-ink); border-radius: 6px; padding: 3px 5px; box-shadow: 2px 2px 0 var(--px-ink); }
@@ -385,7 +385,7 @@ label { color: var(--ink); }
 .map-visitor { --line: 98px; }
 .map-visitor.inner { --line: 82px; }
 .map-visitor.face-left .visitor-buddy svg, .map-visitor.face-left .visitor-buddy canvas { transform: scaleX(-1); }
-.fish-line { position: absolute; top: 12px; left: 60px; width: 1px; height: var(--line); background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 0.5px rgba(42, 24, 56, 0.35); pointer-events: none; transform-origin: top; }
+.fish-line { position: absolute; top: 12px; left: 60px; width: 2px; height: var(--line); background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 0.5px rgba(42, 24, 56, 0.35); pointer-events: none; transform-origin: top; }
 .map-visitor.face-left .fish-line { left: 3px; }
 .bobber { position: absolute; bottom: -4px; left: -3px; width: 7px; height: 7px; border-radius: 2px; background: linear-gradient(#e03131 50%, #fff 50%); border: 1px solid var(--px-ink); animation: bobber 1.6s steps(2, end) infinite; }
 @keyframes bobber { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
