@@ -224,3 +224,10 @@
 .village.party .villager .v-bowl { animation: v-hop 0.4s steps(2, end) infinite; }
 /* a scared buddy, running from a crab */
 .v-buddy.scared::before { content: '!'; position: absolute; left: 50%; top: -4px; transform: translateX(-50%); font: 700 13px/1 var(--px-font); color: #ffe066; text-shadow: 1px 0 var(--px-ink), -1px 0 var(--px-ink), 0 1px var(--px-ink), 0 -1px var(--px-ink); animation: v-hop 0.3s steps(2, end) infinite; }
+
+/* the kid's house: tap it and the buddy walks in the door (js/house.js is inside) */
+.v-home { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; }
+.v-home-door { position: absolute; bottom: 4px; transform: translateX(-50%); font-size: 7px; line-height: 1; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.v-home:hover .v-home-door, .v-home:focus-visible .v-home-door { opacity: 0.9; }
+.v-buddy.going-in { animation: v-go-in 0.4s steps(4, end) forwards; }
+@keyframes v-go-in { to { transform: translate(-50%, -110%); opacity: 0; } }

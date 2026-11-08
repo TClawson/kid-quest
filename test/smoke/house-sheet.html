@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>body{background:#2a1e2a;margin:0;padding:8px;font:12px sans-serif;color:#fff} canvas{image-rendering:pixelated;display:block} .row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start} .cell{text-align:center} .room{position:relative}</style></head>
+<body><div id="out"></div>
+<script type="module">
+// A sheet of the buddy's house art (houseart.js), for previews: ?mode=room|shelf|shop&mess=0-3&scale=3
+import { paintRoom, shelfArt, furnitureThumb, ROOM } from '../../js/houseart.js';
+import { FURNITURE, homeLayout } from '../../js/furniture.js';
+const q = new URLSearchParams(location.search);
+const S = Number(q.get('scale') || 3);
+const out = document.getElementById('out');
+const mode = q.get('mode') || 'room';
+function room(opts, label) {
+  const wrap = document.createElement('div'); wrap.className = 'cell';
+  const holder = document.createElement('div'); holder.className = 'room';
+  holder.style.width = `${ROOM.W * S}px`; holder.style.height = `${ROOM.H * S}px`;
+  const c = document.createElement('canvas');
+  const res = paintRoom(c, opts);
+  c.style.width = `${ROOM.W * S}px`; holder.append(c);
+  for (const p of res.pieces) { p.canvas.style.cssText = `position:absolute;left:${p.x * S}px;top:${p.y * S}px;width:${p.w * S}px`; holder.append(p.canvas); }
+  if (q.get('blocks')) for (const [x, y, w, h] of res.blocks) { const d = document.createElement('div'); d.style.cssText = `position:absolute;left:${x * S}px;top:${y * S}px;width:${w * S}px;height:${h * S}px;outline:1px solid red`; holder.append(d); }
+  wrap.append(holder); if (label) wrap.append(label);
+  return wrap;
+}
+const owned = FURNITURE.filter((f) => f.price).map((f) => f.id);
+const fancy = { owned, home: JSON.parse(q.get('home') || 'null') || { bed: 'home-bed-quilt', table: 'home-table-round', couch: 'home-couch', chair: 'home-chair-cozy', corner: 'home-hammock', lamp: 'home-lamp', rug: 'home-rug-round', art: 'home-art-sunset' } };
+const basic = { owned: [], home: {} };
+const gear = JSON.parse(q.get('gear') || '{"soccer":2,"hockey":1,"rod":3,"football":1,"shoes":2}');
+const row = document.createElement('div'); row.className = 'row'; out.append(row);
+if (mode === 'room') {
+  const kid = q.get('basic') ? basic : fancy;
+  const mess = Number(q.get('mess') || 0);
+  row.append(room({ layout: homeLayout(kid), made: !q.get('unmade'), teeth: !q.get('teethout'), mess, shelf: Number(q.get('shelf') || 2), gear, color: q.get('color') || '#e03131' }));
+} else if (mode === 'mess') {
+  for (const m of [1, 3]) row.append(room({ layout: homeLayout(q.get('basic') ? basic : fancy), made: false, teeth: false, mess: m, shelf: 1, gear, color: '#4dabf7' }, `mess level ${m}`));
+} else if (mode === 'shelf') {
+  ['Empty', 'A few', 'Mostly full', 'Full'].forEach((name, i) => {
+    const b = shelfArt(i); const c = document.createElement('canvas'); c.width = b.W; c.height = b.H;
+    const ctx = c.getContext('2d'); b.each((x, y) => { const col = b.get(x, y); if (col) { ctx.fillStyle = col; ctx.fillRect(x + b.pad, y + b.pad, 1, 1); } });
+    c.style.width = `${b.W * S * 2}px`; const cell = document.createElement('div'); cell.className = 'cell'; cell.append(c, name); row.append(cell);
+  });
+} else if (mode === 'shop') {
+  for (const f of FURNITURE) { const c = furnitureThumb(document, f.id); if (!c) continue; c.style.width = `${c.width * S}px`; const cell = document.createElement('div'); cell.className = 'cell'; cell.style.width = '230px'; cell.append(c, f.name); row.append(cell); }
+}
+document.body.dataset.ready = '1';
+</script></body></html>

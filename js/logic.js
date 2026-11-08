@@ -48,9 +48,10 @@ export function defaultTasks() {
     ...extra,
   });
   return [
-    t('Brush teeth', '🪥', 'morning', ALL_DAYS),
-    t('Make bed', '🛏️', 'morning', ALL_DAYS),
-    t('Clear bedroom floor', '🧸', 'morning', ALL_DAYS),
+    // linked to the buddy's house (houserules.js): the toothbrush, the bed and the floor
+    t('Brush teeth', '🪥', 'morning', ALL_DAYS, { house: 'teeth' }),
+    t('Make bed', '🛏️', 'morning', ALL_DAYS, { house: 'bed' }),
+    t('Clear bedroom floor', '🧸', 'morning', ALL_DAYS, { house: 'floor' }),
     t('Piano practice', '🎹', 'afternoon', WEEKDAYS, { verify: 'parent', minutes: 30 }),
     t('Chore of the week', '🧽', 'afternoon', [1, 2, 3, 4], { verify: 'parent' }),
     t('Chore of the week: deep clean', '✨', 'afternoon', [5], { verify: 'parent' }),

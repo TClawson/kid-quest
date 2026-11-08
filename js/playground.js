@@ -17,7 +17,7 @@ function layout(vw, vh) {
 }
 
 /**
- * opts: { kid, visitor: { buddy, name, gear }, kind, best, sounds, onScore(score) }
+ * opts: { kid, visitor: { buddy, name, gear }, kind, best, sounds, onScore(score): a new best, onOver(score): any game's end }
  * Returns a function that closes the screen.
  */
 export function openPlay(opts) {
@@ -70,6 +70,7 @@ export function openPlay(opts) {
     if (game.phase === 'over' && seen.phase !== 'over') {
       snd.over?.(game.newBest);
       if (game.newBest) opts.onScore?.(game.score);
+      opts.onOver?.(game.score);
       navigator.vibrate?.(game.newBest ? [30, 60, 30] : 60);
     }
     // for tests: what the game is doing
