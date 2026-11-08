@@ -642,7 +642,7 @@ export function ballSvg(kind, tier = 1) {
   const w = Math.max(...rows.map((r) => r.length));
   const px = new Pixels();
   px.grid(0, 0, rows, pal);
-  return `<svg class="ball-svg pixel" viewBox="0 0 ${w} ${rows.length}" width="${w * 2.4}" height="${rows.length * 2.4}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${px.svg()}</svg>`;
+  return `<svg class="ball-svg pixel" viewBox="0 0 ${w} ${rows.length}" width="${w * 2}" height="${rows.length * 2}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${px.svg()}</svg>`;
 }
 
 /** The same ball (or puck) as colors, row by row (null for see-through), for canvas games. */

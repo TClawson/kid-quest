@@ -601,8 +601,9 @@ export function playShow(section, theme, { buddy = null, spot = null, scale = 4,
   const def = SHOWS[theme];
   const land = section.querySelector('canvas.map-land');
   if (!def || !land || running.has(section)) return null;
-  const aw = land.width;
-  const ah = land.height;
+  const z = Number(land.dataset.z) || 1; // the land is drawn with z fine pixels per map pixel
+  const aw = land.width / z;
+  const ah = land.height / z;
   const canvas = document.createElement('canvas');
   canvas.className = 'map-show';
   canvas.setAttribute('aria-hidden', 'true');
