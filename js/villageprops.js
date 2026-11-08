@@ -8,6 +8,8 @@ import {
   OUT, shade, hashXY, seeded, painter, bigTree, bush, cottage, well, fence, garden, laundry, plaza, flower, noteSign, pond, frozen,
 } from './villageart.js';
 import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrowB, mushroomsB, snailB } from './meadowart.js';
+import { paintOcean, anemoneB, helmetB, mermaidB, sunkboatB, bootB, urchinsB, seahorseB, seaventB } from './oceanart.js';
+import { paintSunset, hammockB, rowboatB, gullB, tidepoolB, driftwoodB, tikiB, coconutsB } from './sunsetart.js';
 
 // ---------- a lit shape ----------
 
@@ -535,6 +537,23 @@ export const PROPS = {
   barrow: { w: 26, h: 16, foot: [1, 6, 24, 10], base: 15, draw: (px, p) => barrowB(px, p.x, p.y) },
   mushrooms: { w: 14, h: 9, foot: null, flat: true, draw: (px, p) => mushroomsB(px, p.x, p.y) },
   snail: { w: 9, h: 6, foot: null, flat: true, draw: (px, p) => snailB(px, p.x, p.y) },
+  // Sunset Beach's little things (sunsetart.js)
+  hammock: { w: 44, h: 22, foot: null, base: 18, draw: (px, p) => hammockB(px, p.x, p.y, p.w || 44, p.dy ?? 6) },
+  tiki: { w: 10, h: 34, foot: [2, 28, 6, 6], base: 33, draw: (px, p) => tikiB(px, p.x, p.y) },
+  coconuts: { w: 12, h: 6, foot: null, flat: true, draw: (px, p) => coconutsB(px, p.x, p.y) },
+  driftwood: { w: 32, h: 12, foot: [2, 4, 28, 7], base: 11, draw: (px, p) => driftwoodB(px, p.x, p.y) },
+  tidepool: { w: 30, h: 16, foot: [2, 2, 26, 12], flat: true, draw: (px, p) => tidepoolB(px, p.x, p.y) },
+  rowboat: { w: 56, h: 16, foot: null, flat: true, draw: (px, p) => rowboatB(px, p.x, p.y) },
+  gull: { w: 9, h: 8, foot: null, flat: true, draw: (px, p) => gullB(px, p.x, p.y) },
+  // Under the Sea's little things (oceanart.js)
+  anemone: { w: 20, h: 14, foot: [3, 6, 14, 8], base: 13, draw: (px, p) => anemoneB(px, p.x, p.y) },
+  helmet: { w: 18, h: 18, foot: [2, 8, 14, 9], base: 17, draw: (px, p) => helmetB(px, p.x, p.y) },
+  mermaid: { w: 24, h: 40, foot: [4, 30, 16, 9], base: 39, draw: (px, p) => mermaidB(px, p.x, p.y) },
+  sunkboat: { w: 40, h: 18, foot: [2, 6, 36, 11], base: 17, draw: (px, p) => sunkboatB(px, p.x, p.y) },
+  boot: { w: 16, h: 13, foot: [1, 4, 14, 8], base: 12, draw: (px, p) => bootB(px, p.x, p.y) },
+  urchins: { w: 12, h: 7, foot: null, flat: true, draw: (px, p) => urchinsB(px, p.x, p.y) },
+  seahorse: { w: 8, h: 14, foot: null, flat: true, draw: (px, p) => seahorseB(px, p.x, p.y) },
+  seavent: { w: 16, h: 12, foot: [2, 4, 12, 8], base: 11, draw: (px, p) => seaventB(px, p.x, p.y) },
 };
 
 // ---------- the ground ----------
@@ -735,6 +754,10 @@ function castleWall(px, L) {
 export function paintVillage(canvas, L, opts = {}) {
   // the Forest Village has its own storybook painter
   if (L.id === 'bg-meadow') return paintMeadow(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does Sunset Beach (sunsetart.js)
+  if (L.id === 'bg-sunset') return paintSunset(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does Under the Sea (oceanart.js)
+  if (L.id === 'bg-ocean') return paintOcean(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');

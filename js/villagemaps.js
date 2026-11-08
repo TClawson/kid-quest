@@ -16,6 +16,8 @@
 
 import { PROPS, waterDepth } from './villageprops.js';
 import { OAK } from './oakart.js';
+import { WRECK } from './wreckart.js';
+import { GALLEON } from './galleonart.js';
 
 const W = 448;
 
@@ -100,16 +102,22 @@ export const VILLAGE_MAPS = {
       p('stall', 140, 40, { pal: { a: '#22b8cf', b: '#fff9db', wood: '#e0a96d', goods: [['#ff8787', '#ffc9c9'], ['#ffd43b', '#fff3bf'], ['#69db7c', '#d3f9d8']] } }),
       p('laundry', 264, 400, { w: 70 }),
       p('palm', 150, 120), p('palm', 20, 260), p('palm', 270, 300), p('palm', 400, 380),
-      p('umbrella', 130, 470, { c: '#ff6b6b' }), p('umbrella', 300, 500, { c: '#4dabf7' }), p('sandcastle', 186, 480),
+      p('umbrella', 142, 380, { c: '#ff6b6b' }), p('umbrella', 300, 500, { c: '#4dabf7' }), p('sandcastle', 186, 480),
       p('surfboard', 20, 140, { c: '#ff922b' }), p('surfboard', 412, 150, { c: '#4dabf7' }), p('surfboard', 424, 160, { c: '#f783ac' }),
       p('rock', 180, 300, { c: '#ced4da' }), p('rock', 420, 250, { c: '#ced4da', w: 18, h: 13 }),
+      // the beach's little things
+      p('palm', 234, 44), p('palm', 276, 50), p('hammock', 252, 64, { w: 42, dy: 6 }),
+      p('tiki', 68, 110), p('tiki', 102, 110), p('coconuts', 168, 160),
+      p('driftwood', 58, 398), p('tidepool', 396, 506), p('rowboat', 336, 536),
+      p('gull', 280, 518), p('gull', 404, 238),
     ],
     shop: { x: 162, y: 88 },
     green: {
-      left: { x: 54, y: 300, w: 116, h: 44 }, right: { x: 278, y: 136, w: 118, h: 44 },
+      left: { x: 54, y: 300, w: 116, h: 44 }, right: { x: 256, y: 136, w: 94, h: 44 },
       idle: [{ x: 186, y: 372 }, { x: 290, y: 240 }, { x: 130, y: 376 }, { x: 398, y: 250 }],
     },
-    landmark: { x: 30, y: 404, stand: { x: 160, y: 444 } },
+    // the ghost ship wreck, drawn for the village (wreckart.js): run aground in the south-west corner
+    landmark: { x: 16, y: 418, w: WRECK.w, h: WRECK.h, art: 'wreck', foot: [8, 30, 156, 72], stand: { x: 194, y: 458 } },
     chest: { x: 372, y: 484 },
     start: { x: 88, y: 130 },
     slots: {
@@ -140,27 +148,31 @@ export const VILLAGE_MAPS = {
     crossings: [{ at: [252, 372], dir: 'v', kind: 'stone', pal: { plank: '#bcaaa4', dark: '#8d6e63', rail: '#d7ccc8' } }],
     paths: [
       [[224, 119], [224, 180], [252, 230], [252, 540]], [[224, 160], [82, 160], [82, 152]], [[224, 160], [372, 160], [372, 142]],
-      [[252, 470], [362, 470], [362, 524]], [[252, 470], [140, 470]],
+      [[252, 470], [362, 470], [362, 524]], [[252, 498], [206, 498]],
     ],
     plazas: [[224, 186, 26], [252, 548, 26]],
     props: [
       p('stall', 46, 196, { pal: { a: '#f783ac', b: '#fff0f6', wood: '#bcaaa4', goods: [['#ffd43b', '#fff3bf'], ['#fff0f6', '#ffffff'], ['#ff8787', '#ffc9c9']] } }),
       p('laundry', 108, 410, { w: 76 }),
       p('clam', 300, 196), p('anchor', 404, 210), p('coral', 140, 110, { c: '#ffa94d' }), p('coral', 290, 110, { c: '#f783ac' }),
-      p('kelp', 260, 236), p('rock', 30, 250, { c: '#748ffc' }), 
-      p('rock', 180, 520, { c: '#748ffc' }), p('kelp', 200, 404), p('clam', 50, 380),
+      p('kelp', 260, 236), p('rock', 30, 250, { c: '#748ffc' }),
+      p('kelp', 200, 404), p('clam', 50, 380),
+      // the sea's little things
+      p('mermaid', 144, 60), p('sunkboat', 372, 236), p('helmet', 270, 500), p('anemone', 24, 404),
+      p('boot', 288, 548), p('urchins', 130, 368), p('seahorse', 218, 398), p('seavent', 412, 272),
     ],
     shop: { x: 68, y: 244 },
     green: {
       left: { x: 104, y: 240, w: 116, h: 44 }, right: { x: 278, y: 262, w: 118, h: 44 },
       idle: [{ x: 240, y: 300 }, { x: 180, y: 302 }, { x: 330, y: 230 }, { x: 410, y: 316 }],
     },
-    landmark: { x: 24, y: 488, stand: { x: 160, y: 540 } },
+    // the Kraken's ship, drawn for the village (galleonart.js): broken in two in the south-west corner
+    landmark: { x: 20, y: 456, w: GALLEON.w, h: GALLEON.h, art: 'galleon', foot: [6, 44, 172, 76], stand: { x: 208, y: 498 } },
     chest: { x: 252, y: 556 },
     start: { x: 224, y: 130 },
     slots: {
       morning: [[150, 150], [300, 150], [60, 176], [400, 170], [180, 210], [350, 230], [110, 210], [260, 220]],
-      afternoon: [[300, 520, MUSIC], [146, 450, LAUNDRY], [200, 456], [290, 420], [60, 450], [414, 552], [190, 380], [130, 540]],
+      afternoon: [[300, 520, MUSIC], [146, 450, LAUNDRY], [226, 440], [290, 420], [60, 450], [414, 552], [190, 380], [330, 560]],
     },
     labels: { morning: [110, 330, '⬆ 🌅 Morning quests'], afternoon: [370, 410, '⬇ ☀️ After-school quests'] },
     pond: { lip: '#c9a35d', water: '#163e73', deep: '#0f2d57', light: '#1c5d99', shine: '#4dabf7', pads: false },
