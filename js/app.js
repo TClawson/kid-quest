@@ -24,6 +24,7 @@ import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { liveHtml, live, liveStart, feel, partyAll } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
+import { villageHtml, mountVillages } from './village.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
@@ -1575,6 +1576,40 @@ function questMap(kid, s, entry, mood) {
     </section>`;
 }
 
+// The village: the same chores as the map, as quests from villagers (see village.js).
+function villageView(kid, s, entry, mood) {
+  const tasks = ['morning', 'afternoon'].flatMap((period) => planOrder(kid, s.tasks.filter((x) => x.period === period)));
+  let current = false;
+  const list = tasks.map((t) => {
+    const status = entry?.tasks?.[t.id];
+    let st = status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo';
+    if (st === 'todo' && !current) { st = 'current'; current = true; }
+    let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'A parent checks this one' : 'Tap "I did it" when it\'s done';
+    if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
+      const sec = status?.seconds || 0;
+      const left = t.minutes * 60 - sec;
+      sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left on the timer` : `${t.minutes} minute timer`;
+    }
+    const cue = cueFor(kid, t);
+    if (cue && st !== 'done' && st !== 'pending') sub = `${cue} · ${sub}`;
+    return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0 };
+  });
+  const c = chestFor(kid, today());
+  return villageHtml({
+    kidId: kid.id,
+    kidName: kid.name,
+    kidColor: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
+    buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
+    tasks: list,
+    chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
+  });
+}
+const villageHandlers = {
+  onTask: (id, el) => onTaskTap(id, el),
+  onChest: (el) => actions.chest(el),
+  sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
+};
+
 function viewKid() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
@@ -1585,18 +1620,9 @@ function viewKid() {
   const xp = totalXp(state, kid, t);
   const lv = levelFor(xp);
   const entry = entryFor(state, kid.id, t);
-  const section = (period, title, by) => {
-    const tasks = planOrder(kid, s.tasks.filter((x) => x.period === period));
-    if (!tasks.length) return '';
-    return `
-      <section>
-        <h2>${title} <small class="muted">${by ? `by ${esc(formatTime(by))}` : ''}</small></h2>
-        <div class="tiles">${tasks.map((x) => taskTile(kid, x, entry?.tasks?.[x.id])).join('')}</div>
-      </section>`;
-  };
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
   const mood = moodFor(kid);
-  const listMode = state.settings.questView === 'list';
+  const villageMode = state.settings.questView === 'village';
   const newCount = (kid.newItems || []).length;
   const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
   const late = lateChest(kid);
@@ -1629,13 +1655,12 @@ function viewKid() {
       </div>
       ${exerciseSection(kid, exTasks, entry)}
       <div class="view-toggle">
-        <button class="${listMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
-        <button class="${listMode ? 'on' : ''}" data-action="quest-mode" data-mode="list">📋 List</button>
+        <button class="${villageMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
+        <button class="${villageMode ? 'on' : ''}" data-action="quest-mode" data-mode="village">🏘️ Village</button>
       </div>
-      ${listMode || !state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
+      ${!state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
       ${familyBanner()}
-      ${listMode ? `${section('morning', '🌅 Morning', state.settings.morningBy)}
-      ${section('afternoon', '☀️ After school', state.settings.bedtime)}` : questMap(kid, s, entry, mood)}
+      ${villageMode ? villageView(kid, s, entry, mood) : questMap(kid, s, entry, mood)}
       <section>
         <h2>This week</h2>
         ${weekDots(kid, info)}
@@ -2537,6 +2562,7 @@ function render() {
   lastView = ui.view;
   $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
   paintQuestMaps($app);
+  mountVillages($app, villageHandlers);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);

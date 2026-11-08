@@ -84,10 +84,21 @@ try {
     await go('[data-action="open-kid"][data-id="kid_ava"]');
     await page.waitForSelector('.quest-map');
     await check('kid-map');
-    await go('[data-action="quest-mode"][data-mode="list"]');
-    await check('kid-list');
-    const piano = await page.$('[data-action="task"]:has-text("Piano")');
-    if (piano) { await piano.click(); await page.waitForSelector('.timer'); await check('timer'); await go('[data-action="timer-back"]'); }
+    await go('[data-action="quest-mode"][data-mode="village"]');
+    await page.waitForSelector('.village .villager');
+    await check('kid-village');
+    // the piano's villager: walk over, then start the timer from what they say
+    const piano = await page.$('.villager[aria-label*="Piano"]');
+    if (piano) {
+      await piano.click({ force: true });
+      await page.waitForSelector('.v-dialog:not([hidden]) [data-v="do"]', { timeout: 15000 });
+      await check('kid-village-talk');
+      await page.click('.v-dialog [data-v="do"]');
+      await page.waitForSelector('.timer');
+      await check('timer');
+      await go('[data-action="timer-back"]');
+    }
+    await go('[data-action="quest-mode"][data-mode="map"]');
     await go('[data-action="home"]');
     // Annabelle still has chores, so her buddy store is locked; Ben's day is excused, so his is open
     await go('[data-action="open-kid"][data-id="kid_ben"]');

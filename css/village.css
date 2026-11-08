@@ -1,0 +1,119 @@
+/* ---------- the walkable village (js/village.js) ----------
+   Everything inside .village-world is in village pixels and is scaled up 3x (2x on
+   phones) by village.js, so sprites, labels and the buddy share one pixel grid. */
+
+.village { margin: 8px 0 12px; }
+.village-view {
+  position: relative; overflow: hidden; height: min(66vh, 680px); min-height: 360px;
+  border: 4px solid var(--px-ink); border-radius: 8px; background: #2f7d32;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer;
+}
+@media (max-width: 600px) { .village-view { height: min(62vh, 560px); } }
+.village-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.village-land, .v-sprite, .village .v-portrait canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+.village-land { position: absolute; left: 0; top: 0; }
+
+/* labels on the land: small wooden signs, in village pixels */
+.v-label {
+  position: absolute; transform: translate(-50%, 0); white-space: nowrap; pointer-events: none;
+  font: 700 7px/1 var(--px-font); letter-spacing: 0.02em; color: #fff8e7;
+  background: #6e3d1a; border: 1px solid var(--px-ink); padding: 1.5px 3px 1px; border-radius: 1px;
+  box-shadow: 0 1px 0 var(--px-ink);
+}
+.v-label.home-label { background: #fff8e7; color: var(--px-ink); top: 0; }
+.v-label.period { background: rgba(42, 24, 56, 0.72); border-color: transparent; box-shadow: none; }
+
+/* villagers: feet at (left, top) */
+.villager {
+  position: absolute; width: 16px; height: 22px; padding: 0; border: 0; background: none;
+  transform: translate(-50%, -100%); cursor: pointer; display: block;
+}
+.villager .v-sprite { position: absolute; left: 0; bottom: 0; width: 16px; height: auto; }
+.villager::after { content: ''; position: absolute; left: 2px; right: 2px; bottom: -1px; height: 2px; background: rgba(27, 20, 48, 0.22); border-radius: 50%; z-index: -1; }
+.villager .v-sprite { animation: v-idle 1.6s steps(2, end) infinite; transform-origin: 50% 100%; }
+.villager:nth-of-type(2n) .v-sprite { animation-delay: -0.8s; }
+@keyframes v-idle { 50% { transform: translateY(-0.5px) scaleY(1.03); } }
+.villager.st-done .v-sprite { animation: v-happy 0.9s steps(2, end) infinite; }
+@keyframes v-happy { 50% { transform: translateY(-1px); } }
+.villager.chatting .v-sprite, .villager.cheer .v-sprite { animation: v-hop 0.3s steps(2, end) 3; }
+@keyframes v-hop { 50% { transform: translateY(-3px); } }
+
+/* the floating picture of the chore over a villager's head */
+.v-bubble {
+  position: absolute; left: 50%; bottom: calc(100% + 1px); transform: translateX(-50%);
+  width: 15px; height: 13px; display: grid; place-items: center;
+  background: #fff8e7; border: 1px solid var(--px-ink); border-radius: 2px; box-shadow: 0 1px 0 var(--px-ink);
+}
+.v-bubble::after { content: ''; position: absolute; left: 50%; top: 100%; margin-left: -2px; border: 2px solid transparent; border-top-color: var(--px-ink); }
+.v-icon { font-size: 9px; line-height: 1; }
+.villager.st-todo .v-bubble, .villager.st-current .v-bubble { animation: v-float 1.2s ease-in-out infinite; }
+.villager.st-current .v-bubble { background: #fff3bf; outline: 1px solid #fcc419; }
+@keyframes v-float { 50% { transform: translate(-50%, -2px); } }
+.villager.st-done .v-bubble { background: #d3f9d8; }
+.villager.st-done .v-icon { opacity: 0.45; filter: grayscale(0.6); }
+.villager.st-pending .v-bubble { background: #e7f5ff; }
+.v-badge { position: absolute; right: -4px; top: -4px; width: 7px; height: 7px; border-radius: 50%; display: grid; place-items: center; font: 700 5px/1 var(--px-text); color: #fff; background: #2f9e44; border: 1px solid var(--px-ink); }
+.v-badge.wait { background: #fff; font-size: 4.5px; }
+/* hearts float up from a happy villager */
+.villager.st-done .v-hearts::before, .villager.st-done .v-hearts::after { content: '♥'; position: absolute; left: 1px; top: 4px; font: 6px/1 var(--px-text); color: #ff6b9a; opacity: 0; animation: v-heart 3s ease-out infinite; }
+.villager.st-done .v-hearts::after { left: 10px; animation-delay: 1.5s; }
+.villager.cheer .v-hearts::before, .villager.cheer .v-hearts::after { animation-duration: 0.9s; }
+@keyframes v-heart { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+
+/* the treasure chest on the south plaza */
+.v-chest { position: absolute; transform: translate(-50%, -100%); padding: 0; border: 0; background: none; cursor: pointer; }
+.v-chest svg { display: block; width: 20px; height: 13px; }
+.v-chest.ready svg { animation: v-hop 0.5s steps(2, end) infinite; filter: drop-shadow(0 0 2px #ffe066); }
+
+/* the buddy: feet at (left, top) */
+.v-buddy { position: absolute; width: 24px; height: 24px; transform: translate(-50%, -96%); pointer-events: none; }
+.v-buddy .v-flip, .v-buddy .buddy, .v-buddy canvas { width: 24px; height: 24px; display: block; }
+.v-buddy .buddy { background: none; border: 0; border-radius: 0; overflow: visible; }
+.v-buddy canvas { image-rendering: pixelated; }
+.v-buddy::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; background: rgba(27, 20, 48, 0.22); border-radius: 50%; z-index: -1; }
+.v-buddy.walking .buddy { animation: v-walk 0.28s steps(2, end) infinite; }
+@keyframes v-walk { 50% { transform: translateY(-1.5px); } }
+.v-target { position: absolute; width: 8px; height: 4px; margin: -2px 0 0 -4px; border: 1px solid #fff8e7; border-radius: 50%; pointer-events: none; opacity: 0.85; }
+.v-target.pop { animation: v-target 0.5s ease-out; }
+@keyframes v-target { from { transform: scale(2); opacity: 0; } }
+
+/* arrows on the edges, pointing to villagers off screen who still have a quest */
+.v-arrows { position: absolute; inset: 0; pointer-events: none; }
+.v-arrow {
+  position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; padding: 0; pointer-events: auto;
+  display: grid; place-items: center; border-radius: 50%; border: 3px solid var(--px-ink);
+  background: #fff8e7; box-shadow: 0 3px 0 var(--px-ink); cursor: pointer; animation: v-pulse 1.1s ease-in-out infinite;
+}
+.v-arrow-icon { font-size: 22px; line-height: 1; }
+.v-arrow-tip { position: absolute; inset: -12px; pointer-events: none; }
+.v-arrow-tip::after { content: ''; position: absolute; right: -2px; top: 50%; margin-top: -8px; border: 8px solid transparent; border-left: 10px solid var(--px-ink); }
+/* the next quest's arrow is gold */
+.v-arrow.now { background: #fff3bf; border-color: #e67700; box-shadow: 0 3px 0 #e67700; }
+.v-arrow.now .v-arrow-tip::after { border-left-color: #e67700; }
+@keyframes v-pulse { 50% { transform: scale(1.08); } }
+
+/* the talk box along the bottom, like an old adventure game */
+.v-dialog {
+  position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 12px; align-items: flex-start;
+  background: #fff8e7; border: 4px solid var(--px-ink); border-radius: 6px; padding: 10px 12px;
+  box-shadow: inset 0 0 0 3px #f3e6c4, 0 4px 0 var(--px-ink); cursor: default; animation: v-pop 0.18s steps(3, end);
+}
+.v-dialog[hidden] { display: none; }
+@keyframes v-pop { from { transform: translateY(16px); opacity: 0; } }
+.v-portrait { flex: none; width: 64px; height: 76px; display: grid; place-items: end center; background: #7bd66b; border: 3px solid var(--px-ink); border-radius: 4px; padding-bottom: 4px; }
+.v-portrait canvas { width: 48px; height: auto; }
+.v-talk { flex: 1; min-width: 0; }
+.v-name { display: block; font: 700 1.15rem/1.1 var(--px-font); color: #7048e8; }
+.v-text { margin: 4px 0 8px; font: 1.05rem/1.35 var(--px-text); color: var(--px-ink); min-height: 2.6em; }
+.v-quest { display: flex; gap: 10px; align-items: center; padding: 6px 10px; margin-bottom: 8px; background: #fff3bf; border: 2px dashed #e67700; border-radius: 4px; }
+.v-quest-icon { font-size: 1.8rem; line-height: 1; }
+.v-quest b { display: block; font: 700 1.2rem/1.1 var(--px-font); }
+.v-quest small { display: block; color: var(--muted); }
+.v-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.v-buttons .btn { min-height: 44px; padding: 6px 14px; }
+@media (max-width: 600px) {
+  .v-dialog { left: 6px; right: 6px; bottom: 6px; padding: 8px; gap: 8px; }
+  .v-portrait { width: 48px; height: 58px; }
+  .v-portrait canvas { width: 32px; }
+  .v-text { font-size: 0.95rem; }
+}
