@@ -11,7 +11,7 @@
 // buddies' pixels. app.js decides what a tap on a quest does (the same as tapping the
 // chore anywhere else).
 
-import { drawVillager, VILLAGER_KINDS, villagerGrid } from './villageart.js';
+import { drawVillager, VILLAGER_KINDS, villagerGrid, bowlCanvas, BOWL_THEMES } from './villageart.js';
 import { paintVillage } from './villageprops.js';
 import { villageLayout } from './villagemaps.js';
 import { MAP_THEMES } from './maparts.js';
@@ -274,7 +274,8 @@ function startLife(section, L, data, people, cam) {
   const onLandmark = (x, y) => lm && x > lm.x - 6 && x < lm.x + lm.w + 6 && y > lm.y - 6 && y < lm.y + lm.h + 6;
   const falls = L.falls ? riverFalls(L) : null;
   startMapLife({
-    section, canvas, host: cam.host, view: cam.view, toMap: cam.toMap,
+    section, canvas, host: cam.host, view: cam.view, toMap: cam.toMap, buddy: cam.buddy, flee: cam.flee,
+    pokeNear: true, // a tap must be on a critter to poke it (a tap on the ground walks the buddy)
     key: `village|${data.kid}|${L.id}`,
     aw: L.W, ah: L.H, scale: 1, z: 1, life, wall: 20, falls,
     goal: hints.goal || L.chest,
@@ -290,6 +291,7 @@ function startLife(section, L, data, people, cam) {
         const y = Math.max(28, top) + Math.random() * Math.max(1, Math.min(L.H - 40, bottom) - Math.max(28, top) - 16);
         const cx = x + 8; const cy = y + 12;
         if (L.blocked(cx, cy, 4) || L.inWater(cx, cy, 6) || near(cx, cy, 20) || onGreen(cx, cy) || onLandmark(cx, cy)) continue;
+        if ([[x, y], [x + 16, y], [x, y + 14], [x + 16, y + 14]].some(([px, py]) => L.covered(px, py) || L.inWater(px, py, 2))) continue;
         return { x, y };
       }
       return null;
@@ -502,6 +504,24 @@ function mount(section, handlers) {
   };
   for (const p of people) paintSprite(els.get(p.id), p.kind, doneAll(p));
   if (keeperEl) paintSprite(keeperEl, 'badger', data.shop.open);
+  // under the sea and on the moon, everyone wears a fishbowl to breathe (over any hat)
+  if (BOWL_THEMES.includes(L.id)) {
+    const urls = new Map();
+    const bowl = (host, w, h, place) => {
+      const key = `${w}x${h}`;
+      if (!urls.has(key)) urls.set(key, bowlCanvas(w, h, L.id).toDataURL());
+      const b = document.createElement('span');
+      b.className = 'v-bowl';
+      b.setAttribute('aria-hidden', 'true');
+      b.style.cssText = `background-image:url(${urls.get(key)});width:${w}px;height:${h}px;${place}`;
+      host.append(b);
+    };
+    bowl(flip, 22, 21, 'left:1px;top:2px');
+    section.querySelectorAll('.v-vbuddy').forEach((el) => bowl(el, 22, 21, 'left:1px;top:2px'));
+    const folkBowl = (el, kind) => bowl(el, 20, villagerGrid(kind).length - 6 + 5, 'left:-2px;bottom:3px');
+    for (const p of people) folkBowl(els.get(p.id), p.kind);
+    if (keeperEl) folkBowl(keeperEl, 'badger');
+  }
 
   const memKey = `${data.kid}|${L.id}`;
   const mem = memory.get(memKey) || { x: L.start.x, y: L.start.y, seen: {} };
@@ -670,7 +690,34 @@ function mount(section, handlers) {
     } else if (goal.landmark) {
       me.face = lm && lm.x + lm.w / 2 >= me.x ? 1 : -1;
       handlers.onLandmark?.(goal.landmark, section.querySelector('.v-show'));
+    } else if (goal.flee) {
+      // safe! carry on to wherever the buddy was going
+      setTimeout(() => buddyEl.classList.remove('scared'), 900);
+      if (goal.resume) walkTo(goal.resume.x, goal.resume.y, goal.resume.goal);
     }
+  };
+  // a crab snapped at the buddy: it runs a short way off, then carries on
+  const flee = (fx, fy) => {
+    if (!dialog.hidden || me.goal?.flee) return false;
+    const end = me.path[me.path.length - 1];
+    // carry on afterwards only if the buddy was off to see someone (not back to the crab!)
+    const resume = end && me.goal ? { x: end.x, y: end.y, goal: me.goal } : null;
+    const dx = me.x - fx; const dy = me.y - fy; const d = Math.hypot(dx, dy) || 1;
+    for (const turn of [0, 0.7, -0.7, 1.4, -1.4]) {
+      const a = Math.atan2(dy / d, dx / d) + turn;
+      const to = { x: me.x + Math.cos(a) * 44, y: me.y + Math.sin(a) * 44 };
+      const path = findPath(grid, me, to);
+      if (!path.length) continue;
+      const last = path[path.length - 1];
+      if (Math.hypot(last.x - to.x, last.y - to.y) > 16) continue;
+      me.path = path;
+      me.goal = { flee: true, resume };
+      targetEl.hidden = true;
+      buddyEl.classList.add('walking', 'scared');
+      handlers.sound?.('tap');
+      return true;
+    }
+    return false;
   };
   const walkTo = (x, y, goal = null) => {
     closeDialog();
@@ -827,7 +874,7 @@ function mount(section, handlers) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (me.path.length) {
-      let step = SPEED * dt;
+      let step = SPEED * dt * (me.goal?.flee ? 1.4 : 1);
       while (step > 0 && me.path.length) {
         const t = me.path[0];
         const dx = t.x - me.x; const dy = t.y - me.y; const d = Math.hypot(dx, dy);
@@ -847,6 +894,8 @@ function mount(section, handlers) {
   window.addEventListener('resize', () => { measure(); }, { passive: true });
   startLife(section, L, data, people, {
     host: view,
+    buddy: () => ({ x: me.x, y: me.y }),
+    flee,
     view: () => ({ top: cam.y, bottom: cam.y + vh / S }),
     toMap: (e) => { const r = world.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; },
   });

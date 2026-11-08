@@ -192,7 +192,7 @@ export const VILLAGE_MAPS = {
       p('crystal', 420, 200), p('crystal', 20, 470, { c: '#ffd8a8', C: '#ff922b' }), p('rock', 250, 360, { c: '#6a6f96' }),
     ],
     shop: { x: 218, y: 84 },
-    life: { pad: { x: 402, y: 96 } }, // the rocket's landing pad
+    life: { pad: { x: 394, y: 104 } }, // the rocket's landing pad
     green: {
       left: { x: 50, y: 182, w: 110, h: 40 }, right: { x: 312, y: 190, w: 86, h: 40 },
       idle: [{ x: 196, y: 210 }, { x: 250, y: 210 }, { x: 200, y: 250 }, { x: 280, y: 236 }],
@@ -551,6 +551,9 @@ export function villageLayout(theme) {
     obstacles,
     inWater,
     onBridge,
+    // anywhere a house or a standing prop is drawn (critters shouldn't wander over roofs)
+    covered: (x, y) => [home, ...houses].some((h) => inRect(x, y, [h.x - 4, h.y - 16, h.w + 8, h.h + 20])) ||
+      props.some((q) => { const sz = PROPS[q.kind]; return sz && !sz.flat && inRect(x, y, [q.x, q.y, q.w || sz.w, q.h || sz.h], 2); }),
     blockedHard: (x, y, pad = 0) => obstacles.some((r) => inRect(x, y, r, pad)),
     blocked: (x, y, pad = 0) => obstacles.some((r) => inRect(x, y, r, pad)) || (inWater(x, y, pad) && !onBridge(x, y)),
     onPath: (x, y, d) => spec.paths.some((q) => q.some((pt, i) => i > 0 && segDist(x, y, q[i - 1], pt) < d)) || spec.plazas.some(([px, py, r]) => Math.hypot(x - px, y - py) < r + d),

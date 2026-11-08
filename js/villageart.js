@@ -606,3 +606,52 @@ export function greenArea(px, a, rnd) {
   else if (a.kind === 'hockey') frozen(px, a);
   else clearing(px, a, a.kind);
 }
+
+// ---------- fishbowl helmets (under the sea and on the moon) ----------
+
+const BOWL_COLLARS = {
+  'bg-ocean': ['#e67700', '#fcc419', '#ffe066'], // brass, like an old diving helmet
+  'bg-space': ['#868e96', '#ced4da', '#f1f3f5'], // a space suit's metal ring
+};
+/** Themes where everyone wears a fishbowl so they can breathe. */
+export const BOWL_THEMES = Object.keys(BOWL_COLLARS);
+
+/**
+ * A glass fishbowl helmet, w x h village pixels, big enough to go over a hat: a dark outline,
+ * a pale rim, a faint tint, a shine on the top left, and a collar along the bottom.
+ */
+export function bowlCanvas(w, h, theme) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  const px = (x, y, col, ww = 1, hh = 1) => { ctx.fillStyle = col; ctx.fillRect(x, y, ww, hh); };
+  const cx = w / 2; const cy = (h - 3) * 0.52; const rx = w / 2 - 0.5; const ry = (h - 3) * 0.54;
+  const inside = (x, y) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1;
+  const glassBottom = h - 3;
+  for (let y = 0; y < glassBottom; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      if (!inside(x, y)) continue;
+      const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || (y + 1 < glassBottom && !inside(x, y + 1));
+      const rim = !edge && (!inside(x - 2, y) || !inside(x + 2, y) || !inside(x, y - 2));
+      if (edge) px(x, y, OUT);
+      else if (rim) px(x, y, 'rgba(231, 245, 255, 0.75)');
+      else px(x, y, 'rgba(197, 232, 255, 0.16)');
+    }
+  }
+  // the shine: a curved streak on the top left and a dot beside it
+  for (let i = 0; i < 6; i += 1) {
+    const a = Math.PI * (1.08 + i * 0.07);
+    const x = Math.round(cx + Math.cos(a) * (rx - 3.2)); const y = Math.round(cy + Math.sin(a) * (ry - 3.2));
+    px(x, y, 'rgba(255, 255, 255, 0.95)');
+  }
+  px(Math.round(cx - rx * 0.32), Math.round(cy - ry * 0.72), 'rgba(255, 255, 255, 0.9)');
+  // the collar
+  const [dark, mid, light] = BOWL_COLLARS[theme] || BOWL_COLLARS['bg-space'];
+  const cw = Math.round(w * 0.62); const x0 = Math.round(cx - cw / 2);
+  px(x0 - 1, glassBottom - 1, OUT, cw + 2, 4);
+  px(x0, glassBottom, mid, cw, 2);
+  px(x0, glassBottom, light, cw - 1, 1);
+  px(x0 + cw - 1, glassBottom, dark, 1, 2);
+  for (let x = x0 + 2; x < x0 + cw - 2; x += 4) px(x, glassBottom + 1, dark); // rivets
+  return c;
+}

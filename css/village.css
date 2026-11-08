@@ -208,3 +208,14 @@
 @keyframes v-glow { 50% { box-shadow: inset 0 0 0 4px #ffd43b; } }
 /* the map's moving things, over the land and under the people */
 .v-life { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; }
+/* fishbowl helmets (ocean and moon villages): over the head and any hat, moving with it */
+.v-bowl { position: absolute; pointer-events: none; background-size: 100% 100%; image-rendering: pixelated; image-rendering: crisp-edges; z-index: 2; }
+.v-flip { position: relative; }
+.v-buddy.walking .v-bowl { animation: v-walk 0.28s steps(2, end) infinite; }
+.villager .v-bowl { animation: v-idle 1.6s steps(2, end) infinite; transform-origin: 50% 100%; }
+.villager:nth-of-type(2n) .v-bowl { animation-delay: -0.8s; }
+.villager.st-done .v-bowl { animation: v-happy 0.9s steps(2, end) infinite; }
+.villager.chatting .v-bowl, .villager.cheer .v-bowl { animation: v-hop 0.3s steps(2, end) 3; }
+.village.party .villager .v-bowl { animation: v-hop 0.4s steps(2, end) infinite; }
+/* a scared buddy, running from a crab */
+.v-buddy.scared::before { content: '!'; position: absolute; left: 50%; top: -4px; transform: translateX(-50%); font: 700 13px/1 var(--px-font); color: #ffe066; text-shadow: 1px 0 var(--px-ink), -1px 0 var(--px-ink), 0 1px var(--px-ink), 0 -1px var(--px-ink); animation: v-hop 0.3s steps(2, end) infinite; }
