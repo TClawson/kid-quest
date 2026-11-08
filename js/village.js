@@ -16,6 +16,7 @@ import { paintVillage } from './villageprops.js';
 import { villageLayout } from './villagemaps.js';
 import { MAP_THEMES } from './maparts.js';
 import { startMapLife } from './maplife.js';
+import { OAK, startOak } from './oakart.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -207,7 +208,8 @@ export function villageHtml(v) {
   const L = villageLayout(v.theme);
   const people = placeVillagers(v.tasks, L);
   const quest = (t) => ({ id: t.id, st: t.st, verify: t.verify, timer: Boolean(t.timer), icon: t.icon, task: t.name, sub: t.sub, step: t.step || 0, plan: t.plan || '' });
-  const lm = v.landmark ? { ...L.landmark, w: v.landmark.w, h: v.landmark.h } : null;
+  // most landmarks are their treasure-map art drawn twice as big; the meadow's Great Oak is drawn for the village (oakart.js)
+  const lm = v.landmark ? { ...L.landmark, w: L.landmark.w || v.landmark.w, h: L.landmark.h || v.landmark.h } : null;
   const shop = v.shop || { open: false, left: 0 };
   const data = {
     theme: L.id, kid: v.kidId, name: v.kidName, color: v.kidColor,
@@ -244,7 +246,7 @@ export function villageHtml(v) {
           ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
           ${folk}${keeper}
           ${visitorsMarkup(v.visit, L)}
-          ${lm ? `<button class="v-landmark" style="left:${lm.x}px;top:${lm.y}px;width:${lm.w}px;z-index:${lm.y + lm.h}" aria-label="${esc(v.landmark.name)}">${v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
+          ${lm ? `<button class="v-landmark${lm.art ? ` art-${lm.art}` : ''}" style="left:${lm.x}px;top:${lm.y}px;width:${lm.w}px;z-index:${lm.y + lm.h}" aria-label="${esc(v.landmark.name)}">${lm.art === 'oak' ? `<canvas class="v-art" width="${OAK.w}" height="${OAK.h}" aria-hidden="true"></canvas>` : v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
           <span class="v-critter b1" aria-hidden="true"></span><span class="v-critter b2" aria-hidden="true"></span>
           <button class="v-chest ${v.chest.ready ? 'ready' : ''} ${v.chest.opened ? 'opened' : ''}" style="left:${L.chest.x}px;top:${L.chest.y}px;z-index:${L.chest.y}" aria-label="Treasure">${v.chest.html}</button>
           <div class="v-buddy" style="z-index:500"><div class="v-flip">${v.buddy}</div></div>
@@ -332,6 +334,12 @@ function riverFalls(L) {
 const CELL = 8;
 const SPEED = 100; // village pixels a second
 const inRect = (x, y, [rx, ry, rw, rh], pad = 0) => x > rx - pad && x < rx + rw + pad && y > ry - pad && y < ry + rh + pad;
+
+/**
+ * Where a landmark can't be walked through: its own foot box if it has one (the Great Oak's
+ * roots and trunk), otherwise the lower part of its art (the buddy can stand behind the top).
+ */
+export const landmarkBlock = (lm) => (lm.foot ? [lm.x + lm.foot[0], lm.y + lm.foot[1], lm.foot[2], lm.foot[3]] : [lm.x + 8, lm.y + lm.h * 0.5, lm.w - 16, lm.h * 0.45]);
 
 /** The walking grid for a layout: 1 where the buddy can't stand. */
 export function makeGrid(L, people = [], extra = []) {
@@ -532,7 +540,7 @@ function mount(section, handlers) {
     ...data.areas.filter((a) => a.kind === 'pond').map((a) => [a.x - 2, a.y - 2, a.w + 4, a.h + 4]),
     ...Object.values(data.spots).map((p) => [p.x - 7, p.y - 8, 14, 10]),
     ...(L.shop ? [[L.shop.x - 7, L.shop.y - 8, 14, 10]] : []),
-    ...(lm ? [[lm.x + 8, lm.y + lm.h * 0.5, lm.w - 16, lm.h * 0.45]] : []),
+    ...(lm ? [landmarkBlock(lm)] : []),
   ]);
   const me = { x: mem.x, y: mem.y, path: [], goal: null, face: mem.face || 1 };
   let S = 3;
@@ -546,8 +554,11 @@ function mount(section, handlers) {
     // the treasure map's show plays over the view (mapshow.js sizes itself from this canvas)
     if (showLand) { showLand.width = Math.ceil(vw / S); showLand.height = Math.ceil(vh / S); showLand.parentElement.dataset.scale = S; }
   };
+  // on the way to the landmark and while there, the view takes in the buddy and all of it
+  let atLandmark = false;
   const camTarget = () => {
-    const tx = W * S <= vw ? -(vw / S - W) / 2 : Math.max(0, Math.min(W - vw / S, me.x - vw / S / 2));
+    const fx = lm && (atLandmark || me.goal?.landmark) ? (Math.min(me.x - 12, lm.x) + Math.max(me.x + 12, lm.x + lm.w)) / 2 : me.x;
+    const tx = W * S <= vw ? -(vw / S - W) / 2 : Math.max(0, Math.min(W - vw / S, fx - vw / S / 2));
     // while someone is talking, the buddy sits higher up, above the talk box
     const at = dialog.hidden ? 0.5 : 0.3;
     const ty = H * S <= vh ? -(vh / S - H) / 2 : Math.max(0, Math.min(H - vh / S, me.y - 12 - (vh / S) * at));
@@ -689,6 +700,8 @@ function mount(section, handlers) {
       visitorTap(goal.visitor);
     } else if (goal.landmark) {
       me.face = lm && lm.x + lm.w / 2 >= me.x ? 1 : -1;
+      goal.landmark.dataset.wake = String(performance.now()); // the Great Oak wakes up to say hello
+      atLandmark = true;
       handlers.onLandmark?.(goal.landmark, section.querySelector('.v-show'));
     } else if (goal.flee) {
       // safe! carry on to wherever the buddy was going
@@ -721,6 +734,7 @@ function mount(section, handlers) {
   };
   const walkTo = (x, y, goal = null) => {
     closeDialog();
+    atLandmark = false;
     me.path = findPath(grid, me, { x, y });
     me.goal = goal;
     if (!me.path.length) { arrive(); return; }
@@ -868,6 +882,8 @@ function mount(section, handlers) {
   };
 
   // ---- the loop ----
+  const oakEl = section.querySelector('.v-landmark canvas.v-art');
+  const oakStep = oakEl ? startOak(oakEl, oakEl.parentElement) : null;
   let last = performance.now();
   const tick = (now) => {
     if (!section.isConnected) { mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face; return; }
@@ -889,6 +905,7 @@ function mount(section, handlers) {
     mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face;
     place();
     drawArrows();
+    oakStep?.(now);
     requestAnimationFrame(tick);
   };
   window.addEventListener('resize', () => { measure(); }, { passive: true });

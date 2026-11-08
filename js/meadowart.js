@@ -1271,7 +1271,7 @@ export function paintMeadow(canvas, L, opts = {}, lib = {}) {
   };
   const draw = (p) => (DRAW[p.kind] ? DRAW[p.kind](p) : PROPS[p.kind]?.draw(px, p));
   L.props.filter((p) => PROPS[p.kind]?.flat).forEach(draw);
-  butterflyB(px, 196, 226, ['#f08c3a', '#ffc47a']); butterflyB(px, 100, 508, FL.lilac.slice(1)); butterflyB(px, 300, 452, FL.yellow.slice(0, 2));
+  butterflyB(px, 196, 226, ['#f08c3a', '#ffc47a']); butterflyB(px, 100, 508, FL.lilac.slice(1)); butterflyB(px, 244, 404, FL.yellow.slice(0, 2));
 
   // things that stand up, back to front
   const home = L.home;
