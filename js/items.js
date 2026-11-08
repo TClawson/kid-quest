@@ -1,5 +1,7 @@
 // Buddy species, wardrobe items and the rules for unlocking them. Pure data + logic, no DOM.
 
+import { FURNITURE } from './furniture.js';
+
 export const SPECIES = [
   { id: 'fox', name: 'Fox' },
   { id: 'bear', name: 'Bear' },
@@ -17,6 +19,7 @@ export const SLOTS = [
   { id: 'neck', name: 'Extras', icon: '🎀' },
   { id: 'music', name: 'Music', icon: '🎹' },
   { id: 'sport', name: 'Sports', icon: '⚽' },
+  { id: 'home', name: 'Home', icon: '🏠' }, // furniture for the buddy's house (furniture.js)
 ];
 
 // Slots the buddy wears. Bought items in these slots belong to one buddy: switching
@@ -175,7 +178,7 @@ export function pickMove(moves, last, rnd = Math.random) {
   return pool.length ? pool[Math.floor(rnd() * pool.length)] : null;
 }
 
-export const ITEMS = [...BASE_ITEMS, ...SPORT_ITEMS].flatMap((item) => {
+export const ITEMS = [...BASE_ITEMS, ...SPORT_ITEMS, ...FURNITURE].flatMap((item) => {
   const cv = COLOR_VERSIONS[item.id];
   if (!cv) return [item];
   return [item, ...cv.colors.map((color) => ({
@@ -202,7 +205,8 @@ export function isUnlocked(item, progress) {
 /** Old level-based items a kid had already reached before the shop existed. They keep them free. */
 // Color versions came later, so they were never level items.
 // Buddy specials came later too.
-export const LEGACY_LEVEL = (item) => (item.price && !item.base && !item.species ? item.price / 20 : Infinity);
+// Furniture came later too.
+export const LEGACY_LEVEL = (item) => (item.price && !item.base && !item.species && !item.home ? item.price / 20 : Infinity);
 
 /** Whether a buddy of this species can have this item: buddy specials are for their own species only. */
 export const fitsSpecies = (item, species) => !item?.species || item.species === species;
