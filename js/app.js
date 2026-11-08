@@ -1580,7 +1580,9 @@ function questMap(kid, s, entry, mood) {
 function villageView(kid, s, entry, mood) {
   const tasks = ['morning', 'afternoon'].flatMap((period) => planOrder(kid, s.tasks.filter((x) => x.period === period)));
   let current = false;
-  const list = tasks.map((t) => {
+  // a kid who made their own plan sees its steps numbered, and the village follows them
+  const planned = Boolean(kid.plan?.order?.length);
+  const list = tasks.map((t, i) => {
     const status = entry?.tasks?.[t.id];
     let st = status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo';
     if (st === 'todo' && !current) { st = 'current'; current = true; }
@@ -1591,8 +1593,7 @@ function villageView(kid, s, entry, mood) {
       sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left on the timer` : `${t.minutes} minute timer`;
     }
     const cue = cueFor(kid, t);
-    if (cue && st !== 'done' && st !== 'pending') sub = `${cue} · ${sub}`;
-    return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0 };
+    return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
   });
   const c = chestFor(kid, today());
   return villageHtml({
@@ -1601,6 +1602,7 @@ function villageView(kid, s, entry, mood) {
     kidColor: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
     buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
     tasks: list,
+    planned,
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
   });
 }

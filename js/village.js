@@ -53,17 +53,18 @@ const TREES = (() => {
   return t;
 })();
 
-// where quest givers stand (their feet), in the order quests fill them
+// where quest givers stand (their feet), in the order quests fill them: a loop out from the
+// house (and from the bridge), so a kid's plan is also a walk round the village
 const SLOTS = {
   morning: [
-    { x: 150, y: 120 }, { x: 298, y: 120 }, { x: 74, y: 140 }, { x: W - 74, y: 140 },
-    { x: 172, y: 206 }, { x: 276, y: 206 }, { x: 116, y: 176 }, { x: 332, y: 186 },
+    { x: 150, y: 120 }, { x: 74, y: 140 }, { x: 116, y: 176 }, { x: 172, y: 206 },
+    { x: 276, y: 206 }, { x: 332, y: 186 }, { x: W - 74, y: 140 }, { x: 298, y: 120 },
   ],
   afternoon: [
     { x: 78, y: 412, likes: /piano|music|practice|violin|guitar|sing|instrument/i },
     { x: W - 60, y: 372, likes: /laundry|clothes|fold|wash/i },
-    { x: 170, y: 306 }, { x: 290, y: 306 }, { x: 170, y: 420 }, { x: 290, y: 420 },
-    { x: 384, y: 300 }, { x: 64, y: 290 },
+    { x: 170, y: 306 }, { x: 64, y: 290 }, { x: 170, y: 420 }, { x: 290, y: 420 },
+    { x: 384, y: 300 }, { x: 290, y: 306 },
   ],
 };
 const CHEST = { x: CX, y: 436 };
@@ -182,12 +183,12 @@ export const villagerName = (kind) => `${NAMES[kind]} ${SPECIES_NAMES[kind]}`;
  */
 export function villageHtml(v) {
   const people = placeVillagers(v.tasks);
-  const data = { kid: v.kidId, name: v.kidName, color: v.kidColor, people: people.map((p) => ({ id: p.task.id, kind: p.kind, period: p.task.period === 'morning' ? 'morning' : 'afternoon', x: p.x, y: p.y, st: p.task.st, verify: p.task.verify, timer: Boolean(p.task.timer), icon: p.task.icon, task: p.task.name, sub: p.task.sub })), chest: { ready: v.chest.ready, opened: v.chest.opened, title: v.chest.title, sub: v.chest.sub } };
+  const data = { kid: v.kidId, name: v.kidName, color: v.kidColor, people: people.map((p) => ({ id: p.task.id, kind: p.kind, period: p.task.period === 'morning' ? 'morning' : 'afternoon', x: p.x, y: p.y, st: p.task.st, verify: p.task.verify, timer: Boolean(p.task.timer), icon: p.task.icon, task: p.task.name, sub: p.task.sub, step: p.task.step || 0, plan: p.task.plan || '' })), planned: Boolean(v.planned), chest: { ready: v.chest.ready, opened: v.chest.opened, title: v.chest.title, sub: v.chest.sub } };
   const folk = people.map((p) => {
     const st = p.task.st;
     const badge = st === 'done' ? '<span class="v-badge">✓</span>' : st === 'pending' ? '<span class="v-badge wait">⏳</span>' : '';
     return `<button class="villager st-${st}" data-vid="${esc(p.task.id)}" data-kind="${p.kind}" style="left:${p.x}px;top:${p.y}px;z-index:${p.y}" aria-label="${esc(villagerName(p.kind))}: ${esc(p.task.name)}">
-        <span class="v-bubble"><span class="v-icon">${esc(p.task.icon)}</span>${badge}</span>
+        <span class="v-bubble">${p.task.step && st !== 'done' && st !== 'pending' ? `<span class="v-step">${p.task.step}</span>` : ''}<span class="v-icon">${esc(p.task.icon)}</span>${badge}</span>
         <canvas class="v-sprite" width="16" height="${villagerGrid(p.kind).length}"></canvas>
         <span class="v-hearts" aria-hidden="true"></span>
       </button>`;
@@ -406,18 +407,28 @@ function mount(section, handlers) {
     const name = data.name;
     const el = els.get(p.id);
     let text; let buttons;
+    const next = people.find((q) => q.st === 'current');
+    const goNext = next ? `<button class="btn" data-v="go" data-to="${esc(next.id)}">Next quest: ${esc(next.icon)}</button>` : '';
     if (mode === 'thanks' || p.st === 'done') {
       text = THANKS[p.kind](name);
-      buttons = '<button class="btn" data-v="bye">Bye!</button>';
+      // following the plan gets noticed, and the next step is one tap away
+      if (mode === 'thanks' && data.planned && p.step) text += next ? ` That's step ${p.step} of your plan. Next up: ${next.task}!` : ' And that was the last step of your plan!';
+      else if (mode === 'thanks' && next) text += ` Next up: ${next.task}.`;
+      buttons = `${goNext}<button class="btn ${next ? 'ghost' : ''}" data-v="bye">Bye!</button>`;
     } else if (mode === 'pending' || p.st === 'pending') {
       text = 'Great job! Now a grown-up needs to check it. I\'ll wait right here.';
       buttons = '<button class="btn" data-v="do">🙋 Ask a parent now</button><button class="btn ghost" data-v="bye">Later</button>';
     } else {
       text = HELLO[p.kind](name);
+      // off the plan's order: point to the planned step, but never block this one
+      if (data.planned && next && next.id !== p.id && p.st === 'todo') text = `Hi ${name}! Your plan says ${next.task} comes first. I can wait, or you can do mine now.`;
+      else if (data.planned && p.st === 'current' && p.step) text += ` (Step ${p.step} of your plan.)`;
       const doLabel = p.timer && !/^Time done/.test(p.sub) ? '▶ Start the timer' : p.verify === 'parent' ? '🙋 I did it! Ask a parent' : '✓ I did it!';
-      buttons = `<button class="btn" data-v="do">${doLabel}</button><button class="btn ghost" data-v="bye">Not yet</button>`;
+      buttons = data.planned && next && next.id !== p.id && p.st === 'todo'
+        ? `${goNext.replace('Next quest', 'Go to my plan')}<button class="btn ghost" data-v="do">${doLabel}</button>`
+        : `<button class="btn" data-v="do">${doLabel}</button><button class="btn ghost" data-v="bye">Not yet</button>`;
     }
-    const quest = p.st === 'done' ? '' : `<div class="v-quest"><span class="v-quest-icon">${esc(p.icon)}</span><span><b>${esc(p.task)}</b><small>${esc(p.sub)}</small></span></div>`;
+    const quest = p.st === 'done' ? '' : `<div class="v-quest"><span class="v-quest-icon">${esc(p.icon)}</span><span><b>${esc(p.task)}</b><small>${esc(p.sub)}</small>${p.plan ? `<small class="v-plan">📝 Your plan: “${esc(p.plan)}”</small>` : ''}</span></div>`;
     dialog.innerHTML = `
       <div class="v-portrait"><canvas width="16" height="16"></canvas></div>
       <div class="v-talk">
@@ -450,6 +461,7 @@ function mount(section, handlers) {
     const p = personById(dialog.dataset.vid);
     if (b.dataset.v === 'bye' || !p) { closeDialog(); return; }
     if (b.dataset.v === 'do') { closeDialog(); handlers.onTask(p.id, els.get(p.id)); }
+    if (b.dataset.v === 'go') { const q = personById(b.dataset.to); if (q) goTalk(q); }
   });
 
   // ---- arriving ----
@@ -516,6 +528,8 @@ function mount(section, handlers) {
   // arrows point to the quests of the first part of the day that still has some (morning, then after school)
   const open = () => {
     const left = people.filter((p) => p.st === 'todo' || p.st === 'current');
+    // with a plan, only the plan's next step gets an arrow
+    if (data.planned) return left.filter((p) => p.st === 'current');
     const am = left.filter((p) => p.period === 'morning');
     return am.length ? am : left;
   };

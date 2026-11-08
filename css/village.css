@@ -117,3 +117,8 @@
   .v-portrait canvas { width: 32px; }
   .v-text { font-size: 0.95rem; }
 }
+
+/* the kid's own plan: step numbers on the bubbles, and the plan sentence in the quest card */
+.v-step { position: absolute; left: -4px; top: -4px; width: 7px; height: 7px; border-radius: 50%; display: grid; place-items: center; font: 700 5px/1 var(--px-text); color: #fff; background: #7048e8; border: 1px solid var(--px-ink); }
+.villager.st-current .v-step { background: #e67700; }
+.v-quest .v-plan { color: #7048e8; font-style: italic; margin-top: 2px; }
