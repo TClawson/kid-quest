@@ -39,7 +39,7 @@ import { startListening, buddyState, TUNING } from './listen.js';
 import { createBeatFollower } from './beat.js';
 import { loadRecognizer } from './hear.js';
 import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
-import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, SECRETS } from './treasure-art.js';
+import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, secretSize, SECRETS } from './treasure-art.js';
 import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 
@@ -1603,11 +1603,17 @@ function villageView(kid, s, entry, mood) {
     return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
   });
   const c = chestFor(kid, today());
-  // a finished Forest Village treasure map puts its landmark by the chest
-  const lm = SECRETS['bg-meadow'] && treasureFound(state.log, kid.id).maps.has('bg-meadow') ? SECRETS['bg-meadow'] : null;
+  // each map has its own village; a finished treasure map for it puts up its landmark
+  const theme = kidTheme(kid);
+  const lm = SECRETS[theme] && treasureFound(state.log, kid.id).maps.has(theme) ? SECRETS[theme] : null;
+  const size = lm ? secretSize(theme) : null;
+  const store = storeOpen(state, kid, today());
   return villageHtml({
+    theme,
     visit: villageVisit(kid, s),
-    landmark: lm ? { html: secretSvg('bg-meadow', 1), name: lm.name } : null,
+    // drawn twice as big, with fine pixels like the rest of the village
+    landmark: lm ? { html: secretSvg(theme, 1, { smooth: 2 }), name: lm.name, w: size.w * 2, h: size.h * 2 } : null,
+    shop: { open: store.open, left: store.left || 0 },
     kidId: kid.id,
     kidName: kid.name,
     kidColor: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
@@ -1645,8 +1651,9 @@ function villageVisit(kid, s) {
 
 /** A finished treasure map's landmark in the village: it talks, and its show plays over the view. */
 function villageLandmark(el, layer) {
-  const info = SECRETS['bg-meadow'];
   const kid = kidById(ui.kidId);
+  const theme = kid ? kidTheme(kid) : 'bg-meadow';
+  const info = SECRETS[theme];
   if (!info || !kid || !layer) return;
   const bubble = el.querySelector('.v-lm-bubble');
   bubble.textContent = info.lines[(ui.secretLine = ((ui.secretLine ?? -1) + 1) % info.lines.length)];
@@ -1658,11 +1665,11 @@ function villageLandmark(el, layer) {
   img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(kid.buddy, 'excited', { background: false }))}`;
   const r = el.getBoundingClientRect(); const lr = layer.getBoundingClientRect();
   const scale = Number(layer.dataset.scale) || 3;
-  const def = playShow(layer, 'bg-meadow', { buddy: img, scale, spot: { x: r.left + r.width / 2 - lr.left, y: r.top + r.height / 2 - lr.top }, onDone: () => layer.closest('.village')?.classList.remove('show-on') });
+  const def = playShow(layer, theme, { buddy: img, scale, spot: { x: r.left + r.width / 2 - lr.left, y: r.top + r.height / 2 - lr.top }, onDone: () => layer.closest('.village')?.classList.remove('show-on') });
   if (!def) return;
   ui.lastShow = Date.now();
   layer.closest('.village')?.classList.add('show-on');
-  if (state.settings.sound !== false) playShowAudio('bg-meadow', { music: state.settings.music !== false, sfx: def.sfx });
+  if (state.settings.sound !== false) playShowAudio(theme, { music: state.settings.music !== false, sfx: def.sfx });
 }
 
 const villageHandlers = {
@@ -1670,7 +1677,8 @@ const villageHandlers = {
   onChest: (el) => actions.chest(el),
   onVisitor: (el) => actions.visitor(el),
   onLandmark: (el, layer) => villageLandmark(el, layer),
-  fishCatch: (rod) => catchFor('bg-meadow', rod),
+  fishCatch: (rod, theme) => catchFor(theme || 'bg-meadow', rod),
+  onShop: () => actions.wardrobe(),
   sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
 };
 

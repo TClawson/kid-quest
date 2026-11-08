@@ -170,19 +170,37 @@
 .v-show { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
 .v-show canvas.map-land { display: none; }
 
-/* butterflies over the flowers */
-.v-butterfly { position: absolute; width: 3px; height: 2px; pointer-events: none; z-index: 600; background: #ff8fab; box-shadow: 3px 0 0 #ff8fab, 1.5px 1px 0 var(--px-ink); animation: v-flit 14s linear infinite, v-flap 0.3s steps(2, end) infinite; }
-.v-butterfly.b2 { background: #fcc419; box-shadow: 3px 0 0 #fcc419, 1.5px 1px 0 var(--px-ink); animation-duration: 19s, 0.25s; animation-delay: -6s, 0s; }
+/* little things flitting about: butterflies (a seagull, bubbles, embers... on other maps) */
+.v-critter { position: absolute; width: 3px; height: 2px; pointer-events: none; z-index: 600; --c: #ff8fab; background: var(--c); box-shadow: 3px 0 0 var(--c), 1.5px 1px 0 var(--px-ink); animation: v-flit 14s linear infinite, v-flap 0.3s steps(2, end) infinite; }
+.v-critter.b2 { --c: #fcc419; animation-name: v-flit2, v-flap; animation-duration: 19s, 0.25s; animation-delay: -6s, 0s; }
 @keyframes v-flap { 50% { transform: scaleX(0.4); } }
 @keyframes v-flit {
   0% { left: 120px; top: 100px; } 20% { left: 190px; top: 70px; } 40% { left: 300px; top: 110px; }
   60% { left: 260px; top: 200px; } 80% { left: 150px; top: 180px; } 100% { left: 120px; top: 100px; }
 }
-.v-butterfly.b2 { animation-name: v-flit2, v-flap; }
 @keyframes v-flit2 {
   0% { left: 100px; top: 380px; } 25% { left: 180px; top: 420px; } 50% { left: 320px; top: 400px; }
   75% { left: 280px; top: 480px; } 100% { left: 100px; top: 380px; }
 }
+.theme-bg-sunset .v-critter { --c: #f8f9fa; height: 1px; box-shadow: 3px 0 0 var(--c), 1.5px 1px 0 #495057; }
+.theme-bg-rainforest .v-critter { --c: #3bc9db; }
+.theme-bg-rainforest .v-critter.b2 { --c: #ff922b; }
+.theme-bg-rainbow .v-critter { --c: #ffffff; }
+.theme-bg-rainbow .v-critter.b2 { --c: #b197fc; }
+.theme-bg-castle .v-critter.b2 { --c: #b197fc; }
+/* bubbles under the sea, embers on the volcano, blinking lights on the moon and in the galaxy: they rise or twinkle */
+.theme-bg-ocean .v-critter, .theme-bg-volcano .v-critter { width: 3px; height: 3px; border-radius: 50%; box-shadow: none; background: transparent; border: 1px solid #d0ebff; animation: v-rise 7s linear infinite; left: 120px; }
+.theme-bg-ocean .v-critter.b2, .theme-bg-volcano .v-critter.b2 { left: 330px; animation-duration: 9s; animation-delay: -4s; }
+.theme-bg-volcano .v-critter { border: 0; background: #ff922b; width: 2px; height: 2px; }
+.theme-bg-volcano .v-critter.b2 { background: #ffd43b; }
+@keyframes v-rise { 0% { top: 520px; transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 50% { transform: translateX(6px); } 100% { top: 60px; transform: translateX(-4px); opacity: 0; } }
+.theme-bg-space .v-critter, .theme-bg-galaxy .v-critter { --c: #ffd43b; width: 2px; height: 2px; box-shadow: 0 0 3px 1px var(--c); animation: v-flit 30s linear infinite, v-blink 1s steps(2, end) infinite; }
+.theme-bg-space .v-critter.b2, .theme-bg-galaxy .v-critter.b2 { --c: #74c0fc; animation: v-flit2 40s linear infinite, v-blink 0.8s steps(2, end) infinite; }
+@keyframes v-blink { 50% { opacity: 0.2; } }
+
+/* the shopkeeper and a villager with more than one quest */
+.v-badge.more { width: auto; min-width: 7px; padding: 0 1px; border-radius: 3px; background: #f08c00; font-size: 4.5px; }
+.villager.keeper .v-bubble { background: #fff3bf; }
 
 /* the family party: everyone in the village hops */
 .village.party .villager .v-sprite, .village.party .v-visitor .v-vbuddy { animation: v-hop 0.4s steps(2, end) infinite; }

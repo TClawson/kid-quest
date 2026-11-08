@@ -1,120 +1,26 @@
 // The walkable village: a different way to see today's chores. Each chore is a quest
 // from a villager, who has a little picture of the chore floating over their head.
 // Tap the ground and the buddy walks there; tap a villager and the buddy walks over
-// and the villager says what they need. Morning quests are up by the kid's house;
-// after-school quests are across the bridge, so crossing the river means school's out.
+// and the villager says what they need. Morning quests are on the kid's side of the
+// water; after-school quests are across the bridge, so crossing means school's out.
 // Arrows on the edges point to villagers off screen who still have a quest.
 //
-// The village is drawn in village pixels (1 canvas pixel each) and shown at 3 screen
-// pixels per village pixel on a tablet (2 on a phone), so it lines up with the
-// buddies' pixels. The land is in villageart.js; app.js decides what a tap on a
-// quest does (the same as tapping the chore anywhere else).
+// Every map has its own village (villagemaps.js says where things stand, villageprops.js
+// draws them). The village is drawn in village pixels (1 canvas pixel each) and shown at
+// 3 screen pixels per village pixel on a tablet (2 on a phone), so it lines up with the
+// buddies' pixels. app.js decides what a tap on a quest does (the same as tapping the
+// chore anywhere else).
 
-import { paintVillage, drawVillager, VILLAGER_KINDS, villagerGrid } from './villageart.js';
+import { drawVillager, VILLAGER_KINDS, villagerGrid } from './villageart.js';
+import { paintVillage } from './villageprops.js';
+import { villageLayout } from './villagemaps.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-// ---------- layout (village pixels) ----------
-
-const W = 448;
-// the village green (where visitors play, by the river) pushes everything south of it down by G
-const G = 76;
-const H = 480 + G;
-const CX = W / 2;
-
-const HOME = { x: CX - 50, y: 30, w: 100, h: 78 };
-const COTTAGES = [
-  { x: 34, y: 50, w: 80, h: 66, roof: '#4c6ef5', shutter: '#e03131' },
-  { x: W - 114, y: 50, w: 80, h: 66, roof: '#2f9e44', shutter: '#f08c00' },
-  { x: 30, y: 300 + G, w: 96, h: 74, roof: '#7048e8', shutter: '#fcc419', sign: 'note' }, // the music hall
-];
-const WELL = { x: CX - 13, y: 140 };
-const RIVER = { y0: 240 + G, y1: 266 + G };
-const BRIDGE = { x: CX - 16, y0: 236 + G, y1: 270 + G, w: 32 };
-const PATHS = [
-  [[CX, HOME.y + HOME.h + 3], [CX, 448 + G]],
-  [[CX, 132], [74, 132], [74, 119]],
-  [[CX, 132], [W - 74, 132], [W - 74, 119]],
-  [[CX, 392 + G], [78, 392 + G], [78, 377 + G]],
-  [[CX, 316 + G], [W - 70, 316 + G], [W - 70, 336 + G]],
-];
-const PLAZAS = [[CX, 166, 30], [CX, 428 + G, 30]];
-const GARDENS = [{ x: 34, y: 150, w: 62, h: 34 }];
-const FENCES = [{ x: 32, y: 188, w: 66 }];
-const STALLS = [{ x: W - 100, y: 154 }];
-const LAUNDRY = [{ x: W - 112, y: 340 + G, w: 84 }];
-const SIGNS = [];
-const FLOWER_BEDS = [[HOME.x - 14, HOME.y + HOME.h - 10], [HOME.x + HOME.w + 2, HOME.y + HOME.h - 10], [150, 300 + G], [290, 452 + G]];
-const BUSHES = [[HOME.x - 22, HOME.y + 40, true], [HOME.x + HOME.w + 4, HOME.y + 40, false], [150, 368 + G, true], [250, 352 + G, false], [118, 452 + G, true]];
-// the forest round the edge, plus a few trees inside
-const TREES = (() => {
-  const t = [];
-  for (let x = -14; x < W; x += 26) { t.push([x, -16 + ((x / 26) % 2 ? 5 : 0)]); t.push([x, H - 30 + ((x / 26) % 2 ? 0 : 6)]); }
-  for (let y = 4; y < H - 30; y += 30) { t.push([-18 + ((y / 30) % 2 ? 4 : 0), y]); t.push([W - 14 - ((y / 30) % 2 ? 4 : 0), y]); }
-  t.push([118, 66], [298, 66], [380, 190], [140, 308 + G], [40, 400 + G], [290, 362 + G]);
-  return t;
-})();
-
-// The village green: a fishing pond or a play patch each side of the path, on days when
-// visitors use one (see planVisits in visits.js), and spots for visitors who just hang out.
-export const GREEN = {
-  left: { x: 54, y: 234, w: 116, h: 44 },
-  right: { x: 272, y: 234, w: 126, h: 44 },
-  idle: [{ x: 202, y: 250 }, { x: 246, y: 296 }, { x: 202, y: 296 }, { x: 246, y: 250 }],
-};
-// a finished treasure map's landmark stands in a clearing by the chest
-export const LANDMARK = { x: 372, y: 468, w: 46, h: 46 };
-
-// where quest givers stand (their feet), in the order quests fill them: a loop out from the
-// house (and from the bridge), so a kid's plan is also a walk round the village
-const SLOTS = {
-  morning: [
-    { x: 150, y: 120 }, { x: 74, y: 140 }, { x: 116, y: 176 }, { x: 172, y: 206 },
-    { x: 276, y: 206 }, { x: 332, y: 186 }, { x: W - 74, y: 140 }, { x: 298, y: 120 },
-  ],
-  afternoon: [
-    { x: 78, y: 412 + G, likes: /piano|music|practice|violin|guitar|sing|instrument/i },
-    { x: W - 60, y: 372 + G, likes: /laundry|clothes|fold|wash/i },
-    { x: 170, y: 306 + G }, { x: 64, y: 290 + G }, { x: 170, y: 420 + G }, { x: 290, y: 420 + G },
-    { x: 384, y: 300 + G }, { x: 290, y: 306 + G },
-  ],
-};
-const CHEST = { x: CX, y: 436 + G };
-const START = { x: CX, y: HOME.y + HOME.h + 14 };
-
-// Obstacles the buddy walks round: [x, y, w, h]
-const OBSTACLES = [
-  [0, 0, W, 22], [0, H - 18, W, 18], [0, 0, 20, H], [W - 20, 0, 20, H],
-  [HOME.x, HOME.y - 6, HOME.w, HOME.h + 4],
-  ...COTTAGES.map((c) => [c.x, c.y - 6, c.w, c.h + 4]),
-  [WELL.x, WELL.y + 14, 26, 16],
-  ...GARDENS.map((g) => [g.x, g.y, g.w, g.h + 14]),
-  ...STALLS.map((s) => [s.x, s.y + 12, 44, 20]),
-  ...LAUNDRY.map((l) => [l.x, l.y + 18, 4, 8]).concat(LAUNDRY.map((l) => [l.x + l.w - 4, l.y + 18, 4, 8])),
-  ...BUSHES.map(([x, y]) => [x + 1, y + 2, 16, 10]),
-  ...TREES.map(([x, y]) => [x + 6, y + 14, 20, 24]),
-];
-const RIVER_BLOCK = [0, RIVER.y0 - 2, W, RIVER.y1 - RIVER.y0 + 6];
-
-const inRect = (x, y, [rx, ry, rw, rh], pad = 0) => x > rx - pad && x < rx + rw + pad && y > ry - pad && y < ry + rh + pad;
-const onPath = (x, y, d) => PATHS.some((p) => p.some((q, i) => i > 0 && segDist(x, y, p[i - 1], q) < d)) || PLAZAS.some(([px, py, r]) => Math.hypot(x - px, y - py) < r + d);
-function segDist(x, y, [x0, y0], [x1, y1]) {
-  const dx = x1 - x0; const dy = y1 - y0; const l = dx * dx + dy * dy || 1;
-  const t = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / l));
-  return Math.hypot(x - (x0 + t * dx), y - (y0 + t * dy));
-}
-
-export const LAYOUT = {
-  W, H, home: HOME, cottages: COTTAGES, well: WELL, river: RIVER, bridge: BRIDGE, paths: PATHS, plazas: PLAZAS,
-  gardens: GARDENS, fences: FENCES, stalls: STALLS, laundry: LAUNDRY, signs: SIGNS, flowerBeds: FLOWER_BEDS, bushes: BUSHES, trees: TREES,
-  blocked: (x, y, pad = 0) => OBSTACLES.some((r) => inRect(x, y, r, pad)),
-  onPath,
-};
-
 // ---------- villagers ----------
 
-const NAMES = { bunny: 'Clover', beaver: 'Bucky', owl: 'Hoot', frog: 'Fiddle', sheep: 'Wooly', hedgehog: 'Hazel', raccoon: 'Rory', mouse: 'Pip' };
-const SPECIES_NAMES = { bunny: 'the Bunny', beaver: 'the Beaver', owl: 'the Owl', frog: 'the Frog', sheep: 'the Sheep', hedgehog: 'the Hedgehog', raccoon: 'the Raccoon', mouse: 'the Mouse' };
+const NAMES = { bunny: 'Clover', beaver: 'Bucky', owl: 'Hoot', frog: 'Fiddle', sheep: 'Wooly', hedgehog: 'Hazel', raccoon: 'Rory', mouse: 'Pip', badger: 'Barty' };
+const SPECIES_NAMES = { bunny: 'the Bunny', beaver: 'the Beaver', owl: 'the Owl', frog: 'the Frog', sheep: 'the Sheep', hedgehog: 'the Hedgehog', raccoon: 'the Raccoon', mouse: 'the Mouse', badger: 'the Badger' };
 // who gives which chore, when the chore's name fits (beavers know about teeth)
 const LIKES = [
   ['beaver', /teeth|tooth|brush|floss/i],
@@ -146,49 +52,89 @@ const THANKS = {
   raccoon: (n) => `Mission complete! You're a legend, ${n}.`,
   mouse: (n) => `Squeak squeak hooray! Thanks, ${n}!`,
 };
+const liked = (name) => LIKES.find(([, re]) => re.test(name))?.[0] || null;
+
+// At most this many villagers a day: busy days give some villagers more than one quest.
+const MAX_FOLK = 8;
+const MAX_HALF = 6;
+
+/** How many villagers each half of the day gets for n morning and m after-school quests. */
+export function folkCaps(n, m) {
+  if (n + m <= MAX_FOLK) return [Math.min(n, MAX_HALF), Math.min(m, MAX_HALF)];
+  let a = Math.round((MAX_FOLK * n) / (n + m));
+  a = Math.max(Math.min(n, 2), Math.min(a, n, MAX_HALF));
+  const b = Math.max(Math.min(m, 2), Math.min(MAX_FOLK - a, m, MAX_HALF));
+  return [a, b];
+}
+
+/** Splits one half's quests (in plan order) into at most cap villagers' quest lists. */
+function groupQuests(list, cap) {
+  const groups = list.map((t, i) => ({ tasks: [t], like: liked(t.name), first: i }));
+  while (groups.length > cap) {
+    // first, a villager who likes two of the chores gives both (teeth, then floss)
+    let a = -1; let b = -1;
+    for (let i = 0; i < groups.length && a < 0; i += 1) for (let j = i + 1; j < groups.length; j += 1) if (groups[i].like && groups[i].like === groups[j].like) { a = i; b = j; break; }
+    // otherwise the last villager's quest goes to whoever has the fewest
+    if (a < 0) {
+      b = groups.length - 1;
+      a = groups.slice(0, b).reduce((best, g, i) => (g.tasks.length < groups[best].tasks.length ? i : best), 0);
+    }
+    groups[a].tasks.push(...groups[b].tasks);
+    groups.splice(b, 1);
+  }
+  groups.forEach((g) => g.tasks.sort((x, y) => list.indexOf(x) - list.indexOf(y)));
+  return groups;
+}
 
 /**
  * Who gives each quest and where they stand. tasks: [{ id, name, period }] in plan order.
- * Returns [{ task, kind, x, y }]. The same tasks always give the same answer.
+ * Returns [{ id, kind, x, y, period, tasks }]: one entry per villager, each with its quests
+ * in the order they're given. The same tasks always give the same answer.
  */
-export function placeVillagers(tasks) {
-  const out = [];
-  const used = new Set();
-  const pickKind = (task) => {
-    const fit = LIKES.find(([k, re]) => !used.has(k) && re.test(task.name));
-    const kind = fit ? fit[0] : VILLAGER_KINDS.find((k) => !used.has(k) && !LIKES.some(([lk, re]) => lk === k && tasks.some((t) => re.test(t.name)))) || VILLAGER_KINDS.find((k) => !used.has(k)) || VILLAGER_KINDS[out.length % VILLAGER_KINDS.length];
-    used.add(kind);
-    return kind;
-  };
+export function placeVillagers(tasks, L = villageLayout('bg-meadow')) {
+  const halves = ['morning', 'afternoon'].map((period) => tasks.filter((t) => (period === 'morning' ? t.period === 'morning' : t.period !== 'morning')));
+  const caps = folkCaps(halves[0].length, halves[1].length);
+  const groups = halves.map((list, h) => groupQuests(list, caps[h]).map((g) => ({ ...g, period: h ? 'afternoon' : 'morning' })));
+  const all = [...groups[0], ...groups[1]];
   // kinds that fit a chore by name are given out first, so a later chore can't take them
-  const kinds = new Map();
-  tasks.forEach((t) => { const fit = LIKES.find(([k, re]) => !used.has(k) && re.test(t.name)); if (fit) { kinds.set(t.id, fit[0]); used.add(fit[0]); } });
-  tasks.forEach((t) => { if (!kinds.has(t.id)) kinds.set(t.id, pickKind(t)); });
-  for (const period of ['morning', 'afternoon']) {
-    const list = tasks.filter((t) => (period === 'morning' ? t.period === 'morning' : t.period !== 'morning'));
-    const slots = SLOTS[period].map((s) => ({ ...s, taken: false }));
+  const used = new Set();
+  all.forEach((g) => { if (g.like && !used.has(g.like)) { g.kind = g.like; used.add(g.like); } });
+  const wanted = new Set(all.map((g) => g.like).filter(Boolean));
+  all.forEach((g, i) => {
+    if (g.kind) return;
+    g.kind = VILLAGER_KINDS.find((k) => !used.has(k) && !wanted.has(k)) || VILLAGER_KINDS.find((k) => !used.has(k)) || VILLAGER_KINDS[i % VILLAGER_KINDS.length];
+    used.add(g.kind);
+  });
+  const out = [];
+  for (const [h, period] of ['morning', 'afternoon'].entries()) {
+    const slots = L.slots[period].map((s) => ({ ...s, taken: false }));
     const at = new Map();
-    // chores that belong somewhere (piano at the music hall) go there first
-    list.forEach((t) => { const s = slots.find((x) => !x.taken && x.likes?.test(t.name)); if (s) { s.taken = true; at.set(t.id, s); } });
-    list.forEach((t) => {
-      if (at.has(t.id)) return;
-      let s = slots.find((x) => !x.taken && !x.likes) || slots.find((x) => !x.taken);
-      if (!s) { const n = at.size; s = { x: 80 + (n % 5) * 70, y: period === 'morning' ? 196 : 446 + G - 30 * Math.floor(n / 5) }; }
+    // quests that belong somewhere (piano at the music hall) go there first
+    groups[h].forEach((g) => { const s = slots.find((x) => !x.taken && x.likes && g.tasks.some((t) => x.likes.test(t.name))); if (s) { s.taken = true; at.set(g, s); } });
+    groups[h].forEach((g) => {
+      if (at.has(g)) return;
+      const s = slots.find((x) => !x.taken && !x.likes) || slots.find((x) => !x.taken);
       s.taken = true;
-      at.set(t.id, s);
+      at.set(g, s);
     });
-    list.forEach((t) => out.push({ task: t, kind: kinds.get(t.id), x: at.get(t.id).x, y: at.get(t.id).y }));
+    groups[h].forEach((g) => out.push({ id: g.tasks[0].id, kind: g.kind, x: at.get(g).x, y: at.get(g).y, period, tasks: g.tasks }));
   }
   return out;
 }
 
 export const villagerName = (kind) => `${NAMES[kind]} ${SPECIES_NAMES[kind]}`;
 
+/** The quest a villager is on now: the first one not done (waiting on a parent comes after the rest). */
+export function activeQuest(tasks) {
+  return tasks.find((t) => t.st === 'current' || t.st === 'todo') || tasks.find((t) => t.st === 'pending') || tasks[tasks.length - 1];
+}
+
 // ---------- markup ----------
 
 /** Where each visitor stands, which way they face, and what they're doing on the green. */
-export function visitorSpots(visit) {
+export function visitorSpots(visit, L = villageLayout('bg-meadow')) {
   const out = {};
+  const GREEN = L.green;
   let idle = 0;
   for (const a of visit?.areas || []) {
     const Z = GREEN[a.side];
@@ -211,13 +157,13 @@ export function visitorSpots(visit) {
 }
 
 /** The pond or play patch for each visitor area, in village pixels. */
-export const greenAreas = (visit) => (visit?.areas || []).map((a) => ({ ...GREEN[a.side], kind: a.kind, side: a.side }));
+export const greenAreas = (visit, L = villageLayout('bg-meadow')) => (visit?.areas || []).map((a) => ({ ...L.green[a.side], kind: a.kind, side: a.side }));
 
-function visitorsMarkup(visit) {
+function visitorsMarkup(visit, L) {
   if (!visit?.visitors?.length) return '';
-  const spots = visitorSpots(visit);
+  const spots = visitorSpots(visit, L);
   const areas = (visit.areas || []).map((a) => {
-    const Z = GREEN[a.side];
+    const Z = L.green[a.side];
     const solo = a.members.length === 1 ? `solo from-${a.side}` : '';
     const spot = a.members.length === 1 ? spots[a.members[0]] : null;
     const tap = a.tap ? `data-id="${esc(a.members[0])}" data-pick="${a.kind}" role="button" aria-label="Play"` : 'aria-hidden="true"';
@@ -246,40 +192,58 @@ function visitorsMarkup(visit) {
 
 /**
  * The village for a kid. v: {
+ *   theme: the kid's Places background (which map's village),
  *   kidId, kidName, kidColor, buddy: live buddy markup,
- *   tasks: [{ id, name, icon, period, st: 'todo'|'current'|'pending'|'done', sub, verify, timer }],
- *   chest: { html, ready, opened, title, sub },
+ *   tasks: [{ id, name, icon, period, st: 'todo'|'current'|'pending'|'done', sub, verify, timer, step, plan }],
+ *   chest: { html, ready, opened },
+ *   shop: { open, left }: whether the buddy shop is open, and how many quests are left before it is,
  *   visit: { host, visitors: [{ id, name, color, html, line, news, rod }], areas: [{ side, kind, members, ball, tap }] },
- *   landmark: { html, name } or null: a finished treasure map's landmark,
+ *   landmark: { html, name, w, h } or null: a finished treasure map's landmark,
  * }
  */
 export function villageHtml(v) {
-  const people = placeVillagers(v.tasks);
-  const data = { kid: v.kidId, name: v.kidName, color: v.kidColor, people: people.map((p) => ({ id: p.task.id, kind: p.kind, period: p.task.period === 'morning' ? 'morning' : 'afternoon', x: p.x, y: p.y, st: p.task.st, verify: p.task.verify, timer: Boolean(p.task.timer), icon: p.task.icon, task: p.task.name, sub: p.task.sub, step: p.task.step || 0, plan: p.task.plan || '' })), planned: Boolean(v.planned), chest: { ready: v.chest.ready, opened: v.chest.opened, title: v.chest.title, sub: v.chest.sub }, areas: greenAreas(v.visit), spots: visitorSpots(v.visit), landmark: Boolean(v.landmark) };
+  const L = villageLayout(v.theme);
+  const people = placeVillagers(v.tasks, L);
+  const quest = (t) => ({ id: t.id, st: t.st, verify: t.verify, timer: Boolean(t.timer), icon: t.icon, task: t.name, sub: t.sub, step: t.step || 0, plan: t.plan || '' });
+  const lm = v.landmark ? { ...L.landmark, w: v.landmark.w, h: v.landmark.h } : null;
+  const shop = v.shop || { open: false, left: 0 };
+  const data = {
+    theme: L.id, kid: v.kidId, name: v.kidName, color: v.kidColor,
+    people: people.map((p) => ({ id: p.id, kind: p.kind, period: p.period, x: p.x, y: p.y, tasks: p.tasks.map(quest) })),
+    planned: Boolean(v.planned), chest: { ready: v.chest.ready, opened: v.chest.opened }, shop,
+    areas: greenAreas(v.visit, L), spots: visitorSpots(v.visit, L), landmark: lm,
+  };
   const folk = people.map((p) => {
-    const st = p.task.st;
-    const badge = st === 'done' ? '<span class="v-badge">✓</span>' : st === 'pending' ? '<span class="v-badge wait">⏳</span>' : '';
-    return `<button class="villager st-${st}" data-vid="${esc(p.task.id)}" data-kind="${p.kind}" style="left:${p.x}px;top:${p.y}px;z-index:${p.y}" aria-label="${esc(villagerName(p.kind))}: ${esc(p.task.name)}">
-        <span class="v-bubble">${p.task.step && st !== 'done' && st !== 'pending' ? `<span class="v-step">${p.task.step}</span>` : ''}<span class="v-icon">${esc(p.task.icon)}</span>${badge}</span>
+    const a = activeQuest(p.tasks);
+    const st = p.tasks.every((t) => t.st === 'done') ? 'done' : a.st;
+    const more = p.tasks.filter((t) => t.st === 'todo' || t.st === 'current').length;
+    const badge = st === 'done' ? '<span class="v-badge">✓</span>' : st === 'pending' ? '<span class="v-badge wait">⏳</span>' : more > 1 ? `<span class="v-badge more">×${more}</span>` : '';
+    return `<button class="villager st-${st}" data-vid="${esc(p.id)}" data-kind="${p.kind}" style="left:${p.x}px;top:${p.y}px;z-index:${p.y}" aria-label="${esc(villagerName(p.kind))}: ${esc(p.tasks.map((t) => t.name).join(', '))}">
+        <span class="v-bubble">${a.step && st !== 'done' && st !== 'pending' ? `<span class="v-step">${a.step}</span>` : ''}<span class="v-icon">${esc(a.icon)}</span>${badge}</span>
         <canvas class="v-sprite" width="16" height="${villagerGrid(p.kind).length}"></canvas>
         <span class="v-hearts" aria-hidden="true"></span>
       </button>`;
   }).join('');
-  const am = people.some((p) => p.task.period === 'morning');
-  const pm = people.some((p) => p.task.period !== 'morning');
+  const keeper = L.shop ? `<button class="villager keeper st-${shop.open ? 'done' : 'todo'}" data-kind="badger" data-shop="1" style="left:${L.shop.x}px;top:${L.shop.y}px;z-index:${L.shop.y}" aria-label="${esc(villagerName('badger'))}: the buddy shop">
+        <span class="v-bubble"><span class="v-icon">${shop.open ? '👕' : '🔒'}</span></span>
+        <canvas class="v-sprite" width="16" height="${villagerGrid('badger').length}"></canvas>
+      </button>` : '';
+  const am = people.some((p) => p.period === 'morning');
+  const pm = people.some((p) => p.period !== 'morning');
+  const [mx, my, mt] = L.labels.morning; const [ax, ay, at] = L.labels.afternoon;
   return `
-    <section class="village" data-kid="${esc(v.kidId)}" data-v="${esc(JSON.stringify(data))}">
+    <section class="village theme-${esc(L.id)}" data-kid="${esc(v.kidId)}" data-v="${esc(JSON.stringify(data))}">
       <div class="village-view">
-        <div class="village-world" style="width:${W}px;height:${H}px">
-          <canvas class="village-land" width="${W}" height="${H}" aria-hidden="true"></canvas>
-          <div class="v-label home-label" style="left:${CX}px;top:${HOME.y + 10}px">${esc(v.kidName)}'s house</div>
-          ${am ? `<div class="v-label period" style="left:${CX - 66}px;top:${216}px">⬆ 🌅 Morning quests</div>` : ''}
-          ${pm ? `<div class="v-label period" style="left:${CX + 72}px;top:${RIVER.y1 + 10}px">⬇ ☀️ After-school quests</div>` : ''}
-          ${folk}
-          ${visitorsMarkup(v.visit)}
-          ${v.landmark ? `<button class="v-landmark" style="left:${LANDMARK.x}px;top:${LANDMARK.y}px;width:${LANDMARK.w}px" aria-label="${esc(v.landmark.name)}">${v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
-          <span class="v-butterfly b1" aria-hidden="true"></span><span class="v-butterfly b2" aria-hidden="true"></span>
-          <button class="v-chest ${v.chest.ready ? 'ready' : ''} ${v.chest.opened ? 'opened' : ''}" style="left:${CHEST.x}px;top:${CHEST.y}px;z-index:${CHEST.y}" aria-label="Treasure">${v.chest.html}</button>
+        <div class="village-world" style="width:${L.W}px;height:${L.H}px">
+          <canvas class="village-land" width="${L.W}" height="${L.H}" aria-hidden="true"></canvas>
+          <div class="v-label home-label" style="left:${L.home.x + L.home.w / 2}px;top:${L.home.y + 10}px">${esc(v.kidName)}'s house</div>
+          ${am ? `<div class="v-label period" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
+          ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
+          ${folk}${keeper}
+          ${visitorsMarkup(v.visit, L)}
+          ${lm ? `<button class="v-landmark" style="left:${lm.x}px;top:${lm.y}px;width:${lm.w}px;z-index:${lm.y + lm.h}" aria-label="${esc(v.landmark.name)}">${v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
+          <span class="v-critter b1" aria-hidden="true"></span><span class="v-critter b2" aria-hidden="true"></span>
+          <button class="v-chest ${v.chest.ready ? 'ready' : ''} ${v.chest.opened ? 'opened' : ''}" style="left:${L.chest.x}px;top:${L.chest.y}px;z-index:${L.chest.y}" aria-label="Treasure">${v.chest.html}</button>
           <div class="v-buddy" style="z-index:500"><div class="v-flip">${v.buddy}</div></div>
           <span class="v-target" hidden></span>
         </div>
@@ -293,30 +257,31 @@ export function villageHtml(v) {
 // ---------- walking ----------
 
 const CELL = 8;
-const COLS = Math.ceil(W / CELL);
-const ROWS = Math.ceil(H / CELL);
 const SPEED = 100; // village pixels a second
+const inRect = (x, y, [rx, ry, rw, rh], pad = 0) => x > rx - pad && x < rx + rw + pad && y > ry - pad && y < ry + rh + pad;
 
-function makeGrid(people, extra = []) {
+/** The walking grid for a layout: 1 where the buddy can't stand. */
+export function makeGrid(L, people = [], extra = []) {
+  const COLS = Math.ceil(L.W / CELL); const ROWS = Math.ceil(L.H / CELL);
   const block = new Uint8Array(COLS * ROWS);
-  const solid = [...OBSTACLES, RIVER_BLOCK, ...people.map((p) => [p.x - 7, p.y - 8, 14, 10]), [CHEST.x - 12, CHEST.y - 12, 24, 14], ...extra];
+  const solid = [...L.obstacles, ...people.map((p) => [p.x - 7, p.y - 8, 14, 10]), [L.chest.x - 12, L.chest.y - 12, 24, 14], ...extra];
   for (let r = 0; r < ROWS; r += 1) {
     for (let c = 0; c < COLS; c += 1) {
       const x = c * CELL + CELL / 2; const y = r * CELL + CELL / 2;
-      // the bridge crosses the river
-      const onBridge = x > BRIDGE.x + 2 && x < BRIDGE.x + BRIDGE.w - 2 && y > RIVER.y0 - 8 && y < RIVER.y1 + 8;
-      if (onBridge) continue;
-      if (solid.some((rc) => inRect(x, y, rc, 3))) block[r * COLS + c] = 1;
+      if (L.onBridge(x, y)) continue;
+      if (L.inWater(x, y, 3) || solid.some((rc) => inRect(x, y, rc, 3))) block[r * COLS + c] = 1;
     }
   }
+  block.cols = COLS; block.rows = ROWS;
   return block;
 }
 
-const cellOf = (x, y) => [Math.max(0, Math.min(COLS - 1, Math.floor(x / CELL))), Math.max(0, Math.min(ROWS - 1, Math.floor(y / CELL)))];
+const cellOf = (grid, x, y) => [Math.max(0, Math.min(grid.cols - 1, Math.floor(x / CELL))), Math.max(0, Math.min(grid.rows - 1, Math.floor(y / CELL)))];
 
 /** The open cell nearest a point (breadth first). */
 function nearestOpen(grid, x, y) {
-  const [c0, r0] = cellOf(x, y);
+  const COLS = grid.cols; const ROWS = grid.rows;
+  const [c0, r0] = cellOf(grid, x, y);
   if (!grid[r0 * COLS + c0]) return [c0, r0];
   const seen = new Set([r0 * COLS + c0]);
   let ring = [[c0, r0]];
@@ -340,8 +305,9 @@ function nearestOpen(grid, x, y) {
   return [c0, r0];
 }
 
-/** A* over the walking grid, 8 ways, then the corners smoothed off. Returns points in village pixels. */
-function findPath(grid, from, to) {
+/** A* over the walking grid, 8 ways, then the corners smoothed off. Returns points in village pixels ([] if there's no way). */
+export function findPath(grid, from, to) {
+  const COLS = grid.cols; const ROWS = grid.rows;
   const [sc, sr] = nearestOpen(grid, from.x, from.y);
   const [gc, gr] = nearestOpen(grid, to.x, to.y);
   const start = sr * COLS + sc; const goal = gr * COLS + gc;
@@ -378,11 +344,12 @@ function findPath(grid, from, to) {
   cells.reverse();
   const pts = cells.map((i) => ({ x: (i % COLS) * CELL + CELL / 2, y: Math.floor(i / COLS) * CELL + CELL / 2 }));
   // the last step goes to the exact spot when it's open
-  if (pts.length) { const [ec, er] = cellOf(to.x, to.y); if (ec === gc && er === gr) pts[pts.length - 1] = { x: to.x, y: to.y }; }
+  if (pts.length) { const [ec, er] = cellOf(grid, to.x, to.y); if (ec === gc && er === gr) pts[pts.length - 1] = { x: to.x, y: to.y }; }
+  if (!pts.length && start === goal) return [{ x: to.x, y: to.y }];
   // string pulling: skip points while the straight line stays open
   const clear = (a, b) => {
     const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3);
-    for (let s = 1; s < n; s += 1) { const [c, r] = cellOf(a.x + ((b.x - a.x) * s) / n, a.y + ((b.y - a.y) * s) / n); if (grid[r * COLS + c]) return false; }
+    for (let s = 1; s < n; s += 1) { const [c, r] = cellOf(grid, a.x + ((b.x - a.x) * s) / n, a.y + ((b.y - a.y) * s) / n); if (grid[r * COLS + c]) return false; }
     return true;
   };
   const out = [];
@@ -393,9 +360,18 @@ function findPath(grid, from, to) {
   return out;
 }
 
+/** Where the buddy stands to talk to someone at (x, y): beside them, or just in front. */
+export function standSpot(grid, x, y, fromX = 0) {
+  for (const [dx, dy] of (x > fromX ? [[-18, 1], [18, 1]] : [[18, 1], [-18, 1]]).concat([[0, 16], [0, -14]])) {
+    const [c, r] = cellOf(grid, x + dx, y + dy);
+    if (!grid[r * grid.cols + c]) return { x: x + dx, y: y + dy };
+  }
+  return { x, y: y + 14 };
+}
+
 // ---------- the live village ----------
 
-// Per kid, while the app is open: where the buddy is and what each villager last looked like.
+// Per kid and map, while the app is open: where the buddy is and what each quest last looked like.
 const memory = new Map();
 const spriteCache = new Map();
 
@@ -406,9 +382,9 @@ function spriteUrl(kind, happy) {
 }
 
 let landCache = { key: '', canvas: null };
-function land(color, areas = []) {
-  const key = `${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}`;
-  if (landCache.key !== key) landCache = { key, canvas: paintVillage(document.createElement('canvas'), LAYOUT, { homeRoof: color, areas }) };
+function land(L, color, areas = []) {
+  const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}`;
+  if (landCache.key !== key) landCache = { key, canvas: paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas }) };
   return landCache.canvas;
 }
 
@@ -416,6 +392,8 @@ function land(color, areas = []) {
  * Starts every village inside root. handlers: {
  *   onTask(taskId, el): the kid says a quest is done (or wants to start it),
  *   onChest(el): the buddy reached the treasure,
+ *   onShop(): the kid wants to go into the buddy shop,
+ *   onVisitor(el), onLandmark(el, layer), fishCatch(rod),
  *   sound(name): a little sound ('tap', 'talk'),
  * }
  */
@@ -426,6 +404,8 @@ export function mountVillages(root, handlers) {
 function mount(section, handlers) {
   section.dataset.live = '1';
   const data = JSON.parse(section.dataset.v);
+  const L = villageLayout(data.theme);
+  const { W, H } = L;
   const view = section.querySelector('.village-view');
   const world = section.querySelector('.village-world');
   const buddyEl = section.querySelector('.v-buddy');
@@ -434,26 +414,34 @@ function mount(section, handlers) {
   const dialog = section.querySelector('.v-dialog');
   const targetEl = section.querySelector('.v-target');
   const chestEl = section.querySelector('.v-chest');
+  const keeperEl = section.querySelector('.villager.keeper');
   const people = data.people;
-  const els = new Map([...section.querySelectorAll('.villager')].map((el) => [el.dataset.vid, el]));
+  const els = new Map([...section.querySelectorAll('.villager[data-vid]')].map((el) => [el.dataset.vid, el]));
+  const allQuests = people.flatMap((p) => p.tasks);
+  const doneAll = (p) => p.tasks.every((t) => t.st === 'done');
 
   // the land and the villagers' faces
   const canvas = section.querySelector('.village-land');
-  canvas.getContext('2d').drawImage(land(data.color || '#e03131', data.areas), 0, 0);
-  for (const p of people) {
-    const c = els.get(p.id).querySelector('.v-sprite');
-    const src = spriteUrl(p.kind, p.st === 'done');
+  canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas), 0, 0);
+  const paintSprite = (el, kind, happy) => {
+    const c = el.querySelector('.v-sprite');
+    const src = spriteUrl(kind, happy);
     c.width = src.width; c.height = src.height;
     c.getContext('2d').drawImage(src, 0, 0);
-  }
+  };
+  for (const p of people) paintSprite(els.get(p.id), p.kind, doneAll(p));
+  if (keeperEl) paintSprite(keeperEl, 'badger', data.shop.open);
 
-  const mem = memory.get(data.kid) || { x: START.x, y: START.y, seen: {} };
-  memory.set(data.kid, mem);
-  // ponds can't be walked through; visitors and the landmark are stood round
-  const grid = makeGrid(people, [
+  const memKey = `${data.kid}|${L.id}`;
+  const mem = memory.get(memKey) || { x: L.start.x, y: L.start.y, seen: {} };
+  memory.set(memKey, mem);
+  // ponds can't be walked through; visitors, the shopkeeper and the landmark are stood round
+  const lm = data.landmark;
+  const grid = makeGrid(L, people, [
     ...data.areas.filter((a) => a.kind === 'pond').map((a) => [a.x - 2, a.y - 2, a.w + 4, a.h + 4]),
     ...Object.values(data.spots).map((p) => [p.x - 7, p.y - 8, 14, 10]),
-    ...(data.landmark ? [[LANDMARK.x + 2, LANDMARK.y + 8, LANDMARK.w - 4, LANDMARK.h - 10]] : []),
+    ...(L.shop ? [[L.shop.x - 7, L.shop.y - 8, 14, 10]] : []),
+    ...(lm ? [[lm.x + 8, lm.y + lm.h * 0.5, lm.w - 16, lm.h * 0.45]] : []),
   ]);
   const me = { x: mem.x, y: mem.y, path: [], goal: null, face: mem.face || 1 };
   let S = 3;
@@ -488,64 +476,104 @@ function mount(section, handlers) {
   // ---- talking ----
   const personById = (id) => people.find((p) => p.id === id);
   const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); };
-  const say = (p, mode) => {
-    const name = data.name;
-    const el = els.get(p.id);
-    let text; let buttons;
-    const next = people.find((q) => q.st === 'current');
-    const goNext = next ? `<button class="btn" data-v="go" data-to="${esc(next.id)}">Next quest: ${esc(next.icon)}</button>` : '';
-    if (mode === 'thanks' || p.st === 'done') {
-      text = THANKS[p.kind](name);
-      // following the plan gets noticed, and the next step is one tap away
-      if (mode === 'thanks' && data.planned && p.step) text += next ? ` That's step ${p.step} of your plan. Next up: ${next.task}!` : ' And that was the last step of your plan!';
-      else if (mode === 'thanks' && next) text += ` Next up: ${next.task}.`;
-      buttons = `${goNext}<button class="btn ${next ? 'ghost' : ''}" data-v="bye">Bye!</button>`;
-    } else if (mode === 'pending' || p.st === 'pending') {
-      text = 'Great job! Now a grown-up needs to check it. I\'ll wait right here.';
-      buttons = '<button class="btn" data-v="do">🙋 Ask a parent now</button><button class="btn ghost" data-v="bye">Later</button>';
-    } else {
-      text = HELLO[p.kind](name);
-      // off the plan's order: point to the planned step, but never block this one
-      if (data.planned && next && next.id !== p.id && p.st === 'todo') text = `Hi ${name}! Your plan says ${next.task} comes first. I can wait, or you can do mine now.`;
-      else if (data.planned && p.st === 'current' && p.step) text += ` (Step ${p.step} of your plan.)`;
-      const doLabel = p.timer && !/^Time done/.test(p.sub) ? '▶ Start the timer' : p.verify === 'parent' ? '🙋 I did it! Ask a parent' : '✓ I did it!';
-      buttons = data.planned && next && next.id !== p.id && p.st === 'todo'
-        ? `${goNext.replace('Next quest', 'Go to my plan')}<button class="btn ghost" data-v="do">${doLabel}</button>`
-        : `<button class="btn" data-v="do">${doLabel}</button><button class="btn ghost" data-v="bye">Not yet</button>`;
-    }
-    const quest = p.st === 'done' ? '' : `<div class="v-quest"><span class="v-quest-icon">${esc(p.icon)}</span><span><b>${esc(p.task)}</b><small>${esc(p.sub)}</small>${p.plan ? `<small class="v-plan">📝 Your plan: “${esc(p.plan)}”</small>` : ''}</span></div>`;
-    dialog.innerHTML = `
-      <div class="v-portrait"><canvas width="16" height="16"></canvas></div>
-      <div class="v-talk">
-        <b class="v-name">${esc(villagerName(p.kind))}</b>
-        <p class="v-text"></p>
-        ${quest}
-        <div class="v-buttons">${buttons}</div>
-      </div>`;
-    const src = spriteUrl(p.kind, p.st === 'done' || mode === 'thanks');
+  const open = (dialogHtml, kind, happy, vid) => {
+    dialog.innerHTML = dialogHtml;
+    const src = spriteUrl(kind, happy);
     const pc = dialog.querySelector('.v-portrait canvas');
     pc.width = src.width; pc.height = src.height;
     pc.getContext('2d').drawImage(src, 0, 0);
-    // the words appear a few letters at a time, like an old game; a tap shows them all
+    dialog.hidden = false;
+    dialog.dataset.vid = vid;
+    section.classList.add('talking');
+    handlers.sound?.('talk');
+  };
+  // the words appear a few letters at a time, like an old game; a tap shows them all
+  const typeText = (text) => {
     const $t = dialog.querySelector('.v-text');
     let n = 0;
     clearInterval(dialog.typer);
     dialog.typer = setInterval(() => { n += 2; $t.textContent = text.slice(0, n); if (n >= text.length) clearInterval(dialog.typer); }, 30);
     $t.onclick = () => { clearInterval(dialog.typer); $t.textContent = text; };
-    dialog.hidden = false;
-    dialog.dataset.vid = p.id;
-    section.classList.add('talking');
+  };
+  const card = (name, text, quest, buttons) => `
+      <div class="v-portrait"><canvas width="16" height="16"></canvas></div>
+      <div class="v-talk">
+        <b class="v-name">${esc(name)}</b>
+        <p class="v-text"></p>
+        ${quest}
+        <div class="v-buttons">${buttons}</div>
+      </div>`;
+  const questCard = (q) => `<div class="v-quest"><span class="v-quest-icon">${esc(q.icon)}</span><span><b>${esc(q.task)}</b><small>${esc(q.sub)}</small>${q.plan ? `<small class="v-plan">📝 Your plan: “${esc(q.plan)}”</small>` : ''}</span></div>`;
+  const doLabel = (q) => (q.timer && !/^Time done/.test(q.sub) ? '▶ Start the timer' : q.verify === 'parent' ? '🙋 I did it! Ask a parent' : '✓ I did it!');
+
+  const say = (p, mode) => {
+    const name = data.name;
+    const el = els.get(p.id);
+    const q = activeQuest(p.tasks);
+    const more = p.tasks.filter((t) => t.st === 'todo' || t.st === 'current');
+    const next = allQuests.find((t) => t.st === 'current');
+    const nextOwner = next && people.find((o) => o.tasks.includes(next));
+    const goNext = next && nextOwner !== p ? `<button class="btn" data-v="go" data-to="${esc(nextOwner.id)}">Next quest: ${esc(next.icon)}</button>` : '';
+    let text; let buttons; let quest = '';
+    const offPlan = data.planned && next && q.st === 'todo' && next !== q;
+    if (mode === 'thanks' || doneAll(p)) {
+      text = THANKS[p.kind](name);
+      const just = mode === 'thanks' ? p.tasks.filter((t) => t.st === 'done').pop() : null;
+      if (more.length) {
+        // this villager has another quest: it's handed over right away
+        text += ' I\'ve got another quest for you!';
+        quest = questCard(more[0]);
+        buttons = `<button class="btn" data-v="do" data-q="${esc(more[0].id)}">${doLabel(more[0])}</button><button class="btn ghost" data-v="bye">Later</button>`;
+      } else {
+        // following the plan gets noticed, and the next step is one tap away
+        if (just && data.planned && just.step) text += next ? ` That's step ${just.step} of your plan. Next up: ${next.task}!` : ' And that was the last step of your plan!';
+        else if (just && next) text += ` Next up: ${next.task}.`;
+        buttons = `${goNext}<button class="btn ${goNext ? 'ghost' : ''}" data-v="bye">Bye!</button>`;
+      }
+    } else if (mode === 'pending' || q.st === 'pending') {
+      text = 'Great job! Now a grown-up needs to check it. I\'ll wait right here.';
+      if (more.length) {
+        text += ' While we wait, here\'s another one:';
+        quest = questCard(more[0]);
+        buttons = `<button class="btn" data-v="do" data-q="${esc(more[0].id)}">${doLabel(more[0])}</button><button class="btn ghost" data-v="bye">Later</button>`;
+      } else {
+        const waiting = p.tasks.find((t) => t.st === 'pending');
+        buttons = `<button class="btn" data-v="do" data-q="${esc(waiting.id)}">🙋 Ask a parent now</button><button class="btn ghost" data-v="bye">Later</button>`;
+      }
+    } else {
+      text = HELLO[p.kind](name);
+      if (more.length > 1) text += ` (I have ${more.length} quests for you today. Here's the first.)`;
+      // off the plan's order: point to the planned step, but never block this one
+      if (offPlan) text = `Hi ${name}! Your plan says ${next.task} comes first. I can wait, or you can do mine now.`;
+      else if (data.planned && q.st === 'current' && q.step) text += ` (Step ${q.step} of your plan.)`;
+      quest = questCard(q);
+      buttons = offPlan
+        ? `${goNext.replace('Next quest', 'Go to my plan')}<button class="btn ghost" data-v="do" data-q="${esc(q.id)}">${doLabel(q)}</button>`
+        : `<button class="btn" data-v="do" data-q="${esc(q.id)}">${doLabel(q)}</button><button class="btn ghost" data-v="bye">Not yet</button>`;
+    }
+    open(card(villagerName(p.kind), text, quest, buttons), p.kind, doneAll(p) || mode === 'thanks', p.id);
+    typeText(text);
     el?.classList.add('chatting');
     setTimeout(() => el?.classList.remove('chatting'), 600);
-    handlers.sound?.('talk');
+  };
+  // the shopkeeper: the buddy shop opens once every quest is done and checked
+  const sayShop = () => {
+    const s = data.shop;
+    const text = s.open
+      ? `Welcome, ${data.name}! All your quests are done, so the shop is open. Want to dress up your buddy?`
+      : `Hi ${data.name}! My shop opens when all of today's quests are done and a grown-up has checked them.${s.left ? ` ${s.left} to go!` : ''} See you then!`;
+    const buttons = s.open ? '<button class="btn" data-v="shop">👕 Go shopping</button><button class="btn ghost" data-v="bye">Bye!</button>' : '<button class="btn" data-v="bye">OK!</button>';
+    open(card(villagerName('badger'), text, '', buttons), 'badger', s.open, 'shop');
+    typeText(text);
   };
   dialog.addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]');
     if (!b) return;
     e.stopPropagation();
+    if (b.dataset.v === 'shop') { closeDialog(); handlers.onShop?.(); return; }
     const p = personById(dialog.dataset.vid);
     if (b.dataset.v === 'bye' || !p) { closeDialog(); return; }
-    if (b.dataset.v === 'do') { closeDialog(); handlers.onTask(p.id, els.get(p.id)); }
+    if (b.dataset.v === 'do') { closeDialog(); handlers.onTask(b.dataset.q || activeQuest(p.tasks).id, els.get(p.id)); }
     if (b.dataset.v === 'go') { const q = personById(b.dataset.to); if (q) goTalk(q); }
   });
 
@@ -560,12 +588,16 @@ function mount(section, handlers) {
       const p = personById(goal.person);
       me.face = p.x >= me.x ? 1 : -1;
       say(p);
+    } else if (goal.shop) {
+      me.face = L.shop.x >= me.x ? 1 : -1;
+      sayShop();
     } else if (goal.chest) {
       handlers.onChest(chestEl);
     } else if (goal.visitor) {
       me.face = goal.x >= me.x ? 1 : -1;
       visitorTap(goal.visitor);
     } else if (goal.landmark) {
+      me.face = lm && lm.x + lm.w / 2 >= me.x ? 1 : -1;
       handlers.onLandmark?.(goal.landmark, section.querySelector('.v-show'));
     }
   };
@@ -576,22 +608,20 @@ function mount(section, handlers) {
     if (!me.path.length) { arrive(); return; }
     buddyEl.classList.add('walking');
   };
-  // where the buddy stands to talk to someone: just in front (below) of them, or to a side
-  const standBy = (x, y) => {
-    for (const [dx, dy] of (x > me.x ? [[-18, 1], [18, 1]] : [[18, 1], [-18, 1]]).concat([[0, 16], [0, -14]])) {
-      const [c, r] = cellOf(x + dx, y + dy);
-      if (!grid[r * COLS + c]) return { x: x + dx, y: y + dy };
-    }
-    return { x, y: y + 14 };
-  };
+  const near = (spot) => Math.hypot(me.x - spot.x, me.y - spot.y) < 22;
   const goTalk = (p) => {
-    const spot = standBy(p.x, p.y);
-    if (Math.hypot(me.x - spot.x, me.y - spot.y) < 22) { me.face = p.x >= me.x ? 1 : -1; say(p); return; }
+    const spot = standSpot(grid, p.x, p.y, me.x);
+    if (near(spot)) { me.face = p.x >= me.x ? 1 : -1; say(p); return; }
     walkTo(spot.x, spot.y, { person: p.id });
   };
+  const goShop = () => {
+    const spot = standSpot(grid, L.shop.x, L.shop.y, me.x);
+    if (near(spot)) { sayShop(); return; }
+    walkTo(spot.x, spot.y, { shop: true });
+  };
   const goChest = () => {
-    const spot = standBy(CHEST.x, CHEST.y);
-    if (Math.hypot(me.x - spot.x, me.y - spot.y) < 22) { handlers.onChest(chestEl); return; }
+    const spot = standSpot(grid, L.chest.x, L.chest.y, me.x);
+    if (near(spot)) { handlers.onChest(chestEl); return; }
     walkTo(spot.x, spot.y, { chest: true });
   };
 
@@ -607,8 +637,8 @@ function mount(section, handlers) {
     const sp = data.spots[el.dataset.id];
     if (!sp) return;
     // stand on the near side, or behind a fisher (the pond is in front)
-    const spot = sp.role === 'fish' ? { x: sp.x - sp.face * 22, y: sp.y + 2 } : standBy(sp.x, sp.y);
-    if (Math.hypot(me.x - spot.x, me.y - spot.y) < 22) { visitorTap(el); return; }
+    const spot = sp.role === 'fish' ? { x: sp.x - sp.face * 22, y: sp.y + 2 } : standSpot(grid, sp.x, sp.y, me.x);
+    if (near(spot)) { visitorTap(el); return; }
     walkTo(spot.x, spot.y, { visitor: el, x: sp.x });
   };
   // visitors take turns talking, one bubble at a time (news always shows)
@@ -628,7 +658,7 @@ function mount(section, handlers) {
     if (document.visibilityState !== 'visible' || Math.random() > 0.4) return;
     const el = fishers[Math.floor(Math.random() * fishers.length)];
     if (el.classList.contains('reeling')) return;
-    const got = handlers.fishCatch(Number(el.dataset.rod) || 1);
+    const got = handlers.fishCatch(Number(el.dataset.rod) || 1, L.id);
     if (!got) return;
     el.querySelector('.v-catch').innerHTML = got.svg;
     el.classList.add('reeling');
@@ -655,10 +685,15 @@ function mount(section, handlers) {
       if (a) walkTo(a.x + a.w / 2, a.y + a.h + 12, { visitor: area, x: a.x + a.w / 2 });
       return;
     }
-    const lm = e.target.closest('.v-landmark');
-    if (lm) { handlers.sound?.('tap'); walkTo(LANDMARK.x + LANDMARK.w / 2, LANDMARK.y + LANDMARK.h + 10, { landmark: lm }); return; }
+    const lmEl = e.target.closest('.v-landmark');
+    if (lmEl && lm) { handlers.sound?.('tap'); walkTo(lm.stand.x, lm.stand.y, { landmark: lmEl }); return; }
     const arrow = e.target.closest('.v-arrow');
-    if (arrow) { handlers.sound?.('tap'); if (arrow.dataset.vid === 'chest') goChest(); else goTalk(personById(arrow.dataset.vid)); return; }
+    if (arrow) {
+      handlers.sound?.('tap');
+      if (arrow.dataset.vid === 'chest') goChest(); else if (arrow.dataset.vid === 'shop') goShop(); else goTalk(personById(arrow.dataset.vid));
+      return;
+    }
+    if (e.target.closest('.villager.keeper')) { handlers.sound?.('tap'); goShop(); return; }
     const who = e.target.closest('.villager');
     if (who) { handlers.sound?.('tap'); goTalk(personById(who.dataset.vid)); return; }
     if (e.target.closest('.v-chest')) { goChest(); return; }
@@ -673,19 +708,21 @@ function mount(section, handlers) {
   });
 
   // ---- arrows to quests off screen ----
-  // arrows point to the quests of the first part of the day that still has some (morning, then after school)
-  const open = () => {
-    const left = people.filter((p) => p.st === 'todo' || p.st === 'current');
+  // arrows point to the villagers of the first part of the day that still has quests (morning, then after school)
+  const openFolk = () => {
+    const left = people.filter((p) => p.tasks.some((t) => t.st === 'todo' || t.st === 'current'));
     // with a plan, only the plan's next step gets an arrow
-    if (data.planned) return left.filter((p) => p.st === 'current');
+    if (data.planned) return left.filter((p) => p.tasks.some((t) => t.st === 'current'));
     const am = left.filter((p) => p.period === 'morning');
     return am.length ? am : left;
   };
   // arrow buttons are kept and moved (not redrawn), so a tap lands even while the view slides
   const arrowEls = new Map();
   const drawArrows = () => {
-    const list = open().map((p) => ({ id: p.id, x: p.x, y: p.y - 22, icon: p.icon, now: p.st === 'current' }));
-    if (!list.length && data.chest.ready) list.push({ id: 'chest', x: CHEST.x, y: CHEST.y - 10, icon: '🎁' });
+    const list = openFolk().map((p) => ({ id: p.id, x: p.x, y: p.y - 22, icon: activeQuest(p.tasks).icon, now: p.tasks.some((t) => t.st === 'current') }));
+    if (!list.length && data.chest.ready) list.push({ id: 'chest', x: L.chest.x, y: L.chest.y - 10, icon: '🎁' });
+    // all done, chest opened: the shop is open
+    else if (!list.length && data.shop.open && L.shop && !data.chest.ready) list.push({ id: 'shop', x: L.shop.x, y: L.shop.y - 22, icon: '👕' });
     const m = 30; // keep arrows this far inside the edge
     const shown = new Set();
     for (const q of list) {
@@ -742,15 +779,17 @@ function mount(section, handlers) {
 
   // a quest that just got done: the villager cheers and says thanks; one sent to a parent waits
   for (const p of people) {
-    const was = mem.seen[p.id];
-    if (was && was !== p.st) {
-      if (p.st === 'done') {
-        const el = els.get(p.id);
-        el.classList.add('cheer');
-        setTimeout(() => el.classList.remove('cheer'), 2400);
-        setTimeout(() => say(p, 'thanks'), 500);
-      } else if (p.st === 'pending') setTimeout(() => say(p, 'pending'), 300);
+    let changed = null;
+    for (const q of p.tasks) {
+      const was = mem.seen[q.id];
+      if (was && was !== q.st && (q.st === 'done' || q.st === 'pending')) changed = q.st;
+      mem.seen[q.id] = q.st;
     }
-    mem.seen[p.id] = p.st;
+    if (changed === 'done') {
+      const el = els.get(p.id);
+      el.classList.add('cheer');
+      setTimeout(() => el.classList.remove('cheer'), 2400);
+      setTimeout(() => say(p, 'thanks'), 500);
+    } else if (changed === 'pending') setTimeout(() => say(p, 'pending'), 300);
   }
 }

@@ -3,7 +3,7 @@
 // at one canvas pixel per village pixel. The village is shown at 3 screen pixels per
 // village pixel on a tablet (2 on a phone), the same size as the buddies' pixels.
 
-const OUT = '#2a1838';
+export const OUT = '#2a1838';
 const EYE = '#1b1430';
 const BLUSH = '#ff8fab';
 
@@ -13,9 +13,9 @@ export function shade(hex, k) {
   const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255]; const t = k > 0 ? [255, 255, 255] : [27, 20, 48]; const a = Math.abs(k);
   return `#${c.map((v, i) => Math.round(v + (t[i] - v) * a).toString(16).padStart(2, '0')).join('')}`;
 }
-const hashXY = (i, j) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return h - Math.floor(h); };
+export const hashXY = (i, j) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return h - Math.floor(h); };
 
-function seeded(n) {
+export function seeded(n) {
   let s = n % 2147483647 || 7;
   return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
 }
@@ -133,6 +133,18 @@ const HEADS = {
     '..KAAaaaaaaAAK..',
     '...KKKKKKKKKK...',
   ],
+  // the shopkeeper, who sells buddy clothes at the market stall
+  badger: [
+    '..KK........KK..',
+    '.KAAKKKKKKKKAAK.',
+    '.KAAAAAssAAAAAK.',
+    '.KAAAAAssAAAAAK.',
+    '.KAaweAssAweaAK.',
+    '.KAaeeAssAeeaAK.',
+    '.KAbbaaNNaabbAK.',
+    '..KAaaaaaaaaAK..',
+    '...KKKKKKKKKK...',
+  ],
 };
 
 // colors for each kind; lid is what closed (happy) eyes are drawn over
@@ -145,9 +157,10 @@ const PALS = {
   hedgehog: { S: '#7a4a26', s: '#b07a47', A: '#f3d6a4', a: '#fff0d0', N: '#3b2314', C: '#7048e8', lid: 'A' },
   raccoon: { A: '#adb5bd', a: '#f1f3f5', D: '#495057', M: '#3d4249', N: '#1b1430', C: '#e03131', lid: 'M' },
   mouse: { A: '#ced4da', a: '#f1f3f5', i: '#ffadc6', N: '#ff6b9a', C: '#fcc419', lid: 'A' },
+  badger: { A: '#495057', a: '#f1f3f5', s: '#f8f9fa', N: '#1b1430', C: '#2b8a3e', lid: 'a' },
 };
 
-export const VILLAGER_KINDS = Object.keys(HEADS);
+export const VILLAGER_KINDS = Object.keys(HEADS).filter((k) => k !== 'badger');
 
 /** A villager's letter grid, and its size. */
 export function villagerGrid(kind) {
@@ -204,7 +217,7 @@ const GRASS_LIGHT = '#7bd66b';
 const DIRT = '#d9a86c';
 const DIRT_EDGE = '#a4743f';
 
-function painter(ctx) {
+export function painter(ctx) {
   const px = (x, y, c, w = 1, h = 1) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
   return px;
 }
@@ -348,13 +361,13 @@ export function well(px, X, Y) {
 }
 
 /** A picket fence along x from X for w pixels. */
-function fence(px, X, Y, w, c = '#c98a4b') {
+export function fence(px, X, Y, w, c = '#c98a4b') {
   px(X, Y + 3, OUT, w, 5); px(X, Y + 4, c, w, 1); px(X, Y + 6, shade(c, -0.25), w, 1);
   for (let x = 0; x < w; x += 5) { px(X + x, Y, OUT, 3, 10); px(X + x + 1, Y + 1, shade(c, 0.25), 1, 8); px(X + x + 1, Y - 1, OUT); }
 }
 
 /** A garden with rows of sprouts and a few carrots, w x h. */
-function garden(px, X, Y, w, h) {
+export function garden(px, X, Y, w, h) {
   px(X - 1, Y - 1, OUT, w + 2, h + 2); px(X, Y, '#7a4a26', w, h);
   for (let y = Y + 2; y < Y + h - 2; y += 7) {
     px(X + 1, y + 3, '#5c3317', w - 2, 2);
@@ -366,7 +379,7 @@ function garden(px, X, Y, w, h) {
 }
 
 /** A laundry line between two posts with clothes hung on it (shirts, socks). */
-function laundry(px, X, Y, w) {
+export function laundry(px, X, Y, w) {
   const post = (x) => { px(x, Y, OUT, 4, 26); px(x + 1, Y, '#a0612f', 2, 25); px(x - 2, Y, OUT, 8, 3); px(x - 1, Y + 1, '#c98a4b', 6, 1); px(x - 1, Y + 26, 'rgba(27,20,48,0.2)', 7, 2); };
   post(X); post(X + w - 4);
   for (let x = X + 3; x < X + w - 3; x += 1) px(x, Y + 3 + Math.round(Math.sin(((x - X) / (w - 6)) * Math.PI) * 3), '#495057');
@@ -387,28 +400,29 @@ function laundry(px, X, Y, w) {
 }
 
 /** A round plaza of cobblestones. */
-function plaza(px, cx, cy, r) {
+export function plaza(px, cx, cy, r, pal = {}) {
+  const A = pal.a || '#ced4da'; const B = pal.b || '#dee2e6'; const gap = pal.gap || '#adb5bd'; const rim = pal.rim || '#868e96';
   for (let y = -r - 1; y <= r + 1; y += 1) {
     for (let x = -r - 1; x <= r + 1; x += 1) {
       const d = Math.sqrt(x * x + y * y);
       if (d > r + 1) continue;
-      if (d > r) { px(cx + x, cy + y, '#868e96'); continue; }
+      if (d > r) { px(cx + x, cy + y, rim); continue; }
       // stones in rings, with dark gaps between them
       const ring = Math.floor(d / 5);
       const ang = Math.atan2(y, x);
       const seg = Math.floor(((ang + Math.PI) / (2 * Math.PI)) * (6 + ring * 6) + ring * 0.5);
       const gapR = d % 5 < 1;
       const gapA = Math.abs((((ang + Math.PI) / (2 * Math.PI)) * (6 + ring * 6) + ring * 0.5) - seg) < 0.08 * (1 + ring * 0.15);
-      let c = hashXY(ring, seg) < 0.5 ? '#ced4da' : '#dee2e6';
-      if (hashXY(ring * 3, seg * 7) > 0.85) c = '#c8bfa8';
-      if (gapR || gapA) c = '#adb5bd';
+      let c = hashXY(ring, seg) < 0.5 ? A : B;
+      if (hashXY(ring * 3, seg * 7) > 0.85) c = shade(A, -0.08);
+      if (gapR || gapA) c = gap;
       px(cx + x, cy + y, c);
     }
   }
 }
 
 /** A dirt path along the points, w wide, with a darker edge and a little grit. */
-function path(px, pts, w, rnd) {
+export function path(px, pts, w, rnd) {
   const dots = [];
   for (let i = 1; i < pts.length; i += 1) {
     const [x0, y0] = pts[i - 1]; const [x1, y1] = pts[i];
@@ -428,7 +442,7 @@ function path(px, pts, w, rnd) {
 }
 
 /** The river across the whole village, from y0 to y1, with grassy banks. Returns the water band. */
-function river(px, W, y0, y1, rnd) {
+export function river(px, W, y0, y1, rnd) {
   for (let x = 0; x < W; x += 1) {
     const wob = Math.round(Math.sin(x / 13) * 1.5 + Math.sin(x / 5.3) * 0.7);
     const top = y0 + wob; const bot = y1 + Math.round(Math.sin(x / 11 + 2) * 1.5);
@@ -452,7 +466,7 @@ function river(px, W, y0, y1, rnd) {
 }
 
 /** A wooden bridge across the river: planks, rails and posts. */
-function bridge(px, X, Y0, Y1, w) {
+export function bridge(px, X, Y0, Y1, w) {
   px(X - 3, Y0 - 2, 'rgba(27,20,48,0.25)', w + 8, Y1 - Y0 + 6);
   px(X - 1, Y0 - 2, OUT, w + 2, Y1 - Y0 + 4);
   for (let y = Y0 - 1; y < Y1 + 1; y += 1) {
@@ -469,7 +483,7 @@ function bridge(px, X, Y0, Y1, w) {
 }
 
 /** A signpost with a small board. */
-function signpost(px, X, Y) {
+export function signpost(px, X, Y) {
   px(X + 7, Y + 8, OUT, 4, 14); px(X + 8, Y + 8, '#7a4a26', 2, 13);
   px(X, Y, OUT, 18, 10); px(X + 1, Y + 1, '#d9a066', 16, 8); px(X + 1, Y + 1, '#ecc78f', 16, 1);
   px(X + 3, Y + 4, '#8b5a2b', 12, 1); px(X + 3, Y + 6, '#8b5a2b', 8, 1);
@@ -477,13 +491,13 @@ function signpost(px, X, Y) {
 }
 
 /** A music note sign over the music hall's door. */
-function noteSign(px, cx, y) {
+export function noteSign(px, cx, y) {
   px(cx - 9, y - 16, OUT, 18, 14); px(cx - 8, y - 15, '#fff3bf', 16, 12);
   px(cx - 1, y - 14, OUT, 2, 8); px(cx + 1, y - 14, OUT, 4, 2); px(cx - 4, y - 8, OUT, 4, 3);
 }
 
 /** A market stall with a striped awning and fruit. */
-function stall(px, X, Y) {
+export function stall(px, X, Y) {
   px(X + 2, Y + 30, 'rgba(27,20,48,0.2)', 40, 3);
   px(X + 2, Y + 8, OUT, 3, 22); px(X + 37, Y + 8, OUT, 3, 22);
   px(X, Y, OUT, 44, 11);
@@ -496,7 +510,7 @@ function stall(px, X, Y) {
 }
 
 /** A small flower: petals round a center. */
-function flower(px, x, y, c) {
+export function flower(px, x, y, c) {
   px(x, y + 2, '#2f9e44', 1, 2);
   px(x - 1, y, c); px(x + 1, y, c); px(x, y - 1, c); px(x, y + 1, c); px(x, y, '#fff3bf');
 }
@@ -506,23 +520,29 @@ function flower(px, x, y, c) {
 const oval = (Z, x, y) => { const dx = (x + 0.5 - (Z.x + Z.w / 2)) / (Z.w / 2); const dy = (y + 0.5 - (Z.y + Z.h / 2)) / (Z.h / 2); const d = dx * dx + dy * dy; return d <= 1 ? 1 - d : -1; };
 
 /** The village fishing pond: deep middle, a sandy lip, lily pads and reeds. */
-function pond(px, Z, rnd) {
+export function pond(px, Z, rnd, pal = {}) {
+  const lip = pal.lip || '#c9a46a'; const deep = pal.deep || '#1f6fc0'; const water = pal.water || '#2b8adf'; const light = pal.light || '#4dabf7'; const shine = pal.shine || '#a5d8ff';
   for (let y = Z.y - 3; y < Z.y + Z.h + 3; y += 1) {
     for (let x = Z.x - 3; x < Z.x + Z.w + 3; x += 1) {
       const big = { x: Z.x - 3, y: Z.y - 3, w: Z.w + 6, h: Z.h + 6 };
       if (oval(big, x, y) < 0) continue;
       const k = oval(Z, x, y);
-      if (k < 0) { px(x, y, oval({ x: Z.x - 2, y: Z.y - 2, w: Z.w + 4, h: Z.h + 4 }, x, y) < 0 ? OUT : '#c9a46a'); continue; }
-      let c = k > 0.55 ? '#1f6fc0' : k > 0.12 ? '#2b8adf' : '#4dabf7';
-      if (k > 0.12 && k < 0.2 && y < Z.y + Z.h / 2) c = '#74c0fc';
+      if (k < 0) { px(x, y, oval({ x: Z.x - 2, y: Z.y - 2, w: Z.w + 4, h: Z.h + 4 }, x, y) < 0 ? OUT : lip); continue; }
+      let c = k > 0.55 ? deep : k > 0.12 ? water : light;
+      if (k > 0.12 && k < 0.2 && y < Z.y + Z.h / 2) c = shade(light, 0.25);
       px(x, y, c);
     }
   }
-  for (let i = 0; i < 9; i += 1) { const x = Z.x + 12 + Math.floor(rnd() * (Z.w - 30)); const y = Z.y + 8 + Math.floor(rnd() * (Z.h - 16)); px(x, y, '#a5d8ff', 4 + Math.floor(rnd() * 4), 1); }
+  for (let i = 0; i < 9; i += 1) { const x = Z.x + 12 + Math.floor(rnd() * (Z.w - 30)); const y = Z.y + 8 + Math.floor(rnd() * (Z.h - 16)); px(x, y, shine, 4 + Math.floor(rnd() * 4), 1); }
+  if (pal.pads === false) {
+    // stones round the edge instead of lily pads
+    [[0.1, 0.2], [0.9, 0.3], [0.85, 0.85], [0.15, 0.9]].forEach(([fx, fy]) => { const x = Math.round(Z.x + fx * Z.w) - 2; const y = Math.round(Z.y + fy * Z.h) - 2; px(x - 1, y - 1, OUT, 6, 5); px(x, y, '#adb5bd', 4, 3); px(x, y, '#dee2e6', 3, 1); });
+    return;
+  }
   // lily pads, one with a flower
   [[0.2, 0.62], [0.72, 0.3], [0.8, 0.7]].forEach(([fx, fy], i) => {
     const x = Math.round(Z.x + fx * Z.w); const y = Math.round(Z.y + fy * Z.h);
-    px(x - 1, y - 1, OUT, 9, 5); px(x, y, '#2f9e44', 7, 3); px(x + 1, y, '#69db7c', 4, 1); px(x + 5, y, '#1f6fc0', 2, 1);
+    px(x - 1, y - 1, OUT, 9, 5); px(x, y, '#2f9e44', 7, 3); px(x + 1, y, '#69db7c', 4, 1); px(x + 5, y, deep, 2, 1);
     if (!i) { px(x + 2, y - 2, '#ff8fab', 3, 2); px(x + 3, y - 3, '#fff0f6'); }
   });
   // reeds at the ends
@@ -532,7 +552,7 @@ function pond(px, Z, rnd) {
 }
 
 /** A frozen pond for hockey: ice with snow round the edge, cracks, two little nets. */
-function frozen(px, Z) {
+export function frozen(px, Z) {
   for (let y = Z.y - 4; y < Z.y + Z.h + 4; y += 1) {
     for (let x = Z.x - 6; x < Z.x + Z.w + 6; x += 1) {
       const snow = oval({ x: Z.x - 6, y: Z.y - 4, w: Z.w + 12, h: Z.h + 8 }, x, y);
@@ -552,7 +572,7 @@ function frozen(px, Z) {
 }
 
 /** A worn clearing for soccer or football, with small goals or yellow goalposts. */
-function clearing(px, Z, kind) {
+export function clearing(px, Z, kind) {
   for (let y = Z.y - 2; y < Z.y + Z.h + 2; y += 1) {
     for (let x = Z.x - 2; x < Z.x + Z.w + 2; x += 1) {
       const k = oval({ x: Z.x - 2, y: Z.y - 2, w: Z.w + 4, h: Z.h + 4 }, x, y);
@@ -581,66 +601,8 @@ function clearing(px, Z, kind) {
 }
 
 /** The village green's areas (see GREEN in village.js): a pond or a play patch. */
-function greenArea(px, a, rnd) {
+export function greenArea(px, a, rnd) {
   if (a.kind === 'pond') pond(px, a, rnd);
   else if (a.kind === 'hockey') frozen(px, a);
   else clearing(px, a, a.kind);
-}
-
-/**
- * Paints the whole village onto a canvas, one canvas pixel per village pixel.
- * L is the layout from village.js: { W, H, home, cottages, river, paths, plazas, trees, ... }.
- */
-export function paintVillage(canvas, L, opts = {}) {
-  canvas.width = L.W;
-  canvas.height = L.H;
-  const ctx = canvas.getContext('2d');
-  const px = painter(ctx);
-  const rnd = seeded(1234);
-
-  // grass with tufts and speckles
-  px(0, 0, GRASS, L.W, L.H);
-  for (let i = 0; i < (L.W * L.H) / 70; i += 1) {
-    const x = Math.floor(rnd() * L.W); const y = Math.floor(rnd() * L.H);
-    px(x, y, GRASS_DARK, 3, 1); px(x + 1, y - 1, GRASS_DARK); px(x + 3, y - 1, GRASS_DARK);
-    px(x + 1, y - 2, GRASS_LIGHT); px(x + 3, y - 2, GRASS_LIGHT);
-  }
-  for (let i = 0; i < (L.W * L.H) / 25; i += 1) px(Math.floor(rnd() * L.W), Math.floor(rnd() * L.H), rnd() < 0.5 ? GRASS_DARK : GRASS_LIGHT);
-  // the deep forest round the edge is darker
-  const edge = (x, y) => Math.min(x, y, L.W - x, L.H - y);
-  for (let y = 0; y < L.H; y += 1) for (let x = 0; x < L.W; x += 1) if (edge(x, y) < 20) px(x, y, (x + y) % 2 ? '#2f7d32' : '#357f36');
-
-  // paths and plazas
-  L.paths.forEach((p) => path(px, p, 12, rnd));
-  L.plazas.forEach(([x, y, r]) => plaza(px, x, y, r));
-  river(px, L.W, L.river.y0, L.river.y1, rnd);
-  (opts.areas || []).forEach((a) => greenArea(px, a, rnd));
-  bridge(px, L.bridge.x, L.bridge.y0, L.bridge.y1, L.bridge.w);
-
-  // flowers on open grass, away from paths and buildings
-  const busy = (x, y) => L.blocked(x, y, 6) || L.onPath(x, y, 10) || (opts.areas || []).some((a) => x > a.x - 8 && x < a.x + a.w + 8 && y > a.y - 8 && y < a.y + a.h + 8);
-  const colors = ['#ff8fa3', '#ffd43b', '#ffffff', '#b197fc'];
-  for (let i = 0; i < (L.W * L.H) / 260; i += 1) {
-    const x = Math.floor(rnd() * L.W); const y = Math.floor(rnd() * L.H);
-    if (edge(x, y) < 26 || busy(x, y) || (y > L.river.y0 - 10 && y < L.river.y1 + 8)) continue;
-    flower(px, x, y, colors[i % colors.length]);
-  }
-  // little flower beds in clusters
-  L.flowerBeds.forEach(([bx, by]) => { for (let i = 0; i < 9; i += 1) flower(px, bx + (i % 3) * 5 + (Math.floor(i / 3) % 2) * 2, by + Math.floor(i / 3) * 4, colors[(i + bx) % colors.length]); });
-
-  // things that stand up, back to front
-  const things = [
-    ...L.gardens.map((g) => ({ y: g.y, draw: () => garden(px, g.x, g.y, g.w, g.h) })),
-    ...L.fences.map((f) => ({ y: f.y, draw: () => fence(px, f.x, f.y, f.w) })),
-    { y: L.home.y, draw: () => cottage(px, L.home.x, L.home.y, L.home.w, L.home.h, { roof: opts.homeRoof || '#e03131', shutter: '#4c6ef5' }) },
-    ...L.cottages.map((c) => ({ y: c.y, draw: () => cottage(px, c.x, c.y, c.w, c.h, { roof: c.roof, shutter: c.shutter, sign: c.sign === 'note' ? noteSign : null }) })),
-    { y: L.well.y, draw: () => well(px, L.well.x, L.well.y) },
-    ...L.stalls.map((s) => ({ y: s.y, draw: () => stall(px, s.x, s.y) })),
-    ...L.laundry.map((l) => ({ y: l.y, draw: () => laundry(px, l.x, l.y, l.w) })),
-    ...L.signs.map(([x, y]) => ({ y, draw: () => signpost(px, x, y) })),
-    ...L.bushes.map(([x, y, b]) => ({ y, draw: () => bush(px, x, y, b) })),
-    ...L.trees.map(([x, y]) => ({ y: y + 20, draw: () => bigTree(px, x, y) })),
-  ].sort((a, b) => a.y - b.y);
-  things.forEach((t) => t.draw());
-  return canvas;
 }
