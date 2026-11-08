@@ -242,6 +242,7 @@ export function villageHtml(v) {
           <canvas class="village-land" width="${L.W}" height="${L.H}" aria-hidden="true"></canvas>
           <canvas class="v-life" width="${L.W}" height="${L.H}" style="width:${L.W}px;height:${L.H}px" aria-hidden="true"></canvas>
           <div class="v-label home-label" style="left:${L.home.x + L.home.w / 2}px;top:${L.home.y + 10}px">${esc(v.kidName)}'s house</div>
+          <button class="v-home" style="left:${L.home.x}px;top:${L.home.y - 12}px;width:${L.home.w}px;height:${L.home.h + 12}px;z-index:${L.home.y + L.home.h - 2}" aria-label="Go into ${esc(v.kidName)}'s house"><span class="v-home-door" style="left:${L.home.w / 2}px">🚪</span></button>
           ${am ? `<div class="v-label period" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
           ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
           ${folk}${keeper}
@@ -456,6 +457,13 @@ export function standSpot(grid, x, y, fromX = 0) {
 const memory = new Map();
 const spriteCache = new Map();
 
+/** The buddy just came out of the kid's house: it stands outside the door. */
+export function cameOut(kidId, theme) {
+  const L = villageLayout(theme);
+  const key = `${kidId}|${L.id}`;
+  memory.set(key, { ...(memory.get(key) || { seen: {} }), x: L.start.x, y: L.start.y + 4, face: 1, cam: null });
+}
+
 function spriteUrl(kind, happy) {
   const key = `${kind}:${happy ? 1 : 0}`;
   if (!spriteCache.has(key)) spriteCache.set(key, drawVillager(document.createElement('canvas'), kind, happy));
@@ -474,6 +482,7 @@ function land(L, color, areas = []) {
  *   onTask(taskId, el): the kid says a quest is done (or wants to start it),
  *   onChest(el): the buddy reached the treasure,
  *   onShop(): the kid wants to go into the buddy shop,
+ *   onHome(): the buddy went in the door of the kid's house,
  *   onVisitor(el), onLandmark(el, layer), fishCatch(rod),
  *   sound(name): a little sound ('tap', 'talk'),
  * }
@@ -695,6 +704,11 @@ function mount(section, handlers) {
       sayShop();
     } else if (goal.chest) {
       handlers.onChest(chestEl);
+    } else if (goal.home) {
+      // in through the door (house.js takes it from here)
+      me.face = 1;
+      buddyEl.classList.add('going-in');
+      setTimeout(() => handlers.onHome?.(), 380);
     } else if (goal.visitor) {
       me.face = goal.x >= me.x ? 1 : -1;
       visitorTap(goal.visitor);
@@ -829,6 +843,7 @@ function mount(section, handlers) {
     const who = e.target.closest('.villager');
     if (who) { handlers.sound?.('tap'); goTalk(personById(who.dataset.vid)); return; }
     if (e.target.closest('.v-chest')) { goChest(); return; }
+    if (e.target.closest('.v-home')) { handlers.sound?.('tap'); walkTo(L.start.x, L.start.y, { home: true }); return; }
     if (!dialog.hidden) { closeDialog(); return; }
     const r = view.getBoundingClientRect();
     const x = (e.clientX - r.left) / S + cam.x;
