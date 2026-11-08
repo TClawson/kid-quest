@@ -12,7 +12,7 @@ import {
   freeGamesOn,
   SATURDAY_GAMES,
   earlyGames,
-  logGame,
+  logGame, lendLeft, logLend,
   gamesPerDay,
   GAMES_PER_DAY,
   OLD_GAMES_PER_DAY,
@@ -3329,6 +3329,11 @@ actions.visitor = (el) => {
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
 const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
+// the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
+const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod' };
+const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod' };
+/** True when the kid would play with the visitor's gear: they don't own that kind. */
+const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
 const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).map((m) => m.move.id);
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
@@ -3362,14 +3367,21 @@ function gamesWith(kid, v, plan) {
   const area = plan.areas.find((a) => a.members.includes(v.id));
   // a visitor fishing at the village pond goes fishing with you
   const theirs = area && PLAY_KINDS.includes(area.kind) ? area.kind : area?.kind === 'pond' ? 'fishing' : visitGame(v);
-  return [...new Set([heldGame(kid) || heldRod(kid), theirs, 'tag'].filter(Boolean))];
+  // a visitor only lends their gear for a couple of games a day
+  const lent = borrows(kid, theirs) && lendLeft(kid, today(), GEAR_KEY[theirs]) === 0 ? null : theirs;
+  return [...new Set([heldGame(kid) || heldRod(kid), lent, 'tag'].filter(Boolean))];
 }
 
 function pickGame(kid, v, games) {
   const held = heldGame(kid) || heldRod(kid);
   const note = (k) => (k === 'tag' ? 'No gear needed' : k === held ? `With your ${GEAR_WORD[k]}` : `With ${esc(v.name)}'s ${GEAR_WORD[k]}`);
+  const lend = games.find((k) => k !== held && borrows(kid, k));
+  const invite = lend
+    ? `<p class="visitor-invite">${esc(v.name)}: "Do you want to play? I brought my ${GEAR_NAME[lend]}! I'll share with you for a couple of games so you can try it!"</p>`
+    : '';
   openModal(`
     <h2>Play with ${esc(v.name)}</h2>
+    ${invite}
     <div class="game-pick">
       ${games.map((k) => `<button class="btn" data-action="play-pick" data-kind="${k}" data-id="${esc(v.id)}" data-host="${esc(kid.id)}">${GAME_NAMES[k]}<small>${note(k)}</small></button>`).join('')}
     </div>
@@ -3444,6 +3456,7 @@ function playWith(kid, v, kind) {
     sounds,
     gamesLeft: () => playableFor(kid),
     onStart: () => {
+      if (borrows(kid, kind)) kid.lendLog = logLend(kid, today(), GEAR_KEY[kind]);
       kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
       save();
     },
