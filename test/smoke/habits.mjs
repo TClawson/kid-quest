@@ -155,7 +155,10 @@ try {
     assert.ok(coinsAfter >= coinsBefore + 15, `${coinsBefore} -> ${coinsAfter}`);
 
     // 5. the family party: Ben is done and Ava has one left (over 85%), so opening the map starts it
-    const party = family({ avaToday: -1, benToday: 99 });
+    // (weekends have fewer chores: when one left would drop below 85%, Ava finishes too)
+    const probe = family();
+    const n = (k) => questTasks(tasksForDay(probe, probe.kids[k], today, today)).length;
+    const party = family({ avaToday: (n(0) - 1 + n(1)) / (n(0) + n(1)) >= 0.85 ? -1 : 99, benToday: 99 });
     party.kids[0].seenMastered = party.kids[0].tasks.map((t) => t.id);
     party.kids[0].lookbackSeen = s2.kids[0].lookbackSeen;
     await open(page, party);
@@ -205,7 +208,10 @@ try {
     const dir = join(shots, 'video');
     const ctx = await browser.newContext({ viewport: { width: 600, height: 900 }, recordVideo: { dir, size: { width: 600, height: 900 } } });
     const page = await ctx.newPage();
-    const party = family({ avaToday: -1, benToday: 99 });
+    // (weekends have fewer chores: when one left would drop below 85%, Ava finishes too)
+    const probe = family();
+    const n = (k) => questTasks(tasksForDay(probe, probe.kids[k], today, today)).length;
+    const party = family({ avaToday: (n(0) - 1 + n(1)) / (n(0) + n(1)) >= 0.85 ? -1 : 99, benToday: 99 });
     party.kids[0].seenMastered = party.kids[0].tasks.map((t) => t.id);
     party.kids[0].lookbackSeen = weekStart(today);
     await open(page, party);

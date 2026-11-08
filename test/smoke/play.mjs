@@ -35,7 +35,8 @@ async function open(device, done, played = 0, held = null, tweak = null) {
   const tasks = defaultTasks();
   s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: ['sport-shoes-regular'], buddy: { species: 'fox', outfit: { background: 'bg-meadow', hat: 'hat-cap' } } });
   // Saturday's free games would change every count below, so use them up first
-  if (played || freeGamesOn(dateKey())) s.kids[0].playLog = { day: dateKey(), n: played + freeGamesOn(dateKey()) };
+  // and yesterday's (on a Sunday they would carry over), so the counts are the same any day
+  s.kids[0].playLog = { day: dateKey(), n: played + freeGamesOn(dateKey()), prev: { day: dateKey(new Date(Date.now() - 86400000)), n: 99, cap: 4 } };
   if (held) { s.kids[0].owned.push(held); s.kids[0].buddy.outfit.sport = held; }
   if (tweak) tweak(s, tasks);
   seenSaturday(s);
@@ -76,7 +77,7 @@ try {
     const y = dateKey(new Date(Date.now() - 86400000));
     const tweak = (s, tasks) => {
       s.kids[0].startDate = y;
-      s.kids[0].playLog = { day: y, n: 4, cap: 4 };
+      s.kids[0].playLog = { day: y, n: 4 + freeGamesOn(y), cap: 4 }; // a Saturday's free games were played
       s.log[y] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false, chest: { tier: 'wood', kind: 'games', games: 2 } } };
     };
     const { page, ctx, errors } = await open(devices['Galaxy Tab S4'], false, 0, null, tweak);
