@@ -65,3 +65,17 @@ test('a pose stays in whole pixels', () => {
   const pose = b.pose(1, 1 / 12, { beat: { index: 3, phase: 0.3 } });
   assert.deepEqual(render(rig, pose, 0), render(rig, pose, 0));
 });
+
+test('the dino tail stays joined to its body as it wags', () => {
+  const rig = buildRig({ species: 'dino', outfit: {} }, { background: false });
+  const t = rig.tail;
+  // the tail's first column, where it meets the body, never moves
+  const u0 = t.c[0].findIndex((_, u) => t.c.some((r) => r[u]));
+  const join = (buf) => t.c.map((_, v) => buf[(t.y + v) * 24 + t.x + u0]);
+  const b = new Brain(5);
+  const rest = join(render(rig, { ...b.pose(0, 1 / 12), tail: { rot: 0 }, fx: [] }));
+  for (const rot of [-70, -40, -20, -8, 8, 20, 40, 70]) {
+    const pose = { ...b.pose(0, 1 / 12), tail: { rot }, fx: [] };
+    assert.deepEqual(join(render(rig, pose)), rest, `tail turned ${rot}: comes loose`);
+  }
+});
