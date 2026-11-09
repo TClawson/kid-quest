@@ -331,6 +331,25 @@ label { color: var(--ink); }
 .buddy-svg .flame-1 { animation: px-flame-b 0.3s steps(1, end) infinite; }
 @keyframes px-flame-a { 0% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes px-flame-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+/* the magic wand: once every chore is done the glow breathes, the star twinkles,
+   and every few seconds a burst of colored sparks flies out (four frames) */
+.buddy-svg .wand-full .wand-glow { animation: wand-breathe 1.6s ease-in-out infinite; }
+.buddy-svg .wand-tip-0 { animation: px-flame-a 0.5s steps(1, end) infinite; }
+.buddy-svg .wand-tip-1 { animation: px-flame-b 0.5s steps(1, end) infinite; }
+.buddy-svg .wand-spark { opacity: 0; animation: 3.4s steps(1, end) infinite; }
+.buddy-svg .wand-spark-0 { animation-name: wand-spark-0; }
+.buddy-svg .wand-spark-1 { animation-name: wand-spark-1; }
+.buddy-svg .wand-spark-2 { animation-name: wand-spark-2; }
+.buddy-svg .wand-spark-3 { animation-name: wand-spark-3; }
+@keyframes wand-breathe { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+@keyframes wand-spark-0 { 0%, 76% { opacity: 0; } 76.01%, 81% { opacity: 1; } 81.01%, 100% { opacity: 0; } }
+@keyframes wand-spark-1 { 0%, 81% { opacity: 0; } 81.01%, 86% { opacity: 1; } 86.01%, 100% { opacity: 0; } }
+@keyframes wand-spark-2 { 0%, 86% { opacity: 0; } 86.01%, 91% { opacity: 1; } 91.01%, 100% { opacity: 0; } }
+@keyframes wand-spark-3 { 0%, 91% { opacity: 0; } 91.01%, 96% { opacity: 1; } 96.01%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .buddy-svg .wand-full .wand-glow, .buddy-svg .wand-tip-0, .buddy-svg .wand-tip-1 { animation: none; }
+  .buddy-svg .wand-tip-1 { opacity: 0; }
+}
 .item .piano-need { font-weight: 700; color: var(--kid, var(--brand)); }
 
 /* coins and the shop */

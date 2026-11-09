@@ -17,6 +17,7 @@ export const SLOTS = [
   { id: 'hat', name: 'Hats', icon: '🎩' },
   { id: 'face', name: 'Glasses', icon: '🕶️' },
   { id: 'neck', name: 'Extras', icon: '🎀' },
+  { id: 'hand', name: 'Magic', icon: '🪄' }, // held in a paw: the magic wand
   { id: 'music', name: 'Music', icon: '🎹' },
   { id: 'sport', name: 'Sports', icon: '⚽' },
   { id: 'home', name: 'Home', icon: '🏠' }, // furniture for the buddy's house (furniture.js)
@@ -25,7 +26,7 @@ export const SLOTS = [
 // Slots the buddy wears. Bought items in these slots belong to one buddy: switching
 // to a new buddy means buying them again for it. Everything else (places, pianos)
 // belongs to the kid and works with every buddy. Earned prizes work with every buddy.
-export const WORN_SLOTS = ['hat', 'face', 'neck'];
+export const WORN_SLOTS = ['hat', 'face', 'neck', 'hand'];
 export const isWorn = (item) => WORN_SLOTS.includes(item?.slot);
 
 // need: { streak: n } uses the kid's BEST streak ever, so a broken streak never takes items away.
@@ -65,6 +66,13 @@ const BASE_ITEMS = [
   { id: 'neck-medal', slot: 'neck', name: 'Gold medal', need: { streak: 7 } },
   { id: 'neck-cape', slot: 'neck', name: 'Hero cape', need: { streak: 14 } },
   { id: 'neck-necklace', slot: 'neck', name: 'Gem necklace', price: 400 },
+
+  // The wizard set. The wand glows brighter with each of today's chores done, and
+  // sparks once they are all done (see wandPower and wandCells in avatar.js).
+  { id: 'hat-wizard-star', slot: 'hat', name: 'Starry wizard hat', price: 250 },
+  { id: 'face-beard', slot: 'face', name: 'Wizard beard', price: 150 },
+  { id: 'neck-robe', slot: 'neck', name: 'Wizard robe', price: 300 },
+  { id: 'hand-wand', slot: 'hand', name: 'Magic wand', price: 500, note: 'It glows brighter with every chore you finish today. Finish them all and it sparks!' },
 
   // Buddy specials: each is made for one kind of buddy and only sold to it.
   { id: 'hat-coonskin', slot: 'hat', name: 'Raccoon hat', price: 1000, species: 'fox' },
@@ -205,8 +213,9 @@ export function isUnlocked(item, progress) {
 /** Old level-based items a kid had already reached before the shop existed. They keep them free. */
 // Color versions came later, so they were never level items.
 // Buddy specials came later too.
-// Furniture came later too.
-export const LEGACY_LEVEL = (item) => (item.price && !item.base && !item.species && !item.home ? item.price / 20 : Infinity);
+// Furniture came later too, and so did the wizard set.
+const LATER = new Set(['hat-wizard-star', 'face-beard', 'neck-robe', 'hand-wand']);
+export const LEGACY_LEVEL = (item) => (item.price && !item.base && !item.species && !item.home && !LATER.has(item.id) ? item.price / 20 : Infinity);
 
 /** Whether a buddy of this species can have this item: buddy specials are for their own species only. */
 export const fitsSpecies = (item, species) => !item?.species || item.species === species;
@@ -235,6 +244,17 @@ export function needLabel(item) {
 export function newUnlocks(kid, progress) {
   const seen = new Set(kid.seenUnlocks || []);
   return ITEMS.filter((i) => i.need && isUnlocked(i, progress) && !seen.has(i.id)).map((i) => i.id);
+}
+
+/**
+ * How bright the magic wand glows: the share of today's chores done (or waiting for
+ * a parent's OK), from a day summary { done, total } (see todaySummary in logic.js).
+ * A day with nothing to do counts as all done; no summary (unknown) is 0.
+ */
+export function wandPower(summary) {
+  if (!summary) return 0;
+  if (!summary.total) return 1;
+  return Math.max(0, Math.min(1, summary.done / summary.total));
 }
 
 /** Map an old emoji avatar to a species, for kids created before buddies existed. */
