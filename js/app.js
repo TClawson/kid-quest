@@ -88,7 +88,8 @@ function save() {
     // just saved (a kid buys something, then right away buys something else on
     // top of the old data, and the first purchase is lost). The write we just
     // sent comes back as a fresh update that holds both, so drop the old one.
-    if (changed.length || removed.length) pendingRemote = null;
+    // Device settings never go to the family, so they send nothing back.
+    if ([...changed, ...removed].some((p) => p !== 'device')) pendingRemote = null;
   } catch {
     toast('Could not save. Is storage full?');
   }
@@ -800,7 +801,10 @@ function onTaskTap(id, anchor) {
 // also kept in this device's storage, so if Android closes the app in the
 // background, opening it again picks the timer back up.
 const RUN_KEY = 'kidquest.practiceRun';
-const timer = { running: false, interval: null, wakeLock: null, run: null };
+const timer = { running: false, interval: null, wakeLock: null, run: null, savedAt: 0 };
+// While the timer runs its seconds go to the family every 15 s, not every tick
+// (the count is rebuilt from timer.run anyway). Pausing or finishing saves now.
+const TIMER_SAVE_MS = 15000;
 
 function keepRun() {
   try {
@@ -842,7 +846,7 @@ function resumeTimer() {
 }
 
 function stopTimer(rerender = true) {
-  if (timer.run) syncTimer();
+  if (timer.run) syncTimer(true);
   timer.running = false;
   timer.run = null;
   keepRun();
@@ -854,7 +858,7 @@ function stopTimer(rerender = true) {
 }
 
 // Bring the saved seconds up to the clock. Returns true when the timer is done.
-function syncTimer() {
+function syncTimer(force = false) {
   const run = timer.run;
   const found = runTask();
   if (!found) return false;
@@ -865,17 +869,18 @@ function syncTimer() {
   const cur = { status: 'inprogress', ...(entry.tasks[task.id] || {}) };
   const sec = Math.max(cur.seconds || 0, runSeconds(run, now, total));
   let changed = sec !== cur.seconds || !entry.tasks[task.id];
+  let urgent = force || !entry.tasks[task.id] || sec >= total;
   if (run.awayFrom != null) {
     // count how much of the timer ran in another app, so a parent can see it
     const away = Math.max(0, sec - run.awayFrom);
-    if (away) { cur.away = (cur.away || 0) + away; changed = true; }
+    if (away) { cur.away = (cur.away || 0) + away; changed = true; urgent = true; }
     run.awayFrom = null;
     keepRun();
   }
   if (!changed) return sec >= total;
   cur.seconds = sec;
   entry.tasks[task.id] = cur;
-  save();
+  if (urgent || now - timer.savedAt >= TIMER_SAVE_MS) { timer.savedAt = now; save(); }
   return sec >= total;
 }
 
@@ -920,7 +925,7 @@ function leaveTimer() {
   if (!timer.running) return;
   const found = runTask();
   if (!found?.task.background) { stopTimer(); return; }
-  syncTimer();
+  syncTimer(true);
   timer.run.awayFrom = entryFor(state, found.kid.id, timer.run.day)?.tasks?.[found.task.id]?.seconds || 0;
   keepRun();
 }
@@ -940,7 +945,7 @@ function restoreTimer() {
   const found = runTask();
   if (!found || ui.view === 'setup') { timer.run = null; keepRun(); return; }
   if (run.day !== today()) { stopTimer(false); return; }
-  if (syncTimer()) {
+  if (syncTimer(true)) {
     // the time ran out while the app was closed
     setTimeout(() => finishTimer(found.kid, found.task), 300);
     return;
