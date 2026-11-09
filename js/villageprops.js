@@ -9,6 +9,7 @@ import {
 } from './villageart.js';
 import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrowB, mushroomsB, snailB } from './meadowart.js';
 import { paintOcean, anemoneB, helmetB, mermaidB, sunkboatB, bootB, urchinsB, seahorseB, seaventB } from './oceanart.js';
+import { paintVolcano, spaV, totemV, dodoV, crystalsV, campfireV, geyserV, dragonfruitV } from './volcanoart.js';
 import { paintCastle, dummyK, rackK, targetK, anvilK, houndK, cartK, bellK } from './castleart.js';
 import { paintSpace, roverB, solarB, satelliteB, telescopeB, cheeseB, robotB, greenhouseB, printsB } from './spaceart.js';
 import { paintSunset, hammockB, rowboatB, gullB, tidepoolB, driftwoodB, tikiB, coconutsB } from './sunsetart.js';
@@ -573,6 +574,14 @@ export const PROPS = {
   hound: { w: 26, h: 15, foot: [0, 4, 26, 10], base: 14, draw: (px, p) => houndK(px, p.x, p.y) },
   cart: { w: 38, h: 26, foot: [1, 10, 37, 15], base: 25, draw: (px, p) => cartK(px, p.x, p.y) },
   bell: { w: 20, h: 34, foot: [1, 26, 18, 8], base: 33, draw: (px, p) => bellK(px, p.x, p.y) },
+  // Volcano Island's whimsy (volcanoart.js)
+  spa: { w: 44, h: 28, foot: [2, 6, 40, 20], base: 26, draw: (px, p) => spaV(px, p.x, p.y) },
+  totem: { w: 14, h: 36, foot: [1, 28, 12, 7], base: 35, draw: (px, p) => totemV(px, p.x, p.y) },
+  dodo: { w: 16, h: 16, foot: [2, 10, 12, 5], base: 15, draw: (px, p) => dodoV(px, p.x, p.y) },
+  crystals: { w: 20, h: 18, foot: [2, 10, 16, 7], base: 17, draw: (px, p) => crystalsV(px, p.x, p.y) },
+  campfire: { w: 30, h: 22, foot: [3, 10, 24, 11], base: 20, draw: (px, p) => campfireV(px, p.x, p.y) },
+  geyser: { w: 20, h: 34, foot: [2, 26, 16, 7], base: 33, draw: (px, p) => geyserV(px, p.x, p.y) },
+  dragonfruit: { w: 24, h: 32, foot: [6, 24, 12, 7], base: 31, draw: (px, p) => dragonfruitV(px, p.x, p.y) },
 };
 
 // ---------- the ground ----------
@@ -781,6 +790,8 @@ export function paintVillage(canvas, L, opts = {}) {
   if (L.id === 'bg-space') return paintSpace(canvas, L, opts, { waterDepth, PROPS });
   // ...and so does the Castle (castleart.js)
   if (L.id === 'bg-castle') return paintCastle(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does Volcano Island (volcanoart.js)
+  if (L.id === 'bg-volcano') return paintVolcano(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');

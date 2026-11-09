@@ -20,6 +20,7 @@ import { WRECK } from './wreckart.js';
 import { GALLEON } from './galleonart.js';
 import { CAVE } from './caveart.js';
 import { GATE } from './gateart.js';
+import { STONE } from './stoneart.js';
 
 const W = 448;
 
@@ -308,20 +309,22 @@ export const VILLAGE_MAPS = {
       p('laundry', 180, 390, { w: 84 }),
       p('torch', 70, 120), p('torch', 120, 120), p('torch', 330, 350), p('torch', 400, 350),
       p('vent', 400, 290),
-      p('palm', 20, 360), p('palm', 280, 120), p('boulder', 250, 190, { c: '#3d3330' }), p('rock', 70, 480, { c: '#3d3330' }), p('palm', 200, 500),
+      p('palm', 280, 120), p('boulder', 250, 190, { c: '#3d3330' }), p('palm', 200, 500),
+      // island whimsy
+      p('spa', 262, 500), p('campfire', 334, 506), p('totem', 264, 52), p('dodo', 232, 140), p('crystals', 330, 236), p('geyser', 396, 186), p('dragonfruit', 144, 70),
     ],
     shop: { x: 52, y: 218 },
-    life: { goal: { x: 360, y: 54 }, tikiHomes: [[364, 128], [410, 170], [372, 222], [320, 236], [160, 318], [60, 420], [140, 470]] }, // the crater is 26 px above goal
+    life: { goal: { x: 360, y: 54 }, tikiHomes: [[364, 128], [410, 170], [372, 222], [350, 280], [160, 318], [290, 430], [380, 522]] }, // the crater is 26 px above goal
     green: {
       left: { x: 50, y: 312, w: 100, h: 44 }, right: { x: 220, y: 300, w: 120, h: 44 },
       idle: [{ x: 360, y: 250 }, { x: 410, y: 250 }, { x: 180, y: 300 }, { x: 370, y: 300 }],
     },
-    landmark: { x: 26, y: 400, stand: { x: 154, y: 494 } },
+    landmark: { x: 16, y: 384, w: STONE.w, h: STONE.h, art: 'stone', foot: [18, 106, 92, 42], stand: { x: 154, y: 494 } },
     chest: { x: 240, y: 486 },
     start: { x: 90, y: 130 },
     slots: {
       morning: [[150, 130], [40, 150], [260, 130], [120, 200], [200, 210], [90, 230], [250, 236], [20, 220]],
-      afternoon: [[300, 470, MUSIC], [220, 450, LAUNDRY], [200, 340], [80, 380], [300, 400], [420, 330], [110, 500], [420, 500]],
+      afternoon: [[300, 470, MUSIC], [220, 450, LAUNDRY], [200, 340], [86, 372], [300, 400], [420, 330], [186, 516], [420, 500]],
     },
     labels: { morning: [104, 256, '⬆ 🌅 Morning quests'], afternoon: [290, 262, '⬇ ☀️ After-school quests'] },
     pond: { lip: '#2b211d', water: '#ff6b1a', deep: '#e03131', light: '#ff922b', shine: '#ffe066', pads: false },
