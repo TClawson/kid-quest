@@ -172,6 +172,7 @@
 .v-landmark.art-galleon .v-lm-bubble { bottom: auto; top: 0; left: 42%; } /* the octopus talks from the open water over its head */
 .v-landmark.art-cave .v-lm-bubble { bottom: auto; top: 0; left: 24%; } /* the moon worm talks from over the crystals beside its head (in view on a phone too) */
 .v-landmark.art-gate .v-lm-bubble { bottom: auto; top: 0; left: 18%; } /* the baby dragon talks from the open sky over the left tower */
+.v-landmark.art-stone .v-lm-bubble { bottom: auto; top: 4px; left: 50%; } /* the stone face talks from over its mossy head */
 .v-lm-bubble { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); width: max-content; max-width: 80px; font: 700 5px/1.25 var(--px-text); background: #fff8e7; color: var(--px-ink); border: 1px solid var(--px-ink); border-radius: 2px; padding: 1.5px 2.5px; }
 .v-show { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
 .v-show canvas.map-land { display: none; }

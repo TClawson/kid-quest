@@ -88,9 +88,11 @@ try {
     await page.waitForSelector('.village .villager');
     await check('kid-village');
     // the piano's villager: walk over, then start the timer from what they say
+    // (weekdays only: the default piano task has no Saturday or Sunday). The piano's villager
+    // can be off screen, where a real click can't reach it, so the tap is sent to it directly.
     const piano = await page.$('.villager[aria-label*="Piano"]');
     if (piano) {
-      await piano.click({ force: true });
+      await piano.dispatchEvent('click');
       await page.waitForSelector('.v-dialog:not([hidden]) [data-v="do"]', { timeout: 15000 });
       await check('kid-village-talk');
       await page.click('.v-dialog [data-v="do"]');

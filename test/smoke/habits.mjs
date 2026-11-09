@@ -92,7 +92,9 @@ try {
     // 2. then last week, next to four weeks before
     await page.waitForSelector('.modal-card .lookback');
     const look = await page.textContent('.modal-card .lookback');
-    assert.match(look, /Make bed\s*7 of 7/);
+    // on a Monday, the missed yesterday was the last day of last week
+    const bedLastWeek = weekStart(addDays(today, -1)) < weekStart(today) ? 6 : 7;
+    assert.match(look, new RegExp(`Make bed\\s*${bedLastWeek} of 7`));
     assert.match(look, /4 weeks ago: [0-6] of 7/);
     await shot(page, `lookback-${tag}.png`);
 
