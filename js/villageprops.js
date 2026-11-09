@@ -9,6 +9,7 @@ import {
 } from './villageart.js';
 import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrowB, mushroomsB, snailB } from './meadowart.js';
 import { paintOcean, anemoneB, helmetB, mermaidB, sunkboatB, bootB, urchinsB, seahorseB, seaventB } from './oceanart.js';
+import { paintCastle, dummyK, rackK, targetK, anvilK, houndK, cartK, bellK } from './castleart.js';
 import { paintSpace, roverB, solarB, satelliteB, telescopeB, cheeseB, robotB, greenhouseB, printsB } from './spaceart.js';
 import { paintSunset, hammockB, rowboatB, gullB, tidepoolB, driftwoodB, tikiB, coconutsB } from './sunsetart.js';
 
@@ -564,6 +565,14 @@ export const PROPS = {
   robot: { w: 20, h: 24, foot: [4, 16, 12, 7], base: 23, draw: (px, p) => robotB(px, p.x, p.y) },
   greenhouse: { w: 36, h: 30, foot: [1, 14, 34, 15], base: 29, draw: (px, p) => greenhouseB(px, p.x, p.y) },
   prints: { w: 44, h: 14, foot: null, flat: true, draw: (px, p) => printsB(px, p.x, p.y) },
+  // the Castle's little things (castleart.js)
+  dummy: { w: 18, h: 30, foot: [5, 22, 9, 7], base: 29, draw: (px, p) => dummyK(px, p.x, p.y) },
+  rack: { w: 26, h: 22, foot: [0, 14, 26, 8], base: 21, draw: (px, p) => rackK(px, p.x, p.y) },
+  target: { w: 20, h: 26, foot: [2, 20, 16, 6], base: 25, draw: (px, p) => targetK(px, p.x, p.y) },
+  anvil: { w: 26, h: 20, foot: [3, 10, 20, 10], base: 19, draw: (px, p) => anvilK(px, p.x, p.y) },
+  hound: { w: 26, h: 15, foot: [0, 4, 26, 10], base: 14, draw: (px, p) => houndK(px, p.x, p.y) },
+  cart: { w: 38, h: 26, foot: [1, 10, 37, 15], base: 25, draw: (px, p) => cartK(px, p.x, p.y) },
+  bell: { w: 20, h: 34, foot: [1, 26, 18, 8], base: 33, draw: (px, p) => bellK(px, p.x, p.y) },
 };
 
 // ---------- the ground ----------
@@ -770,6 +779,8 @@ export function paintVillage(canvas, L, opts = {}) {
   if (L.id === 'bg-ocean') return paintOcean(canvas, L, opts, { waterDepth, PROPS });
   // ...and so does the Moon Base (spaceart.js)
   if (L.id === 'bg-space') return paintSpace(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does the Castle (castleart.js)
+  if (L.id === 'bg-castle') return paintCastle(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');

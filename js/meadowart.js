@@ -27,7 +27,7 @@ export const PB = {
 };
 const G = PB.grass; const Dt = PB.dirt; const T = PB.thatch; const WS = PB.wash; const Wd = PB.wood; const LF = PB.leaf; const St = PB.stone; const Wa = PB.water; const INK = PB.ink;
 
-const FL = {
+export const FL = {
   pink: ['#c0487a', '#f58cb0', '#ffd2e2'], rose: ['#a8304a', '#e0546a', '#ff9a9a'], yellow: ['#d08a1a', '#ffd23f', '#fff4a8'], white: ['#b8aed0', '#f6f2fa', '#ffffff'],
   blue: ['#3a5ec0', '#6ea0f0', '#c0dcff'], lilac: ['#6a4ab0', '#a07ee0', '#d8c4ff'], orange: ['#c0581e', '#f08c3a', '#ffc47a'],
 };
@@ -71,10 +71,10 @@ export function propB(px, X, Y, w, h, draw, o = {}) {
 // ---------- grass ----------
 
 const STROKES = [['.L', 'D.'], ['L.', '.D'], ['L', 'D'], ['..L', '.D.', 'D..'], ['L.L', '.D.'], ['.L.', 'D.D']];
-const tuft = (px, x, y, k) => grid(px, x, y, STROKES[k % STROKES.length], { D: G[2], L: G[4] });
+export const tuft = (px, x, y, k) => grid(px, x, y, STROKES[k % STROKES.length], { D: G[2], L: G[4] });
 
 /** A small flower: daisy, forget-me-nots, buttercup, dandelion puff or clover. */
-function flowerB(px, x, y, kind, col = 'white') {
+export function flowerB(px, x, y, kind, col = 'white') {
   const [d, m, l] = FL[col] || FL.white;
   if (kind === 'daisy') { px(x - 1, y, l); px(x + 1, y, m); px(x, y - 1, l); px(x, y + 1, d); px(x, y, '#ffcf3a'); px(x + 1, y + 1, G[2]); return; }
   if (kind === 'forget') { px(x, y, m); px(x + 1, y, d); px(x, y - 1, l); px(x + 2, y - 1, m); px(x + 2, y - 2, l); px(x + 1, y + 1, G[2]); return; }
@@ -89,7 +89,7 @@ function flowerB(px, x, y, kind, col = 'white') {
  * grass strokes, clover, and wildflowers in clumps of one kind. o.edge(x, y) gives the color
  * of the dark forest floor round the village (or null), where no flowers grow.
  */
-function grassB(px, W, H, seed, o = {}) {
+export function grassB(px, W, H, seed, o = {}) {
   const rnd = rng(seed);
   const edge = o.edge || (() => null);
   for (let y = 0; y < H; y += 1) {
@@ -141,7 +141,7 @@ function bbox(lines, pad) {
 }
 
 /** A pebble: no line on top, a warm dark line under it. */
-function pebbleB(px, x, y, k) {
+export function pebbleB(px, x, y, k) {
   const p = [['lm', 'md', 'ss'], ['.lm.', 'lmmd', '.ss.'], ['l', 's'], ['lmm', 'mmd', '.ss']][k % 4];
   grid(px, x, y, p, { l: St[5], m: St[4], d: St[2], s: Dt[1] });
 }
@@ -274,7 +274,7 @@ function plazaB(px, cx, cy, r, seed, onPath = () => false) {
 // ---------- water ----------
 
 /** A lily pad (7 x 4) with a notch, and a flower on some. */
-function lilyPad(px, x, y, flower, mirror) {
+export function lilyPad(px, x, y, flower, mirror) {
   for (let yy = 0; yy < 4; yy += 1) {
     for (let xx = 0; xx < 7; xx += 1) {
       if (!inEll(xx, yy, 3.5, 2, 3.6, 2.1)) continue;
@@ -289,7 +289,7 @@ function lilyPad(px, x, y, flower, mirror) {
 }
 
 /** A clump of reeds with cattails, standing on the ground at (x, y). */
-function reeds(px, x, y, seed) {
+export function reeds(px, x, y, seed) {
   const n = 3 + Math.floor(h2(x, y, seed) * 3);
   for (let i = 0; i < n; i += 1) {
     const bx = x + i * 2 - n + (i % 2); const hgt = 5 + Math.floor(h2(i, x, seed) * 6); const lean = i < n / 2 ? -1 : 1;
@@ -801,7 +801,7 @@ function cottageB(px, X, Y, w, h, o = {}) {
 // ---------- props ----------
 
 /** A rustic split-rail fence: crooked posts, two sagging rails with bark, a robin on a rail. */
-function railFenceB(px, X, Y, w, seed = 52) {
+export function railFenceB(px, X, Y, w, seed = 52) {
   const rnd = rng(seed);
   for (let x = 1; x < w; x += 1) px(X + x, Y + 14, 'rgba(59,34,53,0.16)');
   propB(px, X, Y, w, 15, (b) => {
@@ -882,7 +882,7 @@ export function wellB(px, X, Y, seed = 62) {
 }
 
 /** The vegetable garden, w x h: a raised bed of plank sides, rows of carrots, lettuces, cabbages and pumpkins, a watering can; a split-rail fence in front. */
-function gardenB(px, X, Y, w, h, seed = 91) {
+export function gardenB(px, X, Y, w, h, seed = 91) {
   groundShadow(px, X + w / 2 + 2, Y + h, w / 2 + 2, 2.5, 0.18);
   const soil = ['#5a3438', '#7a4a3e', '#94603e', '#aa7450', '#c48c60'];
   propB(px, X, Y, w, h, (b) => {
@@ -1142,7 +1142,7 @@ export function benchB(px, X, Y) {
 }
 
 /** A clump of wildflowers, 16 x 12 (flat): a leafy mound with flowers of a few kinds on top. */
-function flowersB(px, X, Y, seed) {
+export function flowersB(px, X, Y, seed) {
   groundShadow(px, X + 8, Y + 11, 8, 1.6, 0.14);
   for (let y = 4; y < 12; y += 1) {
     for (let x = 0; x < 16; x += 1) {
@@ -1207,7 +1207,7 @@ function treeSprite(pal, key, v) {
   }
   return treeSprites.get(id);
 }
-function treeB(px, p, L) {
+export function treeB(px, p, L) {
   const forest = p.x < 0 || p.x + 32 > L.W || p.y < 0 || p.y + 40 > L.H;
   const pals = forest ? TREE_PALS.forest : TREE_PALS.village;
   const k = Math.floor(h2(p.x, p.y, 5) * pals.length); const v = Math.floor(h2(p.y, p.x, 9) * 3);
@@ -1218,7 +1218,7 @@ function treeB(px, p, L) {
     [[8, 12], [14, 6], [22, 11], [18, 17], [10, 19], [25, 18], [5, 15]].forEach(([x, y], i) => { if (h2(i, p.x, 3) < 0.75) { px(p.x + x, p.y + y, fruit[0]); px(p.x + x, p.y + y - 1, fruit[1]); } });
   }
 }
-function bushB(px, x, y, berries) {
+export function bushB(px, x, y, berries) {
   restyle(px, x, y, 18, 13, (q) => bush(q, x, y, berries), BUSH_COLORS);
 }
 

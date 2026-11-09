@@ -19,6 +19,7 @@ import { OAK } from './oakart.js';
 import { WRECK } from './wreckart.js';
 import { GALLEON } from './galleonart.js';
 import { CAVE } from './caveart.js';
+import { GATE } from './gateart.js';
 
 const W = 448;
 
@@ -259,7 +260,9 @@ export const VILLAGE_MAPS = {
       p('laundry', 120, 476, { w: 80 }), p('banner', 140, 60, { c: '#7048e8' }), p('banner', 296, 60, { c: '#e64980' }),
       p('haybale', 260, 470), p('haybale', 40, 230), p('bush', 140, 200, { berries: true }), p('bush', 290, 200),
       p('tree', 396, 210), p('tree', 26, 120), p('tree', 390, 110), p('flowers', 260, 140), p('flowers', 170, 140),
-      p('garden', 30, 40, { w: 56, h: 30 }), p('tree', 380, 450), p('bush', 26, 460, { berries: true }), p('flowers', 300, 260),
+      p('garden', 30, 40, { w: 56, h: 30 }), p('bush', 26, 460, { berries: true }), p('flowers', 300, 260),
+      // castle whimsy (castleart.js)
+      p('dummy', 118, 34), p('target', 310, 34), p('rack', 36, 170), p('cart', 372, 160), p('anvil', 262, 298), p('hound', 176, 556),
     ],
     shop: { x: 142, y: 300 },
     life: { knightPost: { x: 370, y: 256, side: 1 } }, // where the knight keeps watch
@@ -267,12 +270,13 @@ export const VILLAGE_MAPS = {
       left: { x: 54, y: 400, w: 110, h: 44 }, right: { x: 284, y: 400, w: 110, h: 44 },
       idle: [{ x: 196, y: 410 }, { x: 252, y: 430 }, { x: 196, y: 446 }, { x: 252, y: 396 }],
     },
-    landmark: { x: 300, y: 524, stand: { x: 288, y: 626 } },
+    // the Dragon King's gatehouse (gateart.js); its foot is the towers and the gate, not the roofs and the dragon on top
+    landmark: { x: 272, y: 482, w: GATE.w, h: GATE.h, art: 'gate', foot: [4, 56, 148, 96], stand: { x: 260, y: 620 } },
     chest: { x: 224, y: 606 },
     start: { x: 224, y: 146 },
     slots: {
       morning: [[150, 156], [300, 156], [140, 210], [310, 210], [180, 196], [270, 196], [130, 110], [320, 110]],
-      afternoon: [[146, 590, MUSIC], [160, 520, LAUNDRY], [300, 330], [80, 470], [340, 480], [270, 520], [80, 400], [400, 400]],
+      afternoon: [[146, 590, MUSIC], [160, 520, LAUNDRY], [300, 330], [80, 470], [332, 470], [246, 540], [80, 400], [400, 400]],
     },
     labels: { morning: [224, 262, '⬆ 🌅 Morning quests in the castle'], afternoon: [224, 350, '⬇ ☀️ After-school quests in town'] },
     pond: {},
