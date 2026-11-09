@@ -12,6 +12,7 @@ import { paintOcean, anemoneB, helmetB, mermaidB, sunkboatB, bootB, urchinsB, se
 import { paintVolcano, spaV, totemV, dodoV, crystalsV, campfireV, geyserV, dragonfruitV } from './volcanoart.js';
 import { paintRainforest, dartfrogR, bromeliadR, orchidsR, mushlogR, antsR, maskR, morphoR } from './rainforestart.js';
 import { paintRainbow, gumdropsRB, campfireRB, cloudsheepRB, lamppostRB, snailRB, cupcakeRB, starnetRB } from './rainbowart.js';
+import { paintGalaxy, scopeGX, moongardenGX, starpupGX, cometvaneGX, planetswingGX, starjarGX, meteorGX } from './galaxyart.js';
 import { paintCastle, dummyK, rackK, targetK, anvilK, houndK, cartK, bellK } from './castleart.js';
 import { paintSpace, roverB, solarB, satelliteB, telescopeB, cheeseB, robotB, greenhouseB, printsB } from './spaceart.js';
 import { paintSunset, hammockB, rowboatB, gullB, tidepoolB, driftwoodB, tikiB, coconutsB } from './sunsetart.js';
@@ -600,6 +601,14 @@ export const PROPS = {
   rbsnail: { w: 22, h: 14, foot: [3, 8, 14, 5], base: 13, draw: (px, p) => snailRB(px, p.x, p.y) },
   cupcake: { w: 34, h: 32, foot: [2, 18, 30, 13], base: 31, draw: (px, p) => cupcakeRB(px, p.x, p.y) },
   starnet: { w: 22, h: 34, foot: [4, 28, 14, 5], base: 33, draw: (px, p) => starnetRB(px, p.x, p.y) },
+  // the Golden Galaxy's whimsy (galaxyart.js)
+  brassscope: { w: 22, h: 30, foot: [3, 24, 16, 5], base: 29, draw: (px, p) => scopeGX(px, p.x, p.y) },
+  moongarden: { w: 34, h: 18, foot: [2, 6, 30, 11], base: 17, draw: (px, p) => moongardenGX(px, p.x, p.y) },
+  starpup: { w: 26, h: 16, foot: [2, 6, 22, 9], base: 15, draw: (px, p) => starpupGX(px, p.x, p.y) },
+  cometvane: { w: 16, h: 40, foot: [5, 34, 6, 5], base: 39, draw: (px, p) => cometvaneGX(px, p.x, p.y) },
+  planetswing: { w: 30, h: 38, foot: [1, 30, 28, 7], base: 37, draw: (px, p) => planetswingGX(px, p.x, p.y) },
+  starjar: { w: 14, h: 20, foot: [1, 12, 12, 7], base: 19, draw: (px, p) => starjarGX(px, p.x, p.y) },
+  meteorpit: { w: 34, h: 24, foot: [2, 10, 30, 13], base: 23, draw: (px, p) => meteorGX(px, p.x, p.y) },
 };
 
 // ---------- the ground ----------
@@ -814,6 +823,8 @@ export function paintVillage(canvas, L, opts = {}) {
   if (L.id === 'bg-rainforest') return paintRainforest(canvas, L, opts, { waterDepth, PROPS });
   // ...and so does Rainbow Land (rainbowart.js)
   if (L.id === 'bg-rainbow') return paintRainbow(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does the Golden Galaxy (galaxyart.js)
+  if (L.id === 'bg-galaxy') return paintGalaxy(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');

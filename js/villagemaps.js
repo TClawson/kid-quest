@@ -23,6 +23,7 @@ import { GATE } from './gateart.js';
 import { STONE } from './stoneart.js';
 import { KAPOK } from './kapokart.js';
 import { GOLDPOT } from './goldpotart.js';
+import { STARWHALE } from './starwhaleart.js';
 
 const W = 448;
 
@@ -452,29 +453,32 @@ export const VILLAGE_MAPS = {
     ],
     water: [{ pts: [[470, 150], [330, 230], [224, 262], [110, 300], [-20, 350]], w: 30, kind: 'stars', colors: { bank: '#3a2878', edge: '#5f3dc4', deep: '#4527a0', water: '#7950f2', shine: '#ffffff' } }],
     crossings: [{ at: [224, 262], dir: 'v', kind: 'light' }],
-    paths: [[[370, 120], [370, 170], [224, 200], [224, 400], [100, 470]], [[224, 400], [348, 400], [348, 430]], [[224, 170], [82, 170], [82, 122]]],
-    plazas: [[100, 474, 24], [224, 190, 20]],
+    paths: [[[370, 120], [370, 170], [224, 200], [224, 462]], [[224, 400], [348, 400], [348, 430]], [[224, 170], [82, 170], [82, 122]], [[212, 486], [188, 534]]],
+    plazas: [[224, 474, 22], [224, 190, 20]],
     plazaStyle: { a: '#ffe066', b: '#fff3bf', gap: '#f59f00', rim: '#e67700' },
     props: [
       p('stall', 160, 60, { pal: { a: '#ffd43b', b: '#5f3dc4', wood: '#fab005', goods: [['#ffd43b', '#fff3bf'], ['#b197fc', '#e5dbff'], ['#63e6be', '#c3fae8']] } }),
-      p('laundry', 40, 380, { w: 84 }),
+      p('laundry', 28, 366, { w: 80 }),
       p('orb', 260, 80, { c: '#b197fc' }), p('orb', 390, 230, { c: '#63e6be' }), p('lamp', 150, 120, { c: '#ffd43b', post: '#fab005' }),
       p('lamp', 290, 360, { c: '#ffd43b', post: '#fab005' }), p('crystal', 30, 220, { c: '#ffe066', C: '#f59f00' }), p('crystal', 420, 330, { c: '#d0bfff', C: '#9775fa' }),
-      p('spire', 180, 310, { c: '#ffe066', C: '#f59f00' }), p('orb', 30, 500, { c: '#ffa94d' }), p('crystal', 420, 500, { c: '#ffe066', C: '#f59f00' }),
+      p('spire', 180, 310, { c: '#ffe066', C: '#f59f00' }), p('crystal', 420, 500, { c: '#ffe066', C: '#f59f00' }),
+      // whimsy: a brass telescope, a planet swing, a comet weather vane, a jar of stardust, a moon-rock garden, a sleepy star puppy, a meteor in its crater
+      p('brassscope', 244, 122), p('planetswing', 220, 50), p('cometvane', 134, 50), p('starjar', 300, 66),
+      p('moongarden', 332, 360), p('starpup', 132, 318), p('meteorpit', 28, 262),
     ],
     shop: { x: 182, y: 108 },
     green: {
       left: { x: 50, y: 200, w: 106, h: 44 }, right: { x: 274, y: 300, w: 120, h: 44 },
       idle: [{ x: 180, y: 216 }, { x: 250, y: 300 }, { x: 160, y: 244 }, { x: 250, y: 344 }],
     },
-    landmark: { x: 170, y: 452, stand: { x: 158, y: 520 } },
-    chest: { x: 100, y: 480 },
+    landmark: { x: 14, y: 392, w: STARWHALE.w, h: STARWHALE.h, art: 'starwhale', foot: [12, 100, 152, 36], stand: { x: 176, y: 536 } },
+    chest: { x: 224, y: 480 },
     start: { x: 370, y: 132 },
     slots: {
       morning: [[300, 140], [420, 150], [120, 150], [250, 210], [60, 160], [330, 190], [190, 240], [400, 190]],
-      afternoon: [[300, 520, MUSIC], [80, 420, LAUNDRY], [170, 380], [300, 390], [100, 330], [400, 400], [240, 500], [420, 470]],
+      afternoon: [[300, 520, MUSIC], [124, 386, LAUNDRY], [170, 380], [300, 390], [100, 330], [400, 400], [268, 446], [420, 470]],
     },
-    labels: { morning: [370, 196, '⬆ 🌅 Morning quests'], afternoon: [110, 360, '⬇ ☀️ After-school quests'] },
+    labels: { morning: [370, 196, '⬆ 🌅 Morning quests'], afternoon: [350, 268, '⬇ ☀️ After-school quests'] },
     pond: { lip: '#5f3dc4', water: '#7950f2', deep: '#5f3dc4', light: '#9775fa', shine: '#ffffff', pads: false },
     clearing: { fill: ['#5f3dc4', '#4527a0', '#7950f2'], grass: '#3a2878' },
   },

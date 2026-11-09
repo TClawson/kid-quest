@@ -24,9 +24,10 @@ import { GATE, startGate } from './gateart.js';
 import { STONE, startStone } from './stoneart.js';
 import { KAPOK, startKapok } from './kapokart.js';
 import { GOLDPOT, startGoldpot } from './goldpotart.js';
+import { STARWHALE, startStarwhale } from './starwhaleart.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
-const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot } };
+const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot }, starwhale: { size: STARWHALE, start: startStarwhale } };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
