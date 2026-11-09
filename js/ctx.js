@@ -12,9 +12,13 @@ export function setState(next) { state = next; }
 
 export let ui, $modal, today, esc, kidById, taskById, liveKey, dressed;
 export let save, render, viewKid, markDone, askParentNowOrLater;
+export let toast, actions, openModal, closeModal, confirmModal;
+export let cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY;
 
 /** app.js hands over its shared things, by name. */
 export function provide(parts) {
   ({ ui, $modal, today, esc, kidById, taskById, liveKey, dressed } = parts);
   ({ save, render, viewKid, markDone, askParentNowOrLater } = parts);
+  ({ toast, actions, openModal, closeModal, confirmModal } = parts);
+  ({ cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY } = parts);
 }

@@ -16,6 +16,7 @@ const SHELL = [
   'js/app.js',
   'js/ctx.js',
   'js/timer-ui.js',
+  'js/sync-ui.js',
   'js/logic.js',
   'js/fx.js',
   'js/avatar.js',
