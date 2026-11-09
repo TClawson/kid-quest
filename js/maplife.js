@@ -769,11 +769,26 @@ function castleLife(m) {
   };
 }
 
-/** A unicorn wanders about; poke it and it gallops off for a couple of seconds. */
+// Little hearts and stars that puff out of Rainbow Land's chimneys: e is a soft edge, h/y the fill, H/Y a shine.
+const PUFF_HEART = ['.ee.ee.', 'eHhehhe', 'ehhhhhe', '.ehhhe.', '..ehe..', '...e...'];
+const PUFF_STAR = ['...e...', '..eYe..', 'eeeyeee', 'eyyyyye', '.eyyye.', '.eyeye.', '.e...e.'];
+const PUFF_TINY = ['.h.', 'hHh', '.h.'];
+const PUFF_PALS = [
+  { e: '#e64980', h: '#ff8fb8', H: '#fff0f6' },
+  { e: '#9c6ade', h: '#d0b4ff', H: '#f8f0ff' },
+  { e: '#e8890c', y: '#ffe066', Y: '#fffbe6' },
+];
+
+/**
+ * A unicorn wanders about; poke it and it gallops off for a couple of seconds. In a village that
+ * names its chimneys (m.chimneys), little hearts and stars puff up out of them now and then.
+ */
 function unicornLife(m) {
   const start = m.openSpot({ top: 40, bottom: Math.min(m.ah - 20, 140) }) || { x: m.aw / 2, y: 60 };
   const u = { x: start.x, y: start.y, tx: start.x, ty: start.y, dir: 1, run: 0, rest: 20 };
   const trail = [];
+  const puffs = [];
+  const chimneys = (m.chimneys || []).map(([x, y], i) => ({ x, y, next: Math.round(FPS * (0.6 + i * 0.9)), n: i }));
   const manes = ['#f783ac', '#b197fc', '#74c0fc', '#8ce99a', '#ffd43b'];
   const pick = (view) => m.openSpot(view) || { x: u.x, y: u.y };
   return {
@@ -806,8 +821,26 @@ function unicornLife(m) {
       }
       for (const p of trail) { p.life -= 1; p.y += 0.2; }
       while (trail.length && trail[0].life <= 0) trail.shift();
+      // a heart or a star puffs up out of a chimney, sways as it rises, and pops
+      for (const c of chimneys) {
+        c.next -= 1;
+        if (c.next > 0) continue;
+        c.n += 1;
+        const star = c.n % 3 === 2;
+        puffs.push({ x: c.x - 3, y: c.y - 7, t: 0, max: Math.round(FPS * rand(2.4, 3.2)), star, pal: PUFF_PALS[star ? 2 : c.n % 2], sway: rand(0, 6) });
+        c.next = Math.round(FPS * rand(1.6, 3));
+      }
+      for (const p of puffs) { p.t += 1; p.y -= 0.7; }
+      while (puffs.length && puffs[0].t >= puffs[0].max) puffs.shift();
     },
     draw(ctx, frame) {
+      for (const p of puffs) {
+        const x = p.x + Math.round(Math.sin((p.t + p.sway) / 5) * 2);
+        const left = p.max - p.t;
+        if (left <= 2) { ctx.fillStyle = p.pal.H || p.pal.Y; ctx.fillRect(Math.round(x) + 3, Math.round(p.y) + 3, 1, 1); continue; }
+        if (p.t < 5 || left < 7) { draw(ctx, x + 2, p.y + 2, PUFF_TINY, { h: p.pal.h || p.pal.y, H: p.pal.H || p.pal.Y }); continue; }
+        draw(ctx, x, p.y, p.star ? PUFF_STAR : PUFF_HEART, p.pal);
+      }
       for (const p of trail) {
         ctx.fillStyle = p.c;
         if (p.life > 8) { ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y), 3, 1); ctx.fillRect(Math.round(p.x), Math.round(p.y) - 1, 1, 3); } else ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);

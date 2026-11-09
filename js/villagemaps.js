@@ -22,6 +22,7 @@ import { CAVE } from './caveart.js';
 import { GATE } from './gateart.js';
 import { STONE } from './stoneart.js';
 import { KAPOK } from './kapokart.js';
+import { GOLDPOT } from './goldpotart.js';
 
 const W = 448;
 
@@ -409,25 +410,30 @@ export const VILLAGE_MAPS = {
     plazaStyle: { a: '#fff0f6', b: '#ffffff', gap: '#fcc2d7', rim: '#f783ac' },
     props: [
       p('stall', 280, 300, { pal: { a: '#ff8787', b: '#ffffff', wood: '#fcc2d7', goods: [['#ff6b6b', '#ffc9c9'], ['#845ef7', '#d0bfff'], ['#4dabf7', '#d0ebff'], ['#ffd43b', '#fff3bf']] } }),
-      p('laundry', 300, 400, { w: 76 }),
+      p('laundry', 238, 392, { w: 44 }),
       p('lollipop', 150, 60, { c: '#ff6b6b' }), p('lollipop', 290, 60, { c: '#845ef7' }), p('lollipop', 170, 410, { c: '#4dabf7' }),
-      p('mushroom', 30, 250, { c: '#ff6b6b' }), p('mushroom', 400, 250, { c: '#845ef7' }), p('cloud', 120, 380), p('cloud', 250, 420),
-      p('candytree', 30, 330, { pal: { G: '#ffd43b', g: '#ffec99', d: '#fab005', T: '#fff0f6' } }), p('mushroom', 160, 520, { c: '#4dabf7' }),
+      p('mushroom', 30, 250, { c: '#ff6b6b' }), p('mushroom', 400, 250, { c: '#845ef7' }), p('cloud', 120, 380),
+      p('candytree', 72, 352, { pal: { G: '#ffd43b', g: '#ffec99', d: '#fab005', T: '#fff0f6' } }), p('mushroom', 160, 520, { c: '#4dabf7' }),
       p('cloud', 330, 90, { c: '#fff0f6' }), p('cloud', 60, 80, { c: '#f3f0ff' }),
+      // whimsy (rainbowart.js): a gumdrop garden, a sprinkle-cupcake fountain, a star-catcher net, a lollipop lamp post,
+      // a marshmallow campfire, a sleeping cloud sheep and a rainbow snail
+      p('gumdrops', 88, 46), p('cupcake', 336, 44), p('starnet', 398, 44), p('lamppost', 234, 140),
+      p('mallowfire', 172, 372), p('cloudsheep', 150, 300), p('rbsnail', 360, 264),
     ],
     shop: { x: 302, y: 348 },
     green: {
       left: { x: 56, y: 208, w: 104, h: 40 }, right: { x: 290, y: 210, w: 104, h: 40 },
       idle: [{ x: 180, y: 250 }, { x: 268, y: 250 }, { x: 180, y: 220 }, { x: 268, y: 290 }],
     },
-    landmark: { x: 300, y: 448, stand: { x: 290, y: 522 } },
+    life: { chimneys: [[246, 16], [98, 106], [388, 106], [109, 396]] }, // where the hearts and stars puff from (rainbowart.js chimneyOf)
+    landmark: { x: 278, y: 396, w: GOLDPOT.w, h: GOLDPOT.h, art: 'goldpot', foot: [6, 100, 140, 44], stand: { x: 262, y: 528 } },
     chest: { x: 224, y: 506 },
     start: { x: 224, y: 136 },
     slots: {
       morning: [[150, 120], [300, 120], [80, 110], [370, 110], [150, 180], [300, 180], [40, 220], [410, 220]],
-      afternoon: [[150, 470, MUSIC], [340, 440, LAUNDRY], [150, 356], [400, 370], [60, 390], [260, 380], [110, 540], [350, 524]],
+      afternoon: [[150, 470, MUSIC], [260, 436, LAUNDRY], [150, 356], [400, 370], [60, 390], [260, 380], [110, 540], [190, 470]],
     },
-    labels: { morning: [224, 236, '⬆ 🌅 Morning quests'], afternoon: [110, 336, '⬇ ☀️ After-school quests'] },
+    labels: { morning: [224, 236, '⬆ 🌅 Morning quests'], afternoon: [98, 336, '⬇ ☀️ After-school quests'] },
     pond: { lip: '#ffffff', water: '#f783ac', deep: '#e64980', light: '#faa2c1', shine: '#fff0f6', pads: false },
     clearing: { fill: ['#fff9db', '#ffec99', '#ffffff'], grass: '#c3fae8' },
   },
