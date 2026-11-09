@@ -162,9 +162,11 @@ function scheduleStep(r, song, s, t) {
   const arp = song.arp;
   if (arp && barIndex >= (arp.from || 0)) {
     const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 1, 2];
+    // (a swung eighth is long or short, and its two notes share it evenly)
+    const half = (step * (1 + (i % 2 ? -1 : 1) * (song.swing || 0))) / 2;
     for (let k = 0; k < 2; k += 1) {
       const tone = tones[order[(i * 2 + k) % order.length]];
-      voice(r, arp.wave || 'square', hz(tone + ((arp.octave ?? 4) + 1) * 12), at + k * (step / 2), (step / 2) * 0.8, arp.vol ?? 0.07, arp.env);
+      voice(r, arp.wave || 'square', hz(tone + ((arp.octave ?? 4) + 1) * 12), at + k * half, half * 0.8, arp.vol ?? 0.07, arp.env);
     }
   }
 
