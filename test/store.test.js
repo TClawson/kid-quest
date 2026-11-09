@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, defaultTasks, newId } from '../js/logic.js';
-import { migrate, splitState, joinState, diffDocs, createStore, localBackend, STORAGE_KEY } from '../js/store.js';
+import { migrate, splitState, joinState, diffDocs, diffFields, nestFields, DELETE, createStore, localBackend, STORAGE_KEY } from '../js/store.js';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -131,4 +131,14 @@ test('migrate moves worn items a kid owned to their current buddy', () => {
   const s = migrate({ kids: [{ id: 'k', name: 'A', owned: ['hat-cap', 'bg-ocean'], buddy: { species: 'cat', outfit: { hat: 'hat-cap' } } }] });
   assert.deepEqual(s.kids[0].owned, ['bg-ocean']);
   assert.deepEqual(s.kids[0].buddyOwned, { cat: ['hat-cap'] });
+});
+
+test('nestFields turns field changes into one nested object for a merging set', () => {
+  const before = { entry: { tasks: { a: { status: 'done' }, b: { status: 'done' } }, note: 'x' } };
+  const after = { entry: { tasks: { a: { status: 'approved' } }, bonus: 5 } };
+  const nested = nestFields(diffFields(before, after));
+  assert.deepEqual(nested.entry.tasks.a, { status: 'approved' });
+  assert.equal(nested.entry.tasks.b, DELETE);
+  assert.equal(nested.entry.note, DELETE);
+  assert.equal(nested.entry.bonus, 5);
 });

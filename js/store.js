@@ -146,6 +146,19 @@ export function diffFields(before, after, depth = 3, prefix = []) {
   return out;
 }
 
+// Field changes from diffFields as one nested object, so they can be written
+// with a merging set (which also works when the document doesn't exist yet).
+// Removed fields keep the DELETE marker for the caller to turn into a delete.
+export function nestFields(fields) {
+  const out = {};
+  for (const [path, value] of fields) {
+    let at = out;
+    path.slice(0, -1).forEach((k) => { at = (at[k] ||= {}); });
+    at[path[path.length - 1]] = value;
+  }
+  return out;
+}
+
 // onSave(changes, before, after) runs after each successful save with the
 // changed document paths and the splitState views before and after, so a
 // cloud backend can write just those.

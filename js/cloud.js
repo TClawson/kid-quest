@@ -10,7 +10,7 @@
 //   joinCodes/{code}                { familyId, role, kidId?, expiresAt }
 
 import { firebaseConfig } from './firebase-config.js';
-import { splitState, joinState, diffFields, diffDocs, docAt, stableJson, DELETE } from './store.js';
+import { splitState, joinState, diffFields, nestFields, diffDocs, docAt, stableJson, DELETE } from './store.js';
 
 let fb = null;
 let auth = null;
@@ -278,6 +278,13 @@ export function stopSync() {
 // it, since an update can reach the server before the document exists.
 const creating = new Map(); // path -> pending creates
 
+// DELETE markers from nestFields become Firestore deletes.
+const withDeletes = (v) => {
+  if (v === DELETE) return fb.deleteField();
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return v;
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, withDeletes(x)]));
+};
+
 export function writeChanges(familyId, changes, before, after, onStatus = () => {}) {
   const ops = [];
   const created = [];
@@ -286,9 +293,20 @@ export function writeChanges(familyId, changes, before, after, onStatus = () => 
     const ref = refFor(familyId, path);
     const was = before ? docAt(before, path) : undefined;
     const now = clean(docAt(after, path));
-    if (was === undefined || (creating.get(path) && path !== 'family')) {
-      ops.push((b) => b.set(ref, now, path === 'family' ? { merge: true } : undefined));
-      if (was === undefined && path !== 'family') created.push(path);
+    if (was === undefined) {
+      // A new document here may already exist on the server: another device
+      // made it while this one was offline (a parent's bonus on today's day,
+      // say). Merge into it so neither device's fields are lost.
+      ops.push((b) => b.set(ref, now, { merge: true }));
+      if (path !== 'family') created.push(path);
+    } else if (creating.get(path) && path !== 'family') {
+      // Still waiting for the server to confirm this document: write just the
+      // changed fields, with a set so it works even if the create lands later.
+      const fields = diffFields(clean(was), now);
+      if (!fields.length) continue;
+      const data = withDeletes(nestFields(fields));
+      const mergeFields = fields.map(([p]) => new fb.FieldPath(...p));
+      ops.push((b) => b.set(ref, data, { mergeFields }));
     } else {
       const fields = diffFields(clean(was), now);
       if (!fields.length) continue;
@@ -318,7 +336,7 @@ export function writeChanges(familyId, changes, before, after, onStatus = () => 
         const again = fb.writeBatch(db);
         for (const path of changes.changed) {
           if (path === 'device') continue;
-          again.set(refFor(familyId, path), clean(docAt(after, path)), { merge: path === 'family' });
+          again.set(refFor(familyId, path), clean(docAt(after, path)), { merge: true });
         }
         return again.commit();
       })
