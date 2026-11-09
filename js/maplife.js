@@ -1122,6 +1122,61 @@ export function waterfallAt(band, wall, side) {
  * steals the monkey's banana (tap it to make it drop it), a rain shower sends everyone under the
  * jaguar's leaf, and now and then something comes over the waterfall.
  */
+/**
+ * The village's vines: thick twisted lianas slung across the jungle, leafy, with strands and the odd
+ * flower hanging from them and their shadow on the floor. Drawn once onto a canvas of their own.
+ */
+function lianas(aw, ah, vines, vineY) {
+  const c = document.createElement('canvas'); c.width = aw; c.height = ah;
+  const g = c.getContext('2d');
+  const px = (x, y, col) => { g.fillStyle = col; g.fillRect(x, y, 1, 1); };
+  const hash = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+  const LEAF = ['#1f5a2a', '#2f7a32', '#4fa83a', '#8fd45a'];
+  const leaf = (x, y, dir, k) => {
+    // a little pointed leaf, hanging down to one side
+    const pts = [[0, 0, 1], [dir, 0, 2], [0, 1, 1], [dir, 1, 2], [dir * 2, 1, 2], [dir, 2, 1], [dir * 2, 2, 1]];
+    for (const [dx, dy, i] of pts) px(x + dx, y + dy, LEAF[i + (k > 0.6 ? 1 : 0)]);
+    px(x + dir * 3, y + 3, LEAF[0]);
+  };
+  for (const v of vines) {
+    // its shadow on the floor, below and to the right
+    g.fillStyle = 'rgba(8,16,20,0.2)';
+    for (let x = 0; x < aw; x += 1) g.fillRect(x + 3, vineY(v, x) + 6, 1, 2);
+  }
+  for (const v of vines) {
+    for (let x = 0; x < aw; x += 1) {
+      const y = vineY(v, x);
+      // two strands twisted round each other
+      const seg = Math.floor((x + v) / 4) % 2;
+      px(x, y - 1, '#2a2a1a');
+      px(x, y, seg ? '#a08a48' : '#7a6830');
+      px(x, y + 1, seg ? '#5a4a22' : '#7a6830');
+      px(x, y + 2, '#22201a');
+      if ((x + v) % 4 === 0) { px(x, y, '#5a4a22'); px(x, y + 1, '#a08a48'); }
+    }
+    // leaves along it, and now and then a strand hanging down with leaves and a flower
+    for (let x = 2; x < aw - 4; x += 5 + Math.floor(hash(x, v) * 5)) {
+      const k = hash(v, x); const y = vineY(v, x);
+      if (k < 0.5) leaf(x, y + 2, k < 0.25 ? 1 : -1, hash(x, 3));
+      else leaf(x, y - 3, k < 0.75 ? 1 : -1, hash(x, 4));
+    }
+    for (let x = 20 + Math.floor(hash(v, 1) * 30); x < aw - 10; x += 34 + Math.floor(hash(x, v) * 40)) {
+      const len = 5 + Math.floor(hash(x, v + 1) * 12); const y0 = vineY(v, x) + 2;
+      for (let k = 0; k < len; k += 1) {
+        const sx = x + Math.round(Math.sin(k / 3 + x) * 0.7);
+        px(sx, y0 + k, k % 5 === 4 ? '#2f7a32' : '#5a6a2a');
+        if (k % 4 === 2) leaf(sx, y0 + k, k % 8 === 2 ? 1 : -1, hash(x, k));
+      }
+      if (hash(x, 9) > 0.55) {
+        const fc = hash(x, 10) > 0.5 ? ['#ff6a8a', '#ffd0dc'] : ['#ff9a3a', '#ffe08a'];
+        const fy = y0 + len;
+        px(x - 1, fy, fc[0]); px(x + 1, fy, fc[0]); px(x, fy + 1, fc[0]); px(x, fy - 1, fc[0]); px(x, fy, fc[1]);
+      }
+    }
+  }
+  return c;
+}
+
 function jungleLife(m) {
   let fall = m.falls;
   // vines to hang from, kept clear of the river and the waterfall
@@ -1387,8 +1442,11 @@ function jungleLife(m) {
       if (b && !b.landed) { b.vy += 0.3; b.y += b.vy; if (b.y >= b.ground) { b.y = b.ground; b.landed = true; } }
     },
     draw(ctx, frame) {
-      // vines across the map, with leaves
-      for (const v of vines) {
+      // vines across the map, with leaves (the village's are leafy lianas, drawn once)
+      if (m.vines) {
+        if (!s.lianas || s.lianas.width !== m.aw || s.lianas.height !== m.ah) s.lianas = lianas(m.aw, m.ah, vines, vineY);
+        ctx.drawImage(s.lianas, 0, 0, m.aw, m.ah);
+      } else for (const v of vines) {
         for (let x = 0; x < m.aw; x += 1) {
           const y = vineY(v, x);
           ctx.fillStyle = OUT; ctx.fillRect(x, y - 1, 1, 3);
