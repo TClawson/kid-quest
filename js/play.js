@@ -27,6 +27,7 @@
 import { buildRig, render, Brain, CALM } from './rig.js';
 import { ballCells, SPRITE_Y } from './avatar.js';
 import { clamp } from './pixelkit.js';
+import { addPop } from './meter.js';
 
 /**
  * Which game a visitor plays, from the gear they own ({ kind: best tier }): one of
@@ -277,10 +278,7 @@ export class Play {
 
   get bounds() { const c = this.camX || 0; return { x0: c + 12, x1: c + this.W - 12, y0: this.top + 22, y1: this.H - 4 }; }
 
-  pop(text, x, y, color = '#ffffff', big = false) {
-    this.pops.push({ text, x, y, at: this.t, color, big });
-    if (this.pops.length > 8) this.pops.shift();
-  }
+  pop(text, x, y, color, big) { addPop(this, text, x, y, color, big); }
 
   nearest(x, y) {
     const d = (p) => Math.hypot(p.x - x, (p.y - 10) - y);

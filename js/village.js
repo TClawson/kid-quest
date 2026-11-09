@@ -916,7 +916,7 @@ function mount(section, handlers) {
   const artStep = artEl && lm?.art ? LANDMARK_ART[lm.art].start(artEl, artEl.parentElement) : null;
   let last = performance.now();
   const tick = (now) => {
-    if (!section.isConnected) { mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face; return; }
+    if (!section.isConnected) { mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face; window.removeEventListener('resize', onResize); return; }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (me.path.length) {
@@ -938,7 +938,9 @@ function mount(section, handlers) {
     artStep?.(now);
     requestAnimationFrame(tick);
   };
-  window.addEventListener('resize', () => { measure(); }, { passive: true });
+  // removed with the screen (tick stops then too), so redraws don't pile up listeners
+  const onResize = () => { if (section.isConnected) measure(); else window.removeEventListener('resize', onResize); };
+  window.addEventListener('resize', onResize, { passive: true });
   startLife(section, L, data, people, {
     host: view,
     buddy: () => ({ x: me.x, y: me.y }),

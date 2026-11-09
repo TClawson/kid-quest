@@ -10,7 +10,7 @@
 //   joinCodes/{code}                { familyId, role, kidId?, expiresAt }
 
 import { firebaseConfig } from './firebase-config.js';
-import { splitState, joinState, diffFields, diffDocs, docAt, stableJson, DELETE } from './store.js';
+import { splitState, joinState, nestFields, planWrites, diffDocs, docAt, stableJson, DELETE } from './store.js';
 
 let fb = null;
 let auth = null;
@@ -148,6 +148,11 @@ export async function joinFamily(code, state) {
   const fid = c.familyId;
   let kidId = null;
   if (c.role === 'kid') {
+    // a code made for a kid already in the family must match this device's kid,
+    // or joining would upload this device's kid as a second copy
+    if (c.kidId && state.kids.length === 1 && state.kids[0].id !== c.kidId) {
+      throw Object.assign(new Error(`This code is for a kid who is already in the family, and this device's ${state.kids[0].name || 'kid'} is a different kid. Ask a parent for a code for a new kid instead.`), { code: 'which-kid' });
+    }
     if (state.kids.length === 1) kidId = state.kids[0].id;
     else if (!state.kids.length && c.kidId) kidId = c.kidId;
     else throw Object.assign(new Error('This device needs exactly one kid to join as a kid’s device.'), { code: 'which-kid' });
@@ -272,35 +277,35 @@ export function stopSync() {
 
 // Send what changed in one save. Works offline: Firestore keeps the writes on
 // the device and sends them when it is back online.
+// What to send is worked out by planWrites (js/store.js); this runs it.
 // Documents this device has just created and the server hasn't confirmed yet.
 // A change to one of them right away (a kid added, then their day summary
-// saved a moment later) writes the whole document again instead of updating
-// it, since an update can reach the server before the document exists.
+// saved a moment later) is sent as a set of just those fields instead of an
+// update, since an update can reach the server before the document exists.
 const creating = new Map(); // path -> pending creates
 
+// DELETE markers from nestFields become Firestore deletes.
+const withDeletes = (v) => {
+  if (v === DELETE) return fb.deleteField();
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return v;
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, withDeletes(x)]));
+};
+
 export function writeChanges(familyId, changes, before, after, onStatus = () => {}) {
-  const ops = [];
-  const created = [];
-  for (const path of changes.changed) {
-    if (path === 'device') continue;
-    const ref = refFor(familyId, path);
-    const was = before ? docAt(before, path) : undefined;
-    const now = clean(docAt(after, path));
-    if (was === undefined || (creating.get(path) && path !== 'family')) {
-      ops.push((b) => b.set(ref, now, path === 'family' ? { merge: true } : undefined));
-      if (was === undefined && path !== 'family') created.push(path);
-    } else {
-      const fields = diffFields(clean(was), now);
-      if (!fields.length) continue;
-      const args = fields.flatMap(([p, v]) => [new fb.FieldPath(...p), v === DELETE ? fb.deleteField() : v]);
-      ops.push((b) => b.update(ref, ...args));
+  const plan = planWrites(changes, before, after, new Set(creating.keys()));
+  const created = plan.filter((w) => w.op === 'merge' && w.path !== 'family').map((w) => w.path);
+  const ops = plan.map((w) => {
+    const ref = refFor(familyId, w.path);
+    if (w.op === 'merge') return (b) => b.set(ref, w.data, { merge: true });
+    if (w.op === 'delete') return (b) => b.delete(ref);
+    if (w.op === 'patch') {
+      const data = withDeletes(nestFields(w.fields));
+      const mergeFields = w.fields.map(([p]) => new fb.FieldPath(...p));
+      return (b) => b.set(ref, data, { mergeFields });
     }
-  }
-  for (const path of changes.removed) {
-    if (path === 'device' || path === 'family') continue;
-    const ref = refFor(familyId, path);
-    ops.push((b) => b.delete(ref));
-  }
+    const args = w.fields.flatMap(([p, v]) => [new fb.FieldPath(...p), v === DELETE ? fb.deleteField() : v]);
+    return (b) => b.update(ref, ...args);
+  });
   created.forEach((path) => creating.set(path, (creating.get(path) || 0) + 1));
   const done = () => created.forEach((path) => { const n = (creating.get(path) || 1) - 1; if (n > 0) creating.set(path, n); else creating.delete(path); });
   for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
@@ -318,7 +323,7 @@ export function writeChanges(familyId, changes, before, after, onStatus = () => 
         const again = fb.writeBatch(db);
         for (const path of changes.changed) {
           if (path === 'device') continue;
-          again.set(refFor(familyId, path), clean(docAt(after, path)), { merge: path === 'family' });
+          again.set(refFor(familyId, path), clean(docAt(after, path)), { merge: true });
         }
         return again.commit();
       })

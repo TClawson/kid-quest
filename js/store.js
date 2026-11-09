@@ -16,6 +16,12 @@ export const STORAGE_KEY = 'kidquest.v1';
 export const DEVICE_SETTINGS = ['sound', 'music', 'questView'];
 
 // Bring saved data from any older version up to the current shape.
+// Careful: what migrate changes is never written back to the family's cloud
+// copy (saves only send what changed after loading). So a migration must only
+// fill in missing fields with defaults. Moving data from one field to another
+// (like moveWornToBuddy) can lose it: a later save writes the field it moved
+// out of, but not the one it moved into. For a move, write a one-time repair
+// that runs after loading and then saves, like repairAllowanceStart.
 export function migrate(s) {
   const base = emptyState();
   const kids = (s.kids || []).map((k) => {
@@ -144,6 +150,50 @@ export function diffFields(before, after, depth = 3, prefix = []) {
     }
   }
   return out;
+}
+
+// Field changes from diffFields as one nested object, so they can be written
+// with a merging set (which also works when the document doesn't exist yet).
+// Removed fields keep the DELETE marker for the caller to turn into a delete.
+export function nestFields(fields) {
+  const out = {};
+  for (const [path, value] of fields) {
+    let at = out;
+    path.slice(0, -1).forEach((k) => { at = (at[k] ||= {}); });
+    at[path[path.length - 1]] = value;
+  }
+  return out;
+}
+
+// What to write to the cloud for one save, without touching Firebase (so it can
+// be tested): one step per changed document, in order.
+//   { path, op: 'merge', data }    a new document here: merge into whatever the
+//                                  server has (another device may have made it)
+//   { path, op: 'patch', fields }  a document this device is still creating:
+//                                  set just these fields (works before it exists)
+//   { path, op: 'update', fields } change just these fields
+//   { path, op: 'delete' }
+// fields are diffFields pairs. creating holds the paths still being created.
+// 'device' never leaves this device, and the family document is never deleted.
+export function planWrites(changes, before, after, creating = new Set()) {
+  const plan = [];
+  const json = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+  for (const path of changes.changed) {
+    if (path === 'device') continue;
+    const was = before ? docAt(before, path) : undefined;
+    const now = json(docAt(after, path));
+    if (was === undefined) {
+      plan.push({ path, op: 'merge', data: now });
+      continue;
+    }
+    const fields = diffFields(json(was), now);
+    if (!fields.length) continue;
+    plan.push({ path, op: creating.has(path) && path !== 'family' ? 'patch' : 'update', fields });
+  }
+  for (const path of changes.removed) {
+    if (path !== 'device' && path !== 'family') plan.push({ path, op: 'delete' });
+  }
+  return plan;
 }
 
 // onSave(changes, before, after) runs after each successful save with the

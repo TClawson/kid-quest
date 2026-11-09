@@ -30,6 +30,7 @@
 // release() for every finger that comes up.
 import { Player, rng, canvas, clamp, HAPPY } from './play.js';
 import { fishPic, baitArt, shade, mix } from './fishart.js';
+import { needle, drawMeter, addPop, ZONE_COLORS } from './meter.js';
 
 export { fishPic };
 
@@ -39,7 +40,6 @@ const hashXY = (i, j) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.545
 
 export const GAME_SECONDS = 90;
 const FEET = 7 + 16; // SPRITE_Y + 16, as in play.js
-const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
 const SWEEP = 0.8; // seconds for the cast needle to cross the meter
 const HOLD = 0.18; // a press longer than this is reeling, shorter is a twitch
 export const SNAG = { weed: 0.1, log: 0.5 };
@@ -791,7 +791,7 @@ export class Fishing {
   // phases: idle -> aim (needle swinging) -> air -> water -> (snag | fight) -> idle
   startCast(L) { if (L.state === 'idle') { L.state = 'aim'; L.meterAt = this.t; } }
 
-  meter(L) { const ph = ((this.t - L.meterAt) / SWEEP) % 2; return ph < 1 ? ph : 2 - ph; }
+  meter(L) { return needle(this.t - L.meterAt, SWEEP); }
 
   /** Red short, yellow medium, green far; a better rod widens green a little. */
   zoneOf(m, tier = this.rodTier) { const g = 0.82 - 0.04 * (tier - 1); return m < 0.45 ? 'red' : m < g ? 'yellow' : 'green'; }
@@ -972,7 +972,7 @@ export class Fishing {
 
   splash(x) { this.splashes = (this.splashes || []).concat({ x, at: this.t }); }
 
-  pop(text, x, y, color = '#ffffff', big = false) { this.pops.push({ text, x, y, color, big, at: this.t }); }
+  pop(text, x, y, color, big) { addPop(this, text, x, y, color, big, Infinity); }
 
   // ---------- the visitor fishes too ----------
   stepAI(dt) {
@@ -1174,10 +1174,7 @@ export class Fishing {
     if (L.state === 'aim') {
       const m = this.meter(L);
       const mx = (this.bankX + 4) * S; const my = (this.surface - 22) * S; const mw = u * 18; const mh = u * 1.6;
-      const steps = 100;
-      for (let i = 0; i < steps; i += 1) { ctx.fillStyle = ZONE_COLORS[this.zoneOf((i + 0.5) / steps)]; ctx.fillRect(mx + (i * mw) / steps, my, mw / steps + 0.5, mh); }
-      ctx.lineWidth = S * 0.6; ctx.strokeStyle = '#1b1430'; ctx.strokeRect(mx, my, mw, mh);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(mx + m * mw - S * 0.6, my - S, S * 1.2, mh + 2 * S);
+      drawMeter(ctx, (k) => this.zoneOf(k), m, mx, my, mw, mh, S);
       ctx.textAlign = 'left'; text('short', mx + u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'right'; text('far', mx + mw - u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'center';
     }
     // line tension while a fish is on
