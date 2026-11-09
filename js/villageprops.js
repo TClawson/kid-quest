@@ -11,6 +11,7 @@ import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrow
 import { paintOcean, anemoneB, helmetB, mermaidB, sunkboatB, bootB, urchinsB, seahorseB, seaventB } from './oceanart.js';
 import { paintVolcano, spaV, totemV, dodoV, crystalsV, campfireV, geyserV, dragonfruitV } from './volcanoart.js';
 import { paintRainforest, dartfrogR, bromeliadR, orchidsR, mushlogR, antsR, maskR, morphoR } from './rainforestart.js';
+import { paintRainbow, gumdropsRB, campfireRB, cloudsheepRB, lamppostRB, snailRB, cupcakeRB, starnetRB } from './rainbowart.js';
 import { paintCastle, dummyK, rackK, targetK, anvilK, houndK, cartK, bellK } from './castleart.js';
 import { paintSpace, roverB, solarB, satelliteB, telescopeB, cheeseB, robotB, greenhouseB, printsB } from './spaceart.js';
 import { paintSunset, hammockB, rowboatB, gullB, tidepoolB, driftwoodB, tikiB, coconutsB } from './sunsetart.js';
@@ -591,6 +592,14 @@ export const PROPS = {
   ants: { w: 44, h: 12, foot: null, flat: true, draw: (px, p) => antsR(px, p.x, p.y) },
   mask: { w: 14, h: 34, foot: [4, 28, 6, 6], base: 33, draw: (px, p) => maskR(px, p.x, p.y) },
   morpho: { w: 12, h: 10, foot: null, flat: true, draw: (px, p) => morphoR(px, p.x, p.y) },
+  // Rainbow Land's whimsy (rainbowart.js)
+  gumdrops: { w: 36, h: 20, foot: [2, 8, 32, 11], base: 19, draw: (px, p) => gumdropsRB(px, p.x, p.y) },
+  mallowfire: { w: 28, h: 22, foot: [4, 12, 20, 9], base: 21, draw: (px, p) => campfireRB(px, p.x, p.y) },
+  cloudsheep: { w: 24, h: 18, foot: [3, 9, 18, 8], base: 17, draw: (px, p) => cloudsheepRB(px, p.x, p.y) },
+  lamppost: { w: 12, h: 40, foot: [4, 34, 5, 5], base: 39, draw: (px, p) => lamppostRB(px, p.x, p.y) },
+  rbsnail: { w: 22, h: 14, foot: [3, 8, 14, 5], base: 13, draw: (px, p) => snailRB(px, p.x, p.y) },
+  cupcake: { w: 34, h: 32, foot: [2, 18, 30, 13], base: 31, draw: (px, p) => cupcakeRB(px, p.x, p.y) },
+  starnet: { w: 22, h: 34, foot: [4, 28, 14, 5], base: 33, draw: (px, p) => starnetRB(px, p.x, p.y) },
 };
 
 // ---------- the ground ----------
@@ -803,6 +812,8 @@ export function paintVillage(canvas, L, opts = {}) {
   if (L.id === 'bg-volcano') return paintVolcano(canvas, L, opts, { waterDepth, PROPS });
   // ...and so does the Rainforest (rainforestart.js)
   if (L.id === 'bg-rainforest') return paintRainforest(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does Rainbow Land (rainbowart.js)
+  if (L.id === 'bg-rainbow') return paintRainbow(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');

@@ -23,9 +23,10 @@ import { CAVE, startCave } from './caveart.js';
 import { GATE, startGate } from './gateart.js';
 import { STONE, startStone } from './stoneart.js';
 import { KAPOK, startKapok } from './kapokart.js';
+import { GOLDPOT, startGoldpot } from './goldpotart.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
-const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok } };
+const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot } };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -296,6 +297,7 @@ function startLife(section, L, data, people, cam) {
     pad: hints.pad,
     vines: hints.vines,
     tikiHomes: hints.tikiHomes,
+    chimneys: hints.chimneys,
     // a straight run between two open spots must not cross water (the lava) either
     canStand: (x, y) => !L.blocked(x, y, 2) && !L.inWater(x, y, 8),
     openSpot: ({ top, bottom }) => {
