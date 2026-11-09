@@ -14,6 +14,7 @@ export let ui, $modal, today, esc, kidById, taskById, liveKey, dressed;
 export let save, render, viewKid, markDone, askParentNowOrLater;
 export let toast, actions, openModal, closeModal, confirmModal;
 export let cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY;
+export let currentKid, buddyHtml, progressFor, mover, doMove;
 
 /** app.js hands over its shared things, by name. */
 export function provide(parts) {
@@ -21,4 +22,5 @@ export function provide(parts) {
   ({ save, render, viewKid, markDone, askParentNowOrLater } = parts);
   ({ toast, actions, openModal, closeModal, confirmModal } = parts);
   ({ cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY } = parts);
+  ({ currentKid, buddyHtml, progressFor, mover, doMove } = parts);
 }
