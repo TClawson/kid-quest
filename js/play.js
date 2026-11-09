@@ -141,10 +141,11 @@ export function cellsCanvas(cells) {
   return c;
 }
 
-/** A buddy's outfit for a game: held gear put down (the game draws the ball), running shoes on for tag. */
+/** A buddy's outfit for a game: held gear and the wand put down (the game draws the ball), running shoes on for tag. */
 export function playLook(buddy, gear, kind) {
   const outfit = { ...(buddy?.outfit || {}) };
   delete outfit.sport;
+  delete outfit.hand; // the wand is put down to play
   const version = (tier) => ['regular', 'good', 'super'][Math.max(0, Math.min(2, tier - 1))];
   if (kind === 'tag' && gear?.shoes) outfit.sport = `sport-shoes-${version(gear.shoes)}`;
   // hockey: everyone holds a stick (a borrowed regular one if they have none)

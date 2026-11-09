@@ -5,7 +5,7 @@
 // The look is "style A": parts move in whole pixels and turn only in big steps
 // (45 degrees for arms, 30 for ears and tails), and the pose changes 12 times a
 // second (see live.js), like a hand-drawn 16-bit sprite. No DOM here.
-import { speciesGrid, itemArt, backgroundCells, liveLook, OUT, SIZE, SPRITE_X, SPRITE_Y } from './avatar.js';
+import { speciesGrid, itemArt, backgroundCells, liveLook, wandCells, OUT, SIZE, SPRITE_X, SPRITE_Y } from './avatar.js';
 
 // ---------- letter grids to colors (the same 16-bit shading rule as avatar.js) ----------
 function resolve(rows, pal, shade = {}) {
@@ -165,7 +165,8 @@ export function buildRig(buddy, opts = {}) {
 
   return {
     species, heads, ears, body, footL, footR, tail, armL, armR,
-    hat: item(look.hat), face: item(look.face), neck: item(look.neck),
+    hat: item(look.hat), face: item(look.face), neck: item(look.neck), neckFront: item(look.neckFront),
+    wand: look.wand,
     music: look.music && { behind: scene(look.music.behind), front: scene(look.music.front), flames: look.music.flames.map(scene) },
     gear: look.gear && { ...scene(look.gear.c), kind: look.gear.kind, held: look.gear.held },
     bg: opts.background === false ? null : backgroundCells(look.background),
@@ -238,11 +239,22 @@ function darken(hex, t) {
   return '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - t)).toString(16).padStart(2, '0')).join('');
 }
 
+/** Paints a see-through color over another: solid where there is something under it, else '#rrggbbaa'. */
+function blend(under, c, a) {
+  if (a >= 1) return c;
+  if (!under) return c + Math.round(a * 255).toString(16).padStart(2, '0');
+  const u = under.slice(0, 7);
+  return '#' + [1, 3, 5].map((i) => Math.round(parseInt(u.slice(i, i + 2), 16) * (1 - a) + parseInt(c.slice(i, i + 2), 16) * a).toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Draws a pose. Returns 24 x 24 colors, row by row (null where nothing is drawn).
- * Parts move in whole pixels; arms turn in 45 degree steps, ears and tails in 30.
+ * A color can be '#rrggbbaa' where something see-through (the wand's glow) has
+ * nothing under it. Parts move in whole pixels; arms turn in 45 degree steps,
+ * ears and tails in 30. opts.wand: how much of today's chores are done (0 to 1),
+ * for the magic wand's glow.
  */
-export function render(rig, pose, frame = 0) {
+export function render(rig, pose, frame = 0, opts = {}) {
   const N = SIZE;
   const buf = new Array(N * N).fill(null);
   const draw = (p, m, c = p.c) => {
@@ -300,8 +312,18 @@ export function render(rig, pose, frame = 0) {
   });
   draw(head, headM, hb);
   if (rig.neck && !rig.neck.behind) draw(rig.neck, neckM);
+  if (rig.neckFront) draw(rig.neckFront, neckM);
   if (rig.face) draw(rig.face, headM);
   if (rig.hat) draw(rig.hat, headM);
+  if (rig.wand) {
+    // held at the side, moving with the body
+    const wx = q(neckM[4]); const wy = q(neckM[5]);
+    for (const { x, y, c, a } of wandCells(opts.wand, rig.wand.side, frame)) {
+      const X = x + wx; const Y = y + wy;
+      if (X < 0 || Y < 0 || X >= N || Y >= N) continue;
+      buf[Y * N + X] = blend(buf[Y * N + X], c, a);
+    }
+  }
   for (const [arm, a] of arms) if (showArm(a)) draw(arm, armM(arm, a));
   if (rig.gear && rig.gear.kind !== 'shoes') draw(rig.gear, rig.gear.held ? neckM : I);
   if (rig.music) {
