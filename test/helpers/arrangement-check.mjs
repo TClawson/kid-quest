@@ -10,13 +10,15 @@ const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 
 /** What each level allows. */
 export const RULES = {
+  // medium: about grade 3-4. The melody on top most of the time, eighth-note motion below.
   medium: {
-    rhChord: 2, lhChord: 3, // the most notes played together in a hand
-    rhSpan: 9, lhSpan: 12, // the widest stretch (semitones) of notes played together
-    shortest: 1, // the shortest note (eighths): no sixteenths
-    melody: 0.95, // the share of the melody's notes that must be there
-    exact: true, // the melody's own rhythm, as the right hand's top note, at one octave all through
+    rhChord: 4, lhChord: 4, // the most notes played together in a hand
+    rhSpan: 12, lhSpan: 12, // the widest stretch (semitones) of notes played together
+    shortest: 0.5, // the shortest note (eighths): sixteenths
+    melody: 0.8, // the share of the melody's notes that must be there
+    exact: false, // true: the melody's own rhythm, as the right hand's top note, at one octave all through
   },
+  // hard: about grade 4-5. The same limits; it must be busier than medium (see `lower`).
   hard: { rhChord: 4, lhChord: 4, rhSpan: 12, lhSpan: 12, shortest: 0.5, melody: 0.8, exact: false },
 };
 const RANGE = { rh: [53, 96], lh: [33, 64] }; // F3 to C7, A1 to E4
