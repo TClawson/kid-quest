@@ -11,12 +11,11 @@
 // One canvas pixel per village pixel, painted into one ImageData and shown with a single
 // putImageData. villageprops.js calls paintRainbow() for 'bg-rainbow' only.
 
-import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, pathField, pixelBuffer } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, pathField, pixelBuffer, clamp, line, roundRect } from './pixelkit.js';
 import { propB, groundShadow, laundryB } from './meadowart.js';
 import { sel, tg } from './castleart.js';
 
 const INK = '#3a2850';
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const RBW = {
   mint: ['#3e7e86', '#56a09c', '#76c0b0', '#96d8c2', '#b2ead2', '#cdf6e2', '#e6fdf2'], // base 4
   cloud: ['#6e5c9c', '#8c7cb8', '#ab9ed0', '#c9c0e4', '#e2ddf2', '#f3f0fb', '#ffffff'],
@@ -31,7 +30,6 @@ const BOW = ['#ff7a8e', '#ffab6a', '#ffdc5a', '#86dc92', '#68bcff', '#b292ff'].m
 // candy colors for cobbles, spots, gumdrops and sprinkles
 const CANDY = ['#ffb0c6', '#ffcf96', '#fff09a', '#b4eebe', '#a8d6ff', '#d2bcff'].map((c) => ramp(c, 2, 2));
 const TREE = [ramp('#f7a0c4', 3, 3), ramp('#b9a0ff', 3, 3), ramp('#86c6ff', 3, 3), ramp('#ffb4d8', 3, 3)];
-const line = (x0, y0, x1, y1, fn) => { const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5)); for (let i = 0; i <= n; i += 1) fn(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), i / n); };
 const edgeOf = (t, side) => {
   const k = String(t).split(':')[0];
   if (k === 'cloud') return side === 'bottom' ? CL[1] : side === 'right' ? CL[2] : CL[3];
@@ -295,11 +293,6 @@ function bridgeRB(px, c) {
 }
 
 // ---------- the green ----------
-
-function roundRect(Z, x, y, g = 0, rr = 10) {
-  const qx = Math.max(Z.x + rr - g, Math.min(Z.x + Z.w - rr + g, x + 0.5)); const qy = Math.max(Z.y + rr - g, Math.min(Z.y + Z.h - rr + g, y + 0.5));
-  return Math.hypot(x + 0.5 - qx, y + 0.5 - qy) <= rr;
-}
 
 /** A pink lemonade pond in a rim of sugar cubes, with floating marshmallows and a little rubber duck. */
 function lemonadePondRB(px, Z, seed) {

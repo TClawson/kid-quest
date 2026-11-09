@@ -133,8 +133,48 @@ export function grid(put, X, Y, rows, pal, tag) {
 
 // ---------- shapes ----------
 
+export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
 /** Is cell (x, y) inside an ellipse? Cells are tested at their centers. */
 export const inEll = (x, y, cx, cy, rx, ry) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1;
+
+/** Calls fn(x, y, t) for whole cells along a line, t going 0..1. */
+export const line = (x0, y0, x1, y1, fn) => { const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5)); for (let i = 0; i <= n; i += 1) fn(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), i / n); };
+
+/** An oval in a box: how far into it (x, y) is, 1 in the middle, 0 at the edge, negative outside. */
+export const oval = (Z, x, y) => { const dx = (x + 0.5 - (Z.x + Z.w / 2)) / (Z.w / 2); const dy = (y + 0.5 - (Z.y + Z.h / 2)) / (Z.h / 2); return 1 - (dx * dx + dy * dy); };
+/** A box grown by g on every side. */
+export const grow = (Z, g) => ({ x: Z.x - g, y: Z.y - g, w: Z.w + g * 2, h: Z.h + g * 2 });
+
+/** A rounded box test: inside a w x h box at (x0, y0) with corner radius r. */
+export const inRound = (x, y, x0, y0, w, h, r) => {
+  const cx = Math.max(x0 + r, Math.min(x0 + w - r, x + 0.5)); const cy = Math.max(y0 + r, Math.min(y0 + h - r, y + 0.5));
+  return (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= r * r;
+};
+/** Is (x, y) inside box Z with corners rounded by rr, grown by g? */
+export function roundRect(Z, x, y, g = 0, rr = 10) {
+  const qx = Math.max(Z.x + rr - g, Math.min(Z.x + Z.w - rr + g, x + 0.5)); const qy = Math.max(Z.y + rr - g, Math.min(Z.y + Z.h - rr + g, y + 0.5));
+  return Math.hypot(x + 0.5 - qx, y + 0.5 - qy) <= rr;
+}
+
+/** The whole-cell box [x, y, w, h] round some polylines of [x, y] points, padded by pad. */
+export function bbox(lines, pad) {
+  const xs = lines.flat().map((p) => p[0]); const ys = lines.flat().map((p) => p[1]);
+  const x0 = Math.floor(Math.min(...xs) - pad); const y0 = Math.floor(Math.min(...ys) - pad);
+  return [x0, y0, Math.ceil(Math.max(...xs) + pad) - x0, Math.ceil(Math.max(...ys) + pad) - y0];
+}
+
+const WIDTHS = [6, 5, 7, 6, 5, 7, 6, 5]; const CUM = WIDTHS.reduce((a, w) => [...a, a[a.length - 1] + w], [0]); const SPAN = CUM[CUM.length - 1];
+/** The cobble a point is in: rows 4 high, stones 5 to 7 wide, each row shifted. */
+export function cobble(x, y, seed) {
+  const row = Math.floor(y / 4); const v = y - row * 4;
+  const s = Math.floor(h2(row, 1, seed) * SPAN);
+  const q = x + s; const rep = Math.floor(q / SPAN); const m = q - rep * SPAN;
+  let i = 0; while (CUM[i + 1] <= m) i += 1;
+  const w = WIDTHS[i]; const u = m - CUM[i];
+  const id = rep * 8 + i;
+  return { u, v, w, row, id, cx: x - u + w / 2, cy: row * 4 + 1.5, mortar: u === w - 1 || v === 3 };
+}
 
 /** Stones from seed points: for a cell, the nearest seed k, and gap (small on the joints between two stones). */
 export function stones(seeds, sx = 1, sy = 1) {

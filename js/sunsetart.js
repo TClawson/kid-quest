@@ -8,7 +8,7 @@
 // a single putImageData. villageprops.js calls paintSunset() for the sunset map; every other
 // map keeps its own painter.
 
-import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer, clamp, oval, grow, inRound } from './pixelkit.js';
 import { PB, propB, groundShadow, laundryB, stoneB, selective } from './meadowart.js';
 
 // ---------- the palette ----------
@@ -347,7 +347,6 @@ function palmSprite(lean, v) {
   palmSprites.set(id, cells);
   return cells;
 }
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function palmB(px, p) {
   const k = h2(p.x, p.y, 13);
   const lean = [-5, -3, 3, 5, 6][Math.floor(k * 5)];
@@ -770,9 +769,6 @@ export function coconutsB(px, X, Y) {
 
 // ---------- the green on the sand ----------
 
-const oval = (Z, x, y) => { const dx = (x + 0.5 - (Z.x + Z.w / 2)) / (Z.w / 2); const dy = (y + 0.5 - (Z.y + Z.h / 2)) / (Z.h / 2); return 1 - (dx * dx + dy * dy); };
-const grow = (Z, g) => ({ x: Z.x - g, y: Z.y - g, w: Z.w + g * 2, h: Z.h + g * 2 });
-
 /** The fishing pool on the green: a rock pool with a rim of stones, turquoise water, a starfish. */
 function poolB(px, Z, seed) {
   const mid = Z.y + Z.h / 2;
@@ -795,12 +791,6 @@ function poolB(px, Z, seed) {
   [[0.05, 0.6], [0.14, 0.88], [0.48, 1.04], [0.88, 0.2], [0.96, 0.62], [0.74, 1], [0.3, -0.04], [0.62, -0.02]].forEach(([fx, fy], i) => stoneB(px, Math.round(Z.x + fx * Z.w), Math.round(Z.y + fy * Z.h), 3.2 + (i % 3) * 0.7, 2.2 + (i % 2) * 0.5, i % 4 === 0, seed + i));
   grid(px, Math.round(Z.x + Z.w * 0.82), Math.round(Z.y + Z.h * 0.86), ['..o..', '.oOo.', 'oOOOo', '.o.o.'], { o: '#f07a5a', O: '#ffb08a' });
 }
-
-/** A rounded box test: inside a w x h box at (x0, y0) with corner radius r. */
-const inRound = (x, y, x0, y0, w, h, r) => {
-  const cx = Math.max(x0 + r, Math.min(x0 + w - r, x + 0.5)); const cy = Math.max(y0 + r, Math.min(y0 + h - r, y + 0.5));
-  return (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= r * r;
-};
 
 /** A goal of driftwood and old fishing net, w x h, its mouth facing dir (1: right, -1: left). */
 function netGoal(px, X, Y, w, h, dir, frame = DW) {

@@ -9,7 +9,7 @@
 // lantern flickers, the treasure glints, the crab snaps, the parrot bobs, and now and then a
 // small friendly ghost peeks out (tapped, it floats up and waves).
 
-import { mix, h2, vnoise, bayer, Buf, inEll, grid, pixelBuffer } from './pixelkit.js';
+import { mix, h2, vnoise, bayer, Buf, inEll, grid, pixelBuffer, clamp } from './pixelkit.js';
 
 export const WRECK = { w: 168, h: 116 };
 const W = WRECK.w; const H = WRECK.h;
@@ -26,8 +26,6 @@ const GHOST = ['#5ac8b0', '#8ae8d0', '#c8fff0', '#f4fffb'];
 const WARM = ['#7a3a3a', '#c86a3a', '#f0a848', '#ffd878', '#fff4c8'];
 const SEAWEED = ['#24503e', '#3a7448', '#5a9a52', '#86bc62'];
 const INK = '#2e1a2a';
-
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- the ship's shape ----------
 // The hull is drawn level ("ship" coordinates), then tipped: run aground, its bow rides up the

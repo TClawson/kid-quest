@@ -8,7 +8,7 @@
 // and then, and its tail wiggles. Tapped, it pops right out of its cave, opens its big eyes,
 // lights up its antennae and wiggles hello.
 
-import { mix, h2, vnoise, bayer, Buf, inEll, grid, pixelBuffer } from './pixelkit.js';
+import { mix, h2, vnoise, bayer, Buf, inEll, grid, pixelBuffer, clamp } from './pixelkit.js';
 import { SB } from './spaceart.js';
 
 export const CAVE = { w: 164, h: 108 };
@@ -16,7 +16,6 @@ const W = CAVE.w; const H = CAVE.h;
 
 const MG = SB.dust; const RK = SB.rock; const SKY = SB.sky; const INK = SB.ink;
 const WM = ['#3a2a6e', '#5a46a0', '#8a76d0', '#b4a2ec', '#d6c8fa', '#f0eaff']; // the moon worm, dark .. light
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- where things are (art pixels) ----------
 

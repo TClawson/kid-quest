@@ -11,13 +11,12 @@
 // The still parts are painted once into canvases; startStarwhale() redraws the moving parts about
 // ten times a second. village.js uses it for the landmark whose art is 'starwhale'.
 
-import { mix, h2, vnoise, bayer, Buf, grid, inEll, ramp, pixelBuffer } from './pixelkit.js';
+import { mix, h2, vnoise, bayer, Buf, grid, inEll, ramp, pixelBuffer, clamp } from './pixelkit.js';
 import { sel, tg } from './castleart.js';
 
 export const STARWHALE = { w: 168, h: 140 };
 const W = STARWHALE.w; const H = STARWHALE.h;
 const INK = '#140c2c';
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // the palettes
 const SKY = ['#0c0828', '#140e3a', '#1c144e', '#261c64', '#32267c', '#40329a', '#5a4cc0', '#8070e0', '#b0a4f4']; // the whale's sky

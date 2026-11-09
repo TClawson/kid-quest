@@ -11,7 +11,7 @@
 // The still parts are painted once into ImageData and canvases; startStone() redraws the moving
 // parts about ten times a second. village.js uses it for the landmark whose art is 'stone'.
 
-import { mix, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer } from './pixelkit.js';
+import { mix, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer, clamp } from './pixelkit.js';
 import { sel, tg } from './castleart.js';
 import { VB } from './volcanoart.js';
 
@@ -20,7 +20,6 @@ const W = STONE.w; const H = STONE.h;
 const STN = ['#2a2234', '#3e3244', '#564658', '#6e5e6e', '#887884', '#a4949c', '#c2b4b6', '#e0d4d0'];
 const R = VB.rock; const LV = VB.lava; const GL = VB.lawn; const J = VB.jungle; const BS = VB.bamboo;
 const Wd = ['#4a2a36', '#7a4436', '#a8663e', '#cc8a50', '#e8b674', '#f8dca0'];
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const HEAD = { cx: 62, cy: 63, rx: 28, ry: 43 }; // a rounded slab: top at 20, chin at 106
 const EYES = [[49, 57], [75, 57]];

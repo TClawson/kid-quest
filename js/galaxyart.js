@@ -12,12 +12,11 @@
 // One canvas pixel per village pixel, painted into one ImageData and shown with a single
 // putImageData. villageprops.js calls paintGalaxy() for 'bg-galaxy' only.
 
-import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, pathField, pixelBuffer } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, pathField, pixelBuffer, clamp, line, roundRect } from './pixelkit.js';
 import { propB, groundShadow, laundryB } from './meadowart.js';
 import { sel, tg } from './castleart.js';
 
 const INK = '#140c2c';
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const GXP = {
   night: ['#0e0924', '#150e34', '#1d1446', '#261b56', '#2f2366', '#3a2c78', '#47388c', '#5848a2'], // base 3
   gold: ['#5a2a10', '#8a4a14', '#c07a1c', '#e8a82a', '#fcc83c', '#ffe27a', '#fff6c8'],
@@ -29,7 +28,6 @@ const NEB = ['#c45ab4', '#7e52d6', '#3e8cc8'];
 const LIL = ramp('#b197fc', 3, 3);
 const CRYS = { gold: ramp('#ffd43b', 3, 3), lilac: LIL, teal: ramp('#63e6be', 3, 3), rose: ramp('#f783ac', 3, 3) };
 const crysOf = (c) => (!c ? CRYS.lilac : /ffe066|ffd43b|fcc419|ffa94d|f59f00/i.test(c) ? CRYS.gold : /63e6be|38d9a9/i.test(c) ? CRYS.teal : ramp(c, 3, 3));
-const line = (x0, y0, x1, y1, fn) => { const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5)); for (let i = 0; i <= n; i += 1) fn(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), i / n); };
 const edgeOf = (t, side) => {
   const k = String(t).split(':')[0];
   if (k === 'glow' || k === 'fx' || k === 'water' || k === 'net' || k === 'star') return null;
@@ -314,11 +312,6 @@ function bridgeGX(px, c) {
 }
 
 // ---------- the green ----------
-
-function roundRect(Z, x, y, g = 0, rr = 10) {
-  const qx = Math.max(Z.x + rr - g, Math.min(Z.x + Z.w - rr + g, x + 0.5)); const qy = Math.max(Z.y + rr - g, Math.min(Z.y + Z.h - rr + g, y + 0.5));
-  return Math.hypot(x + 0.5 - qx, y + 0.5 - qy) <= rr;
-}
 
 /** A nebula pool in a ring of golden moon stones: swirling rose, violet and blue, with stars in it. */
 function nebulaPoolGX(px, Z, seed) {

@@ -26,6 +26,7 @@
 // that the page scales up (draw); words go on a second, sharp canvas (drawHud).
 import { buildRig, render, Brain, CALM } from './rig.js';
 import { ballCells, SPRITE_Y } from './avatar.js';
+import { clamp } from './pixelkit.js';
 
 /**
  * Which game a visitor plays, from the gear they own ({ kind: best tier }): one of
@@ -120,7 +121,7 @@ export function rng(seed) {
   let s = (seed >>> 0) || 1;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
-export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export { clamp };
 const lerp = (a, b, k) => a + (b - a) * k;
 
 export function canvas(w, h) {

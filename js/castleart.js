@@ -7,7 +7,7 @@
 // One canvas pixel per village pixel, painted into one ImageData and shown with a single
 // putImageData. villageprops.js calls paintCastle() for 'bg-castle' only.
 
-import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pathField, pixelBuffer } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pathField, pixelBuffer, bbox, cobble } from './pixelkit.js';
 import { PB, propB, groundShadow, grassB, flowerB, treeB, bushB, gardenB, flowersB, lilyPad, reeds, laundryB, wellB, smokeB, stoneB, tuft } from './meadowart.js';
 
 export const CB = {
@@ -64,12 +64,6 @@ export function masonry(x, y, o = {}) {
   return k.id > 0.55 && k.id < 0.68 ? mix(c, '#c8a890', 0.18) : c;
 }
 
-function bbox(lines, pad) {
-  const xs = lines.flat().map((p) => p[0]); const ys = lines.flat().map((p) => p[1]);
-  const x0 = Math.floor(Math.min(...xs) - pad); const y0 = Math.floor(Math.min(...ys) - pad);
-  return [x0, y0, Math.ceil(Math.max(...xs) + pad) - x0, Math.ceil(Math.max(...ys) + pad) - y0];
-}
-
 // ---------- cobbles ----------
 
 const COB = [
@@ -78,17 +72,6 @@ const COB = [
   ['#685a4a', '#8c7c62', '#ac9c7e', '#c8ba98', '#e2d8b8'], // sandstone
 ];
 const MORTAR = '#6e5e68';
-const WIDTHS = [6, 5, 7, 6, 5, 7, 6, 5]; const CUM = WIDTHS.reduce((a, w) => [...a, a[a.length - 1] + w], [0]); const SPAN = CUM[CUM.length - 1];
-/** The cobble a point is in: rows 4 high, stones 5 to 7 wide, each row shifted. */
-function cobble(x, y, seed) {
-  const row = Math.floor(y / 4); const v = y - row * 4;
-  const s = Math.floor(h2(row, 1, seed) * SPAN);
-  const q = x + s; const rep = Math.floor(q / SPAN); const m = q - rep * SPAN;
-  let i = 0; while (CUM[i + 1] <= m) i += 1;
-  const w = WIDTHS[i]; const u = m - CUM[i];
-  const id = rep * 8 + i;
-  return { u, v, w, row, id, cx: x - u + w / 2, cy: row * 4 + 1.5, mortar: u === w - 1 || v === 3 };
-}
 function cobbleColor(c, seed, worn = 0) {
   if (c.mortar) return MORTAR;
   const hk = h2(c.id, c.row, seed);

@@ -10,7 +10,7 @@
 // One canvas pixel per village pixel, painted into one ImageData and shown with a single
 // putImageData. villageprops.js calls paintRainforest() for 'bg-rainforest' only.
 
-import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, stones, pathField, pixelBuffer } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, stones, pathField, pixelBuffer, clamp, line, roundRect } from './pixelkit.js';
 import { PB, propB, groundShadow, laundryB } from './meadowart.js';
 import { sel, tg } from './castleart.js';
 
@@ -35,8 +35,6 @@ const F = RB.floor; const LT = RB.litter; const J = RB.jungle; const E = RB.eart
 const MD = RB.mud; const BS = RB.bamboo; const MS = RB.moss; const MI = RB.mist; const GW = RB.glow; const GS = RB.glass;
 const Wd = PB.wood; const INK = '#2e2238';
 const CANOPY = [RB.jungle, RB.teal, RB.lime, RB.jungle];
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const line = (x0, y0, x1, y1, fn) => { const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5)); for (let i = 0; i <= n; i += 1) fn(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), i / n); };
 const FLOWERS = [['#c8203a', '#ff5a6a', '#ffd23f'], ['#d0408a', '#ff8ac0', '#fff4a8'], ['#e86a1a', '#ffa848', '#fff4a8'], ['#e8b020', '#ffe060', '#fffbe0'], ['#8a48c8', '#c08af0', '#fff4ff']];
 
 // ---------- the jungle floor ----------
@@ -636,11 +634,6 @@ function ropeBridgeR(px, c) {
 }
 
 // ---------- the green ----------
-
-function roundRect(Z, x, y, g = 0, rr = 10) {
-  const qx = Math.max(Z.x + rr - g, Math.min(Z.x + Z.w - rr + g, x + 0.5)); const qy = Math.max(Z.y + rr - g, Math.min(Z.y + Z.h - rr + g, y + 0.5));
-  return Math.hypot(x + 0.5 - qx, y + 0.5 - qy) <= rr;
-}
 
 /** A lily-pad pond in a rim of mossy stones, with lotus flowers, a frog on a pad, and reeds. */
 function lilyPondR(px, Z, seed) {
