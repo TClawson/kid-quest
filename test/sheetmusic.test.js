@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SONGS, SHOW_SONGS } from '../js/songs.js';
 import {
   keyInfo, keyLabel, chordNotes, chordLabel, splitLength, barEvents, meterOf, parseNote,
-  songById, songAbc, melodyShift, SONGBOOK, songbookFor, PIECES_PER_TIER, stars,
+  songById, songAbc, melodyShift, SONGBOOK, songbookFor, PIECES_PER_TIER, stars, SWING_MARK,
 } from '../js/sheetmusic.js';
 
 const LETTERS = 'CDEFGAB';
@@ -114,6 +114,7 @@ for (const p of SONGBOOK) {
     for (const hands of ['melody', 'roots', 'chords']) {
       const abc = songAbc(p.id, { hands, names: true, perLine: 4 });
       assert.match(abc, new RegExp(`^K:${song.key}$`, 'm'));
+      assert.equal(abc.split('\n').includes(SWING_MARK), Boolean(song.swing), 'Swing is written when the game swings the song');
       const bars = readVoice(abc, hands === 'melody' ? null : 'R', song.key);
       assert.equal(bars.length, song.lead.length, `${hands}: one bar each`);
       bars.forEach((bar, i) => {

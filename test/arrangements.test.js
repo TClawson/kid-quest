@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readAbcBar, arrangementNotes, arrangementAbc, hasLevel, LEVELS } from '../js/arrange.js';
 import { ARRANGEMENTS } from '../js/arrangements.js';
-import { SONGBOOK, signature, songById } from '../js/sheetmusic.js';
+import { SONGBOOK, signature, songById, SWING_MARK } from '../js/sheetmusic.js';
+import { swingAt } from '../js/music.js';
 import { checkArrangement, easyDensity } from './helpers/arrangement-check.mjs';
 
 const C = signature('C');
@@ -64,6 +65,7 @@ for (const [id, versions] of Object.entries(ARRANGEMENTS)) {
       const barsIn = (voice) => abc.split('\n').filter((l) => l.startsWith(`[V:${voice}]`)).join(' ').split('|').length - 1;
       assert.deepEqual([barsIn('R'), barsIn('L')], [songById(id).lead.length, songById(id).lead.length], 'every bar in both hands');
       assert.match(abc, new RegExp(`^K:${songById(id).key}$`, 'm'));
+      assert.equal(abc.split('\n').includes(SWING_MARK), Boolean(songById(id).swing), 'Swing is written when the game swings the song');
     }
   });
 }
@@ -72,4 +74,18 @@ test('levels: easy always, medium and hard where written', () => {
   assert.deepEqual(LEVELS, ['easy', 'medium', 'hard']);
   assert.ok(SONGBOOK.every((p) => hasLevel(p.id, 'easy')));
   for (const id of Object.keys(ARRANGEMENTS)) assert.ok(hasLevel(id, 'medium') && hasLevel(id, 'hard'));
+});
+
+test('swing: every second eighth comes late, and the beats stay put', () => {
+  assert.equal(swingAt(3.5, 0), 3.5, 'no swing leaves the music alone');
+  const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} is ${b}`);
+  close(swingAt(0, 0.25), 0);
+  close(swingAt(1, 0.25), 1.25); // the off eighth, as the game plays it
+  close(swingAt(2, 0.25), 2);
+  close(swingAt(7, 0.25), 7.25);
+  close(swingAt(0.5, 0.25), 0.625); // sixteenths share out the long and the short eighth
+  close(swingAt(1.5, 0.25), 1.625);
+  // a note keeps its place between its neighbours, and a bar keeps its length
+  for (let x = 0; x < 8; x += 0.25) assert.ok(swingAt(x + 0.25, 0.28) > swingAt(x, 0.28));
+  close(swingAt(8, 0.28), 8);
 });

@@ -316,14 +316,26 @@ export function playPiece(id, { tempo = 1 } = {}) {
 }
 
 /**
- * Play a piano version from the songbook (arrange.js): notes [{ midi, start, len, hand }] in
- * eighths, with a soft piano-like voice, bpm at tempo; steps a bar. Returns the same handle as
- * playPiece, or null without sound.
+ * Where a spot in the music (in eighths) falls when the song swings: every second eighth comes
+ * `swing` of an eighth late (as scheduleStep plays it), and what lies between moves with it.
  */
-export function playNotes(notes, { bpm, beat, tempo = 1 }) {
+export function swingAt(x, swing = 0) {
+  const pair = Math.floor(x / 2) * 2;
+  const r = x - pair;
+  return pair + (r < 1 ? r * (1 + swing) : 1 + swing + (r - 1) * (1 - swing));
+}
+
+/**
+ * Play a piano version from the songbook (arrange.js): notes [{ midi, start, len, hand }] in
+ * eighths, with a soft piano-like voice, bpm at tempo; steps a bar; swing as in the song.
+ * Returns the same handle as playPiece, or null without sound.
+ */
+export function playNotes(notes, { bpm, beat, tempo = 1, swing = 0 }) {
   const a = context();
   if (!a) return null;
   const step = 60 / bpm / 2 / tempo;
+  // a swung song plays its piano versions swung, like the game does
+  if (swing) notes = notes.map((n) => ({ ...n, start: swingAt(n.start, swing), len: swingAt(n.start + n.len, swing) - swingAt(n.start, swing) }));
   const steps = Math.ceil(Math.max(0, ...notes.map((n) => n.start + n.len)) / beat) * beat;
   const master = a.createGain();
   master.gain.value = 0.55;

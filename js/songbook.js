@@ -232,7 +232,7 @@ function startPiece(id) {
   const song = songById(id);
   const h = level === 'easy'
     ? playPiece(id, { tempo })
-    : playNotes(arrangementNotes(id, level), { bpm: song.bpm, beat: meterOf(song).steps, tempo });
+    : playNotes(arrangementNotes(id, level), { bpm: song.bpm, beat: meterOf(song).steps, tempo, swing: song.swing || 0 });
   if (!h) return;
   Object.assign(player, { id, h, lit: -1 });
   showPlaying();

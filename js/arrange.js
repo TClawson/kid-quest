@@ -5,7 +5,7 @@
 // Pure logic, no DOM.
 
 import { ARRANGEMENTS } from './arrangements.js';
-import { songById, signature, meterOf, chordLabel } from './sheetmusic.js';
+import { songById, signature, meterOf, chordLabel, SWING_MARK } from './sheetmusic.js';
 
 const LETTERS = 'CDEFGAB';
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
@@ -187,7 +187,7 @@ export function arrangementAbc(id, level, o = {}, version = ARRANGEMENTS[id]?.[l
     return names.join(' ');
   });
 
-  const head = ['X:1', `M:${meter.meter}`, 'L:1/8', `K:${song.key}`, '%%score {(R) | (L)}', 'V:R clef=treble', 'V:L clef=bass'];
+  const head = ['X:1', `M:${meter.meter}`, 'L:1/8', ...(song.swing ? [SWING_MARK] : []), `K:${song.key}`, '%%score {(R) | (L)}', 'V:R clef=treble', 'V:L clef=bass'];
   const body = [];
   for (let at = 0; at < song.lead.length; at += per) {
     const end = Math.min(song.lead.length, at + per);

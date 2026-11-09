@@ -250,6 +250,9 @@ export function melodyShift(song) {
 
 const lengthText = (len) => (len === 1 ? '' : String(len));
 
+/** The header line that writes "Swing" over the first bar of a song the game swings. */
+export const SWING_MARK = 'Q:"Swing"';
+
 /**
  * One piece as ABC notation for abcjs. o: {
  *   hands: 'melody' (right hand and chord names), 'roots' (+ the left hand's root notes) or
@@ -317,6 +320,7 @@ export function songAbc(id, o = {}) {
     'X:1',
     `M:${meter.meter}`,
     'L:1/8',
+    song.swing ? SWING_MARK : '',
     `K:${song.key}`,
     hands === 'melody' ? '' : '%%score {(R) | (L)}',
     hands === 'melody' ? '' : 'V:R clef=treble',
