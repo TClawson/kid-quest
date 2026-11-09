@@ -35,7 +35,7 @@ import { recordCatch, catchSpecies, bookPages, bookCount, fishSpecies, tankFish,
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
 import { pickVisitors, visitorLines, planVisits, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
@@ -153,7 +153,7 @@ function exerciseInfo(kid) {
 }
 
 /** Everything a buddy needs to do its moves: its look, the kid's gear, and how far the exercise streak got. */
-const mover = (kid) => ({ buddy: kid.buddy, owned: kid.owned || [], exBest: Math.max(kid.exBest || 0, exerciseInfo(kid).best) });
+const mover = (kid) => ({ buddy: dressed(kid), owned: kid.owned || [], exBest: Math.max(kid.exBest || 0, exerciseInfo(kid).best) });
 
 function missedYesterday(kid, info) {
   const t = today();
@@ -195,18 +195,26 @@ function feelFor(kid, mood = moodFor(kid)) {
 const liveKey = (kid) => `kid:${kid.id}`;
 
 /**
+ * A kid's buddy as it is drawn right now: with the magic wand's glow (buddy.wand)
+ * from how much of today's chores are done. The glow is never saved.
+ */
+const dressed = (kid, buddy = kid.buddy) => ({ ...buddy, wand: wandPower(todaySummary(state, kid, today())) });
+/** A visiting buddy, with its wand glowing from that kid's day (their shared summary of today). */
+const dressedVisitor = (v, buddy = v.buddy) => ({ ...buddy, wand: wandPower(v.today?.day === today() ? v.today : null) });
+
+/**
  * A kid's buddy. size: css class for sizing. opts.live: drawn live by rig.js
  * (it moves, feels and reacts to taps); otherwise the still picture from avatar.js.
  * opts.feel: feelings to use instead of feelFor; opts.idle: gets bored when left alone.
  */
 function buddyHtml(kid, mood, size = 'lg', opts = {}) {
   if (opts.live) {
-    const html = liveHtml(liveKey(kid), kid.buddy, { background: opts.background !== false, feel: opts.feel || feelFor(kid, mood), idle: opts.idle, label: `${kid.name}'s buddy` });
+    const html = liveHtml(liveKey(kid), dressed(kid), { background: opts.background !== false, feel: opts.feel || feelFor(kid, mood), idle: opts.idle, label: `${kid.name}'s buddy` });
     return `<div class="buddy buddy-${size} live">${html}</div>`;
   }
-  return `<div class="buddy buddy-${size} mood-${mood}">${buddySvg(kid.buddy, mood, opts)}</div>`;
+  return `<div class="buddy buddy-${size} mood-${mood}">${buddySvg(dressed(kid), mood, opts)}</div>`;
 }
-const buddyChip = (kid) => `<span class="avatar xs buddy-chip">${buddySvg(kid.buddy, 'happy', { background: false })}</span>`;
+const buddyChip = (kid) => `<span class="avatar xs buddy-chip">${buddySvg(dressed(kid), 'happy', { background: false })}</span>`;
 const taskById = (kid, key, id) => tasksForDay(state, kid, key, today()).find((t) => t.id === id) || kid.tasks.find((t) => t.id === id);
 
 function friendlyDate(key) {
@@ -392,7 +400,7 @@ function showUnlocks(kid) {
   kid.newItems = [...(kid.newItems || []), ...ids];
   save();
   const items = ids.map(itemById);
-  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, [items[0].slot]: items[0].id } };
+  const preview = { ...dressed(kid), outfit: { ...kid.buddy.outfit, [items[0].slot]: items[0].id } };
   sounds.day();
   confetti(120, 2400);
   openModal(`
@@ -1467,13 +1475,13 @@ function visitorsHtml(kid, s) {
     const x = (area && area.kind !== 'pond' ? GX : X)[spot.side][spot.slot];
     const solo = area && area.kind !== 'pond' && area.members.length === 1;
     const gear = gearOf(v);
-    let look = v.buddy;
+    let look = dressedVisitor(v);
     let cls = '';
     let extra = '';
     let data = '';
     if (area?.kind === 'pond') {
       // fishing in the village pond, facing away from the road
-      look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } };
+      look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } });
       cls = `fishing face-${spot.side}`;
       data = `data-rod="${gear.rod}"`;
       extra = '<div class="fish-line" aria-hidden="true"><span class="bobber"></span></div><div class="fish-catch" aria-hidden="true"></div>';
@@ -1482,7 +1490,7 @@ function visitorsHtml(kid, s) {
       // on their own, they practice from the outer end (a borrowed stick if they have none)
       const a = x === Math.min(...area.members.map((id) => GX[plan.spots[id].side][plan.spots[id].slot]));
       const outfit = { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined };
-      look = { ...v.buddy, outfit };
+      look = dressedVisitor(v, { ...v.buddy, outfit });
       const facesIn = solo ? spot.side === 'right' : a && area.kind === 'hockey';
       cls = `playing play-${area.kind} ${solo ? 'solo' : `player-${a ? 'a' : 'b'}`} ${facesIn ? 'face-left' : ''}`;
     }
@@ -1823,9 +1831,9 @@ function villageVisit(kid, s) {
     visitors: visitors.map((v, i) => {
       const area = areaOf(v.id);
       const gear = bestGear(v.owned);
-      let look = v.buddy;
-      if (area?.kind === 'pond') look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } };
-      else if (area) look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined } };
+      let look = dressedVisitor(v);
+      if (area?.kind === 'pond') look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } });
+      else if (area) look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined } });
       return { id: v.id, name: v.name, color: v.color, rod: gear.rod || 1, line: lines[i], news: news[v.id] || '', html: liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` }) };
     }),
     areas: plan.areas.map((a) => {
@@ -1849,7 +1857,7 @@ function villageLandmark(el, layer) {
   bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
   if (showPlaying(layer) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
   const img = new Image();
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(kid.buddy, 'excited', { background: false }))}`;
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(dressed(kid), 'excited', { background: false }))}`;
   const r = el.getBoundingClientRect(); const lr = layer.getBoundingClientRect();
   const scale = Number(layer.dataset.scale) || 3;
   const def = playShow(layer, theme, { buddy: img, scale, spot: { x: r.left + r.width / 2 - lr.left, y: r.top + r.height / 2 - lr.top }, onDone: () => layer.closest('.village')?.classList.remove('show-on') });
@@ -2043,7 +2051,7 @@ function viewTimer() {
         </div>
         <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
           <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), kid.buddy, { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
+          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
         </button>
       </div>
       ${task.listen ? `<p class="timer-ears" id="ears"><b id="ears-text" aria-live="polite"${earsText() ? '' : ' hidden'}>${esc(earsText())}</b></p>` : ''}
@@ -2377,7 +2385,8 @@ function viewWardrobe() {
         ${items.map((item) => {
     const open = isUnlocked(item, prog);
     const on = item.home ? isPlaced(kid, item) : kid.buddy.outfit[item.slot] === item.id;
-    const preview = { ...kid.buddy, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
+    // the wand's picture is lit all the way, to show what it does
+    const preview = { ...kid.buddy, wand: 1, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
     const wearing = item.home ? (on ? 'In your house' : 'Tap to use') : item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
     const price = item.gems ? `<span class="price gems ${prog.gems >= item.gems ? 'can' : ''}">💎 ${item.gems}</span>`
       : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : '';
@@ -2772,7 +2781,7 @@ function buyGear(kid, item, prog) {
     toast(`${item.gems - prog.gems} more gems to go! Exercise to earn them. 💪`);
     return;
   }
-  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, sport: item.id } };
+  const preview = { ...dressed(kid), outfit: { ...kid.buddy.outfit, sport: item.id } };
   openModal(`
     <div class="celebrate">
       <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
@@ -2793,12 +2802,13 @@ function buyItem(kid, item, prog) {
     toast(`${item.price - prog.coins} more coins to go! Finish tasks to earn them.`);
     return;
   }
-  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, [item.slot]: item.id } };
+  const preview = { ...kid.buddy, wand: 1, outfit: { ...kid.buddy.outfit, [item.slot]: item.id } };
   openModal(`
     <div class="celebrate">
       ${item.home ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${homeThumb(item.id)}" alt=""></div>` : `<div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>`}
       <h1>Buy ${esc(item.name)}${isWorn(item) ? ` for your ${esc(speciesName(kid.buddy.species).toLowerCase())}` : item.home ? ' for your house' : ''}?</h1>
       <p>It costs <b>🪙 ${item.price}</b>. You'll have ${prog.coins - item.price} coins left.</p>
+      ${item.note ? `<p>${esc(item.note)}</p>` : ''}
       ${item.species ? `<p class="muted small">⭐ A special made just for ${esc(speciesName(item.species).toLowerCase())}s. Every kind of buddy has its own.</p>`
     : isWorn(item) ? '<p class="muted small">Only this buddy can wear it. Other buddies need their own.</p>'
       : item.home ? `<p class="muted small">It goes in your buddy's house (${esc(spotById(item.spot).name.toLowerCase())}), for every buddy you have.</p>` : ''}
@@ -2986,7 +2996,7 @@ const actions = {
     bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
     if (showPlaying(section) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
     const img = new Image();
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(kid.buddy, 'excited', { background: false }))}`;
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(dressed(kid), 'excited', { background: false }))}`;
     const spot = { x: el.offsetLeft + el.offsetWidth / 2, y: el.offsetTop + el.offsetHeight / 2 };
     const def = playShow(section, theme, { buddy: img, spot, onDone: () => section.classList.remove('show-on') });
     if (!def) return;
@@ -3569,7 +3579,7 @@ actions.visitor = (el) => {
     }
   }
   nextVisitorTalks(el);
-  if (!v || !doMove(el, v)) { sounds.tap(); live(`visit:${el.dataset.id}`).giggle(); }
+  if (!v || !doMove(el, { ...v, buddy: dressedVisitor(v) })) { sounds.tap(); live(`visit:${el.dataset.id}`).giggle(); }
 };
 
 // ---------- playing with a visitor ----------
