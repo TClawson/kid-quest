@@ -7,7 +7,7 @@
 // Shared things come from ctx.js; app.js adds songbookActions to its actions.
 
 import { ui, state, esc, kidById, render, progressFor, toast, viewKid } from './ctx.js';
-import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars } from './sheetmusic.js';
+import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars, PIECES_PER_TIER } from './sheetmusic.js';
 import { treasureFound } from './treasure.js';
 import { musicTier, MUSIC_TIERS } from './musicrules.js';
 import { itemById } from './items.js';
@@ -56,24 +56,24 @@ function listHtml(kid, book, tier) {
     const name = p.secret ? 'Secret song' : p.name;
     const head = `<span class="song-icon" aria-hidden="true">${p.kind === 'show' ? '✨' : '🎵'}</span><b>${esc(name)}</b>`;
     if (!p.open) {
-      const why = p.tier > tier ? `Opens with the ${pianoName(p.tier)}` : `Finish the ${mapName(p)} treasure map`;
+      const why = p.secret ? `Finish the ${mapName(p)} treasure map` : `Opens with the ${pianoName(p.tier)}`;
       return `<div class="song-card locked" aria-label="${esc(name)}, locked">${head}<small>🔒 ${esc(why)}</small></div>`;
     }
     return `<button class="song-card" data-action="song-open" data-id="${esc(p.id)}">${head}
       <small>${esc(keyLabel(p.key))} · ${p.bars} bars</small>
       <span class="song-stars" aria-label="${['', 'Easy', 'Medium', 'Tricky'][s]}">${'★'.repeat(s)}${'☆'.repeat(3 - s)}</span></button>`;
   };
-  const sections = [1, 2, 3].map((t) => {
-    const list = book.filter((p) => p.tier === t);
-    return `<section class="song-tier ${t <= tier ? '' : 'locked'}"><h3>${TIER_TITLE[t]}</h3><div class="song-grid">${list.map(card).join('')}</div></section>`;
-  }).join('');
+  const section = (title, list, locked) => `<section class="song-tier ${locked ? 'locked' : ''}"><h3>${title}</h3><div class="song-grid">${list.map(card).join('')}</div></section>`;
+  const shows = book.filter((p) => p.kind === 'show');
+  const sections = [1, 2, 3].map((t) => section(TIER_TITLE[t], book.filter((p) => p.tier === t), t > tier)).join('')
+    + section('✨ Secret show songs', shows, !shows.some((p) => p.open));
   return `
     <div class="screen songbook" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="songbook-back" aria-label="Back to the music house">←</button>
         <div class="kid-title"><b>🎼 Sheet music</b><small>${esc(kid.name)}'s songbook · ${open} of ${book.length} songs open</small></div>
       </header>
-      <p class="muted song-intro">Songs from the game to play on your piano. Every new piano opens more, and each treasure map you finish opens its secret show's song!</p>
+      <p class="muted song-intro">Songs from the game to play on your piano. Every new piano opens ${PIECES_PER_TIER[0]} more, and each treasure map you finish opens its secret show's song!</p>
       ${sections}
     </div>`;
 }
@@ -130,9 +130,12 @@ export function mountSongbook(root) {
   if (!el) return;
   el.dataset.live = '1';
   showPlaying();
-  if (globalThis.ABCJS) draw(el, globalThis.ABCJS);
-  else loadAbcjs(el.ownerDocument).then((ABCJS) => draw(el, ABCJS), () => draw(el, null));
+  if (globalThis.ABCJS) { draw(el, globalThis.ABCJS); return; }
+  loadAbcjs(el.ownerDocument).then((ABCJS) => draw(el, ABCJS), () => draw(el, null));
+  // a load that hangs: show the plain lead sheet meanwhile (abcjs replaces it if it comes)
+  setTimeout(() => { if (!el.classList.contains('drawn')) draw(el, null); }, LOAD_WAIT_MS);
 }
+const LOAD_WAIT_MS = 15000;
 
 /** Draw the piece into el: engraved by abcjs, or as a plain lead sheet without it. */
 function draw(el, ABCJS) {
@@ -234,6 +237,7 @@ function follow() {
 
 /** Scroll the bar being played into view when it isn't (below the buttons, which stay on top). */
 function keepInView(els) {
+  if (performance.now() - ownScroll < 3000) return; // the kid is reading ahead (or back)
   const boxes = [...els].map((e) => e.getBoundingClientRect());
   const top = Math.min(...boxes.map((b) => b.top));
   const bottom = Math.max(...boxes.map((b) => b.bottom));
@@ -242,6 +246,39 @@ function keepInView(els) {
 }
 
 globalThis.document?.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') stopPiece(); });
+// when the kid scrolls the music themselves, it doesn't follow the playing for a moment
+let ownScroll = -Infinity;
+for (const type of ['wheel', 'touchmove', 'keydown']) globalThis.addEventListener?.(type, () => { ownScroll = performance.now(); }, { passive: true });
+
+/** The first bar showing below the buttons, to keep the place when the music is drawn again. */
+function barInView() {
+  const under = document.querySelector('.songbook .song-tools')?.getBoundingClientRect().bottom || 0;
+  let first = null;
+  let best = Infinity;
+  for (const e of document.querySelectorAll('#sheet .abcjs-note, #sheet .abcjs-rest, #sheet .lead-bar')) {
+    const top = e.getBoundingClientRect().top;
+    if (top >= under && top < best) { first = e; best = top; }
+  }
+  const m = first && [...first.classList].find((c) => /^abcjs-mm\d+$/.test(c));
+  return m ? Number(m.slice(8)) : 0;
+}
+
+/** Scroll so bar n's line sits just below the buttons. */
+function showBar(n) {
+  const els = [...document.querySelectorAll(`#sheet .abcjs-mm${n}`)];
+  if (!n || !els.length) return;
+  const under = document.querySelector('.songbook .song-tools')?.getBoundingClientRect().bottom || 0;
+  const top = Math.min(...els.map((e) => e.getBoundingClientRect().top));
+  window.scrollBy(0, top - under - 24);
+}
+
+/** Redraw the piece with new settings, keeping the kid's place in the music. */
+function redrawKeepingPlace(change) {
+  const bar = barInView();
+  setPrefs(change);
+  render();
+  showBar(bar);
+}
 
 /** How long a piece lasts, in seconds, at a tempo (for tests and the list). */
 export function pieceSeconds(id, tempo = 1) {
@@ -251,12 +288,13 @@ export function pieceSeconds(id, tempo = 1) {
 
 // ---------- taps ----------
 
+let listScroll = 0; // where the list was, for coming back to it from a piece
 export const songbookActions = {
   'songbook-back': () => { stopPiece(); ui.view = 'kid'; ui.songId = null; render(); },
-  'song-open': (el) => { stopPiece(); ui.songId = el.dataset.id; render(); window.scrollTo(0, 0); },
-  'song-back': () => { stopPiece(); ui.songId = null; render(); window.scrollTo(0, 0); },
-  'song-hands': (el) => { setPrefs({ hands: el.dataset.val }); render(); },
-  'song-names': () => { setPrefs({ names: !prefs().names }); render(); },
+  'song-open': (el) => { stopPiece(); listScroll = window.scrollY; ui.songId = el.dataset.id; render(); window.scrollTo(0, 0); },
+  'song-back': () => { stopPiece(); ui.songId = null; render(); window.scrollTo(0, listScroll); },
+  'song-hands': (el) => redrawKeepingPlace({ hands: el.dataset.val }),
+  'song-names': () => redrawKeepingPlace({ names: !prefs().names }),
   'song-slow': () => {
     const slow = !prefs().slow;
     setPrefs({ slow });
@@ -274,6 +312,7 @@ export const songbookActions = {
 export function openSongbook() {
   ui.view = 'songbook';
   ui.songId = null;
+  listScroll = 0;
   render();
   window.scrollTo(0, 0);
 }

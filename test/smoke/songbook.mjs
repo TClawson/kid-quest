@@ -75,21 +75,22 @@ async function litBar(page, n, ms = 8000) {
   return -1;
 }
 
-// 1. tablet, the little keyboard and the Golden galaxy's treasure: the easiest map songs and
-// that show's tune are open; every one engraves cleanly
+// 1. tablet, the little keyboard and two treasure maps: the easiest map songs and those two
+// shows' tunes (whatever their difficulty) are open; every one engraves cleanly
 {
-  const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 3, ['bg-galaxy']);
+  const found = ['bg-meadow', 'bg-galaxy'];
+  const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 3, found);
   const open = await page.$$eval('.song-card:not(.locked)', (els) => els.map((e) => e.dataset.id));
-  const want = songbookFor(1, new Set(['bg-galaxy'])).filter((p) => p.open).map((p) => p.id);
-  assert.deepEqual(open, want, 'the easiest map songs, and the found show');
-  assert.equal(open.length, 4);
-  assert.ok(open.includes('show:bg-galaxy') && open.includes('bg-meadow'));
-  assert.equal(await page.locator('.song-card.locked').count(), 14);
+  const want = songbookFor(1, new Set(found)).filter((p) => p.open).map((p) => p.id);
+  assert.deepEqual(open, want, 'the easiest map songs, and the found shows');
+  assert.equal(open.length, 5);
+  assert.ok(open.includes('show:bg-galaxy') && open.includes('show:bg-meadow') && open.includes('bg-meadow'));
+  assert.equal(await page.locator('.song-card.locked').count(), 13);
   assert.match(await page.locator('.song-tier.locked .song-card.locked').first().textContent(), /Opens with the upright piano/);
   // the other shows' tunes are secret: no names, and what opens them
   const list = await page.locator('.songbook').textContent();
-  assert.equal((list.match(/Secret song/g) || []).length, 8);
-  for (const [map, song] of Object.entries(SHOW_SONGS)) if (map !== 'bg-galaxy') assert.ok(!list.includes(song.name), `${song.name} stays secret`);
+  assert.equal((list.match(/Secret song/g) || []).length, 7);
+  for (const [map, song] of Object.entries(SHOW_SONGS)) if (!found.includes(map)) assert.ok(!list.includes(song.name), `${song.name} stays secret`);
   assert.match(list, /Finish the \w[\w ]* treasure map/);
   await page.screenshot({ path: `${out}/1-songbook-tablet.png`, fullPage: true });
   for (const id of open) {
@@ -166,14 +167,36 @@ async function litBar(page, n, ms = 8000) {
   // Stop stays on screen while the music scrolls by
   const stop = await page.locator('[data-action="song-play"]').boundingBox();
   assert.ok(stop.y >= 0 && stop.y + stop.height <= 915, `Stop in reach (${stop.y})`);
-  // turning on note names redraws the music, but keeps the place
+  // other settings redraw the music, but keep the kid's place in it
+  const place = () => page.evaluate(() => {
+    const under = document.querySelector('.song-tools').getBoundingClientRect().bottom;
+    const tops = [...document.querySelectorAll('#sheet .abcjs-note')].map((e) => [e.getBoundingClientRect().top, e]).filter(([t]) => t >= under).sort((a, b) => a[0] - b[0]);
+    return Number([...tops[0][1].classList].find((c) => /^abcjs-mm\d+$/.test(c)).slice(8));
+  });
+  const before = await place();
+  assert.ok(before >= 4, `reading further down (bar ${before + 1})`);
   await page.click('[data-action="song-names"]');
   await page.waitForSelector('#sheet.engraved .abcjs-lyric');
-  const y2 = await page.evaluate(() => window.scrollY);
-  assert.ok(Math.abs(y2 - y) < 200, `the place is kept (${y} → ${y2})`);
+  assert.ok(Math.abs(await place() - before) <= 2, 'note names: the same place');
+  await page.click('[data-action="song-hands"][data-val="melody"]');
+  await page.waitForSelector('#sheet.engraved svg');
+  // (shorter music may not scroll that far: the bar is on screen, below the buttons)
+  const seen = await page.evaluate((n) => {
+    const under = document.querySelector('.song-tools').getBoundingClientRect().bottom;
+    return [...document.querySelectorAll(`#sheet .abcjs-note.abcjs-mm${n}`)].every((e) => { const r = e.getBoundingClientRect(); return r.top >= under && r.bottom <= window.innerHeight; });
+  }, before);
+  assert.ok(seen, `melody only: bar ${before + 1} still in view`);
   assert.match(await page.locator('[data-action="song-play"]').textContent(), /Stop/, 'and it keeps playing');
   await page.screenshot({ path: `${out}/6-listening-phone.png` });
   await page.click('[data-action="song-play"]');
+  // back to the list where it was left
+  await page.click('[data-action="song-back"]');
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await page.click('[data-action="song-open"][data-id="show:bg-castle"]');
+  await page.waitForSelector('#sheet.engraved svg');
+  assert.equal(await page.evaluate(() => window.scrollY), 0, 'a piece opens at the top');
+  await page.click('[data-action="song-back"]');
+  assert.equal(await page.evaluate(() => window.scrollY), 900, 'and back at the same place in the list');
   await ctx.close();
 }
 

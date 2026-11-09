@@ -94,9 +94,11 @@ const WHOLE = [8, 6, 4, 3, 2, 1]; // note lengths in eighths that are a single n
 
 /**
  * Split a note (or a rest) of length len starting at step pos into ones that can be written,
- * tied together: a note that starts off the beat breaks at the middle of a 4/4 bar (a rest
- * always does, unless it fills the bar, and is never a dotted half), and a length that isn't one note (5, 7) breaks
- * into the biggest that fits and the rest.
+ * tied together: a note that starts off the beat breaks at the middle of a 4/4 bar, and a
+ * length that isn't one note (5, 7) breaks into the biggest that fits and the rest. Rests
+ * show the beats more plainly: one that starts off the beat goes only to the next beat, a
+ * waltz rest after the first beat goes beat by beat, and in 4/4 a rest always breaks at the
+ * middle (unless it fills the bar) and is never a dotted half.
  */
 export function splitLength(pos, len, meter, rest = false) {
   const parts = [];
@@ -107,6 +109,7 @@ export function splitLength(pos, len, meter, rest = false) {
     const crosses = meter.middle && p < meter.middle && p + left > meter.middle;
     const wholeBar = p === 0 && left === meter.steps;
     if (crosses && (p % 2 === 1 || (rest && !wholeBar))) room = meter.middle - p;
+    if (rest && (p % 2 === 1 || (!meter.middle && p > 0))) room = Math.min(room, 2 - (p % 2));
     const d = WHOLE.find((w) => w <= room && !(rest && meter.middle && w === 6));
     parts.push(d);
     p += d;
@@ -147,11 +150,13 @@ const FAMILIAR = { 'bg-meadow': 15 };
 
 /**
  * How hard a piece is to play from the page, roughly: more notes a bar, quick notes, tricky
- * rhythms (held from off the beat, tied, dotted), black keys, notes on ledger lines, a wide
- * reach, big jumps and length all add to it. Tempo doesn't: kids play at their own speed.
+ * rhythms (held from off the beat, tied, dotted), sharps and flats written in the music (the
+ * key signature's black keys less so), notes on ledger lines, a wide reach, jumps that move
+ * the hand and length all add to it. Tempo doesn't: kids play at their own speed.
  */
 export function difficulty(song) {
   const meter = meterOf(song);
+  const sig = signature(song.key);
   const shift = melodyShift(song);
   const notes = [];
   let rhythm = 0;
@@ -168,12 +173,14 @@ export function difficulty(song) {
   const share = (test) => notes.filter(test).length / n;
   const midis = notes.map((x) => x.midi);
   const reach = Math.max(...midis) - Math.min(...midis);
-  const leaps = notes.slice(1).filter((x, i) => Math.abs(x.midi - notes[i].midi) > 4).length / n;
+  // jumps past a fifth: the hand has to move (broken chords stay in one place)
+  const leaps = notes.slice(1).filter((x, i) => Math.abs(x.midi - notes[i].midi) > 7).length / n;
   return Math.round(
     (notes.length / song.lead.length) * 4
     + share((x) => x.len === 1) * 15
     + (rhythm / n) * 30
-    + share((x) => BLACK.has(x.midi % 12)) * 40
+    + share((x) => x.alter !== sig[x.letter]) * 40
+    + share((x) => x.alter === sig[x.letter] && BLACK.has(x.midi % 12)) * 15
     + share((x) => x.written < 60 || x.written > 80) * 15
     + reach * 0.4
     + leaps * 15
@@ -182,10 +189,10 @@ export function difficulty(song) {
 }
 
 /**
- * Every piece in the songbook, by the piano that opens it and then easiest first: { id, name,
- * key, bars, kind ('map' or 'show'), map (the map's background id), level (difficulty), tier
- * (the piano that opens it) }. Each piano opens a third of the map songs and a third of the
- * secret shows' tunes, the easiest ones first.
+ * Every piece in the songbook: { id, name, key, bars, kind ('map' or 'show'), map (the map's
+ * background id), level (difficulty), tier }. The map songs come first, easiest first, a third
+ * of them opened by each piano (tier 1-3). Then the secret shows' tunes, easiest first (tier
+ * null): each opens with its treasure map, whatever the piano.
  */
 export const SONGBOOK = (() => {
   const all = [
@@ -193,23 +200,24 @@ export const SONGBOOK = (() => {
     ...Object.entries(SHOW_SONGS).map(([map, s]) => ({ id: `show:${map}`, map, kind: 'show', song: s })),
   ].map((p) => ({ id: p.id, map: p.map, kind: p.kind, name: p.song.name, key: p.song.key, bars: p.song.lead.length, level: difficulty(p.song) - (FAMILIAR[p.id] || 0) }));
   const easiest = (a, b) => a.level - b.level || a.id.localeCompare(b.id);
-  const tiers = (kind) => all.filter((p) => p.kind === kind).sort(easiest).map((p, i, list) => ({ ...p, tier: 1 + Math.floor((i * 3) / list.length) }));
-  return [...tiers('map'), ...tiers('show')].sort((a, b) => a.tier - b.tier || easiest(a, b));
+  const maps = all.filter((p) => p.kind === 'map').sort(easiest).map((p, i, list) => ({ ...p, tier: 1 + Math.floor((i * 3) / list.length) }));
+  const shows = all.filter((p) => p.kind === 'show').sort(easiest).map((p) => ({ ...p, tier: null }));
+  return [...maps, ...shows];
 })();
 
-/** How many pieces each piano opens in all (tier 1, 2, 3). */
-export const PIECES_PER_TIER = [1, 2, 3].map((t) => SONGBOOK.filter((p) => p.tier <= t).length);
+/** How many map songs the pianos have opened by each tier (1, 2, 3). */
+export const PIECES_PER_TIER = [1, 2, 3].map((t) => SONGBOOK.filter((p) => p.tier && p.tier <= t).length);
 
 /**
  * The songbook for a music house look (tier 1-3) and the maps whose treasure the kid has
  * found (a Set of background ids): every piece, with secret (a show's tune whose show the
- * kid hasn't found yet: its name stays hidden) and open (this piano has opened it, and it
- * isn't secret).
+ * kid hasn't found yet: its name stays hidden) and open (its piano is here, or its show was
+ * found).
  */
 export function songbookFor(tier, found = new Set()) {
   return SONGBOOK.map((p) => {
     const secret = p.kind === 'show' && !found.has(p.map);
-    return { ...p, secret, open: p.tier <= tier && !secret };
+    return { ...p, secret, open: tier >= 1 && (p.kind === 'show' ? !secret : p.tier <= tier) };
   });
 }
 
@@ -328,21 +336,32 @@ export function songAbc(id, o = {}) {
 
 /**
  * The left hand for one bar: the chord's root, or the whole chord, held all bar, on the bass
- * staff and below the bar's lowest melody note (low, as MIDI), so the hands never meet.
+ * staff and below the bar's lowest melody note (low, as MIDI), so the hands never meet. A
+ * chord that would reach the melody turns over (an inversion: the root or the root and third
+ * go up an octave, then the whole chord down) before it drops an octave as it is.
  */
 function leftHand(name, hands, meter, sig, low = Infinity) {
   const tones = chordNotes(name);
   const root = tones[0];
-  const midiOf = (t, o) => (o + 1) * 12 + NATURAL[t.letter] + t.alter;
+  const midiOf = ({ t, o }) => (o + 1) * 12 + NATURAL[t.letter] + t.alter;
   // the root between G2 and F#3, so it sits on the bass staff
   let octave = 2;
-  while (midiOf(root, octave) < 43) octave += 1;
-  while (midiOf(root, octave) > 54) octave -= 1;
-  // the third and fifth above the root (moving up an octave when their letter wraps past B)
-  const voicing = (o) => (hands === 'roots' ? [root] : tones).map((t) => ({ t, o: o + (t.letter < root.letter ? 1 : 0) }));
-  while (octave > 1 && Math.max(...voicing(octave).map(({ t, o }) => midiOf(t, o))) >= low) octave -= 1;
+  while (midiOf({ t: root, o: octave }) < 43) octave += 1;
+  while (midiOf({ t: root, o: octave }) > 54) octave -= 1;
+  // the chord from the root up (the third and fifth up an octave when their letter wraps past B)
+  const upright = (hands === 'roots' ? [root] : tones).map((t) => ({ t, o: octave + (t.letter < root.letter ? 1 : 0) }));
+  const fits = (v) => Math.max(...v.map(midiOf)) < low;
+  let voicing = upright;
+  if (!fits(voicing) && hands === 'chords') {
+    // turned over: [third, fifth, root + 8va] and [fifth, root + 8va, third + 8va], an octave down
+    const turned = [1, 2].map((k) => [...upright.slice(k), ...upright.slice(0, k).map(({ t, o }) => ({ t, o: o + 1 }))].map(({ t, o }) => ({ t, o: o - 1 })));
+    // the highest that fits and stays on or just under the bass staff (bottom note E2 or up)
+    const best = turned.filter((v) => fits(v) && midiOf(v[0]) >= 40).sort((x, y) => midiOf(y[2]) - midiOf(x[2]))[0];
+    if (best) voicing = best;
+  }
+  while (!fits(voicing) && voicing[0].o > 1) voicing = voicing.map(({ t, o }) => ({ t, o: o - 1 }));
   const held = new Map();
-  const notes = voicing(octave).map(({ t, o }) => {
+  const notes = voicing.map(({ t, o }) => {
     const spot = `${t.letter}${o}`;
     const now = held.has(spot) ? held.get(spot) : sig[t.letter];
     held.set(spot, t.alter);
