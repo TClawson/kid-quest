@@ -298,8 +298,10 @@ export function playPiece(id, { tempo = 1 } = {}) {
     step,
     beat: song.beat,
     steps,
-    at: () => (a.currentTime - t0) / step,
-    done: () => stopped || a.currentTime > t0 + steps * step + 0.3,
+    // steps heard so far (the speaker plays a little after the clock, more on Bluetooth)
+    at: () => (a.currentTime - (a.outputLatency || a.baseLatency || 0) - t0) / step,
+    // done once the last note (and its echo, on the dreamy songs) has faded
+    done: () => stopped || a.currentTime > t0 + steps * step + (song.echo ? 1.5 : 0.4),
     stop() {
       if (stopped) return;
       stopped = true;

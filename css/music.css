@@ -45,6 +45,9 @@
 .song-card:not(.locked):active { transform: translateY(2px); box-shadow: 0 1px 0 var(--px-ink, #2b2238); }
 
 .song-tools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin: 8px 0 10px; }
+/* the buttons stay on top while the music scrolls by, so Stop is always in reach */
+.songbook.piece .song-tools { position: sticky; top: 0; z-index: 5; margin: 0 -8px 6px; padding: 8px; background: var(--bg); }
+.sheet-wait { margin: 0; padding: 24px; text-align: center; }
 .song-tools .tabs { margin: 0; }
 .song-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .song-buttons .btn.on { background: var(--brand); color: #fff; }

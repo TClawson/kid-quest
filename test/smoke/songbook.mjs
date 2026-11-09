@@ -1,21 +1,26 @@
 // The sheet music stand's songbook (js/songbook.js) in the real app: the little keyboard opens
-// the 6 easiest songs; every open song is engraved bar for bar (abcjs) with no warnings, in
-// every hand setting; Listen plays it with the bar being played lit up; phones get 2 bars a
-// line. Saves screenshots too. Run: node test/smoke/songbook.mjs [outDir]
+// the easiest songs (a secret show's tune only once its treasure map is finished, its name
+// hidden till then); every open song is engraved bar for bar (abcjs) with no warnings, in
+// every hand setting; Listen plays it with the bar being played lit up, and a redraw while it
+// plays leaves the page and its scroll alone; phones get 2 bars a line. Saves screenshots too. Run: node test/smoke/songbook.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
-import { SONGBOOK, songById } from '../../js/sheetmusic.js';
+import { SONGBOOK, songById, songbookFor } from '../../js/sheetmusic.js';
+import { SHOW_SONGS } from '../../js/songs.js';
 
 const out = (process.argv[2] || 'previews/songbook').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
 const day = '2026-11-11'; // a Wednesday
 
-/** Ava with weeks of every chore (piano too) done before today: 3 weeks earns the little keyboard. */
-function family(weeks) {
+/**
+ * Ava with weeks of every chore (piano too) done before today (3 weeks earns the little
+ * keyboard), and the treasure maps (background ids) she has finished.
+ */
+function family(weeks, found = []) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.questView = 'village';
@@ -23,6 +28,8 @@ function family(weeks) {
   const ava = { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: addDays(day, -days), seenUnlocks: ['music-keyboard', 'music-upright', 'music-rock'], seenMoves: [], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } };
   s.kids.push(ava);
   for (let i = 1; i <= days; i += 1) s.log[addDays(day, -i)] = { kid_ava: { tasks: Object.fromEntries(ava.tasks.map((t) => [t.id, { status: 'done', by: 'parent' }])) } };
+  // four map pieces from the daily chest finish a treasure map
+  found.flatMap((map) => [map, map, map, map]).forEach((map, i) => { s.log[addDays(day, -1 - i)].kid_ava.chest = { kind: 'piece', map }; });
   return s;
 }
 
@@ -30,14 +37,14 @@ const site = await serve('.');
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 const errors = [];
 
-async function openSongbook(viewport, weeks) {
+async function openSongbook(viewport, weeks, found) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/favicon|ERR_|net::/.test(m.text())) errors.push(m.text()); });
   await page.clock.install({ time: new Date(`${day}T16:00:00`) });
   await page.goto(site.url);
-  await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [family(weeks), { kid_ava: { day, inside: false, place: 'music' } }]);
+  await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [family(weeks, found), { kid_ava: { day, inside: false, place: 'music' } }]);
   await page.reload();
   await page.click('[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
@@ -68,13 +75,22 @@ async function litBar(page, n, ms = 8000) {
   return -1;
 }
 
-// 1. tablet, the little keyboard: 6 songs open, easiest first; every one engraves cleanly
+// 1. tablet, the little keyboard and the Golden galaxy's treasure: the easiest map songs and
+// that show's tune are open; every one engraves cleanly
 {
-  const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 3);
+  const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 3, ['bg-galaxy']);
   const open = await page.$$eval('.song-card:not(.locked)', (els) => els.map((e) => e.dataset.id));
-  assert.deepEqual(open, SONGBOOK.filter((p) => p.tier === 1).map((p) => p.id), 'the easiest six');
-  assert.equal(await page.locator('.song-card.locked').count(), 12);
-  assert.match(await page.locator('.song-card.locked').first().textContent(), /Opens with the upright piano/);
+  const want = songbookFor(1, new Set(['bg-galaxy'])).filter((p) => p.open).map((p) => p.id);
+  assert.deepEqual(open, want, 'the easiest map songs, and the found show');
+  assert.equal(open.length, 4);
+  assert.ok(open.includes('show:bg-galaxy') && open.includes('bg-meadow'));
+  assert.equal(await page.locator('.song-card.locked').count(), 14);
+  assert.match(await page.locator('.song-tier.locked .song-card.locked').first().textContent(), /Opens with the upright piano/);
+  // the other shows' tunes are secret: no names, and what opens them
+  const list = await page.locator('.songbook').textContent();
+  assert.equal((list.match(/Secret song/g) || []).length, 8);
+  for (const [map, song] of Object.entries(SHOW_SONGS)) if (map !== 'bg-galaxy') assert.ok(!list.includes(song.name), `${song.name} stays secret`);
+  assert.match(list, /Finish the \w[\w ]* treasure map/);
   await page.screenshot({ path: `${out}/1-songbook-tablet.png`, fullPage: true });
   for (const id of open) {
     await page.click(`[data-action="song-open"][data-id="${id}"]`);
@@ -85,16 +101,22 @@ async function litBar(page, n, ms = 8000) {
       assert.equal(await page.locator(`#sheet .abcjs-mm${bars - 1}`).count() > 0, true, `${id} ${hands}: every bar is there`);
       assert.equal(await page.locator(`#sheet .abcjs-mm${bars}`).count(), 0, `${id}: no extra bars`);
       assert.equal(await page.locator('#sheet .abcjs-staff').count() > 0, true);
+      assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0', `${id} ${hands}: abcjs had no warnings`);
     }
     await page.click('[data-action="song-back"]');
   }
+  // a secret piece can't be opened by a stale id either
+  await page.evaluate(async () => { const c = await import('./js/ctx.js'); c.ui.songId = 'show:bg-ocean'; c.render(); });
+  assert.equal(await page.locator('#sheet').count(), 0, 'a secret song shows the list');
+  await page.evaluate(async () => { const c = await import('./js/ctx.js'); c.ui.songId = null; c.render(); });
   // one piece up close: both hands, note names, and Listen lights up the bar being played
-  await page.click(`[data-action="song-open"][data-id="${open[2]}"]`);
+  const close = 'bg-space';
+  await page.click(`[data-action="song-open"][data-id="${close}"]`);
   await page.click('[data-action="song-hands"][data-val="chords"]');
   await page.click('[data-action="song-names"]');
   await page.waitForSelector('#sheet.engraved svg');
   assert.ok(await page.locator('#sheet .abcjs-lyric').count() > 10, 'note names under the notes');
-  assert.ok(await page.locator('#sheet .abcjs-chord').count() >= songById(open[2]).lead.length, 'a chord name on every bar');
+  assert.ok(await page.locator('#sheet .abcjs-chord').count() >= songById(close).lead.length, 'a chord name on every bar');
   await page.screenshot({ path: `${out}/2-piece-tablet.png`, fullPage: true });
   await page.click('[data-action="song-play"]');
   assert.match(await page.locator('[data-action="song-play"]').textContent(), /Stop/);
@@ -116,9 +138,10 @@ async function litBar(page, n, ms = 8000) {
   await ctx.close();
 }
 
-// 2. phone, the rock star piano: every song open, two bars a line
+// 2. phone, the rock star piano and every treasure map: every song open, two bars a line; a
+// redraw while a piece plays (family sync does that) leaves the music and the scroll alone
 {
-  const { ctx, page } = await openSongbook({ width: 412, height: 915 }, 7);
+  const { ctx, page } = await openSongbook({ width: 412, height: 915 }, 7, Object.keys(SHOW_SONGS));
   assert.equal(await page.locator('.song-card:not(.locked)').count(), 18);
   await page.screenshot({ path: `${out}/4-songbook-phone.png`, fullPage: true });
   const id = 'bg-meadow';
@@ -129,6 +152,28 @@ async function litBar(page, n, ms = 8000) {
   const wide = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   assert.ok(wide, 'no sideways scrolling');
   await page.screenshot({ path: `${out}/5-piece-phone.png`, fullPage: true });
+
+  await page.click('[data-action="song-play"]');
+  assert.ok(await litBar(page, 0) >= 0);
+  await page.evaluate(() => { window.scrollTo(0, 700); document.querySelector('#sheet svg').dataset.mark = 'kept'; });
+  await page.clock.runFor(100);
+  const y = await page.evaluate(() => window.scrollY);
+  assert.ok(y > 500, `scrolled down (${y})`);
+  await page.evaluate(async () => (await import('./js/ctx.js')).render());
+  assert.equal(await page.locator('#sheet svg[data-mark="kept"]').count(), 1, 'the same drawing: nothing redrawn');
+  assert.equal(await page.evaluate(() => window.scrollY), y, 'still scrolled down');
+  assert.match(await page.locator('[data-action="song-play"]').textContent(), /Stop/);
+  // Stop stays on screen while the music scrolls by
+  const stop = await page.locator('[data-action="song-play"]').boundingBox();
+  assert.ok(stop.y >= 0 && stop.y + stop.height <= 915, `Stop in reach (${stop.y})`);
+  // turning on note names redraws the music, but keeps the place
+  await page.click('[data-action="song-names"]');
+  await page.waitForSelector('#sheet.engraved .abcjs-lyric');
+  const y2 = await page.evaluate(() => window.scrollY);
+  assert.ok(Math.abs(y2 - y) < 200, `the place is kept (${y} → ${y2})`);
+  assert.match(await page.locator('[data-action="song-play"]').textContent(), /Stop/, 'and it keeps playing');
+  await page.screenshot({ path: `${out}/6-listening-phone.png` });
+  await page.click('[data-action="song-play"]');
   await ctx.close();
 }
 

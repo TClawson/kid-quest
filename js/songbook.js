@@ -1,12 +1,14 @@
 // The music house's sheet music stand: a songbook of the game's own songs (the map songs and
 // the secret shows' tunes), engraved as piano sheet music by abcjs (js/vendor/abcjs.js,
 // loaded the first time the songbook opens). Each better piano opens more songs, easiest
-// first (sheetmusic.js). A piece can be heard (the game's own arrangement, music.js) with
+// first (sheetmusic.js); a secret show's tune also waits until its treasure map is finished,
+// like the show itself. A piece can be heard (the game's own arrangement, music.js) with
 // the bar being played lit up, at the game's speed or slower.
 // Shared things come from ctx.js; app.js adds songbookActions to its actions.
 
-import { ui, state, esc, kidById, render, progressFor, toast } from './ctx.js';
-import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars, PIECES_PER_TIER } from './sheetmusic.js';
+import { ui, state, esc, kidById, render, progressFor, toast, viewKid } from './ctx.js';
+import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars } from './sheetmusic.js';
+import { treasureFound } from './treasure.js';
 import { musicTier, MUSIC_TIERS } from './musicrules.js';
 import { itemById } from './items.js';
 import { playPiece } from './music.js';
@@ -31,18 +33,18 @@ function setPrefs(change) {
 const pianoName = (tier) => itemById(MUSIC_TIERS[tier - 1].piano)?.name.toLowerCase() || 'next piano';
 const TIER_TITLE = ['', 'Little keyboard songs', 'Upright piano songs', 'Rock star piano songs'];
 
+const mapName = (p) => itemById(p.map)?.name || 'map';
 /** Where a piece comes from, in words. */
 function source(p) {
-  const place = itemById(p.map)?.name || 'the map';
-  return p.kind === 'show' ? `The secret show on the ${place} map` : `The ${place} map song`;
+  return p.kind === 'show' ? `The secret show on the ${mapName(p)} map` : `The ${mapName(p)} map song`;
 }
 
 /** The songbook screen: the list of pieces, or one piece (ui.songId). */
 export function viewSongbook() {
   const kid = kidById(ui.kidId);
-  if (!kid) { ui.view = 'kid'; return ''; }
+  if (!kid) { ui.view = 'kid'; return viewKid(); }
   const tier = musicTier(progressFor(kid));
-  const book = songbookFor(tier);
+  const book = songbookFor(tier, treasureFound(state.log, kid.id).maps);
   const piece = ui.songId && book.find((p) => p.id === ui.songId && p.open);
   return piece ? pieceHtml(kid, piece) : listHtml(kid, book, tier);
 }
@@ -51,9 +53,11 @@ function listHtml(kid, book, tier) {
   const open = book.filter((p) => p.open).length;
   const card = (p) => {
     const s = stars(p.level);
-    const head = `<span class="song-icon" aria-hidden="true">${p.kind === 'show' ? '✨' : '🎵'}</span><b>${esc(p.name)}</b>`;
+    const name = p.secret ? 'Secret song' : p.name;
+    const head = `<span class="song-icon" aria-hidden="true">${p.kind === 'show' ? '✨' : '🎵'}</span><b>${esc(name)}</b>`;
     if (!p.open) {
-      return `<div class="song-card locked" aria-label="${esc(p.name)}, locked">${head}<small>🔒 Opens with the ${esc(pianoName(p.tier))}</small></div>`;
+      const why = p.tier > tier ? `Opens with the ${pianoName(p.tier)}` : `Finish the ${mapName(p)} treasure map`;
+      return `<div class="song-card locked" aria-label="${esc(name)}, locked">${head}<small>🔒 ${esc(why)}</small></div>`;
     }
     return `<button class="song-card" data-action="song-open" data-id="${esc(p.id)}">${head}
       <small>${esc(keyLabel(p.key))} · ${p.bars} bars</small>
@@ -69,7 +73,7 @@ function listHtml(kid, book, tier) {
         <button class="btn ghost round" data-action="songbook-back" aria-label="Back to the music house">←</button>
         <div class="kid-title"><b>🎼 Sheet music</b><small>${esc(kid.name)}'s songbook · ${open} of ${book.length} songs open</small></div>
       </header>
-      <p class="muted song-intro">Songs from the game to play on your piano. Every new piano opens ${PIECES_PER_TIER[1] - PIECES_PER_TIER[0]} more!</p>
+      <p class="muted song-intro">Songs from the game to play on your piano. Every new piano opens more, and each treasure map you finish opens its secret show's song!</p>
       ${sections}
     </div>`;
 }
@@ -77,7 +81,6 @@ function listHtml(kid, book, tier) {
 function pieceHtml(kid, p) {
   const o = prefs();
   const song = songById(p.id);
-  const playing = player.h && player.id === p.id && !player.h.done();
   const tabs = HANDS.map(([h, label]) => `<button class="${o.hands === h ? 'on' : ''}" data-action="song-hands" data-val="${h}" aria-pressed="${o.hands === h}">${label}</button>`).join('');
   return `
     <div class="screen songbook piece" style="--kid:${kid.color}">
@@ -90,10 +93,10 @@ function pieceHtml(kid, p) {
         <div class="song-buttons">
           <button class="btn ghost ${o.names ? 'on' : ''}" data-action="song-names" aria-pressed="${o.names}">🔤 Note names</button>
           <button class="btn ghost ${o.slow ? 'on' : ''}" data-action="song-slow" aria-pressed="${o.slow}">🐢 Slow</button>
-          <button class="btn song-play ${playing ? 'playing' : ''}" data-action="song-play">${playing ? '■ Stop' : '▶ Listen'}</button>
+          <button class="btn song-play" data-action="song-play">▶ Listen</button>
         </div>
       </div>
-      <div class="sheet" id="sheet" data-id="${esc(p.id)}" data-hands="${o.hands}" data-names="${o.names ? 1 : 0}" aria-label="Sheet music for ${esc(p.name)}"></div>
+      <div class="sheet" id="sheet" data-id="${esc(p.id)}" data-hands="${o.hands}" data-names="${o.names ? 1 : 0}" aria-label="Sheet music for ${esc(p.name)}"><p class="muted sheet-wait">Getting the music ready…</p></div>
       <p class="muted small song-tip">The letters above the music are chords: they tell your left hand what to play.${o.hands === 'melody' ? '' : ' The bottom line is your left hand.'}</p>
     </div>`;
 }
@@ -117,23 +120,30 @@ function loadAbcjs(doc) {
 /** Bars a line: four on a wide screen, two on a phone. */
 const perLine = (el) => (el.clientWidth >= 640 ? 4 : 2);
 
-/** Engrave the piece on screen (after each redraw of the songbook). */
+/**
+ * After each redraw of the songbook: engrave the piece (straight away once abcjs is loaded, so
+ * the page keeps its height and scroll), and show whether it's playing (kept out of the
+ * page's HTML, so starting and stopping doesn't make the next redraw build a new page).
+ */
 export function mountSongbook(root) {
   const el = root.querySelector('.songbook #sheet:not([data-live])');
   if (!el) return;
   el.dataset.live = '1';
-  engrave(el);
+  showPlaying();
+  if (globalThis.ABCJS) draw(el, globalThis.ABCJS);
+  else loadAbcjs(el.ownerDocument).then((ABCJS) => draw(el, ABCJS), () => draw(el, null));
 }
 
-async function engrave(el) {
+/** Draw the piece into el: engraved by abcjs, or as a plain lead sheet without it. */
+function draw(el, ABCJS) {
+  if (!el.isConnected) return;
   const per = perLine(el);
   el.dataset.per = String(per);
+  el.classList.add('drawn');
+  if (!ABCJS) { el.innerHTML = leadSheetHtml(el.dataset.id, per); player.lit = -1; return; }
   const o = { hands: el.dataset.hands, names: el.dataset.names === '1', perLine: per };
-  let ABCJS = null;
-  try { ABCJS = await loadAbcjs(el.ownerDocument); } catch { ABCJS = null; }
-  if (!el.isConnected) return;
-  if (!ABCJS) { el.innerHTML = leadSheetHtml(el.dataset.id, per); return; }
-  ABCJS.renderAbc(el, songAbc(el.dataset.id, o), {
+  el.innerHTML = '';
+  const [tune] = ABCJS.renderAbc(el, songAbc(el.dataset.id, o), {
     add_classes: true,
     responsive: 'resize',
     staffwidth: per === 4 ? 900 : 440,
@@ -142,6 +152,7 @@ async function engrave(el) {
     paddingtop: 8,
     paddingbottom: 8,
   });
+  el.dataset.warnings = String(tune?.warnings?.length || 0);
   el.classList.add('engraved');
   player.lit = -1; // light the bar being played again on the new drawing
 }
@@ -164,8 +175,8 @@ let resizeTimer = 0;
 globalThis.addEventListener?.('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    const el = document.querySelector('.songbook #sheet.engraved');
-    if (el && Number(el.dataset.per) !== perLine(el)) { el.innerHTML = ''; engrave(el); }
+    const el = document.querySelector('.songbook #sheet.drawn');
+    if (el && Number(el.dataset.per) !== perLine(el)) draw(el, globalThis.ABCJS || null);
   }, 250);
 });
 
@@ -174,13 +185,21 @@ globalThis.addEventListener?.('resize', () => {
 // the piece playing: { id, h (music.js handle), raf, lit (the bar lit up) }
 const player = { id: null, h: null, raf: 0, lit: -1 };
 
+/** The Listen button says Stop while its piece plays. */
+function showPlaying() {
+  const b = document.querySelector('.songbook [data-action="song-play"]');
+  if (!b) return;
+  const on = Boolean(player.h && player.id === ui.songId);
+  b.textContent = on ? '■ Stop' : '▶ Listen';
+  b.classList.toggle('playing', on);
+}
+
 function stopPiece() {
   cancelAnimationFrame(player.raf);
   player.h?.stop();
   Object.assign(player, { id: null, h: null, raf: 0, lit: -1 });
   document.querySelectorAll('#sheet .now').forEach((e) => e.classList.remove('now'));
-  const b = document.querySelector('.songbook [data-action="song-play"]');
-  if (b) { b.textContent = '▶ Listen'; b.classList.remove('playing'); }
+  showPlaying();
 }
 
 function startPiece(id) {
@@ -189,8 +208,7 @@ function startPiece(id) {
   const h = playPiece(id, { tempo: prefs().slow ? 0.7 : 1 });
   if (!h) return;
   Object.assign(player, { id, h, lit: -1 });
-  const b = document.querySelector('.songbook [data-action="song-play"]');
-  if (b) { b.textContent = '■ Stop'; b.classList.add('playing'); }
+  showPlaying();
   player.raf = requestAnimationFrame(follow);
 }
 
@@ -207,12 +225,20 @@ function follow() {
     const els = bar >= 0 ? sheet?.querySelectorAll(`.abcjs-mm${bar}`) : null;
     if (els?.length) {
       els.forEach((e) => e.classList.add('now'));
-      // a new line: bring it into view
-      if (bar % Number(sheet.dataset.per || 4) === 0) els[0].scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      keepInView(els);
       p.lit = bar;
     }
   }
   p.raf = requestAnimationFrame(follow);
+}
+
+/** Scroll the bar being played into view when it isn't (below the buttons, which stay on top). */
+function keepInView(els) {
+  const boxes = [...els].map((e) => e.getBoundingClientRect());
+  const top = Math.min(...boxes.map((b) => b.top));
+  const bottom = Math.max(...boxes.map((b) => b.bottom));
+  const under = document.querySelector('.songbook .song-tools')?.getBoundingClientRect().bottom || 0;
+  if (top < under + 4 || bottom > window.innerHeight - 4) window.scrollBy({ top: top - under - 24, behavior: 'smooth' });
 }
 
 globalThis.document?.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') stopPiece(); });
@@ -228,7 +254,7 @@ export function pieceSeconds(id, tempo = 1) {
 export const songbookActions = {
   'songbook-back': () => { stopPiece(); ui.view = 'kid'; ui.songId = null; render(); },
   'song-open': (el) => { stopPiece(); ui.songId = el.dataset.id; render(); window.scrollTo(0, 0); },
-  'song-back': () => { stopPiece(); ui.songId = null; render(); },
+  'song-back': () => { stopPiece(); ui.songId = null; render(); window.scrollTo(0, 0); },
   'song-hands': (el) => { setPrefs({ hands: el.dataset.val }); render(); },
   'song-names': () => { setPrefs({ names: !prefs().names }); render(); },
   'song-slow': () => {

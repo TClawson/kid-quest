@@ -2014,7 +2014,7 @@ function render() {
   const scrollY = window.scrollY;
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
-  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
+  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
   const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
   // load the sign-in code early, so a sign-in popup opens straight from the tap
