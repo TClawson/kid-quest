@@ -120,7 +120,7 @@ export function cameIn(kidId) { memory.set(kidId, { ...HOUSE_SPOTS.door, face: 1
  * }
  */
 export function mountHouses(root, handlers) {
-  root.querySelectorAll('.house:not([data-live])').forEach((section) => mount(section, handlers));
+  root.querySelectorAll('.house:not(.music-house):not([data-live])').forEach((section) => mount(section, handlers));
 }
 
 let roomCache = { key: '', canvas: null, res: null };

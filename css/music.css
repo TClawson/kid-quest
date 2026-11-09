@@ -1,0 +1,31 @@
+/* ---------- the music house (js/musichouse.js) and its door in the village ----------
+   Inside works like the buddy's house (css/house.css): village pixels, scaled 3x (2x on phones). */
+
+.music-house.tier-1 .house-view { background: #2e1e2a; }
+.music-house.tier-2 .house-view { background: #2a1418; }
+.music-house.tier-3 .house-view { background: #0e0a16; }
+.m-life { position: absolute; left: 0; top: 0; image-rendering: pixelated; image-rendering: crisp-edges; pointer-events: none; z-index: 1; }
+.music-house .house-room { z-index: 0; }
+/* station signs float over the art; they show when the buddy is near */
+.m-station { z-index: 2; }
+.m-station .h-tag { top: 1px; }
+.m-station[data-spot="lab"] { z-index: 160; }
+.music-house.tier-3 .h-sign { background: rgba(255, 79, 216, 0.28); box-shadow: 0 0 0 2px rgba(63, 240, 255, 0.35); }
+
+/* the music hall in the village: tap it to walk in (or to hear that it's locked) */
+.v-music { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; }
+.v-music-sign { position: absolute; display: block; image-rendering: pixelated; image-rendering: crisp-edges; background-repeat: no-repeat; pointer-events: none; }
+.v-music-sign.f2 { animation: v-music-blink 0.8s steps(1, end) infinite; }
+@keyframes v-music-blink { 50% { background-position-x: 100%; } }
+.v-music-sign.f1 { animation: v-music-sway 3.5s ease-in-out infinite; transform-origin: 50% 0; }
+@keyframes v-music-sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@media (prefers-reduced-motion: reduce) { .v-music-sign { animation: none !important; } }
+
+/* ---------- the piano stopwatch (a page like the practice timer) ---------- */
+.watch .ring { --gold: #f0c040; }
+.watch .ring.over { background: conic-gradient(var(--gold) calc(var(--p, 0) * 1turn), #ffe8a3 0); }
+.watch .watch-today { font: 700 3.2rem/1 var(--px-font); }
+.watch .watch-goal { display: block; margin-top: 4px; font-weight: 700; }
+.watch .watch-goal.done { color: #2b8a3e; }
+.watch .watch-session { margin: 0; font-weight: 700; color: var(--muted); }
+.watch .watch-extra { color: #a8701e; font-weight: 800; }

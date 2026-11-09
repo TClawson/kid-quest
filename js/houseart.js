@@ -75,7 +75,7 @@ function edgeOf(c, side) {
  * its silhouette (ink only along its very bottom, where it stands on the floor). Cells tagged
  * 'soft' (glows, shadows, light) never get an outline.
  */
-function sprite(w, h, draw, o = {}) {
+export function sprite(w, h, draw, o = {}) {
   const b = new Buf(w, h, o.pad ?? 3);
   draw(b);
   const marks = [];
@@ -94,7 +94,7 @@ function sprite(w, h, draw, o = {}) {
 }
 
 /** A soft shadow on the floor (see-through). */
-function shadow(px, cx, cy, rx, ry, a = 0.22) {
+export function shadow(px, cx, cy, rx, ry, a = 0.22) {
   for (let y = Math.floor(cy - ry); y <= cy + ry; y += 1) {
     for (let x = Math.floor(cx - rx); x <= cx + rx; x += 1) {
       const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;

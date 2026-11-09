@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, defaultTasks, addDays, snapshotToday } from '../js/logic.js';
-import { HOUSE_CHORES, houseRole, setHouseRole, houseTask, houseChores, floorDays, messLevel, shelfLevel, isInside, setInside } from '../js/houserules.js';
+import { HOUSE_CHORES, houseRole, setHouseRole, houseTask, houseChores, floorDays, messLevel, shelfLevel, isInside, setInside, placeOf, setPlace } from '../js/houserules.js';
 import { FURNITURE, HOME_SPOTS, homeLayout, placeFurniture, isPlaced, furnitureById } from '../js/furniture.js';
 import { ITEMS, SLOTS, isUnlocked, LEGACY_LEVEL, addOwned } from '../js/items.js';
 import { weekOf, recordWeekBest, weekBest, leaderboard, BOARD_GAMES } from '../js/leaderboard.js';
@@ -127,6 +127,21 @@ test('inside or outside: a new day starts inside, otherwise it stays where it wa
   assert.equal(isInside('k2', day, storage), false, 'each kid on their own');
   const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
   assert.equal(isInside('k1', day, broken), false, 'no storage: still works');
+});
+
+test('the buddy can be in its house, the music house or out in the village', () => {
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  assert.equal(placeOf('k1', day, storage), 'out');
+  setPlace('k1', day, 'music', storage);
+  assert.equal(placeOf('k1', day, storage), 'music');
+  assert.equal(isInside('k1', day, storage), false, 'the music house is not its own house');
+  assert.equal(placeOf('k1', addDays(day, 1), storage), 'house', 'the next morning, back home');
+  setPlace('k1', day, 'attic', storage);
+  assert.equal(placeOf('k1', day, storage), 'out', 'an unknown place is the village');
+  // saved before the music house: { inside } only
+  mem.set('kidquest.house', JSON.stringify({ k1: { day, inside: true } }));
+  assert.equal(placeOf('k1', day, storage), 'house');
 });
 
 // ---------- furniture ----------

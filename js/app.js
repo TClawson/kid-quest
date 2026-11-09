@@ -15,9 +15,11 @@ import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { liveHtml, live, liveStart, partyAll } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
-import { villageHtml, mountVillages, cameOut } from './village.js';
+import { villageHtml, mountVillages, cameOut, cameOutOfMusic } from './village.js';
 import { houseHtml, mountHouses, cameIn } from './house.js';
-import { houseChores, shelfLevel, isInside, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
+import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
+import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
+import { musicTier, daysToMusicHouse, studioOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
 import { applyGrants } from './grants.js';
 import { furnitureThumb } from './houseart.js';
@@ -40,7 +42,7 @@ import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETT
 import { state, setState, provide } from './ctx.js';
 import {
   startTimer, stopTimer, leaveTimer, returnToTimer, restoreTimer, mmss, buddyCheer,
-  ears, startEars, stopEars, wakeEars, viewTimer,
+  ears, startEars, stopEars, wakeEars, viewTimer, viewWatch,
   listenTest, viewListen, startListenTest, stopListenTest, setLastListenMood, LISTEN_MODE_KEY, DANCE_LEAD, DANCE_LEAD_KEY,
 } from './timer-ui.js';
 import {
@@ -1030,7 +1032,12 @@ function villageView(kid, s, entry, mood) {
     return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
   });
   // the buddy's house: where the day starts, and wherever the kid left the buddy after that
-  if (isInside(kid.id, today())) return houseView(kid, list, mood);
+  // (its house, the music house, or out in the village)
+  const place = placeOf(kid.id, today());
+  if (place === 'house') return houseView(kid, list, mood);
+  const prog = progressFor(kid);
+  const tier = musicTier(prog);
+  if (place === 'music' && tier) return musicView(kid, list, mood, tier);
   const c = chestFor(kid, today());
   // each map has its own village; a finished treasure map for it puts up its landmark
   const theme = kidTheme(kid);
@@ -1050,8 +1057,50 @@ function villageView(kid, s, entry, mood) {
     tasks: list,
     planned,
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
+    music: { tier, left: tier ? 0 : daysToMusicHouse(prog) },
   });
 }
+
+// Which look of the music house each kid has seen on this device, so a new look is
+// greeted once (the first visit, and each better piano).
+const MUSIC_SEEN_KEY = 'kidquest.musicSeen';
+const musicHellos = new Map(); // kid id -> the look greeted while the app is open (the page keeps saying it the same way)
+function musicHello(kidId, tier) {
+  if (musicHellos.get(kidId) === tier) return tierInfo(tier).hello;
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem(MUSIC_SEEN_KEY) || '{}') || {}; } catch { seen = {}; }
+  if ((seen[kidId] || 0) >= tier) return '';
+  seen[kidId] = tier;
+  try { localStorage.setItem(MUSIC_SEEN_KEY, JSON.stringify(seen)); } catch { /* it just says hello again */ }
+  musicHellos.set(kidId, tier);
+  return tierInfo(tier).hello;
+}
+
+/** Inside the music house (musichouse.js): its look for the kid's best piano, and its stations. */
+function musicView(kid, list, mood, tier) {
+  return musicHouseHtml({
+    kidId: kid.id,
+    kidName: kid.name,
+    color: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
+    buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
+    tier,
+    studio: studioOpen(state, kid, today()),
+    hello: musicHello(kid.id, tier),
+    quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
+  });
+}
+
+const musicHandlers = {
+  onPiano: () => { ui.view = 'watch'; ui.watchSession = 0; render(); },
+  onExit: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setPlace(kid.id, today(), 'out');
+    cameOutOfMusic(kid.id, kidTheme(kid));
+    render();
+  },
+  sound: () => sounds.tap(),
+};
 /** Inside the buddy's house (house.js): today's bed, teeth and floor chores, the trophy shelf, the furniture. */
 function houseView(kid, list, mood) {
   const t = today();
@@ -1284,6 +1333,13 @@ const villageHandlers = {
     if (!kid) return;
     setInside(kid.id, today(), true);
     cameIn(kid.id);
+    render();
+  },
+  onMusic: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setPlace(kid.id, today(), 'music');
+    cameInMusic(kid.id);
     render();
   },
   sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
@@ -1898,7 +1954,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -1973,6 +2029,7 @@ function render() {
   paintQuestMaps($app);
   mountVillages($app, villageHandlers);
   mountHouses($app, houseHandlers);
+  mountMusicHouses($app, musicHandlers);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
@@ -2008,6 +2065,7 @@ const actions = {
   'timer-pause': () => { stopEars(); stopTimer(); },
   'timer-buddy': () => buddyCheer(),
   'timer-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
+  'watch-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
   parent: () => pinPad({ title: 'Parents only', subtitle: 'Type the parent PIN', onSuccess: () => { ui.view = 'parent'; ui.tab = pendingApprovals(state, today()).length ? 'approvals' : ui.tab; render(); } }),
   'listen-open': () => { ui.view = 'listen'; ui.listenKid = ui.listenKid || state.kids[0]?.id; render(); window.scrollTo(0, 0); },
   'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; render(); },
@@ -2595,7 +2653,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading || ui.view === 'timer') return;
+    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch') return;
     reloading = true;
     window.location.reload();
   });
