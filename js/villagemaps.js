@@ -21,6 +21,7 @@ import { GALLEON } from './galleonart.js';
 import { CAVE } from './caveart.js';
 import { GATE } from './gateart.js';
 import { STONE } from './stoneart.js';
+import { KAPOK } from './kapokart.js';
 
 const W = 448;
 
@@ -350,29 +351,33 @@ export const VILLAGE_MAPS = {
     // the river pours over a mossy cliff at the top of the village (things come over it now and then)
     falls: { x0: 218, x1: 236, lip: 4, base: 50, cliff: [184, 274] },
     // the map's moving things (maplife.js): where the sloth's vines hang
-    life: { vines: [176, 360] },
+    life: { vines: [176, 336] },
     paths: [
-      [[90, 132], [90, 300], [190, 300]], [[256, 300], [368, 300], [368, 138]], [[368, 300], [368, 400]], [[90, 300], [150, 330], [150, 504], [85, 504], [85, 492]],
+      [[90, 132], [90, 300], [190, 300]], [[256, 300], [368, 300], [368, 138]], [[368, 300], [368, 364]], [[90, 300], [150, 330], [150, 504], [85, 504], [85, 492]],
     ],
-    plazas: [[368, 400, 22], [90, 300, 20]],
+    plazas: [[368, 364, 16], [90, 300, 20]],
     props: [
       p('stall', 140, 130, { pal: { a: '#5c940d', b: '#d8f5a2', wood: '#a0612f', goods: [['#ffd43b', '#fff3bf'], ['#ff6b6b', '#ffc9c9'], ['#ff922b', '#ffd8a8']] } }),
-      p('laundry', 266, 400, { w: 72 }),
-      p('jungletree', 290, 160), p('jungletree', 170, 470), p('jungletree', 396, 470),
-      p('fern', 30, 200), p('fern', 150, 360), p('fern', 300, 250), p('fern', 410, 200), p('fern', 290, 520),
-      p('bigflower', 120, 340, { c: '#ff6b6b' }), p('bigflower', 270, 360, { c: '#f783ac' }), p('bigflower', 400, 270, { c: '#ffd43b' }),
+      p('laundry', 376, 310, { w: 48 }),
+      p('jungletree', 170, 470),
+      p('fern', 178, 318), p('fern', 250, 262), p('fern', 410, 200),
+      p('bigflower', 292, 108, { c: '#ffd43b' }),
+      // the jungle's little things
+      p('dartfrog', 22, 190), p('bromeliad', 112, 344), p('orchids', 404, 280), p('mushlog', 96, 524),
+      p('ants', 316, 246), p('mask', 270, 98), p('morpho', 172, 262),
     ],
     shop: { x: 162, y: 178 },
     green: {
       left: { x: 50, y: 226, w: 96, h: 44 }, right: { x: 290, y: 196, w: 106, h: 40 },
       idle: [{ x: 166, y: 236 }, { x: 280, y: 330 }, { x: 170, y: 290 }, { x: 330, y: 340 }],
     },
-    landmark: { x: 290, y: 450, stand: { x: 276, y: 540 } },
-    chest: { x: 368, y: 406 },
+    // the great kapok tree with its rain drum, drawn for the village (kapokart.js): the biggest thing here, in the south-east corner
+    landmark: { x: 280, y: 388, w: KAPOK.w, h: KAPOK.h, art: 'kapok', foot: [40, 118, 118, 42], stand: { x: 270, y: 552 } },
+    chest: { x: 368, y: 370 },
     start: { x: 90, y: 144 },
     slots: {
       morning: [[150, 120], [40, 160], [130, 300], [40, 330], [190, 380], [70, 530], [40, 290], [180, 430]],
-      afternoon: [[310, 150, MUSIC], [300, 440, LAUNDRY], [290, 270], [420, 250], [300, 366], [420, 400], [270, 210], [420, 160]],
+      afternoon: [[310, 150, MUSIC], [400, 350, LAUNDRY], [290, 270], [420, 250], [306, 350], [270, 210], [420, 160], [266, 160]],
     },
     labels: { morning: [104, 196, '⬅ 🌅 Morning quests'], afternoon: [346, 268, '➡ ☀️ After-school quests'] },
     pond: { lip: '#6e4b2a', water: '#1c9c8c', deep: '#127a6e', light: '#38d9a9', shine: '#96f2d7', pads: true },
@@ -544,6 +549,8 @@ export function villageLayout(theme) {
     ...[home, ...houses].map((h) => [h.x, h.y - 6, h.w, h.h + 4]),
     ...props.map((q) => { const s = PROPS[q.kind]; if (!s?.foot) return null; const f = q.kind === 'garden' ? [0, 0, q.w || 62, (q.h || 34) + 14] : s.foot; return [q.x + f[0], q.y + f[1], f[2], f[3]]; }).filter(Boolean),
     ...props.filter((q) => q.kind === 'laundry').flatMap((q) => [[q.x, q.y + 18, 4, 8], [q.x + (q.w || 84) - 4, q.y + 18, 4, 8]]),
+    // a waterfall's cliff can't be climbed
+    ...(spec.falls ? [[spec.falls.cliff[0], 0, spec.falls.cliff[1] - spec.falls.cliff[0], spec.falls.base - 6]] : []),
   ];
   const inWater = (x, y, pad = 0) => water.some((wa) => waterDepth(wa, x, y) > -3 - pad);
   const onBridge = (x, y) => crossings.some((b) => (b.dir === 'h' ? x > b.x - 6 && x < b.x + b.w + 6 && y > b.y + 2 && y < b.y + b.h - 2 : x > b.x + 2 && x < b.x + b.w - 2 && y > b.y - 6 && y < b.y + b.h + 6));

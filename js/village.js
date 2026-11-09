@@ -22,9 +22,10 @@ import { GALLEON, startGalleon } from './galleonart.js';
 import { CAVE, startCave } from './caveart.js';
 import { GATE, startGate } from './gateart.js';
 import { STONE, startStone } from './stoneart.js';
+import { KAPOK, startKapok } from './kapokart.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
-const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone } };
+const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok } };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
