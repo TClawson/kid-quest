@@ -159,6 +159,37 @@ export function nestFields(fields) {
   return out;
 }
 
+// What to write to the cloud for one save, without touching Firebase (so it can
+// be tested): one step per changed document, in order.
+//   { path, op: 'merge', data }    a new document here: merge into whatever the
+//                                  server has (another device may have made it)
+//   { path, op: 'patch', fields }  a document this device is still creating:
+//                                  set just these fields (works before it exists)
+//   { path, op: 'update', fields } change just these fields
+//   { path, op: 'delete' }
+// fields are diffFields pairs. creating holds the paths still being created.
+// 'device' never leaves this device, and the family document is never deleted.
+export function planWrites(changes, before, after, creating = new Set()) {
+  const plan = [];
+  const json = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+  for (const path of changes.changed) {
+    if (path === 'device') continue;
+    const was = before ? docAt(before, path) : undefined;
+    const now = json(docAt(after, path));
+    if (was === undefined) {
+      plan.push({ path, op: 'merge', data: now });
+      continue;
+    }
+    const fields = diffFields(json(was), now);
+    if (!fields.length) continue;
+    plan.push({ path, op: creating.has(path) && path !== 'family' ? 'patch' : 'update', fields });
+  }
+  for (const path of changes.removed) {
+    if (path !== 'device' && path !== 'family') plan.push({ path, op: 'delete' });
+  }
+  return plan;
+}
+
 // onSave(changes, before, after) runs after each successful save with the
 // changed document paths and the splitState views before and after, so a
 // cloud backend can write just those.
