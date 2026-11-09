@@ -85,9 +85,29 @@ export function checkArrangement(id, level, version, lower = null) {
     const sounding = (list) => list.filter((n) => n.start <= t + 1e-6 && t < n.start + n.len - 1e-6).map((n) => n.midi);
     const r = sounding(rh);
     const l = sounding(lh);
+    const spot = `${level} bar ${Math.floor(t / steps) + 1}, eighth ${(t % steps) + 1}`;
     if (r.length && l.length && Math.max(...l) >= Math.min(...r)) {
-      errors.push(`${level} bar ${Math.floor(t / steps) + 1}: the hands meet (left ${Math.max(...l)} ≥ right ${Math.min(...r)}) at eighth ${(t % steps) + 1}`);
+      errors.push(`${spot}: the hands meet (left ${Math.max(...l)} ≥ right ${Math.min(...r)})`);
+    } else if (r.length && l.length && Math.min(...r) - Math.max(...l) < 3) {
+      notes.push(`${spot}: the thumbs are only ${Math.min(...r) - Math.max(...l)} semitone(s) apart`);
     }
+    // a semitone (or a minor 9th) between notes struck or held together rubs
+    const both = [...r, ...l].sort((a, b) => a - b);
+    for (let i = 0; i < both.length; i += 1) {
+      for (let j = i + 1; j < both.length; j += 1) {
+        const gap = both[j] - both[i];
+        if (gap === 1 || gap === 13) notes.push(`${spot}: notes ${both[i]} and ${both[j]} rub (a ${gap === 1 ? 'semitone' : 'minor 9th'})`);
+      }
+    }
+  }
+  // the right hand's harmony notes (under the top note), struck on a beat, belong to the chord
+  for (const t of times) {
+    if (t % 2 > 1e-6) continue;
+    const struck = rh.filter((n) => Math.abs(n.start - t) < 1e-6).map((n) => n.midi).sort((a, b) => a - b);
+    const tones = pitchClasses(song.chords[Math.floor(t / steps)]);
+    const top = struck[struck.length - 1];
+    // (an octave under the top note doubles the melody, so it can pass outside the chord)
+    for (const m of struck.slice(0, -1)) if (m % 12 !== top % 12 && !tones.has(m % 12)) notes.push(`${level} bar ${Math.floor(t / steps) + 1}, eighth ${(t % steps) + 1}: right-hand harmony note ${m} isn't in the ${song.chords[Math.floor(t / steps)]} chord`);
   }
 
   // the melody is there
@@ -140,16 +160,17 @@ export function checkArrangement(id, level, version, lower = null) {
 
   // harder than the level below
   const events = (hand) => read[hand].reduce((a, r) => a + r.events.filter((e) => e.notes.length).length, 0) / bars;
+  const keys = (hand) => read[hand].reduce((a, r) => a + r.events.reduce((k, e) => k + e.notes.length, 0), 0) / bars;
   const stats = {
     rhPerBar: +events('rh').toFixed(1),
     lhPerBar: +events('lh').toFixed(1),
-    density: +(events('rh') + events('lh')).toFixed(1),
+    density: +(keys('rh') + keys('lh')).toFixed(1), // keys pressed a bar, both hands
     melodyKept: Math.round(share * 100),
     chordTones: total ? Math.round((on / total) * 100) : 0,
     lowest: Math.min(...lh.map((n) => n.midi)),
     highest: Math.max(...rh.map((n) => n.midi)),
   };
-  if (lower !== null && stats.density <= lower) errors.push(`${level}: ${stats.density} notes a bar is no busier than the level below (${lower})`);
+  if (lower !== null && stats.density <= lower) errors.push(`${level}: ${stats.density} keys pressed a bar is no busier than the level below (${lower})`);
   return { errors, notes, stats };
 }
 
