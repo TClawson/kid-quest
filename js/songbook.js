@@ -1,0 +1,253 @@
+// The music house's sheet music stand: a songbook of the game's own songs (the map songs and
+// the secret shows' tunes), engraved as piano sheet music by abcjs (js/vendor/abcjs.js,
+// loaded the first time the songbook opens). Each better piano opens more songs, easiest
+// first (sheetmusic.js). A piece can be heard (the game's own arrangement, music.js) with
+// the bar being played lit up, at the game's speed or slower.
+// Shared things come from ctx.js; app.js adds songbookActions to its actions.
+
+import { ui, state, esc, kidById, render, progressFor, toast } from './ctx.js';
+import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars, PIECES_PER_TIER } from './sheetmusic.js';
+import { musicTier, MUSIC_TIERS } from './musicrules.js';
+import { itemById } from './items.js';
+import { playPiece } from './music.js';
+
+// ---------- settings (this device) ----------
+
+const PREFS_KEY = 'kidquest.songbook';
+const HANDS = [['melody', 'Melody'], ['roots', '+ Left hand notes'], ['chords', '+ Left hand chords']];
+function prefs() {
+  let p = null;
+  try { p = JSON.parse(globalThis.localStorage?.getItem(PREFS_KEY) || 'null'); } catch { p = null; }
+  return { hands: HANDS.some(([h]) => h === p?.hands) ? p.hands : 'roots', names: Boolean(p?.names), slow: Boolean(p?.slow) };
+}
+function setPrefs(change) {
+  const next = { ...prefs(), ...change };
+  try { globalThis.localStorage?.setItem(PREFS_KEY, JSON.stringify(next)); } catch { /* private mode: just this visit */ }
+  return next;
+}
+
+// ---------- the screens ----------
+
+const pianoName = (tier) => itemById(MUSIC_TIERS[tier - 1].piano)?.name.toLowerCase() || 'next piano';
+const TIER_TITLE = ['', 'Little keyboard songs', 'Upright piano songs', 'Rock star piano songs'];
+
+/** Where a piece comes from, in words. */
+function source(p) {
+  const place = itemById(p.map)?.name || 'the map';
+  return p.kind === 'show' ? `The secret show on the ${place} map` : `The ${place} map song`;
+}
+
+/** The songbook screen: the list of pieces, or one piece (ui.songId). */
+export function viewSongbook() {
+  const kid = kidById(ui.kidId);
+  if (!kid) { ui.view = 'kid'; return ''; }
+  const tier = musicTier(progressFor(kid));
+  const book = songbookFor(tier);
+  const piece = ui.songId && book.find((p) => p.id === ui.songId && p.open);
+  return piece ? pieceHtml(kid, piece) : listHtml(kid, book, tier);
+}
+
+function listHtml(kid, book, tier) {
+  const open = book.filter((p) => p.open).length;
+  const card = (p) => {
+    const s = stars(p.level);
+    const head = `<span class="song-icon" aria-hidden="true">${p.kind === 'show' ? '✨' : '🎵'}</span><b>${esc(p.name)}</b>`;
+    if (!p.open) {
+      return `<div class="song-card locked" aria-label="${esc(p.name)}, locked">${head}<small>🔒 Opens with the ${esc(pianoName(p.tier))}</small></div>`;
+    }
+    return `<button class="song-card" data-action="song-open" data-id="${esc(p.id)}">${head}
+      <small>${esc(keyLabel(p.key))} · ${p.bars} bars</small>
+      <span class="song-stars" aria-label="${['', 'Easy', 'Medium', 'Tricky'][s]}">${'★'.repeat(s)}${'☆'.repeat(3 - s)}</span></button>`;
+  };
+  const sections = [1, 2, 3].map((t) => {
+    const list = book.filter((p) => p.tier === t);
+    return `<section class="song-tier ${t <= tier ? '' : 'locked'}"><h3>${TIER_TITLE[t]}</h3><div class="song-grid">${list.map(card).join('')}</div></section>`;
+  }).join('');
+  return `
+    <div class="screen songbook" style="--kid:${kid.color}">
+      <header class="kid-head">
+        <button class="btn ghost round" data-action="songbook-back" aria-label="Back to the music house">←</button>
+        <div class="kid-title"><b>🎼 Sheet music</b><small>${esc(kid.name)}'s songbook · ${open} of ${book.length} songs open</small></div>
+      </header>
+      <p class="muted song-intro">Songs from the game to play on your piano. Every new piano opens ${PIECES_PER_TIER[1] - PIECES_PER_TIER[0]} more!</p>
+      ${sections}
+    </div>`;
+}
+
+function pieceHtml(kid, p) {
+  const o = prefs();
+  const song = songById(p.id);
+  const playing = player.h && player.id === p.id && !player.h.done();
+  const tabs = HANDS.map(([h, label]) => `<button class="${o.hands === h ? 'on' : ''}" data-action="song-hands" data-val="${h}" aria-pressed="${o.hands === h}">${label}</button>`).join('');
+  return `
+    <div class="screen songbook piece" style="--kid:${kid.color}">
+      <header class="kid-head">
+        <button class="btn ghost round" data-action="song-back" aria-label="Back to the songbook">←</button>
+        <div class="kid-title"><b>${p.kind === 'show' ? '✨' : '🎵'} ${esc(p.name)}</b><small>${esc(keyLabel(p.key))} · speed ${song.bpm}${song.swing ? ', swing' : ''} · ${esc(source(p))}</small></div>
+      </header>
+      <div class="song-tools">
+        <nav class="tabs song-hands" aria-label="Which hands">${tabs}</nav>
+        <div class="song-buttons">
+          <button class="btn ghost ${o.names ? 'on' : ''}" data-action="song-names" aria-pressed="${o.names}">🔤 Note names</button>
+          <button class="btn ghost ${o.slow ? 'on' : ''}" data-action="song-slow" aria-pressed="${o.slow}">🐢 Slow</button>
+          <button class="btn song-play ${playing ? 'playing' : ''}" data-action="song-play">${playing ? '■ Stop' : '▶ Listen'}</button>
+        </div>
+      </div>
+      <div class="sheet" id="sheet" data-id="${esc(p.id)}" data-hands="${o.hands}" data-names="${o.names ? 1 : 0}" aria-label="Sheet music for ${esc(p.name)}"></div>
+      <p class="muted small song-tip">The letters above the music are chords: they tell your left hand what to play.${o.hands === 'melody' ? '' : ' The bottom line is your left hand.'}</p>
+    </div>`;
+}
+
+// ---------- engraving ----------
+
+let abcjsLoad = null;
+/** abcjs, loaded on first use (it's big, and only the songbook needs it). */
+function loadAbcjs(doc) {
+  if (globalThis.ABCJS) return Promise.resolve(globalThis.ABCJS);
+  abcjsLoad ||= new Promise((resolve, reject) => {
+    const s = doc.createElement('script');
+    s.src = 'js/vendor/abcjs.js';
+    s.onload = () => (globalThis.ABCJS ? resolve(globalThis.ABCJS) : reject(new Error('abcjs')));
+    s.onerror = () => { abcjsLoad = null; reject(new Error('abcjs')); };
+    doc.head.appendChild(s);
+  });
+  return abcjsLoad;
+}
+
+/** Bars a line: four on a wide screen, two on a phone. */
+const perLine = (el) => (el.clientWidth >= 640 ? 4 : 2);
+
+/** Engrave the piece on screen (after each redraw of the songbook). */
+export function mountSongbook(root) {
+  const el = root.querySelector('.songbook #sheet:not([data-live])');
+  if (!el) return;
+  el.dataset.live = '1';
+  engrave(el);
+}
+
+async function engrave(el) {
+  const per = perLine(el);
+  el.dataset.per = String(per);
+  const o = { hands: el.dataset.hands, names: el.dataset.names === '1', perLine: per };
+  let ABCJS = null;
+  try { ABCJS = await loadAbcjs(el.ownerDocument); } catch { ABCJS = null; }
+  if (!el.isConnected) return;
+  if (!ABCJS) { el.innerHTML = leadSheetHtml(el.dataset.id, per); return; }
+  ABCJS.renderAbc(el, songAbc(el.dataset.id, o), {
+    add_classes: true,
+    responsive: 'resize',
+    staffwidth: per === 4 ? 900 : 440,
+    paddingleft: 4,
+    paddingright: 4,
+    paddingtop: 8,
+    paddingbottom: 8,
+  });
+  el.classList.add('engraved');
+  player.lit = -1; // light the bar being played again on the new drawing
+}
+
+/**
+ * Without abcjs (it didn't load): the melody's note names bar by bar, with the chord names
+ * above them, the way a lead sheet shows them.
+ */
+export function leadSheetHtml(id, per = 4) {
+  const song = songById(id);
+  const bars = song.lead.map((bar, i) => {
+    const notes = barEvents(bar).map((e) => (e.note ? e.note.replace(/\d/, '').replace('#', '♯').replace(/^([A-G])b$/, '$1♭') : '·')).join(' ');
+    return `<div class="lead-bar abcjs-mm${i}"><b>${esc(chordLabel(song.chords[i]))}</b><span>${esc(notes)}</span></div>`;
+  });
+  return `<div class="lead-sheet" style="--per:${per}">${bars.join('')}</div>`;
+}
+
+// re-engrave when the screen turns and a line fits a different number of bars
+let resizeTimer = 0;
+globalThis.addEventListener?.('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const el = document.querySelector('.songbook #sheet.engraved');
+    if (el && Number(el.dataset.per) !== perLine(el)) { el.innerHTML = ''; engrave(el); }
+  }, 250);
+});
+
+// ---------- listening ----------
+
+// the piece playing: { id, h (music.js handle), raf, lit (the bar lit up) }
+const player = { id: null, h: null, raf: 0, lit: -1 };
+
+function stopPiece() {
+  cancelAnimationFrame(player.raf);
+  player.h?.stop();
+  Object.assign(player, { id: null, h: null, raf: 0, lit: -1 });
+  document.querySelectorAll('#sheet .now').forEach((e) => e.classList.remove('now'));
+  const b = document.querySelector('.songbook [data-action="song-play"]');
+  if (b) { b.textContent = '▶ Listen'; b.classList.remove('playing'); }
+}
+
+function startPiece(id) {
+  stopPiece();
+  if (state.settings.sound === false) { toast('The sound is off. A parent can turn it on in Settings.'); return; }
+  const h = playPiece(id, { tempo: prefs().slow ? 0.7 : 1 });
+  if (!h) return;
+  Object.assign(player, { id, h, lit: -1 });
+  const b = document.querySelector('.songbook [data-action="song-play"]');
+  if (b) { b.textContent = '■ Stop'; b.classList.add('playing'); }
+  player.raf = requestAnimationFrame(follow);
+}
+
+/** Every frame while a piece plays: light up the bar being played, and keep it in view. */
+function follow() {
+  const p = player;
+  if (!p.h) return;
+  if (p.h.done() || ui.view !== 'songbook' || ui.songId !== p.id) { stopPiece(); return; }
+  const at = p.h.at();
+  const bar = at < 0 ? -1 : Math.floor(at / p.h.beat);
+  if (bar !== p.lit) {
+    const sheet = document.getElementById('sheet');
+    sheet?.querySelectorAll('.now').forEach((e) => e.classList.remove('now'));
+    const els = bar >= 0 ? sheet?.querySelectorAll(`.abcjs-mm${bar}`) : null;
+    if (els?.length) {
+      els.forEach((e) => e.classList.add('now'));
+      // a new line: bring it into view
+      if (bar % Number(sheet.dataset.per || 4) === 0) els[0].scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      p.lit = bar;
+    }
+  }
+  p.raf = requestAnimationFrame(follow);
+}
+
+globalThis.document?.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') stopPiece(); });
+
+/** How long a piece lasts, in seconds, at a tempo (for tests and the list). */
+export function pieceSeconds(id, tempo = 1) {
+  const song = songById(id);
+  return (song.lead.length * meterOf(song).steps * 60) / song.bpm / 2 / tempo;
+}
+
+// ---------- taps ----------
+
+export const songbookActions = {
+  'songbook-back': () => { stopPiece(); ui.view = 'kid'; ui.songId = null; render(); },
+  'song-open': (el) => { stopPiece(); ui.songId = el.dataset.id; render(); window.scrollTo(0, 0); },
+  'song-back': () => { stopPiece(); ui.songId = null; render(); },
+  'song-hands': (el) => { setPrefs({ hands: el.dataset.val }); render(); },
+  'song-names': () => { setPrefs({ names: !prefs().names }); render(); },
+  'song-slow': () => {
+    const slow = !prefs().slow;
+    setPrefs({ slow });
+    const was = player.h ? player.id : null;
+    render();
+    if (was) startPiece(was); // carry on at the new speed, from the top
+  },
+  'song-play': () => {
+    if (player.h && player.id === ui.songId) stopPiece();
+    else if (ui.songId) startPiece(ui.songId);
+  },
+};
+
+/** The music house's sheet music stand: open the songbook. */
+export function openSongbook() {
+  ui.view = 'songbook';
+  ui.songId = null;
+  render();
+  window.scrollTo(0, 0);
+}

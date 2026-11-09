@@ -263,6 +263,56 @@ export async function renderSong(theme, loops = 1, sampleRate = 44100) {
   return off.startRendering();
 }
 
+// ---------- the sheet music stand (see songbook.js) ----------
+
+/**
+ * Play one piece from the songbook once: a map song ('bg-meadow') or a show's tune
+ * ('show:bg-meadow'), at tempo (1 is the game's speed, 0.7 slower to follow along).
+ * Returns { step (seconds an eighth), beat (steps a bar), steps, at() (steps played so far,
+ * fractional; negative before the first note), done(), stop() }, or null without sound.
+ */
+export function playPiece(id, { tempo = 1 } = {}) {
+  const a = context();
+  if (!a) return null;
+  const song = compile(id);
+  const step = 60 / song.bpm / 2 / tempo;
+  const steps = song.lead.length * song.beat;
+  const master = a.createGain();
+  master.gain.value = VOLUME * 1.6 * (song.gain || 1);
+  master.connect(a.destination);
+  const r = rig(a, master, song, step);
+  const t0 = a.currentTime + 0.15;
+  let next = 0;
+  let timer = 0;
+  const schedule = () => {
+    while (next < steps && t0 + next * step < a.currentTime + 0.3) {
+      scheduleStep(r, song, next, t0 + next * step);
+      next += 1;
+    }
+    if (next >= steps) clearInterval(timer);
+  };
+  schedule();
+  timer = setInterval(schedule, 100);
+  let stopped = false;
+  return {
+    step,
+    beat: song.beat,
+    steps,
+    at: () => (a.currentTime - t0) / step,
+    done: () => stopped || a.currentTime > t0 + steps * step + 0.3,
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      const t = a.currentTime;
+      master.gain.cancelScheduledValues(t);
+      master.gain.setValueAtTime(master.gain.value, t);
+      master.gain.linearRampToValueAtTime(0.0001, t + 0.15);
+      setTimeout(() => master.disconnect(), 400);
+    },
+  };
+}
+
 // ---------- the secret shows (see mapshow.js) ----------
 
 function context() {

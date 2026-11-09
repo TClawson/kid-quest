@@ -146,7 +146,15 @@ for (const [weeks, tier] of [[5, 2], [7, 3]]) {
   await shot(page, `3-tier${tier}-hello`, '.music-house .village-view');
   await tap(page, '.music-house .v-dialog [data-m="bye"]');
   // every station can be walked to, and the buddy ends up next to it
-  for (const [spot, said] of [['sheets', /Sheet music/], ['studio', /chores are done: 1 to go/], ['lab', /Note-o-Matic/]]) {
+  // the sheet music stand opens the songbook (test/smoke/songbook.mjs tries it out)
+  await tap(page, '.m-station[data-spot="sheets"]');
+  await page.clock.runFor(6000);
+  assert.equal(await page.locator('.songbook').count(), 1, `tier ${tier}: the stand opens the songbook`);
+  assert.equal(await page.locator('.song-card:not(.locked)').count(), tier * 6, `tier ${tier}: ${tier * 6} songs open`);
+  await page.click('[data-action="songbook-back"]');
+  await page.clock.runFor(1500);
+  assert.ok(await page.evaluate(() => document.querySelector('.m-station[data-spot="sheets"]').classList.contains('near')), 'back by the stand');
+  for (const [spot, said] of [['studio', /chores are done: 1 to go/], ['lab', /Note-o-Matic/]]) {
     await tap(page, `.m-station[data-spot="${spot}"]`);
     await page.clock.runFor(6000);
     const text = await page.locator('.music-house .v-dialog .v-text').textContent();
