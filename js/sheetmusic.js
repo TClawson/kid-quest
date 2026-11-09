@@ -54,7 +54,7 @@ export function keyLabel(key) {
 }
 
 /** The key signature as an alteration per letter (0 C ... 6 B). */
-function signature(key) {
+export function signature(key) {
   const { sig } = keyInfo(key);
   const alter = [0, 0, 0, 0, 0, 0, 0];
   for (let i = 0; i < Math.abs(sig); i += 1) alter[LETTERS.indexOf((sig > 0 ? SHARPS : FLATS)[i])] = Math.sign(sig);

@@ -2,8 +2,10 @@
 // the secret shows' tunes), engraved as piano sheet music by abcjs (js/vendor/abcjs.js,
 // loaded the first time the songbook opens). Each better piano opens more songs, easiest
 // first (sheetmusic.js); a secret show's tune also waits until its treasure map is finished,
-// like the show itself. A piece can be heard (the game's own arrangement, music.js) with
-// the bar being played lit up, at the game's speed or slower.
+// like the show itself. Each piece comes easy (the melody, chord names and a simple left
+// hand), medium and hard (two-hand piano versions, arrange.js). A piece can be heard (easy:
+// the game's own arrangement; medium and hard: the version on screen, on a piano-like voice,
+// music.js) with the bar being played lit up, at the game's speed or slower.
 // Shared things come from ctx.js; app.js adds songbookActions to its actions.
 
 import { ui, state, esc, kidById, render, progressFor, toast, viewKid } from './ctx.js';
@@ -11,17 +13,26 @@ import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterO
 import { treasureFound } from './treasure.js';
 import { musicTier, MUSIC_TIERS } from './musicrules.js';
 import { itemById } from './items.js';
-import { playPiece } from './music.js';
+import { playPiece, playNotes } from './music.js';
+import { LEVELS, hasLevel, arrangementAbc, arrangementNotes } from './arrange.js';
 
 // ---------- settings (this device) ----------
 
 const PREFS_KEY = 'kidquest.songbook';
 const HANDS = [['melody', 'Melody'], ['roots', '+ Left hand notes'], ['chords', '+ Left hand chords']];
+const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
 function prefs() {
   let p = null;
   try { p = JSON.parse(globalThis.localStorage?.getItem(PREFS_KEY) || 'null'); } catch { p = null; }
-  return { hands: HANDS.some(([h]) => h === p?.hands) ? p.hands : 'roots', names: Boolean(p?.names), slow: Boolean(p?.slow) };
+  return {
+    hands: HANDS.some(([h]) => h === p?.hands) ? p.hands : 'roots',
+    names: Boolean(p?.names),
+    slow: Boolean(p?.slow),
+    level: LEVELS.includes(p?.level) ? p.level : 'easy',
+  };
 }
+/** The level a piece shows at: the one picked last, when the piece has it. */
+const levelOf = (id) => (hasLevel(id, prefs().level) ? prefs().level : 'easy');
 function setPrefs(change) {
   const next = { ...prefs(), ...change };
   try { globalThis.localStorage?.setItem(PREFS_KEY, JSON.stringify(next)); } catch { /* private mode: just this visit */ }
@@ -81,7 +92,10 @@ function listHtml(kid, book, tier) {
 function pieceHtml(kid, p) {
   const o = prefs();
   const song = songById(p.id);
+  const level = levelOf(p.id);
   const tabs = HANDS.map(([h, label]) => `<button class="${o.hands === h ? 'on' : ''}" data-action="song-hands" data-val="${h}" aria-pressed="${o.hands === h}">${label}</button>`).join('');
+  const levels = LEVELS.filter((l) => hasLevel(p.id, l));
+  const levelTabs = levels.map((l) => `<button class="${l === level ? 'on' : ''}" data-action="song-level" data-val="${l}" aria-pressed="${l === level}">${LEVEL_NAMES[l]}</button>`).join('');
   return `
     <div class="screen songbook piece" style="--kid:${kid.color}">
       <header class="kid-head">
@@ -89,15 +103,18 @@ function pieceHtml(kid, p) {
         <div class="kid-title"><b>${p.kind === 'show' ? '✨' : '🎵'} ${esc(p.name)}</b><small>${esc(keyLabel(p.key))} · speed ${song.bpm}${song.swing ? ', swing' : ''} · ${esc(source(p))}</small></div>
       </header>
       <div class="song-tools">
-        <nav class="tabs song-hands" aria-label="Which hands">${tabs}</nav>
+        ${levels.length > 1 ? `<nav class="tabs song-levels" aria-label="How hard">${levelTabs}</nav>` : ''}
+        ${level === 'easy' ? `<nav class="tabs song-hands" aria-label="Which hands">${tabs}</nav>` : ''}
         <div class="song-buttons">
           <button class="btn ghost ${o.names ? 'on' : ''}" data-action="song-names" aria-pressed="${o.names}">🔤 Note names</button>
           <button class="btn ghost ${o.slow ? 'on' : ''}" data-action="song-slow" aria-pressed="${o.slow}">🐢 Slow</button>
           <button class="btn song-play" data-action="song-play">▶ Listen</button>
         </div>
       </div>
-      <div class="sheet" id="sheet" data-id="${esc(p.id)}" data-hands="${o.hands}" data-names="${o.names ? 1 : 0}" aria-label="Sheet music for ${esc(p.name)}"><p class="muted sheet-wait">Getting the music ready…</p></div>
-      <p class="muted small song-tip">The letters above the music are chords: they tell your left hand what to play.${o.hands === 'melody' ? '' : ' The bottom line is your left hand.'}</p>
+      <div class="sheet" id="sheet" data-id="${esc(p.id)}" data-hands="${o.hands}" data-level="${level}" data-names="${o.names ? 1 : 0}" aria-label="Sheet music for ${esc(p.name)}"><p class="muted sheet-wait">Getting the music ready…</p></div>
+      <p class="muted small song-tip">${level === 'easy'
+    ? `The letters above the music are chords: they tell your left hand what to play.${o.hands === 'melody' ? '' : ' The bottom line is your left hand.'}`
+    : 'Both hands, written out: the top line is your right hand, the bottom line your left. The letters above are the chords.'}</p>
     </div>`;
 }
 
@@ -145,8 +162,10 @@ function draw(el, ABCJS) {
   el.classList.add('drawn');
   if (!ABCJS) { el.innerHTML = leadSheetHtml(el.dataset.id, per); player.lit = -1; return; }
   const o = { hands: el.dataset.hands, names: el.dataset.names === '1', perLine: per };
+  const level = el.dataset.level || 'easy';
   el.innerHTML = '';
-  const [tune] = ABCJS.renderAbc(el, songAbc(el.dataset.id, o), {
+  const abc = level === 'easy' ? songAbc(el.dataset.id, o) : arrangementAbc(el.dataset.id, level, o);
+  const [tune] = ABCJS.renderAbc(el, abc, {
     add_classes: true,
     responsive: 'resize',
     staffwidth: per === 4 ? 900 : 440,
@@ -208,7 +227,12 @@ function stopPiece() {
 function startPiece(id) {
   stopPiece();
   if (state.settings.sound === false) { toast('The sound is off. A parent can turn it on in Settings.'); return; }
-  const h = playPiece(id, { tempo: prefs().slow ? 0.7 : 1 });
+  const tempo = prefs().slow ? 0.7 : 1;
+  const level = levelOf(id);
+  const song = songById(id);
+  const h = level === 'easy'
+    ? playPiece(id, { tempo })
+    : playNotes(arrangementNotes(id, level), { bpm: song.bpm, beat: meterOf(song).steps, tempo });
   if (!h) return;
   Object.assign(player, { id, h, lit: -1 });
   showPlaying();
@@ -295,6 +319,11 @@ export const songbookActions = {
   'song-back': () => { stopPiece(); ui.songId = null; render(); window.scrollTo(0, listScroll); },
   'song-hands': (el) => redrawKeepingPlace({ hands: el.dataset.val }),
   'song-names': () => redrawKeepingPlace({ names: !prefs().names }),
+  'song-level': (el) => {
+    if (el.dataset.val === levelOf(ui.songId)) return;
+    stopPiece(); // what's playing is the other version
+    redrawKeepingPlace({ level: el.dataset.val });
+  },
   'song-slow': () => {
     const slow = !prefs().slow;
     setPrefs({ slow });

@@ -68,10 +68,10 @@
 /* a phone on its side: smaller buttons, so the music has room */
 @media (max-height: 500px) {
   .songbook.piece .song-tools { padding: 4px 8px; gap: 4px 8px; }
-  .song-hands button, .song-buttons .btn { padding: 4px 8px; font-size: 0.85rem; }
+  .song-levels button, .song-hands button, .song-buttons .btn { padding: 4px 8px; font-size: 0.85rem; }
 }
 @media (max-width: 600px) {
   .song-tools { justify-content: flex-start; }
-  .song-hands button { padding: 6px 8px; font-size: 0.9rem; }
+  .song-levels button, .song-hands button { padding: 6px 8px; font-size: 0.9rem; }
   .song-buttons .btn { padding: 8px 10px; font-size: 0.95rem; }
 }

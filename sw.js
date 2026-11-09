@@ -58,6 +58,8 @@ const SHELL = [
   'js/musicrules.js',
   'js/sheetmusic.js',
   'js/songbook.js',
+  'js/arrange.js',
+  'js/arrangements.js',
   'js/houseart.js',
   'js/houserules.js',
   'js/furniture.js',

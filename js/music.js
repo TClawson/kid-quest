@@ -315,6 +315,83 @@ export function playPiece(id, { tempo = 1 } = {}) {
   };
 }
 
+/**
+ * Play a piano version from the songbook (arrange.js): notes [{ midi, start, len, hand }] in
+ * eighths, with a soft piano-like voice, bpm at tempo; steps a bar. Returns the same handle as
+ * playPiece, or null without sound.
+ */
+export function playNotes(notes, { bpm, beat, tempo = 1 }) {
+  const a = context();
+  if (!a) return null;
+  const step = 60 / bpm / 2 / tempo;
+  const steps = Math.ceil(Math.max(0, ...notes.map((n) => n.start + n.len)) / beat) * beat;
+  const master = a.createGain();
+  master.gain.value = 0.55;
+  const squash = a.createDynamicsCompressor(); // many notes at once stay below clipping
+  master.connect(squash).connect(a.destination);
+  const t0 = a.currentTime + 0.15;
+  const list = [...notes].sort((x, y) => x.start - y.start);
+  let next = 0;
+  let timer = 0;
+  const schedule = () => {
+    while (next < list.length && t0 + list[next].start * step < a.currentTime + 0.3) {
+      const n = list[next];
+      pianoNote(a, master, n.midi, t0 + n.start * step, n.len * step, n.hand === 'lh' ? 0.11 : 0.14);
+      next += 1;
+    }
+    if (next >= list.length) clearInterval(timer);
+  };
+  schedule();
+  timer = setInterval(schedule, 100);
+  let stopped = false;
+  return {
+    step,
+    beat,
+    steps,
+    at: () => (a.currentTime - (a.outputLatency || a.baseLatency || 0) - t0) / step,
+    done: () => stopped || a.currentTime > t0 + steps * step + 0.8,
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      const t = a.currentTime;
+      master.gain.cancelScheduledValues(t);
+      master.gain.setValueAtTime(master.gain.value, t);
+      master.gain.linearRampToValueAtTime(0.0001, t + 0.15);
+      setTimeout(() => master.disconnect(), 400);
+    },
+  };
+}
+
+/** One piano-ish note: a soft triangle with a touch of its octave, struck and dying away. */
+function pianoNote(a, out, midi, t, dur, vel) {
+  const f = 440 * 2 ** ((midi - 69) / 12);
+  const g = a.createGain();
+  const tone = a.createBiquadFilter();
+  tone.type = 'lowpass';
+  tone.frequency.value = Math.min(6000, f * 5);
+  const o1 = a.createOscillator();
+  o1.type = 'triangle';
+  o1.frequency.value = f;
+  const o2 = a.createOscillator();
+  o2.frequency.value = f * 2;
+  const g2 = a.createGain();
+  g2.gain.value = 0.2;
+  o1.connect(tone);
+  o2.connect(g2).connect(tone);
+  tone.connect(g).connect(out);
+  const end = t + Math.max(0.08, dur);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vel, t + 0.006);
+  g.gain.setTargetAtTime(vel * 0.15, t + 0.006, 0.5); // the strike dies away while held
+  g.gain.setTargetAtTime(0, end, 0.06); // and stops when the key comes up
+  o1.start(t);
+  o2.start(t);
+  o1.stop(end + 0.5);
+  o2.stop(end + 0.5);
+  o1.onended = () => g.disconnect();
+}
+
 // ---------- the secret shows (see mapshow.js) ----------
 
 function context() {

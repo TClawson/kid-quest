@@ -11,6 +11,7 @@ import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
 import { SONGBOOK, songById, songbookFor } from '../../js/sheetmusic.js';
 import { SHOW_SONGS } from '../../js/songs.js';
+import { hasLevel } from '../../js/arrange.js';
 
 const out = (process.argv[2] || 'previews/songbook').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -104,6 +105,17 @@ async function litBar(page, n, ms = 8000) {
       assert.equal(await page.locator('#sheet .abcjs-staff').count() > 0, true);
       assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0', `${id} ${hands}: abcjs had no warnings`);
     }
+    // the medium and hard versions: both hands, every bar, no warnings
+    for (const level of ['medium', 'hard'].filter((l) => hasLevel(id, l))) {
+      await page.click(`[data-action="song-level"][data-val="${level}"]`);
+      await page.waitForSelector(`#sheet.engraved[data-level="${level}"] svg`);
+      const bars = songById(id).lead.length;
+      assert.equal(await page.locator(`#sheet .abcjs-mm${bars - 1}`).count() > 0, true, `${id} ${level}: every bar is there`);
+      assert.equal(await page.locator(`#sheet .abcjs-mm${bars}`).count(), 0, `${id} ${level}: no extra bars`);
+      assert.equal(await page.locator('.song-hands').count(), 0, 'both hands always: no hands to pick');
+      assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0', `${id} ${level}: abcjs had no warnings`);
+    }
+    if (hasLevel(id, 'medium')) await page.click('[data-action="song-level"][data-val="easy"]');
     await page.click('[data-action="song-back"]');
   }
   // a secret piece can't be opened by a stale id either
@@ -131,7 +143,20 @@ async function litBar(page, n, ms = 8000) {
   assert.equal(await page.locator('#sheet .now').count(), 0, 'stopped: nothing lit');
   // the settings stay on this device
   const prefs = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.songbook')));
-  assert.deepEqual(prefs, { hands: 'chords', names: true, slow: false });
+  assert.deepEqual(prefs, { hands: 'chords', names: true, slow: false, level: 'easy' });
+  // the hard version of a found show's tune plays what's on screen, bar by bar
+  await page.click('[data-action="song-back"]');
+  await page.click('[data-action="song-open"][data-id="show:bg-galaxy"]');
+  await page.click('[data-action="song-level"][data-val="hard"]');
+  await page.waitForSelector('#sheet.engraved[data-level="hard"] svg');
+  assert.ok(await page.locator('#sheet .abcjs-lyric').count() >= 5, 'note names under the right hand');
+  await page.click('[data-action="song-play"]');
+  assert.ok(await litBar(page, 1) >= 1, 'the hard version lights up bar by bar');
+  await page.click('[data-action="song-level"][data-val="medium"]');
+  assert.match(await page.locator('[data-action="song-play"]').textContent(), /Listen/, 'another level stops the one playing');
+  await page.click('[data-action="song-level"][data-val="easy"]');
+  await page.click('[data-action="song-back"]');
+  await page.click(`[data-action="song-open"][data-id="${close}"]`);
   await page.click('[data-action="song-back"]');
   await page.click('[data-action="songbook-back"]');
   await page.clock.runFor(1500);
