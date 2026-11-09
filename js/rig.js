@@ -275,6 +275,18 @@ export function render(rig, pose, frame = 0, opts = {}) {
     }
   };
   const q = Math.round;
+  // tip: how far the far end moves down (up when below 0), in pixels
+  const drawBent = (p, dx, dy, tip) => {
+    const base = p.pivot[0] - p.x; const reach = Math.max(1, p.w - 1 - base);
+    for (let u = 0; u < p.w; u += 1) {
+      const bend = q(tip * Math.max(0, u - base) / reach);
+      for (let v = 0; v < p.h; v += 1) {
+        const col = p.c[v][u]; if (!col) continue;
+        const x = p.x + u + dx; const y = p.y + v + dy + bend;
+        if (x >= 0 && x < N && y >= 0 && y < N) buf[y * N + x] = col;
+      }
+    }
+  };
 
   if (rig.bg) for (let y = 0; y < N; y += 1) for (let x = 0; x < N; x += 1) buf[y * N + x] = rig.bg[y][x];
   const rootX = q(pose.root.dx); const rootY = q(pose.root.dy);
@@ -300,8 +312,11 @@ export function render(rig, pose, frame = 0, opts = {}) {
   const showArm = (a) => Math.abs(snap(a.rot, 45)) > 0;
 
   if (rig.neck?.behind) draw(rig.neck, neckM);
-  // the dino's big tail breaks apart when it turns, so it swishes side to side instead
-  if (rig.tail) draw(rig.tail, mul(root, rig.species === 'dino' ? T(q(pose.tail.rot / 25), 0) : about(rig.tail.pivot, snap(pose.tail.rot, 30))));
+  // the dino's big tail breaks apart when it turns or slides, so it bends instead:
+  // the end at the body stays put and each column further out lifts or dips a
+  // little more, at most one pixel per column, so it never comes loose
+  if (rig.tail && rig.species === 'dino') drawBent(rig.tail, rootX, rootY, Math.max(-4, Math.min(2.4, pose.tail.rot / 12)));
+  else if (rig.tail) draw(rig.tail, mul(root, about(rig.tail.pivot, snap(pose.tail.rot, 30))));
   draw(rig.footL, mul(root, T(q(pose.footL.dx || 0), q(pose.footL.dy))));
   draw(rig.footR, mul(root, T(q(pose.footR.dx || 0), q(pose.footR.dy))));
   draw(rig.body, bodyM);
