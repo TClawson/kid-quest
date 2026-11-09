@@ -19,6 +19,7 @@
 // press() / release() for the button.
 import { Player, playLook, rng, canvas, cellsCanvas, clamp, HAPPY } from './play.js';
 import { ballCells } from './avatar.js';
+import { ZONE_COLORS, needle as sweepAt, zoneAt as zoneOf, pickZone, drawMeter, addPop } from './meter.js';
 
 export const GAME_SECONDS = 60;
 export const SHOT_ODDS = { red: 0.05, yellow: 0.25, green: 0.55 };
@@ -40,22 +41,13 @@ export const CLOSE = 45; // shots from this close (pixels) or closer get the ful
 const RINK_LENGTH = 1.6; // the rink is this many screens long
 const AI_SKILL = { green: 0.18, yellow: 0.42, red: 0.4 };
 
-const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
-
 /** Where the needle is (0 to 1) after holding for `held` seconds. */
-export function needle(held) {
-  const ph = (held / SWEEP) % 2;
-  return ph < 1 ? ph : 2 - ph;
-}
+export const needle = (held) => sweepAt(held, SWEEP);
 
 /** Which color the needle is on. tier: the stick (1-3); better sticks widen green a little. */
 export function zoneAt(m, tier = 1) {
-  const d = Math.abs(m - 0.5);
   // a good stick makes green half again as wide, a super one twice (Taylor, 2026-11-05)
-  const green = 0.035 + 0.02 * (Math.max(1, tier) - 1);
-  if (d <= green) return 'green';
-  if (d <= 0.17) return 'yellow';
-  return 'red';
+  return zoneOf(m, 0.035 + 0.02 * (Math.max(1, tier) - 1), 0.17);
 }
 
 function gauss(r) {
@@ -63,13 +55,6 @@ function gauss(r) {
   while (u === 0) u = r();
   while (v === 0) v = r();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
-
-function pickZone(r, odds) {
-  const x = r();
-  if (x < odds.green) return 'green';
-  if (x < odds.green + odds.yellow) return 'yellow';
-  return 'red';
 }
 
 export class Hockey {
@@ -122,10 +107,7 @@ export class Hockey {
   /** Where the view starts to have rink x in the middle of the screen. */
   camFor(x) { return clamp(x - this.W / 2, 0, this.RW - this.W); }
 
-  pop(text, x, y, color = '#ffffff', big = false) {
-    this.pops.push({ text, x, y, at: this.t, color, big });
-    if (this.pops.length > 8) this.pops.shift();
-  }
+  pop(text, x, y, color, big) { addPop(this, text, x, y, color, big); }
 
   get bounds() { const rk = this.rink; return { x0: rk.x0 + 6, x1: rk.x1 - 6, y0: rk.y0 + 6, y1: rk.y1 - 2 }; }
 
@@ -477,13 +459,7 @@ export class Hockey {
     const meter = this.charge ? needle(this.t - this.charge.t0) : null;
     if (meter != null) {
       const mw = u * 13; const mh = u * 1.4; const mx = Math.min(W - mw - u, bx - mw / 2); const my = by - br - u * 2.6;
-      const steps = 100;
-      for (let i = 0; i < steps; i += 1) {
-        ctx.fillStyle = ZONE_COLORS[zoneAt((i + 0.5) / steps, this.kid.tier)];
-        ctx.fillRect(mx + (i * mw) / steps, my, mw / steps + 0.5, mh);
-      }
-      ctx.lineWidth = S * 0.6; ctx.strokeStyle = '#1b1430'; ctx.strokeRect(mx, my, mw, mh);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(mx + meter * mw - S * 0.6, my - S, S * 1.2, mh + 2 * S);
+      drawMeter(ctx, (k) => zoneAt(k, this.kid.tier), meter, mx, my, mw, mh, S);
     }
     // the visitor lining something up
     if (this.ai.charge && this.phase === 'play') text('!', sx(this.vis.x), (this.vis.y - 30) * S, u * 2, '#ff8787');

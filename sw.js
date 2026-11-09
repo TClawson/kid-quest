@@ -76,6 +76,7 @@ const SHELL = [
   'js/vendor/firebase.js',
   'js/fishbook.js',
   'js/grants.js',
+  'js/meter.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',

@@ -30,9 +30,9 @@
 // Same interface as Play in play.js (tap, drag, step, draw, drawHud, score, phase).
 import { Player, playLook, rng, canvas, cellsCanvas, clamp, HAPPY } from './play.js';
 import { ballCells } from './avatar.js';
+import { ZONE_COLORS, needle, zoneAt as zoneOf, pickZone, drawMeter, addPop } from './meter.js';
 
 export const GAME_SECONDS = 90;
-const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
 
 /**
  * at: how far down the field the cone is (0-1). flight: seconds in the air.
@@ -94,23 +94,14 @@ const GRAV = 90; // makes the ball look high enough without leaving the screen
 const HANDS = 9; // catch height
 const TOO_SLOW = 4; // seconds to aim before the play is over
 
-/** Where the needle is (0 to 1) after `held` seconds. */
-export function needle(held, sweep) {
-  const ph = (held / sweep) % 2;
-  return ph < 1 ? ph : 2 - ph;
-}
+export { needle }; // needle(held, sweep): where the needle is (0 to 1), from meter.js
 
 // green is narrow: a perfect throw is hard (Taylor, 2026-11-05)
 // a better ball widens it a lot: about 1.5x with a good one, 2x with a super one
 // and narrower again on 2026-11-07 (was 0.045 + 0.025 a tier), with the needle starting somewhere new each throw
 const greenHalf = (tier) => 0.032 + 0.02 * (Math.max(1, tier) - 1);
 /** The color under the needle. tier: the ball (1-3); better balls widen green. */
-export function zoneAt(m, tier = 1) {
-  const d = Math.abs(m - 0.5);
-  if (d <= greenHalf(tier)) return 'green';
-  if (d <= 0.18) return 'yellow';
-  return 'red';
-}
+export const zoneAt = (m, tier = 1) => zoneOf(m, greenHalf(tier), 0.18);
 
 /** The kid's catch windows (seconds either side), for a route and the ball. The throw's color doesn't change them any more. */
 export function catchWindows(route, zone, tier = 1) {
@@ -120,13 +111,6 @@ export function catchWindows(route, zone, tier = 1) {
 
 /** The chance the visitor catches a throw it got to. */
 export const visCatch = (route, zone, tier = 1) => clamp(VIS_CATCH[zone] + ROUTE_CATCH[route] + 0.03 * (Math.max(1, tier) - 1), 0.05, 0.97);
-
-function pickZone(r, odds) {
-  const x = r();
-  if (x < odds.green) return 'green';
-  if (x < odds.green + odds.yellow) return 'yellow';
-  return 'red';
-}
 
 export class Football {
   constructor(opts) {
@@ -159,10 +143,7 @@ export class Football {
     this.lineUp(this.kid);
   }
 
-  pop(text, x, y, color = '#ffffff', big = false) {
-    this.pops.push({ text, x, y, at: this.t, color, big });
-    if (this.pops.length > 8) this.pops.shift();
-  }
+  pop(text, x, y, color, big) { addPop(this, text, x, y, color, big); }
 
   other(p) { return p === this.kid ? this.vis : this.kid; }
 
@@ -561,9 +542,7 @@ export class Football {
       if (d.stage === 'aim' || d.stage === 'wait') {
         const m = this.meter(); const th = d.thrower;
         const mw = u * 12; const mh = u * 1.4; const mx = clamp(th.x * S - mw / 2 + u * 3, u, W - mw - u); const my = (th.y - 34) * S;
-        for (let i = 0; i < 100; i += 1) { ctx.fillStyle = ZONE_COLORS[zoneAt((i + 0.5) / 100, this.tier)]; ctx.fillRect(mx + (i * mw) / 100, my, mw / 100 + 0.5, mh); }
-        ctx.lineWidth = S * 0.6; ctx.strokeStyle = '#1b1430'; ctx.strokeRect(mx, my, mw, mh);
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(mx + m * mw - S * 0.6, my - S, S * 1.2, mh + 2 * S);
+        drawMeter(ctx, (k) => zoneAt(k, this.tier), m, mx, my, mw, mh, S);
         if (d.stage === 'aim') hint(th === this.kid ? 'Tap to aim the throw!' : `${th.name} is aiming...`);
       }
       if (d.stage === 'wait' && d.catcher === this.kid) hint('Run to the cone! Tap or drag.');
