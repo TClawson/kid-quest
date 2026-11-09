@@ -27,6 +27,57 @@
 .v-buddy.going-out { animation: h-go-out 0.4s steps(4, end) forwards; }
 @keyframes h-go-out { to { transform: translate(-50%, -70%); opacity: 0; } }
 
+/* the fish tank: its fish swims in the water (clipped to the glass), bubbles rise, a brass plaque says its name */
+.h-spot[data-spot="tank"], .h-spot[data-spot="book"] { z-index: 180; }
+/* the buddy stands just behind the tank to look in: its sign floats over the buddy's head */
+.h-spot[data-spot="tank"] .h-tag { top: -21px; }
+.h-spot[data-spot="book"] .h-tag { top: -31px; }
+.h-water { position: absolute; overflow: hidden; pointer-events: none; }
+.h-fish { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; }
+.h-fish canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+.h-bubble { position: absolute; bottom: 4px; width: 1.5px; height: 1.5px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); box-shadow: 0 0 0 0.4px rgba(255, 255, 255, 0.9); animation: h-bubble 2.7s linear infinite; opacity: 0; }
+@keyframes h-bubble { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 50% { transform: translate(1px, -7px); } 90% { opacity: 1; } 100% { transform: translate(0, -14px); opacity: 0; } }
+.h-plaque {
+  position: absolute; transform: translate(-50%, -50%); pointer-events: none; white-space: nowrap; max-width: 44px; overflow: hidden; text-overflow: ellipsis;
+  font: 700 4.5px/1 var(--px-font); color: #4a2a10; padding: 1px 2px 0.6px; border-radius: 0.6px;
+  background: linear-gradient(#fff6c8, #f0c040 45%, #d89a2a); border: 0.6px solid #7a4a1e; box-shadow: 0 0.5px 0 rgba(59, 34, 53, 0.45);
+}
+.h-plaque.empty { color: #7a4a1e; font-weight: 400; }
+@media (prefers-reduced-motion: reduce) { .h-bubble { animation: none; opacity: 0.6; } }
+
+/* the fish book and the tank's fish picker */
+.fishbook h2, .tankpick h2 { margin: 0 0 4px; }
+.fb-count { margin: 0 0 8px; }
+.fb-map { margin: 10px 0; padding: 8px 10px; background: #fff8e7; border: 3px solid var(--px-ink); border-radius: 6px; }
+.fb-map h3 { margin: 0 0 6px; font: 700 1.2rem/1 var(--px-font); display: flex; justify-content: space-between; gap: 8px; }
+.fb-map h3 small { font: 400 0.95rem/1 var(--px-font); color: var(--muted); }
+.fb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 6px; }
+/* a lake with nothing caught yet: just a row of shapes to find */
+.fb-grid.mini { grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.fb-grid.mini .fb-fish { grid-template-rows: 26px; padding: 4px 2px; }
+.fb-grid.mini .fb-fish img { height: 26px; }
+.fb-grid.mini .fb-fish b, .fb-grid.mini .fb-fish small { display: none; }
+.fb-grid.mini .fb-fish.rare::after { content: '⭐'; top: 1px; right: 2px; }
+.fb-fish { position: relative; display: grid; grid-template-rows: 46px auto auto; justify-items: center; text-align: center; gap: 1px; padding: 6px 4px; background: #fff; border: 2px solid #e8d6b8; border-radius: 6px; min-width: 0; }
+.fb-fish img { max-width: 100%; height: 46px; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+.fb-fish b { font-size: 0.85rem; line-height: 1.1; overflow-wrap: anywhere; }
+.fb-fish small { font-size: 0.75rem; color: var(--muted); line-height: 1.2; }
+.fb-fish .fb-size { font: 700 1rem/1 var(--px-font); color: var(--px-ink); }
+.fb-fish.none { background: #f4ede0; border-style: dashed; }
+.fb-fish.none b { color: var(--muted); letter-spacing: 1px; }
+.fb-fish.rare { border-color: #f0c040; }
+.fb-fish.rare::after { content: '⭐ Rare'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #a8701e; }
+.fb-fish .fb-tank { position: absolute; top: 3px; left: 4px; font-size: 0.8rem; }
+.tp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; max-height: 42vh; overflow: auto; padding: 2px; margin: 8px 0; }
+.tp-fish { display: grid; grid-template-rows: 40px auto auto; justify-items: center; gap: 1px; padding: 6px 4px; background: #fff; border: 2px solid #e8d6b8; border-radius: 6px; cursor: pointer; font: inherit; color: inherit; }
+.tp-fish img { max-width: 100%; height: 40px; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+.tp-fish b { font-size: 0.8rem; line-height: 1.1; }
+.tp-fish small { font-size: 0.72rem; color: var(--muted); }
+.tp-fish.on { border-color: var(--kid, #7048e8); background: #f3f0ff; box-shadow: 0 0 0 2px var(--kid, #7048e8); }
+.tp-name { display: grid; gap: 4px; margin: 8px 0; font-weight: 700; }
+.tp-name input { font: inherit; font-size: 1.1rem; padding: 8px 10px; border: 3px solid var(--px-ink); border-radius: 6px; }
+.tp-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
 /* the family leaderboard (the chart on the wall) */
 .leaderboard h2 { margin: 0 0 8px; }
 .lb-tabs { display: flex; gap: 6px; margin-bottom: 10px; }

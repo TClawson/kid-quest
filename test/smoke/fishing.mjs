@@ -4,7 +4,8 @@
 //   never sit inside the lake bed, and the session ends
 // - a hooked fish has the line at its mouth
 // - in the app: a visitor with a fishing rod goes fishing with you, the first
-//   tap starts the clock, and points are kept as the kid's best
+//   tap starts the clock, points are kept as the kid's best, and the biggest of
+//   each kind of fish goes in the kid's fish book (kid.fishRecords)
 // Run: node test/smoke/fishing.mjs   (SHOTS=dir for screenshots)
 import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
@@ -26,7 +27,8 @@ try {
       const out = [];
       for (const map of Object.keys(SPOTS)) {
         for (const [W, H] of [[213, 120], [130, 150]]) {
-          const g = new Fishing({ W, H, map, seed: 7, day: '2026-11-05', kid: { name: 'A', buddy: { species: 'fox', outfit: {} } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} }, gear: { rod: 2 } } });
+          const told = [];
+          const g = new Fishing({ W, H, map, seed: 7, day: '2026-11-05', onCatch: (c) => { told.push(c); return null; }, kid: { name: 'A', buddy: { species: 'fox', outfit: {} } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} }, gear: { rod: 2 } } });
           const seen = new Map(); let quick = 0; let popIn = 0; let buried = 0; let mouth = 0; let hooked = 0;
           for (let i = 0; i < 95 * 30 && g.phase !== 'over'; i += 1) {
             const L = g.lines.kid;
@@ -47,7 +49,9 @@ try {
               if (f.face !== -1 || Math.abs(nose - Ln.x) > 2) mouth += 1;
             }
           }
-          out.push({ map, W, H, fish: seen.size, quick, popIn, buried, hooked, mouth, phase: g.phase, points: g.points });
+          const mine = g.catches.filter((c) => c.who === 'kid');
+          const toldOk = told.length === mine.length && told.every((c, i) => c.map === map && c.kind === mine[i].kind && c.size === mine[i].inches && c.points === mine[i].points);
+          out.push({ map, W, H, fish: seen.size, quick, popIn, buried, hooked, mouth, phase: g.phase, points: g.points, toldOk });
         }
       }
       return out;
@@ -60,6 +64,7 @@ try {
       assert.equal(r.buried, 0, `${where}: no fish inside the lake bed`);
       assert.equal(r.mouth, 0, `${where}: the line goes to a hooked fish's mouth`);
       assert.equal(r.phase, 'over', `${where}: the session ends after 90 s`);
+      assert.ok(r.toldOk, `${where}: every fish the kid lands is reported for the fish book`);
     }
     if (!results.some((r) => r.hooked > 0)) console.log(JSON.stringify(results));
     assert.ok(results.some((r) => r.hooked > 0), 'fish get hooked');
@@ -116,6 +121,23 @@ try {
     if (shots) await page.screenshot({ path: `${shots}/fishing-${name}.png` });
     await page.mouse.move(...at(fw * 0.6, fh * 0.6)); await page.mouse.down(); await page.waitForTimeout(800); await page.mouse.up();
     await page.mouse.click(...at(fw * 0.6, fh * 0.6));
+    // land a pike: it goes in the fish book, once (the same size again isn't a new record)
+    const rec = await page.evaluate(() => {
+      const g = document.querySelector('.playground').game;
+      const f = g.makeFish('pike', g.W * 0.6, g.H * 0.7, 'lurk');
+      f.post = [f.x, f.y];
+      g.land(g.lines.kid, f);
+      const first = g.catches.at(-1).record;
+      g.land(g.lines.kid, { ...f, gone: false });
+      return { first, again: g.catches.at(-1).record || null, inches: f.inches, records: g.records };
+    });
+    assert.equal(rec.first, 'first');
+    assert.equal(rec.again, null);
+    assert.equal(rec.records, 1);
+    const book = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud.cache')).kids[0].fishRecords);
+    assert.deepEqual(Object.keys(book), ['volcano-pike']);
+    assert.equal(book['volcano-pike'].size, rec.inches);
+    assert.equal(book['volcano-pike'].map, 'bg-volcano');
     // end the session early and check the best score is kept
     await page.evaluate(() => { const g = document.querySelector('.playground').game; g.lines.kid.state = 'idle'; g.points.kid = 42; g.left = 0.05; });
     await page.waitForFunction(() => document.querySelector('.playground')?.dataset.phase === 'over');
