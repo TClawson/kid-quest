@@ -44,7 +44,11 @@ export function daysToMusicHouse(progress) {
 /** Whether stopwatch time also counts toward today's piano chore (Taylor's call). */
 export const WATCH_FILLS_CHORE = true;
 
-/** A stopwatch left running (or forgotten in another app) pauses itself after this long. */
+/**
+ * A stopwatch run counts at most this long. When the buddy listens, it naps and pauses the
+ * stopwatch as soon as the piano stops (like the timer), so this is for a stopwatch nobody
+ * can hear: listening off, offline, or left running in another app.
+ */
 export const WATCH_MAX_RUN_MS = 2 * 3600_000;
 
 /**

@@ -157,7 +157,7 @@ export function leaveTimer() {
   if (timer.run?.watch) {
     // the stopwatch keeps counting in other apps when the kid's piano chore is set to
     const kid = kidById(timer.run.kidId);
-    if (!kid || !pianoTasks(kid).some((t) => t.background)) { stopTimer(); return; }
+    if (!pianoWith(kid, 'background')) { stopTimer(); return; }
     syncWatch(true);
     timer.run.awayFrom = watchSplit(timer.run, Date.now()).fill;
     keepRun();
@@ -287,6 +287,12 @@ function pianoTasks(kid) {
 }
 
 /**
+ * The piano chore a parent set to listen (or to keep counting in other apps), for the
+ * stopwatch: any of the kid's piano timer chores, so it works on days without one too.
+ */
+const pianoWith = (kid, setting) => kid?.tasks.find((x) => isPianoTask(x) && x.minutes > 0 && x[setting]) || null;
+
+/**
  * Today's piano chores by where they stand: toFill (time still to go), unchecked (full, but
  * nobody has marked them done or sent them to a parent yet), and all of them.
  */
@@ -375,10 +381,14 @@ function tickWatch() {
   }
   if (filled.length) finishWatchChores(kid, filled);
   if (watchSplit(run, Date.now()).capped) {
-    // left running for hours: take a break until the kid says they're still playing
+    // Hours without a break. A buddy that can hear the piano naps when the playing stops
+    // (the timer's naps, onEarsFrame), so while it still hears playing the stopwatch just
+    // carries on. A buddy that can't hear (listening off, or offline) dozes off instead,
+    // until the kid taps Keep going.
+    if (ears.run && ears.google && !ears.asleep && ui.view === 'watch') { startWatch(); return; }
     stopEars();
     stopTimer(false);
-    ui.watchNote = `The stopwatch paused after ${WATCH_MAX_RUN_MS / 3600_000} hours. Still playing? Tap Keep going!`;
+    ui.watchNote = `Your buddy dozed off after ${WATCH_MAX_RUN_MS / 3600_000} hours, so the stopwatch paused. Still playing? Tap Keep going!`;
     if (ui.view === 'watch') render();
     return;
   }
@@ -438,9 +448,8 @@ export function viewWatch() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'kid'; return viewKid(); }
   const n = watchNumbers(kid);
-  const tasks = pianoTasks(kid);
-  const listens = tasks.some((t) => t.listen);
-  const away = tasks.some((t) => t.background);
+  const listens = Boolean(pianoWith(kid, 'listen'));
+  const away = Boolean(pianoWith(kid, 'background'));
   const running = timer.running && timer.run?.watch;
   const naps = 'If the piano stops for a minute, it falls asleep and the stopwatch pauses until you play again.';
   const tip = [
@@ -448,7 +457,7 @@ export function viewWatch() {
     listens ? `Your buddy listens and dances to your beat. ${naps}` : '',
     away ? 'You can switch to another app, like Note Rush. The stopwatch keeps counting.' : 'The stopwatch pauses if you leave the app.',
   ].filter(Boolean).join(' ');
-  const mood = listens && (ears.run || ears.asleep) ? ears.mood || 'waiting' : '';
+  const mood = listens && (ears.run || ears.asleep) ? ears.mood || 'waiting' : ui.watchNote && !running ? 'asleep' : '';
   return `
     <div class="screen timer watch center" style="--kid:${kid.color}">
       <header class="kid-head">
@@ -491,7 +500,7 @@ const EARS_NAP = 10 * 60_000;   // asleep this long: stop listening and let the 
 function earsTask() {
   if (ui.view === 'watch') {
     const kid = kidById(ui.kidId);
-    const task = kid && pianoTasks(kid).find((t) => t.listen);
+    const task = pianoWith(kid, 'listen');
     return task ? { kid, task } : null;
   }
   if (ui.view !== 'timer') return null;
