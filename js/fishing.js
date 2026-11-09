@@ -29,10 +29,17 @@
 // holdAnywhere: a finger held down anywhere reels, so playground.js calls
 // release() for every finger that comes up.
 import { Player, rng, canvas, clamp, HAPPY } from './play.js';
+import { fishPic, baitArt, shade, mix } from './fishart.js';
+import { needle, drawMeter, addPop, ZONE_COLORS } from './meter.js';
+
+export { fishPic };
+
+const INK = '#1b1430';
+const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+const hashXY = (i, j) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return h - Math.floor(h); };
 
 export const GAME_SECONDS = 90;
 const FEET = 7 + 16; // SPRITE_Y + 16, as in play.js
-const ZONE_COLORS = { red: '#fa5252', yellow: '#fcc419', green: '#40c057' };
 const SWEEP = 0.8; // seconds for the cast needle to cross the meter
 const HOLD = 0.18; // a press longer than this is reeling, shorter is a twitch
 export const SNAG = { weed: 0.1, log: 0.5 };
@@ -60,9 +67,9 @@ export const pickiness = (size) => 0.1 + 0.35 * size;
 // len: [smallest, biggest] in field pixels; inches: the same range in inches.
 // look: body depth (fraction of length), colors back / side / belly, markings.
 export const SPECIES = {
-  bluegill: { name: 'Bluegill', len: [9, 13], inches: [4, 10], depth: 0.62, back: '#3f6f8f', side: '#7fb3a8', belly: '#ff922b', bar: '#3f6f6a', mark: 'bars', speed: 7, reach: 20, pull: 0.25, fin: '#3f6f8f' },
-  smallmouth: { name: 'Smallmouth bass', len: [14, 22], inches: [8, 20], depth: 0.34, back: '#7a5a2e', side: '#b8904a', belly: '#efe0b0', bar: '#6b4f2a', mark: 'bars', speed: 9, reach: 26, pull: 0.55, eye: '#e03131', fin: '#5c3a1e' },
-  largemouth: { name: 'Largemouth bass', len: [16, 30], inches: [10, 24], depth: 0.36, back: '#2b5d2b', side: '#6aa84f', belly: '#f1f3c4', mark: 'stripe', speed: 8, reach: 28, pull: 0.65, fin: '#1e4620' },
+  bluegill: { name: 'Bluegill', len: [9, 13], inches: [4, 10], depth: 0.62, back: '#3f6f8f', side: '#7fb3a8', belly: '#ff922b', bar: '#3f6f6a', mark: 'bars', flap: true, speed: 7, reach: 20, pull: 0.25, fin: '#3f6f8f' },
+  smallmouth: { name: 'Smallmouth bass', len: [14, 22], inches: [8, 20], depth: 0.34, back: '#7a5a2e', side: '#b8904a', belly: '#efe0b0', bar: '#6b4f2a', mark: 'bars', spiny: true, speed: 9, reach: 26, pull: 0.55, eye: '#e03131', fin: '#5c3a1e' },
+  largemouth: { name: 'Largemouth bass', len: [16, 30], inches: [10, 24], depth: 0.36, back: '#2b5d2b', side: '#6aa84f', belly: '#f1f3c4', mark: 'stripe', spiny: true, mouth: 'big', speed: 8, reach: 28, pull: 0.65, fin: '#1e4620' },
   pike: { name: 'Pike', len: [26, 46], inches: [18, 44], depth: 0.18, back: '#2f4a1f', side: '#5f7f3a', belly: '#e8f0c8', mark: 'spots', speed: 18, reach: 32, pull: 0.9, fin: '#7a3e1d', snout: true },
   catfish: { name: 'Catfish', len: [20, 40], inches: [12, 40], depth: 0.24, back: '#4a4a52', side: '#7b7b86', belly: '#d9d4c8', mark: 'whiskers', speed: 5, reach: 22, pull: 0.95, fin: '#3a3a40', flat: true },
 };
@@ -152,98 +159,133 @@ export const SPOTS = {
     special: { id: 'comet', name: 'Comet fish', as: 'pike', look: { back: '#5f3dc4', side: '#b197fc', belly: '#fff3bf', mark: 'comet', depth: 0.24, fin: '#ffd43b' }, like: { worm: 0.3, jig: 0.8, spoon: 0.8 }, odds: 5 },
   },
 };
+
+// ---------- each map's own fish and baits ----------
+// The five kinds keep how they swim, bite, fight and score (SPECIES); each map
+// gives them its own names and looks. Baits keep how they work (BAIT) and get
+// their own names and pictures. Forest Lake keeps the plain ones.
+const look = (back, side, belly, fin, more = {}) => ({ back, side, belly, fin, ...more });
+const SKINS = {
+  'bg-castle': {
+    fish: {
+      bluegill: { name: 'Roach', look: look('#495057', '#ced4da', '#f8f9fa', '#e03131', { depth: 0.42, eye: '#e03131', mark: 'scales' }) },
+      smallmouth: { name: 'Perch', look: look('#4f6b22', '#c0d860', '#fff3bf', '#f76707', { depth: 0.34, mark: 'bars', bar: '#2b3a1a', spiny: true }) },
+      largemouth: { name: 'Tench', look: look('#1f3d16', '#4f7a26', '#d8d39a', '#1f3d16', { depth: 0.32, eye: '#e03131', tail: 'fan' }) },
+      pike: { name: 'Moat pike', look: look('#22381a', '#4f6b30', '#e8f0c8', '#7a3e1d', { depth: 0.18, mark: 'spots', snout: true }) },
+      catfish: { name: 'Moat eel', look: look('#3d3a24', '#7a7248', '#e6dcae', '#5c5538', { depth: 0.14, shape: 'eel' }) },
+    },
+    baits: { worm: ['Bread', 'bread'], jig: ['Feather', 'feather'], spoon: ['Spinner', 'spinner'] },
+  },
+  'bg-sunset': {
+    fish: {
+      bluegill: { name: 'Sergeant major', look: look('#fab005', '#fff3bf', '#f8f9fa', '#fab005', { depth: 0.52, mark: 'bars', bar: '#1b1430' }) },
+      smallmouth: { name: 'Snapper', look: look('#c92a2a', '#ff8787', '#ffe3e3', '#e03131', { depth: 0.38, spiny: true }) },
+      largemouth: { name: 'Bonefish', look: look('#5c7080', '#dee2e6', '#ffffff', '#868e96', { depth: 0.26, mark: 'stripe', bar: '#adb5bd' }) },
+      pike: { name: 'Barracuda', look: look('#495057', '#adb5bd', '#f8f9fa', '#343a40', { depth: 0.16, mark: 'bars', bar: '#5c6670', snout: true, fangs: true }) },
+      catfish: { name: 'Grouper', look: look('#5c4a32', '#8d6e4a', '#d9c7a0', '#5c4a32', { depth: 0.38, mark: 'blotch', bar: '#4a3a26', tail: 'fan', mouth: 'big', spiny: true }) },
+    },
+    baits: { worm: ['Shrimp', 'shrimp'] },
+  },
+  'bg-ocean': {
+    fish: {
+      bluegill: { name: 'Blue tang', look: look('#1864ab', '#4dabf7', '#74c0fc', '#fab005', { depth: 0.52, mark: 'stripe', bar: '#1b3a6b' }) },
+      smallmouth: { name: 'Parrotfish', look: look('#0ca678', '#63e6be', '#f783ac', '#f783ac', { depth: 0.4, mark: 'scales', tail: 'fan' }) },
+      largemouth: { name: 'Angelfish', look: look('#1971c2', '#fcc419', '#fcc419', '#1971c2', { depth: 0.6, shape: 'angel', mark: 'bars', bar: '#f59f00' }) },
+      pike: { name: 'Moray eel', look: look('#5c940d', '#82c91e', '#d8f5a2', '#5c940d', { depth: 0.15, shape: 'eel', mark: 'spots', spot: '#2b3a1a', fangs: true }) },
+      catfish: { name: 'Nurse shark', look: look('#a07a3c', '#c9a35d', '#f0d9a0', '#a07a3c', { depth: 0.2, shape: 'shark', mark: 'whiskers' }) },
+    },
+    baits: { worm: ['Squid', 'squid'] },
+  },
+  'bg-space': {
+    fish: {
+      bluegill: { name: 'Glowgill', look: look('#37b24d', '#8ce99a', '#ebfbee', '#69db7c', { depth: 0.52, mark: 'glow' }) },
+      smallmouth: { name: 'Zapper', look: look('#1864ab', '#74c0fc', '#e7f5ff', '#fab005', { depth: 0.34, mark: 'comet', spiny: true }) },
+      largemouth: { name: 'Three-eyed bass', look: look('#862e9c', '#da77f2', '#f3d9fa', '#862e9c', { depth: 0.38, eyes3: true, mouth: 'big' }) },
+      pike: { name: 'Laser pike', look: look('#c2255c', '#f783ac', '#fff0f6', '#ff6b6b', { depth: 0.18, mark: 'stripe', bar: '#fff0f6', snout: true }) },
+      catfish: { name: 'Goo gulper', look: look('#5c5f8a', '#9a9fc4', '#b2f2bb', '#37b24d', { depth: 0.3, mark: 'whiskers', mouth: 'big', tail: 'fan' }) },
+    },
+    baits: { worm: ['Goo worm', 'goo'], jig: ['Robot jig', 'robot'], spoon: ['Satellite', 'satellite'] },
+  },
+  'bg-volcano': {
+    fish: {
+      bluegill: { name: 'Ember minnow', look: look('#c92a2a', '#ff922b', '#ffe066', '#ff6b1a', { depth: 0.48, mark: 'flame' }) },
+      smallmouth: { name: 'Cinder bass', look: look('#343a40', '#868e96', '#ffa94d', '#e8590c', { depth: 0.34, mark: 'bars', bar: '#212529', eye: '#ff6b1a', spiny: true }) },
+      largemouth: { name: 'Magma bass', look: look('#1a1210', '#e03131', '#ffd43b', '#ff6b1a', { depth: 0.36, mark: 'blotch', bar: '#1a1210', mouth: 'big', spiny: true }) },
+      pike: { name: 'Obsidian pike', look: look('#1a1210', '#495057', '#ff6b1a', '#ff6b1a', { depth: 0.18, mark: 'spots', spot: '#ff922b', snout: true }) },
+      catfish: { name: 'Rock catfish', look: look('#495057', '#6b5a52', '#ffa94d', '#343a40', { depth: 0.26, mark: 'whiskers', flat: true }) },
+    },
+    baits: { worm: ['Ember worm', 'ember'], jig: ['Obsidian', 'obsidian'], spoon: ['Gold spoon', 'gold'] },
+  },
+  'bg-rainforest': {
+    fish: {
+      bluegill: { name: 'Piranha', look: look('#495057', '#adb5bd', '#e03131', '#868e96', { depth: 0.52, eye: '#e03131', fangs: true, mark: 'glow', spot: '#dee2e6' }) },
+      smallmouth: { name: 'Pacu', look: look('#343a40', '#868e96', '#ff922b', '#495057', { depth: 0.5 }) },
+      largemouth: { name: 'Oscar', look: look('#3b2a1a', '#5c4630', '#ff922b', '#3b2a1a', { depth: 0.4, mark: 'blotch', bar: '#ff922b', tail: 'fan' }) },
+      pike: { name: 'Vampire fish', look: look('#495057', '#ced4da', '#f8f9fa', '#868e96', { depth: 0.2, snout: true, fangs: 'long' }) },
+      catfish: { name: 'Redtail catfish', look: look('#343a40', '#5c5f66', '#f8f9fa', '#e8590c', { depth: 0.26, mark: 'whiskers', flat: true }) },
+    },
+    baits: { worm: ['Grub', 'grub'], spoon: ['Spinner', 'spinner'] },
+  },
+  'bg-rainbow': {
+    fish: {
+      bluegill: { name: 'Gummy fish', look: look('#f03e3e', '#ff8787', '#ffc9c9', '#f03e3e', { depth: 0.5 }) },
+      smallmouth: { name: 'Sour fish', look: look('#37b24d', '#c0eb75', '#ffffff', '#fab005', { depth: 0.36, mark: 'sugar' }) },
+      largemouth: { name: 'Taffy bass', look: look('#f783ac', '#fff0f6', '#d0ebff', '#f783ac', { depth: 0.38, mark: 'bars', bar: '#74c0fc' }) },
+      pike: { name: 'Licorice pike', look: look('#343a40', '#e03131', '#c92a2a', '#343a40', { depth: 0.16, mark: 'bars', bar: '#343a40', snout: true }) },
+      catfish: { name: 'Fudge catfish', look: look('#5c3a1e', '#8b5a2b', '#e9d2b4', '#5c3a1e', { depth: 0.26, mark: 'whiskers', flat: true }) },
+    },
+    baits: { worm: ['Gummy worm', 'gummy'], jig: ['Candy corn', 'corn'], spoon: ['Lollipop', 'lolly'] },
+  },
+  'bg-galaxy': {
+    fish: {
+      bluegill: { name: 'Starlet', look: look('#fab005', '#ffe066', '#fff9db', '#fcc419', { depth: 0.5, mark: 'comet' }) },
+      smallmouth: { name: 'Nebula perch', look: look('#ae3ec9', '#e599f7', '#d0bfff', '#7950f2', { depth: 0.36, mark: 'comet', spiny: true }) },
+      largemouth: { name: 'Planetfish', look: look('#e67700', '#ffc078', '#fff4e6', '#e67700', { depth: 0.48, mark: 'ring' }) },
+      pike: { name: 'Meteor pike', look: look('#495057', '#868e96', '#ffa94d', '#ff6b1a', { depth: 0.18, mark: 'flame', snout: true }) },
+      catfish: { name: 'Black hole catfish', look: look('#212529', '#343a40', '#5f3dc4', '#7950f2', { depth: 0.28, mark: 'whiskers', flat: true }) },
+    },
+    baits: { worm: ['Stardust', 'stardust'], jig: ['Moon jig', 'moonjig'], spoon: ['Star spoon', 'star'] },
+  },
+};
+for (const [bg, skin] of Object.entries(SKINS)) Object.assign(SPOTS[bg], skin);
+
 export const spotFor = (bg) => SPOTS[bg] || SPOTS['bg-meadow'];
 
-/** A fish picture, nose on the left. Returns a canvas len + 4 wide. */
-export function fishPic(look, len) {
-  const L = Math.max(5, Math.round(len));
-  const D = Math.max(3, Math.round(L * look.depth));
-  const w = L + 4; const h = D + 6;
-  const c = canvas(w, h); const x = c.getContext('2d');
-  const cy = 3 + D / 2;
-  const inBody = (i, j) => {
-    const u = (i - 1) / L;
-    if (u < 0 || u > 1) return false;
-    let half;
-    const neck = D * 0.17; // where the tail joins
-    if (u <= 0.8) {
-      const k = u / 0.8;
-      const front = look.snout ? 0.55 : look.depth > 0.5 ? 0.45 : 0.35; // where the fish is deepest
-      if (k < front) half = (D / 2) * (look.snout ? 0.35 + 0.65 * (k / front) : Math.sqrt(Math.sin((Math.PI / 2) * (k / front))));
-      else half = D / 2 - (D / 2 - neck) * ((k - front) / (1 - front)) ** 1.4;
-      if (look.flat && j < cy) half *= 0.85;
-    } else {
-      // forked tail
-      const k = (u - 0.8) / 0.2;
-      half = neck + (D / 2 - neck) * k * 1.05;
-      if (k > 0.55 && Math.abs(j + 0.5 - cy) < half * 0.45) return false;
-    }
-    if (look.mark === 'sword' && u < 0.12) return false;
-    return Math.abs(j + 0.5 - cy) <= half + 0.01;
-  };
-  const px = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
-  for (let i = 0; i < w; i += 1) {
-    for (let j = 0; j < h; j += 1) {
-      if (!inBody(i, j)) continue;
-      const edge = !inBody(i - 1, j) || !inBody(i + 1, j) || !inBody(i, j - 1) || !inBody(i, j + 1);
-      if (edge) { px(i, j, '#1b1430'); continue; }
-      const u = (i - 1) / L;
-      let col = j + 0.5 < cy - D * 0.12 ? look.back : j + 0.5 > cy + D * 0.2 ? look.belly : look.side;
-      if (u > 0.8) col = look.fin;
-      if (look.mark === 'bars' && u > 0.2 && u < 0.78 && Math.floor(u * 9) % 2 === 0 && j + 0.5 < cy + D * 0.25) col = look.bar || look.back;
-      if (look.mark === 'stripe' && Math.abs(j + 0.5 - cy) < 0.8 && u > 0.18 && u < 0.85) col = look.back;
-      if ((look.mark === 'spots' || look.mark === 'glow') && u > 0.2 && u < 0.78 && (i * 7 + j * 13) % 9 === 0 && j + 0.5 < cy + D * 0.3) col = look.belly;
-      if (look.mark === 'peacock' && j + 0.5 < cy + D * 0.3 && [0.3, 0.47, 0.64].some((b) => Math.abs(u - b) < 0.035)) col = '#2b3a1a';
-      if (look.mark === 'flame' && u > 0.25 && u < 0.78 && (i + j) % 4 === 0) col = '#ffd43b';
-      if (look.mark === 'comet' && u > 0.2 && u < 0.78 && (i * 5 + j * 3) % 7 === 0) col = '#ffffff';
-      px(i, j, col);
-    }
+/** A kind's name and look on this map (kind: a SPECIES id or 'special'). */
+export function lookFor(map, kind) {
+  const sp = spotFor(map);
+  if (kind === 'special') {
+    const base = SPECIES[sp.special.as];
+    return { name: sp.special.name, look: { ...base, mark: undefined, bar: undefined, flap: false, spiny: false, ...sp.special.look, snout: sp.special.look.snout ?? base.snout, flat: false } };
   }
-  // dorsal fin, sitting on the back
-  const fx = Math.round(1 + L * 0.38);
-  const finH = look.mark === 'puff' ? 1 : Math.max(1, Math.round(D * 0.22));
-  const finW = Math.max(2, Math.round(L * 0.28));
-  for (let k = 0; k < finW; k += 1) {
-    let j0 = 0; while (j0 < h && !inBody(fx + k, j0)) j0 += 1;
-    const fh = Math.max(1, Math.round(finH * (1 - k / (finW + 1))));
-    for (let j = 1; j <= fh; j += 1) px(fx + k, j0 - j, j === fh ? '#1b1430' : look.fin);
-  }
-  const top = Math.round(cy - D / 2);
-  // eye
-  const ex = Math.round(1 + L * (look.snout ? 0.16 : 0.12)); const ey = Math.round(cy - D * 0.18);
-  px(ex, ey, look.eye || '#ffffff'); px(ex + 1, ey, '#1b1430');
-  if (look.mark === 'bars' && look.depth > 0.5) { px(ex + 2, ey + 1, '#1b1430'); px(ex + 3, ey + 1, '#1b1430'); } // bluegill's dark ear flap
-  if (look.mark === 'whiskers') { px(0, Math.round(cy), '#1b1430'); px(1, Math.round(cy) + 1, '#1b1430'); px(0, Math.round(cy) + 2, '#1b1430'); }
-  if (look.mark === 'peacock') {
-    // the eye spot at the base of the tail: a dark dot in a gold ring
-    const tx = Math.round(1 + L * 0.76); const ty = Math.round(cy);
-    px(tx - 1, ty, '#fcc419'); px(tx + 1, ty, '#fcc419'); px(tx, ty - 1, '#fcc419'); px(tx, ty + 1, '#fcc419'); px(tx, ty, '#1b1430');
-  }
-  if (look.mark === 'horn') { px(1, top - 1, '#ffd43b'); px(0, top - 2, '#ffd43b'); }
-  if (look.mark === 'crown') { for (const d of [0, 2, 4]) { px(ex + d, top - 2, '#ffd43b'); } for (let d = 0; d < 5; d += 1) px(ex + d, top - 1, '#fcc419'); }
-  if (look.mark === 'sword') for (let i = 0; i < 2 + L * 0.12; i += 1) px(i, Math.round(cy) - 1, i === 0 ? '#1b1430' : '#adb5bd');
-  if (look.mark === 'puff') for (let i = 3; i < L * 0.75; i += 3) { px(i, Math.round(cy - D / 2) - 1, '#1b1430'); px(i, Math.round(cy + D / 2) + 1, '#1b1430'); }
-  return c;
+  const s = sp.fish?.[kind];
+  if (!s) return { name: SPECIES[kind].name, look: SPECIES[kind] };
+  return { name: s.name, look: { ...SPECIES[kind], mark: undefined, bar: undefined, eye: undefined, flap: false, spiny: false, mouth: undefined, snout: false, flat: false, ...s.look } };
 }
 
-// ---------- bait pictures (6 x 6) ----------
-const BAIT_PIX = {
-  worm: ['......', '.RR...', 'R..R..', '...R.R', '....RR', '......'],
-  jig: ['..KK..', '.KYYK.', '.KYYK.', '..KYYY', '..YYYY', '...Y.Y'],
-  spoon: ['..K...', '.KSK..', 'KSWSK.', 'KSSSK.', '.KSK..', '..KR..'],
-};
-const BAIT_COL = { R: '#f06595', K: '#1b1430', Y: '#fab005', S: '#ced4da', W: '#ffffff' };
-function baitPic(kind) {
-  const c = canvas(6, 6); const x = c.getContext('2d');
-  BAIT_PIX[kind].forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') { x.fillStyle = BAIT_COL[ch]; x.fillRect(i, j, 1, 1); } }));
-  return c;
+/** Each bait's name on this map. */
+export function baitNames(map) {
+  const b = spotFor(map).baits || {};
+  return Object.fromEntries(BAITS.map((k) => [k, b[k]?.[0] || BAIT[k].name]));
 }
+
+/** A bait's picture on this map, Z fine pixels for each game pixel. */
+export function baitPic(map, bait, Z = 1) { return baitArt(spotFor(map).baits?.[bait]?.[1] || bait, Z); }
+
 
 // ---------- the game ----------
 export class Fishing {
-  /** opts: { W, H, kid, visitor, best, seed, map: Places background id, day: date string } */
+  /**
+   * opts: { W, H, kid, visitor, best, seed, map: Places background id, day: date string,
+   *   onCatch({ kind, size, points, map }): the kid landed a fish (size in inches); answers
+   *   'first' (a new fish for the kid's fish book), 'record' (bigger than the old record) or null }
+   */
   constructor(opts) {
     this.kind = 'fishing';
+    this.onCatch = opts.onCatch || null;
+    this.records = 0; // new fish-book records this session
+    this.Z = 2; // the lake and fish are drawn with Z fine pixels for each game pixel
+    this.map = opts.map;
     this.W = opts.W; this.H = opts.H;
     this.r = rng(opts.seed || 1);
     this.spot = spotFor(opts.map);
@@ -274,7 +316,8 @@ export class Fishing {
     this.ai = { next: 1.5 };
     this.placeCover();
     this.field = this.paint();
-    this.baitPics = Object.fromEntries(BAITS.map((b) => [b, baitPic(b)]));
+    this.baitPics = Object.fromEntries(BAITS.map((b) => [b, baitPic(this.map, b, this.Z)]));
+    this.baitName = baitNames(this.map);
     this.fish = []; this.schools = [];
     this.nextSpawn = 0;
     this.button = { x: this.W - 15, y: this.H - 15, r: 12 };
@@ -311,49 +354,92 @@ export class Fishing {
   }
 
   paint() {
-    const { W, H } = this; const sp = this.spot; const r = rng(77);
-    const c = canvas(W, H); const x = c.getContext('2d');
-    const rect = (col, a, b, w, h) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
-    // sky bands
-    const S = this.surface;
-    for (let y = 0; y < S; y += 1) rect(y < S * 0.55 ? sp.sky[0] : sp.sky[1], 0, y, W, 1);
-    if (sp.stars) for (let i = 0; i < W / 3; i += 1) rect(['#ffffff', '#ffd43b', '#b197fc'][i % 3], Math.floor(r() * W), Math.floor(r() * (S - 4)), 1, 1);
-    this.paintFar(x, sp.far, r);
-    // water: three bands of depth, with a ripple between them
-    const deep = H - S;
-    for (let y = S; y < H; y += 1) {
-      const k = (y - S) / deep;
-      const band = k < 0.33 ? 0 : k < 0.66 ? 1 : 2;
-      rect(sp.water[band], 0, y, W, 1);
-      if (Math.abs(k - 0.33) < 0.01 || Math.abs(k - 0.66) < 0.01) for (let i = (y % 2) * 2; i < W; i += 4) rect(sp.water[Math.max(0, band - 1)], i, y, 2, 1);
+    const { W, H, Z } = this; const sp = this.spot; const r = rng(77);
+    const FW = W * Z; const FH = H * Z; const S = this.surface; const FS = S * Z;
+    const c = canvas(FW, FH); const x = c.getContext('2d');
+    const P = (col, a, b, w = 1, h = 1) => { x.fillStyle = col; x.fillRect(a, b, w, h); }; // fine pixels
+    // sky and water as one image: smooth bands of color with an ordered dither
+    const img = x.createImageData(FW, FH); const d = img.data;
+    const hex = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+    const put = (i, j, col) => { const o = (j * FW + i) * 4; d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255; };
+    const ramp = (cols, n) => { const out = []; for (let k = 0; k < cols.length - 1; k += 1) for (let s = 0; s < n; s += 1) out.push(hex(mix(cols[k], cols[k + 1], s / n))); out.push(hex(cols[cols.length - 1])); return out; };
+    const sky = ramp([sp.sky[0], sp.sky[0], sp.sky[1], shade(sp.sky[1], 0.12)], 3);
+    const water = ramp([shade(sp.water[0], 0.08), sp.water[0], sp.water[1], sp.water[2], shade(sp.water[2], -0.12)], 3);
+    for (let j = 0; j < FH; j += 1) {
+      for (let i = 0; i < FW; i += 1) {
+        const th = (BAYER[j % 4][i % 4] + 0.5) / 16;
+        if (j < FS) { const p = (j / FS) * (sky.length - 1); put(i, j, sky[Math.min(sky.length - 1, Math.floor(p) + (p % 1 > th ? 1 : 0))]); continue; }
+        const k = (j - FS) / (FH - FS);
+        let p = k * (water.length - 1);
+        // sun rays slanting down from the surface
+        if (k < 0.7 && Math.sin((i + j * 0.45) / (9 * Z)) > 0.8 && th < 0.5 * (1 - k / 0.7)) p -= 1.2;
+        put(i, j, water[clamp(Math.floor(p) + (p - Math.floor(p) > th ? 1 : 0), 0, water.length - 1)]);
+      }
     }
-    // light streaks in the water
-    for (let i = 0; i < W / 9; i += 1) rect(sp.water[0], Math.floor(r() * W), S + 4 + Math.floor(r() * deep * 0.7), 3 + Math.floor(r() * 4), 1);
-    // surface line
-    for (let i = 0; i < W; i += 1) rect(i % 6 < 3 ? '#ffffff' : sp.water[0], i, S, 1, 1);
-    // lake bed
-    for (let i = 0; i < W; i += 1) {
-      const b = this.bedAt(i);
-      rect(sp.bed[0], i, b, 1, H - b);
-      rect(sp.bed[1], i, b + 3, 1, H);
-      if (sp.bedKind === 'bricks') { if ((i % 6 === 0)) rect(sp.bed[1], i, b, 1, 3); }
-      else if (r() < 0.12) rect(sp.bed[1], i, b + 1, 1, 1);
+    x.putImageData(img, 0, 0);
+    if (sp.stars) for (let i = 0; i < W / 2; i += 1) { const sx = Math.floor(r() * FW); const sy = Math.floor(r() * (FS - 8)); const col = ['#ffffff', '#ffd43b', '#b197fc'][i % 3]; P(col, sx, sy); if (i % 5 === 0) { P(col, sx - 1, sy); P(col, sx + 1, sy); P(col, sx, sy - 1); P(col, sx, sy + 1); } }
+    // the far shore, drawn in game pixels, then given light edges and a little texture
+    const before = x.getImageData(0, 0, FW, FS);
+    x.save(); x.scale(Z, Z); this.paintFar(x, sp.far, r); x.restore();
+    const after = x.getImageData(0, 0, FW, FS); const a = after.data; const b0 = before.data;
+    const isSky = (i, j) => i < 0 || i >= FW || j < 0 || j >= FS || (a[(j * FW + i) * 4] === b0[(j * FW + i) * 4] && a[(j * FW + i) * 4 + 1] === b0[(j * FW + i) * 4 + 1] && a[(j * FW + i) * 4 + 2] === b0[(j * FW + i) * 4 + 2]);
+    const out = new Uint8ClampedArray(a);
+    for (let j = 0; j < FS; j += 1) for (let i = 0; i < FW; i += 1) {
+      if (isSky(i, j)) continue;
+      let k = 0;
+      if (isSky(i, j - 1)) k = 0.28; else if (isSky(i - 1, j)) k = 0.12; else if (isSky(i + 1, j) || isSky(i, j + 1)) k = -0.16;
+      else { const hsh = hashXY(i, j); if (hsh < 0.1) k = -0.12; else if (hsh > 0.94) k = 0.1; }
+      if (!k) continue;
+      const o = (j * FW + i) * 4; const t = k > 0 ? 255 : 27;
+      for (let q = 0; q < 3; q += 1) out[o + q] = a[o + q] + (t - a[o + q]) * Math.abs(k);
     }
-    if (sp.coral) for (let i = 0; i < W / 30; i += 1) this.paintCoral(x, Math.floor(this.bankX + 20 + r() * (W - this.bankX - 20)), r);
-    // the shore: land at the top left, a muddy slope down into the water
-    const L = sp.land;
-    for (let i = 0; i < this.bankX; i += 1) {
-      const top = S - 3;
-      rect(L[0], i, top, 1, 2);
-      rect(L[1], i, top + 2, 1, 2);
-      rect(L[2], i, top + 4, 1, H - top - 4);
-      if (r() < 0.2) rect(L[1], i, top + 6 + Math.floor(r() * (H - top - 8)), 1, 1);
-      if (r() < 0.05) { const sy = top + 10 + Math.floor(r() * (H - top - 16)); rect('#1b1430', i, sy, 4, 3); rect(L[0] === L[2] ? '#adb5bd' : L[1], i, sy, 3, 2); }
+    x.putImageData(new ImageData(out, FW, FS), 0, 0);
+    // light flecks in the water
+    for (let i = 0; i < W / 5; i += 1) P(shade(sp.water[0], 0.2), Math.floor(r() * FW), FS + 6 + Math.floor(r() * (FH - FS) * 0.7), 3 + Math.floor(r() * 8), 1);
+    // the surface: little white wavelets on a bright line
+    P(shade(sp.water[0], 0.3), 0, FS, FW, 1);
+    for (let i = 0; i < FW; i += 11) { P('#ffffff', i, FS, 5, 1); P('#ffffff', i + 1, FS - 1, 3, 1); }
+    // lake bed: a light top, sand or mud, darker further down, pebbles and specks
+    const bedF = (i) => { const gx = i / Z; const g0 = Math.floor(gx); const t = gx - g0; return Math.round((this.bedAt(g0) * (1 - t) + this.bedAt(g0 + 1) * t) * Z); };
+    const [b1, b2] = sp.bed; const b3 = shade(b2, -0.18);
+    for (let i = 0; i < FW; i += 1) {
+      const top = bedF(i);
+      for (let j = top; j < FH; j += 1) {
+        const k = j - top; const th = (BAYER[j % 4][i % 4] + 0.5) / 16;
+        let col = k < 5 + th * 3 ? b1 : k < 18 + th * 6 ? b2 : b3;
+        if (k === 0) col = shade(b1, 0.2);
+        if (sp.bedKind === 'bricks' && k > 0) {
+          const row = Math.floor(k / (3 * Z)); const off = row % 2 ? 3 * Z : 0;
+          if (k % (3 * Z) === 0 || (i + off) % (6 * Z) === 0) col = shade(b2, -0.25);
+          else if (k % (3 * Z) === 1) col = shade(col, 0.1);
+        } else if (k > 1) { const hsh = hashXY(i, j); if (hsh < 0.06) col = shade(col, -0.2); else if (hsh > 0.96) col = shade(col, 0.2); }
+        P(col, i, j);
+      }
+      if (sp.bedKind !== 'bricks' && r() < 0.05 && i > this.bankX * Z) {
+        const py = top + 2 + Math.floor(r() * 8); const pw = 2 + Math.floor(r() * 3);
+        P(shade(b2, -0.3), i, py + 1, pw, 2); P(shade(b1, 0.15), i, py, pw, 1); P(shade(b1, 0.35), i, py, 1, 1);
+      }
     }
-    // pebbles where the slope meets the shore
-    for (let i = this.bankX; i < this.bankX + this.slopeRun * 0.3; i += 3) if (r() < 0.6) rect(sp.bed[1], i, this.bedAt(i), 2, 1);
-    // grass tufts on the bank
-    for (let i = 1; i < this.bankX - 1; i += 4) rect(L[1], i, S - 4, 1, 1);
+    if (sp.coral) for (let i = 0; i < W / 24; i += 1) this.paintCoral(x, Math.floor(this.bankX + 20 + r() * (W - this.bankX - 20)), r);
+    // the shore: grass on top, then soil, with stones
+    const L = sp.land; const top = (S - 3) * Z; const BX = this.bankX * Z;
+    for (let i = 0; i < BX; i += 1) {
+      for (let j = top; j < FH; j += 1) {
+        const k = j - top; const th = (BAYER[j % 4][i % 4] + 0.5) / 16;
+        let col = k < 3 + th * 2 ? L[0] : k < 7 + th * 3 ? L[1] : L[2];
+        if (k === 0) col = shade(L[0], 0.2);
+        if (k > 8) { const hsh = hashXY(i, j); if (hsh < 0.05) col = shade(L[2], -0.2); else if (hsh > 0.97) col = shade(L[2], 0.18); }
+        P(col, i, j);
+      }
+      // blades of grass along the top
+      const bh = Math.floor(hashXY(i, 7) * 4);
+      if (bh > 1) P(i % 3 ? L[0] : shade(L[0], 0.25), i, top - bh + 1, 1, bh - 1);
+    }
+    for (let i = 0; i < 6 + W / 40; i += 1) {
+      const sx = Math.floor(r() * (BX - 10)); const sy = top + 14 + Math.floor(r() * (FH - top - 24)); const sw = 4 + Math.floor(r() * 5); const sh = 3 + Math.floor(r() * 2);
+      const stone = mix(L[2], '#adb5bd', 0.4);
+      P(INK, sx - 1, sy, sw + 2, sh); P(INK, sx, sy - 1, sw, sh + 2); P(stone, sx, sy, sw, sh); P(shade(stone, 0.3), sx, sy, sw - 1, 1); P(shade(stone, -0.2), sx + 1, sy + sh - 1, sw - 1, 1);
+    }
     // logs on the bottom
     for (const g of this.logs) this.paintLog(x, g, sp);
     return c;
@@ -430,75 +516,119 @@ export class Fishing {
   }
 
   paintLog(x, g, sp) {
-    const rect = (col, a, b, w, h) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+    const Z = this.Z;
+    const P = (col, a, b, w = 1, h = 1) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
     const [mid, dark, light] = sp.log;
+    const X0 = g.x * Z; const Y0 = g.y * Z; const LW = g.len * Z; const LH = g.h * Z;
     if (sp.logKind === 'cane') {
-      for (let i = 0; i < g.len; i += 1) rect(Math.floor(i / 3) % 2 ? '#e03131' : '#ffffff', g.x + i, g.y, 1, g.h);
-      rect('#1b1430', g.x, g.y - 1, g.len, 1); rect('#1b1430', g.x, g.y + g.h, g.len, 1);
+      P(INK, X0, Y0 - 1, LW, LH + 2);
+      for (let i = 0; i < LW; i += 1) for (let j = 0; j < LH; j += 1) P(Math.floor((i + j) / (2 * Z)) % 2 ? '#e03131' : '#ffffff', X0 + i, Y0 + j);
+      P('rgba(255,255,255,0.5)', X0, Y0 + 1, LW, 1); P('rgba(27,20,48,0.25)', X0, Y0 + LH - 2, LW, 2);
       return;
     }
-    rect('#1b1430', g.x - 1, g.y - 1, g.len + 2, g.h + 2);
-    rect(mid, g.x, g.y, g.len, g.h);
-    rect(dark, g.x, g.y + g.h - 1, g.len, 1);
-    rect(light, g.x, g.y, g.len, 1);
-    if (sp.logKind === 'pipe') { for (let i = 4; i < g.len; i += 6) rect(dark, g.x + i, g.y, 1, g.h); rect('#1b1430', g.x + g.len - 1, g.y + 1, 1, g.h - 2); return; }
-    if (sp.logKind === 'charred') { for (let i = 2; i < g.len; i += 5) rect('#ff6b1a', g.x + i, g.y + 1 + (i % 2), 2, 1); return; }
-    if (sp.logKind === 'mossy') { for (let i = 1; i < g.len - 1; i += 3) rect(light, g.x + i, g.y, 2, 1); for (let i = 4; i < g.len - 2; i += 6) rect(dark, g.x + i, g.y + 2, 2, 1); return; }
-    if (sp.logKind === 'rock') { for (let i = 3; i < g.len; i += 7) rect(light, g.x + i, g.y + 2, 1, 1); return; }
-    // bark lines, the cut end and a stub of a branch
-    for (let i = 3; i < g.len - 2; i += 5) rect(dark, g.x + i, g.y + 1, 3, 1);
-    rect(light, g.x + g.len - 2, g.y + 1, 1, g.h - 2);
-    rect(dark, g.x + Math.round(g.len * 0.6), g.y - 3, 2, 3); rect('#1b1430', g.x + Math.round(g.len * 0.6) - 1, g.y - 4, 4, 1);
+    // outline, body, a light top and a dark underside
+    P(INK, X0 - 1, Y0, LW + 2, LH); P(INK, X0, Y0 - 1, LW, LH + 2);
+    P(mid, X0, Y0, LW, LH);
+    P(shade(mid, 0.2), X0, Y0, LW, 1); P(light, X0, Y0 + 1, LW, 1);
+    P(dark, X0, Y0 + LH - 2, LW, 2);
+    if (sp.logKind === 'pipe') {
+      for (let i = 6; i < LW - 2; i += 12) { P(dark, X0 + i, Y0, 2, LH); P(light, X0 + i - 1, Y0 + 2, 1, 1); P(light, X0 + i - 1, Y0 + LH - 3, 1, 1); }
+      P(INK, X0 + LW - 3, Y0 + 2, 2, LH - 4);
+      return;
+    }
+    if (sp.logKind === 'charred') {
+      for (let i = 3; i < LW - 2; i += 7) { P('#ff6b1a', X0 + i, Y0 + 2 + (i % 3), 3, 1); P('#ffd43b', X0 + i + 1, Y0 + 2 + (i % 3), 1, 1); P('#ff6b1a', X0 + i + 2, Y0 + 3 + (i % 3), 2, 1); }
+      return;
+    }
+    if (sp.logKind === 'mossy') {
+      for (let i = 1; i < LW - 1; i += 2) { const mh = 1 + Math.floor(hashXY(i, g.x) * 3); P(i % 4 ? light : shade(light, 0.25), X0 + i, Y0 - 1, 1, mh); }
+      for (let i = 6; i < LW - 4; i += 9) P(dark, X0 + i, Y0 + 4, 4, 1);
+      return;
+    }
+    if (sp.logKind === 'rock') {
+      for (let i = 2; i < LW - 2; i += 5) P(hashXY(i, 3) > 0.5 ? light : dark, X0 + i, Y0 + 2 + Math.floor(hashXY(i, 9) * (LH - 4)), 2, 1);
+      return;
+    }
+    // bark lines, the cut end with its rings, and a stub of a branch
+    for (let i = 4; i < LW - 6; i += 7) { P(dark, X0 + i, Y0 + 2, 5, 1); P(dark, X0 + i + 3, Y0 + 4, 4, 1); }
+    P(light, X0 + LW - 4, Y0 + 1, 3, LH - 2); P(mid, X0 + LW - 3, Y0 + 3, 1, LH - 6); P(INK, X0 + LW - 1, Y0, 1, LH);
+    const bx = X0 + Math.round(LW * 0.6);
+    P(INK, bx - 1, Y0 - 6, 6, 6); P(mid, bx, Y0 - 6, 4, 6); P(light, bx, Y0 - 6, 4, 1); P(dark, bx + 3, Y0 - 5, 1, 5);
   }
 
   paintCoral(x, cx, r) {
-    const b = this.bedAt(cx);
-    const col = ['#ff8787', '#f783ac', '#ffa94d'][Math.floor(r() * 3)];
-    for (let k = 0; k < 7; k += 1) { x.fillStyle = col; x.fillRect(cx + Math.round(Math.sin(k) * 2), b - k, 1, 1); x.fillRect(cx + 2 + Math.round(Math.cos(k) * 1.5), b - k + 2, 1, 1); }
+    const Z = this.Z; const b = this.bedAt(cx) * Z; const X = cx * Z;
+    const col = ['#ff8787', '#f783ac', '#ffa94d', '#b197fc'][Math.floor(r() * 4)];
+    const P = (c, a, bb) => { x.fillStyle = c; x.fillRect(a, bb, 1, 1); };
+    const n = 12 + Math.floor(r() * 6);
+    for (const arm of [-1, 0, 1]) {
+      let px = X + arm * 2;
+      for (let k = 0; k < n - Math.abs(arm) * 3; k += 1) {
+        if (k % 4 === 3) px += arm || (r() < 0.5 ? -1 : 1);
+        P(col, px, b - k); P(shade(col, -0.25), px + 1, b - k);
+        if (k === n - Math.abs(arm) * 3 - 1) P(shade(col, 0.35), px, b - k - 1);
+      }
+    }
   }
 
   drawWeeds(ctx) {
-    const sp = this.spot;
+    const sp = this.spot; const Z = this.Z;
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
+    const hi = shade(sp.weed[1], 0.25);
     for (const w of this.weeds) {
-      const bed = this.bedAt(w.x);
-      for (let s = 0; s < 4; s += 1) {
-        const sx = w.x - Math.floor(w.w / 2) + Math.round((s * w.w) / 4) + 1;
-        const h = Math.round(w.h * (0.65 + 0.35 * Math.sin(w.seed + s * 1.7) ** 2));
+      const bed = this.bedAt(w.x) * Z;
+      const n = 6;
+      for (let s = 0; s < n; s += 1) {
+        const sx = (w.x - w.w / 2) * Z + Math.round((s * w.w * Z) / n) + 1;
+        const h = Math.round(w.h * Z * (0.6 + 0.4 * Math.sin(w.seed + s * 1.7) ** 2));
         for (let k = 0; k < h; k += 1) {
-          const sway = sp.weedKind ? 0 : Math.round(Math.sin(this.t * 1.3 + k * 0.35 + s + w.seed) * (k / h) * 2);
-          ctx.fillStyle = (k + s) % 3 ? sp.weed[0] : sp.weed[1];
+          const sway = sp.weedKind ? 0 : Math.round(Math.sin(this.t * 1.3 + k * 0.17 + s + w.seed) * (k / h) * 2 * Z);
+          const px = sx + sway;
           if (sp.weedKind === 'crystal' || sp.weedKind === 'rock') {
-            const wid = Math.max(1, Math.round((1 - k / h) * 3));
-            ctx.fillRect(sx + sway - Math.floor(wid / 2), bed - k, wid, 1);
-          } else ctx.fillRect(sx + sway, bed - k, 1, 1);
-          if (!sp.weedKind && k % 3 === 1 && k < h - 1) { const side = (k + s) % 2 ? 1 : -2; ctx.fillStyle = sp.weed[1]; ctx.fillRect(sx + sway + side, bed - k - 1, 2, 1); }
+            const wid = Math.max(1, Math.round((1 - k / h) * 3 * Z));
+            P(sp.weed[0], px - Math.floor(wid / 2), bed - k, wid, 1);
+            P(sp.weedKind === 'crystal' ? hi : sp.weed[1], px - Math.floor(wid / 2), bed - k, 1, 1);
+            continue;
+          }
+          P((k + s * 3) % 7 < 2 ? sp.weed[1] : sp.weed[0], px, bed - k);
+          if (k % 7 === 4 && k < h - 3) {
+            const side = (Math.floor(k / 7) + s) % 2 ? 1 : -1;
+            P(sp.weed[1], px + side, bed - k - 1); P(sp.weed[1], px + 2 * side, bed - k - 2); P(hi, px + 3 * side, bed - k - 2);
+          }
         }
       }
     }
   }
 
   drawTop(ctx) {
-    const sp = this.spot; const S = this.surface; const t = this.t;
+    const sp = this.spot; const S = this.surface; const t = this.t; const Z = this.Z;
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
+    const FS = S * Z;
     if (sp.top === 'lily') {
       for (const lx of [0.42, 0.63, 0.88]) {
-        const x = Math.round(this.W * lx + Math.sin(t * 0.4 + lx * 9));
-        ctx.fillStyle = '#2b8a3e'; ctx.fillRect(x, S - 1, 7, 2); ctx.fillStyle = '#51cf66'; ctx.fillRect(x + 1, S - 1, 4, 1);
-        if (lx > 0.6 && lx < 0.7) { ctx.fillStyle = '#ffdeeb'; ctx.fillRect(x + 2, S - 3, 3, 2); ctx.fillStyle = '#f783ac'; ctx.fillRect(x + 3, S - 3, 1, 1); }
+        const x = Math.round((this.W * lx + Math.sin(t * 0.4 + lx * 9)) * Z);
+        P(INK, x, FS - 2, 15, 4); P(INK, x - 1, FS - 1, 17, 2);
+        P('#2b8a3e', x, FS - 1, 15, 2); P('#51cf66', x + 1, FS - 2, 12, 1); P('#8ce99a', x + 2, FS - 2, 4, 1); P(INK, x + 9, FS - 2, 1, 2);
+        if (lx > 0.6 && lx < 0.7) { P(INK, x + 3, FS - 7, 7, 5); P('#ffdeeb', x + 4, FS - 6, 5, 4); P('#ffffff', x + 4, FS - 6, 2, 1); P('#f783ac', x + 6, FS - 5, 1, 2); P('#ffd43b', x + 6, FS - 4, 1, 1); }
       }
     } else if (sp.top === 'bubbles' || sp.top === 'goo' || sp.top === 'lava') {
       const col = sp.top === 'lava' ? '#ffd43b' : sp.top === 'goo' ? '#b2f2bb' : '#d0ebff';
-      for (let i = 0; i < 6; i += 1) {
-        const cyc = (t * 0.35 + i * 0.37) % 1;
-        const x = Math.round(this.bankX + 20 + ((i * 53) % (this.W - this.bankX - 24)));
-        const y = Math.round(this.H - 12 - cyc * (this.H - S - 12));
-        ctx.fillStyle = col; ctx.fillRect(x, y, sp.top === 'bubbles' ? 1 : 2, sp.top === 'bubbles' ? 1 : 2);
+      for (let i = 0; i < 8; i += 1) {
+        const cyc = (t * 0.35 + i * 0.29) % 1;
+        const x = Math.round((this.bankX + 20 + ((i * 53) % (this.W - this.bankX - 24))) * Z + Math.sin(t * 2 + i) * 2);
+        const y = Math.round((this.H - 12 - cyc * (this.H - S - 12)) * Z);
+        const big = sp.top === 'bubbles' ? 1 + (i % 2) : 2 + (i % 2);
+        P(col, x - big, y, 2 * big + 1, 1); P(col, x - big, y - 2 * big, 2 * big + 1, 1); P(col, x - big - 1, y - 2 * big + 1, 1, 2 * big - 1); P(col, x + big + 1, y - 2 * big + 1, 1, 2 * big - 1);
+        if (sp.top !== 'bubbles') P(shade(col, -0.2), x - big, y - 2 * big + 1, 2 * big + 1, 2 * big - 1);
+        P('#ffffff', x - big + 1, y - 2 * big + 1, 1, 1);
       }
     } else if (sp.top === 'sparkle' || sp.top === 'stars' || sp.top === 'shine') {
-      for (let i = 0; i < 8; i += 1) {
-        if (Math.floor(t * 3 + i * 1.7) % 3 === 0) continue;
-        const x = Math.round(this.bankX + ((i * 71) % (this.W - this.bankX))); const y = S + 2 + ((i * 37) % (this.H - S - 14));
-        ctx.fillStyle = sp.top === 'stars' ? '#ffd43b' : '#ffffff'; ctx.fillRect(x, y, 1, 1);
-        if (sp.top !== 'shine') { ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x, y - 1, 1, 3); }
+      for (let i = 0; i < 10; i += 1) {
+        const ph = (t * 1.5 + i * 0.57) % 3; if (ph > 2) continue;
+        const x = Math.round((this.bankX + ((i * 71) % (this.W - this.bankX))) * Z); const y = (S + 2 + ((i * 37) % (this.H - S - 14))) * Z;
+        const col = sp.top === 'stars' ? '#ffd43b' : '#ffffff'; const n = ph < 1 ? Math.round(ph * 3) : Math.round((2 - ph) * 3);
+        P(col, x, y);
+        if (sp.top !== 'shine') { P(col, x - n, y, 2 * n + 1, 1); P(col, x, y - n, 1, 2 * n + 1); } else P(col, x - n, y, 2 * n + 1, 1);
       }
     }
   }
@@ -522,15 +652,16 @@ export class Fishing {
   makeFish(kind, x, y, move) {
     const sp = this.spot;
     const base = kind === 'special' ? SPECIES[sp.special.as] : SPECIES[kind];
-    const look = kind === 'special' ? { ...base, ...sp.special.look, snout: base.snout, flat: false } : base;
+    const { look, name } = lookFor(this.map, kind);
     const size = this.r() ** 1.6; // big ones are rarer
     const len = base.len[0] + (base.len[1] - base.len[0]) * size;
     const f = {
-      kind, likeKey: kind === 'special' ? sp.special.id : kind, name: kind === 'special' ? sp.special.name : base.name,
+      kind, likeKey: kind === 'special' ? sp.special.id : kind, name,
       size, len, inches: Math.round(base.inches[0] + (base.inches[1] - base.inches[0]) * size),
-      pic: fishPic(look, len), x, y, vx: 0, vy: 0, dir: x < this.W / 2 ? 1 : -1, speed: base.speed * (0.8 + this.r() * 0.4),
+      pic: fishPic(look, len, this.Z), x, y, vx: 0, vy: 0, dir: x < this.W / 2 ? 1 : -1, speed: base.speed * (0.8 + this.r() * 0.4),
       move, state: 'swim', born: this.t, life: 10 + this.r() * 20, homeY: y, wob: this.r() * 10, mood: 0, checkAt: 0, pull: base.pull,
     };
+    f.pw = f.pic.width / this.Z; f.ph = f.pic.height / this.Z; // size in game pixels
     this.fish.push(f);
     return f;
   }
@@ -660,7 +791,7 @@ export class Fishing {
   // phases: idle -> aim (needle swinging) -> air -> water -> (snag | fight) -> idle
   startCast(L) { if (L.state === 'idle') { L.state = 'aim'; L.meterAt = this.t; } }
 
-  meter(L) { const ph = ((this.t - L.meterAt) / SWEEP) % 2; return ph < 1 ? ph : 2 - ph; }
+  meter(L) { return needle(this.t - L.meterAt, SWEEP); }
 
   /** Red short, yellow medium, green far; a better rod widens green a little. */
   zoneOf(m, tier = this.rodTier) { const g = 0.82 - 0.04 * (tier - 1); return m < 0.45 ? 'red' : m < g ? 'yellow' : 'green'; }
@@ -697,7 +828,7 @@ export class Fishing {
 
   hook(L, f) {
     f.state = 'hooked'; f.dir = -1; f.face = -1; L.fish = f;
-    f.x = L.x + f.pic.width / 2 - 1; f.y = L.y + 1; // nose on the bait
+    f.x = L.x + f.pw / 2 - 1; f.y = L.y + 1; // nose on the bait
     L.state = 'fight'; L.tension = 0.2; f.stamina = 0.4 + f.size * 1.2 + f.pull * 0.6; f.runAt = this.t + 1 + this.r() * 2;
     for (const o of this.fish) if (o.line === L && o !== f && o.state === 'interest') { o.state = 'swim'; o.line = null; }
     this.pop('Fish on!', L.x, L.y - 6, '#ffd43b', true);
@@ -820,7 +951,7 @@ export class Fishing {
     L.slack = !holding && L.x >= this.W - 8 ? (L.slack || 0) + dt : 0;
     if (L.slack > 2) { this.pop('It got away!', L.x - 10, L.y - 6, '#ff8787', true); this.spook(f); L.state = 'idle'; L.fish = null; return; }
     // the hook is in its mouth: nose on the bait, body trailing away from the shore
-    f.x = L.x + f.pic.width / 2 - 1; f.y = L.y + 1; f.dir = -1; f.face = -1;
+    f.x = L.x + f.pw / 2 - 1; f.y = L.y + 1; f.dir = -1; f.face = -1;
     if (L.tension >= 1) { this.pop('Snap! It got away', L.x, L.y - 6, '#ff8787', true); this.spook(f); L.state = 'idle'; L.fish = null; return; }
     if (L.x <= this.bankX + 6 && L.y <= S + 4) this.land(L, f);
   }
@@ -830,14 +961,18 @@ export class Fishing {
     const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special' };
     this.points[c.who] += c.points;
     this.catches.push(c);
-    if (c.who === 'kid') { this.showCatch = c; this.sound = 'goal'; }
+    if (c.who === 'kid') {
+      this.showCatch = c; this.sound = 'goal';
+      const got = this.onCatch?.({ kind: f.likeKey, size: f.inches, points: c.points, map: this.map });
+      if (got === 'first' || got === 'record') { c.record = got; this.records += 1; }
+    }
     this.pop(c.who === 'kid' ? `+${c.points}` : `${this.vis.name}: ${f.name} +${c.points}`, c.who === 'kid' ? L.who.x + 10 : this.W / 2, this.surface - 30, '#b2f2bb', true);
     L.who.brain.set({ ...HAPPY, valence: 1, arousal: 0.8 });
   }
 
   splash(x) { this.splashes = (this.splashes || []).concat({ x, at: this.t }); }
 
-  pop(text, x, y, color = '#ffffff', big = false) { this.pops.push({ text, x, y, color, big, at: this.t }); }
+  pop(text, x, y, color, big) { addPop(this, text, x, y, color, big, Infinity); }
 
   // ---------- the visitor fishes too ----------
   stepAI(dt) {
@@ -909,7 +1044,7 @@ export class Fishing {
   }
 
   restart() {
-    this.phase = 'ready'; this.left = GAME_SECONDS; this.overtime = 0; this.points = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false;
+    this.phase = 'ready'; this.left = GAME_SECONDS; this.overtime = 0; this.points = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false; this.records = 0;
     this.ai.next = this.t + 2;
   }
 
@@ -931,52 +1066,61 @@ export class Fishing {
 
   // ---------- drawing ----------
   draw(ctx) {
+    const Z = this.Z;
     ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(this.field, 0, 0);
+    ctx.setTransform(Z, 0, 0, Z, 0, 0); // game pixels from here on
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
     // fish
     for (const f of this.fish) {
-      const x = Math.round(f.x - f.pic.width / 2); const y = Math.round(f.y - f.pic.height / 2);
+      const cx = Math.round(f.x * Z) / Z; const y = Math.round((f.y - f.ph / 2) * Z) / Z;
       ctx.save();
-      if ((f.face ?? f.dir) > 0) { ctx.translate(Math.round(f.x) * 2, 0); ctx.scale(-1, 1); }
-      ctx.drawImage(f.pic, x, y);
+      if ((f.face ?? f.dir) > 0) { ctx.translate(cx * 2, 0); ctx.scale(-1, 1); }
+      ctx.drawImage(f.pic, cx - f.pw / 2, y, f.pw, f.ph);
       ctx.restore();
     }
     this.drawWeeds(ctx);
     this.drawTop(ctx);
-    // splashes
+    // splashes: drops thrown up on both sides
     for (const s of this.splashes || []) {
       const a = (this.t - s.at) / 0.5; if (a > 1) continue;
-      ctx.fillStyle = '#ffffff';
-      const h = Math.round(4 * (1 - a));
-      ctx.fillRect(Math.round(s.x) - 3 - Math.round(a * 3), this.surface - h, 1, h); ctx.fillRect(Math.round(s.x) + 3 + Math.round(a * 3), this.surface - h, 1, h);
-      ctx.fillRect(Math.round(s.x), this.surface - h - 2, 1, 2);
+      const sx = Math.round(s.x * Z); const FS = this.surface * Z;
+      for (const [dx, hgt] of [[-6, 8], [-3, 11], [0, 13], [3, 11], [6, 8]]) {
+        const up = Math.round(hgt * Math.sin(Math.PI * a));
+        P('#ffffff', sx + Math.round(dx * (1 + a)), FS - up, 1, 2);
+      }
+      P('rgba(255,255,255,0.7)', sx - 8 - Math.round(a * 6), FS, 16 + Math.round(a * 12), 1);
     }
     // buddies
     for (const p of [this.vis, this.kid]) { p.paint(this.t); p.draw(ctx); }
     // lines and bait
     for (const L of [this.lines.vis, this.lines.kid]) this.drawLine(ctx, L);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   drawLine(ctx, L) {
+    const Z = this.Z;
+    const P = (col, a, b) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, 1 / Z, 1 / Z); };
+    const col = L === this.lines.kid ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.6)';
     if (L.state === 'idle' || L.state === 'aim') {
       const [rx, ry] = this.rodTip(L.who);
-      ctx.fillStyle = '#f8f9fa'; ctx.fillRect(rx, ry, 1, 4);
-      ctx.drawImage(this.baitPics[L === this.lines.kid ? this.bait : L.bait], rx - 3, ry + 3);
+      for (let k = 0; k < 4 * Z; k += 1) P(col, rx * Z, ry * Z + k);
+      ctx.drawImage(this.baitPics[L === this.lines.kid ? this.bait : L.bait], rx - 3, ry + 3, 6, 6);
       return;
     }
     const [rx, ry] = this.rodTip(L.who);
     const bx = Math.round(L.x); const by = Math.round(L.y);
     const tight = L.state === 'fight' || (L === this.lines.kid && L.held);
     const sag = tight ? 0 : L.state === 'air' ? 0 : 6;
-    ctx.fillStyle = L === this.lines.kid ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.55)';
-    const n = Math.max(8, Math.round(Math.hypot(bx - rx, by - ry)));
+    const n = Math.max(8, Math.round(Math.hypot(bx - rx, by - ry) * Z));
     for (let i = 0; i <= n; i += 1) {
       const k = i / n;
       const lx = rx + (bx - rx) * k; let ly = ry + (by - ry) * k + Math.sin(Math.PI * k) * sag;
-      if (ly > this.surface && L.state !== 'air' && lx < bx - 0) ly = Math.max(ly, this.surface);
-      ctx.fillRect(Math.round(lx), Math.round(ly), 1, 1);
+      if (ly > this.surface && L.state !== 'air' && lx < bx) ly = Math.max(ly, this.surface);
+      P(col, Math.round(lx * Z), Math.round(ly * Z));
     }
-    if (L.state !== 'fight') ctx.drawImage(this.baitPics[L.bait], bx - 3, by - 3);
+    if (L.state !== 'fight') ctx.drawImage(this.baitPics[L.bait], bx - 3, by - 3, 6, 6);
     if (L.state === 'snag' && Math.floor(this.t * 4) % 2) { ctx.fillStyle = '#ffa94d'; ctx.fillRect(bx - 1, by - 6, 1, 2); ctx.fillRect(bx + 2, by - 6, 1, 2); }
   }
 
@@ -1000,7 +1144,11 @@ export class Fishing {
       ctx.lineWidth = S * 0.6; ctx.strokeStyle = '#1b1430'; ctx.strokeRect(c.x * S, c.y * S, c.w * S, c.h * S);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(this.baitPics[c.bait], (c.x + 4) * S, (c.y + 1) * S, 6 * S, 6 * S);
-      text(BAIT[c.bait].name, (c.x + c.w / 2) * S, (c.y + 9.5) * S, u * 0.75, on ? '#1b1430' : '#ffffff');
+      // long names shrink to fit the chip
+      const nm = this.baitName[c.bait]; let fs = u * 0.75;
+      ctx.font = `${Math.round(fs)}px "Jersey 10", monospace`;
+      const tw = ctx.measureText(nm).width; if (tw > (c.w - 1.5) * S) fs *= ((c.w - 1.5) * S) / tw;
+      text(nm, (c.x + c.w / 2) * S, (c.y + 9.5) * S, fs, on ? '#1b1430' : '#ffffff');
     }
     // clock
     const secs = Math.ceil(this.left);
@@ -1026,10 +1174,7 @@ export class Fishing {
     if (L.state === 'aim') {
       const m = this.meter(L);
       const mx = (this.bankX + 4) * S; const my = (this.surface - 22) * S; const mw = u * 18; const mh = u * 1.6;
-      const steps = 100;
-      for (let i = 0; i < steps; i += 1) { ctx.fillStyle = ZONE_COLORS[this.zoneOf((i + 0.5) / steps)]; ctx.fillRect(mx + (i * mw) / steps, my, mw / steps + 0.5, mh); }
-      ctx.lineWidth = S * 0.6; ctx.strokeStyle = '#1b1430'; ctx.strokeRect(mx, my, mw, mh);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(mx + m * mw - S * 0.6, my - S, S * 1.2, mh + 2 * S);
+      drawMeter(ctx, (k) => this.zoneOf(k), m, mx, my, mw, mh, S);
       ctx.textAlign = 'left'; text('short', mx + u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'right'; text('far', mx + mw - u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'center';
     }
     // line tension while a fish is on
@@ -1055,11 +1200,21 @@ export class Fishing {
       const cw = u * 26; const ch = u * 13; const cx = W / 2 - cw / 2; const cy = (this.surface + 6) * S;
       ctx.fillStyle = 'rgba(27,20,48,0.88)'; ctx.fillRect(cx, cy, cw, ch);
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(cx, cy, cw, ch);
-      const z = Math.max(1, Math.floor((cw * 0.6) / c.pic.width));
+      const z = Math.min((cw * 0.6) / c.pic.width, (ch * 0.5) / c.pic.height);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(c.pic, W / 2 - (c.pic.width * z) / 2, cy + u * 1.2, c.pic.width * z, c.pic.height * z);
       text(`${c.who === 'kid' ? this.kid.name : this.vis.name} caught a ${c.name}!`, W / 2, cy + ch - u * 3.2, u * 1.6, '#ffd43b');
       text(`${c.inches} inches · +${c.points} points${c.rare ? ' · RARE!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare ? '#ffd43b' : '#ffffff');
+      // a new record for the fish book in the house: a ribbon across the card's corner
+      if (c.record) {
+        const label = c.record === 'first' ? 'NEW FISH!' : 'NEW RECORD!';
+        const rw = u * (c.record === 'first' ? 9 : 11); const rh = u * 2;
+        const rx = cx + cw - rw + u * 1; const ry = cy - u * 0.9;
+        ctx.fillStyle = '#2f9e44'; ctx.fillRect(rx, ry, rw, rh);
+        ctx.strokeStyle = '#1b1430'; ctx.lineWidth = S * 0.6; ctx.strokeRect(rx, ry, rw, rh);
+        text(label, rx + rw / 2, ry + rh / 2, u * 1.2, '#ffffff');
+        if (Math.floor(this.t * 3) % 2) text(c.record === 'first' ? 'Added to your fish book!' : 'Your biggest one yet!', W / 2, cy + ch + u * 1.3, u * 1.2, '#b2f2bb');
+      }
     }
     if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) text(this.locked ? "That's all our games today!" : 'Pick a bait, then tap CAST!', W / 2, (this.surface + 10) * S, u * 1.8);
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
@@ -1069,7 +1224,7 @@ export class Fishing {
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
       const mine = this.catches.filter((c) => c.who === 'kid');
       text(`Time's up! ${this.points.kid} points`, W / 2, cy - u * 3.2, u * 2.4, '#ffd43b');
-      text(`${mine.length} ${mine.length === 1 ? 'fish' : 'fish'} · ${this.vis.name} got ${this.points.vis}`, W / 2, cy - u * 0.7, u * 1.4, '#e9ecef');
+      text(`${mine.length} fish${this.records ? ` · ${this.records} new in your fish book` : ''} · ${this.vis.name} got ${this.points.vis}`, W / 2, cy - u * 0.7, u * 1.4, '#e9ecef');
       text(this.newBest ? 'New best!' : `Best ${this.best} points`, W / 2, cy + u * 1.5, u * 1.6, this.newBest ? '#b2f2bb' : '#e9ecef');
       if (this.t - this.overAt > 1.2) text('Tap to fish again', W / 2, cy + u * 3.7, u * 1.3, '#ffffff');
     }

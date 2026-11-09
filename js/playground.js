@@ -17,7 +17,8 @@ function layout(vw, vh) {
 }
 
 /**
- * opts: { kid, visitor: { buddy, name, gear }, kind, best, sounds, onScore(score) }
+ * opts: { kid, visitor: { buddy, name, gear }, kind, best, sounds, onScore(score): a new best, onOver(score): any game's end,
+ *   onCatch(fish): fishing only, the kid landed a fish (see Fishing) }
  * Returns a function that closes the screen.
  */
 export function openPlay(opts) {
@@ -42,8 +43,10 @@ export function openPlay(opts) {
 
   const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : Play;
   // fishing: the lake for the kid's map, and today's bait odds
-  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000 });
+  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch });
   root.game = game; // for tests
+  // fishing draws its lake and fish with finer pixels
+  if (game.Z) { field.width = W * game.Z; field.height = H * game.Z; }
   // the daily limit: opts.gamesLeft() says how many games are left today
   const left = () => (opts.gamesLeft ? opts.gamesLeft() : Infinity);
   const $left = root.querySelector('.play-left');
@@ -68,6 +71,7 @@ export function openPlay(opts) {
     if (game.phase === 'over' && seen.phase !== 'over') {
       snd.over?.(game.newBest);
       if (game.newBest) opts.onScore?.(game.score);
+      opts.onOver?.(game.score);
       navigator.vibrate?.(game.newBest ? [30, 60, 30] : 60);
     }
     // for tests: what the game is doing
@@ -92,7 +96,7 @@ export function openPlay(opts) {
     if (e.target.closest('.play-close')) return;
     e.preventDefault();
     const p = at(e);
-    if (!game.holdAnywhere && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
+    if (!game.holdAnywhere && game.press && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
     down = e.pointerId;
     game.tap(...p);
     listen();

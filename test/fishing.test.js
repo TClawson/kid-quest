@@ -55,3 +55,19 @@ test('every regular map has its own fishing spot and rare fish', () => {
   assert.equal(GAME_SECONDS, 90);
   assert.deepEqual(SNAG, { weed: 0.1, log: 0.5 });
 });
+
+test('every map but Forest Lake has its own fish and bait names; they keep how they work', async () => {
+  const { lookFor, baitNames, BAITS: B } = await import('../js/fishing.js');
+  const kinds = Object.keys(SPECIES);
+  for (const map of Object.keys(SPOTS)) {
+    const names = kinds.map((k) => lookFor(map, k).name);
+    assert.equal(new Set(names).size, kinds.length, `${map}: five different fish`);
+    if (map !== 'bg-meadow') assert.ok(names.every((n, i) => n !== SPECIES[kinds[i]].name), `${map}: its own fish`);
+    for (const k of [...kinds, 'special']) { const { look } = lookFor(map, k); assert.ok(look.depth > 0 && look.back && look.side && look.belly && look.fin, `${map} ${k} has a look`); }
+    const bn = baitNames(map);
+    assert.deepEqual(Object.keys(bn), B);
+    assert.ok(Object.values(bn).every((n) => n.length <= 10), `${map}: bait names fit the chips`);
+  }
+  assert.equal(lookFor('bg-ocean', 'catfish').name, 'Nurse shark');
+  assert.equal(lookFor('bg-rainbow', 'special').name, 'Unicorn fish');
+});

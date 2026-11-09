@@ -14,6 +14,7 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { pianoNotes, talking, concat, addNoise, room, wav, RATE } from '../helpers/sound.mjs';
 import { MEDIAPIPE, YAMNET } from '../../js/hear.js';
+import { seenSaturday } from '../helpers/seed.mjs';
 import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
 
 const shots = process.env.SHOTS;
@@ -100,7 +101,7 @@ async function withMic(samples, { mode = 'builtin', viewport = { width: 1280, he
     saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: '2026-10-01', buddy: { species: 'fox', outfit: {} } });
     if (clock) await page.clock.install({ time: new Date(2026, 10, 2, 16, 0, 0) });
     await page.goto(site.url);
-    await page.evaluate(([s, m]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.listenMode', m); }, [saved, mode]);
+    await page.evaluate(([s, m]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.listenMode', m); }, [seenSaturday(saved), mode]);
     await page.reload();
     await open(page, mode);
     await check(page);
@@ -134,6 +135,12 @@ try {
   await withMic(melody, {}, async (page) => {
     await waitNum(page, 'ls-piano', 8);
     assert.match(await page.textContent('#ls-mic'), /voice filters off.*notes from every sample/);
+    // the "dance earlier" slider starts at the usual lead and is kept for the timer
+    assert.equal(await page.textContent('[data-dance-lead-out]'), '120 ms');
+    await page.fill('[data-dance-lead]', '180');
+    assert.equal(await page.textContent('[data-dance-lead-out]'), '180 ms');
+    assert.equal(await page.evaluate(() => localStorage.getItem('kidquest.danceLead')), '180');
+    await page.fill('[data-dance-lead]', '120');
     assert.ok(await num(page, 'ls-since') < 3);
     // the end of the file (one fading echo per loop) may count as another sound
     const [p, o] = [await num(page, 'ls-piano'), await num(page, 'ls-other')];

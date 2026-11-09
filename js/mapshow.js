@@ -8,6 +8,7 @@ import {
   DRAGON, DRAGON_ROAR, WING_UP, WING_DOWN, KNIGHT, UNICORN_RUN, TIKI, draw, puff,
   MONKEY_DANCE, NOTE, TOUCAN, TOUCAN_WING_UP, TOUCAN_WING_DOWN, JAGUAR, SLOTH_WAVE, CAPY_CALM,
 } from './maplife.js';
+import { upscale, thinOutline } from './upscale.js';
 import { outlined, SHIP, WHALE, CHEST_CLOSED, CHEST_PALS } from './treasure-art.js';
 
 const OUT = '#2a1838';
@@ -30,10 +31,43 @@ function big(key, rows, pal, scale = 2, flip = false) {
   c.width = w * scale;
   c.height = rows.length * scale;
   const x = c.getContext('2d');
-  x.scale(scale, scale);
-  draw(x, 0, 0, rows.map((r) => r.padEnd(w, '.')), pal, flip);
+  // the art is smoothed up (Scale2x / Scale3x) rather than blown up, so its pixels stay the
+  // size of the land's pixels and its edges stay fine
+  const padded = rows.map((r) => r.padEnd(w, '.'));
+  let fine = padded; let n = scale;
+  if (n === 4) { fine = upscale(upscale(padded, 2), 2); n = 1; } else if (n === 2 || n === 3) { fine = upscale(padded, n); n = 1; }
+  if (fine !== padded) fine = thinOutline(fine, scale - 1);
+  x.scale(n, n);
+  draw(x, 0, 0, fine, pal, flip);
+  if (fine !== padded) fineDetail(x, c.width, c.height);
   scaled.set(k, c);
   return c;
+}
+/** Lit top-left edges, shaded bottom-right edges and a little texture, one pixel at a time (like the village's drawings). */
+function fineDetail(x, w, h) {
+  const img = x.getImageData(0, 0, w, h);
+  const d = img.data;
+  const OUTLINE = [42, 24, 56];
+  const filled = (px, py) => {
+    if (px < 0 || py < 0 || px >= w || py >= h) return false;
+    const i = (py * w + px) * 4;
+    return d[i + 3] > 0 && !(d[i] === OUTLINE[0] && d[i + 1] === OUTLINE[1] && d[i + 2] === OUTLINE[2]);
+  };
+  const src = new Uint8ClampedArray(d);
+  for (let py = 0; py < h; py += 1) {
+    for (let px = 0; px < w; px += 1) {
+      if (!filled(px, py)) continue;
+      let k = 0;
+      if (!filled(px, py - 1) || !filled(px - 1, py)) k = 0.22;
+      else if (!filled(px, py + 1) || !filled(px + 1, py)) k = -0.18;
+      else { const t = Math.sin(px * 127.1 + py * 311.7) * 43758.5453; const f = t - Math.floor(t); k = f < 0.12 ? -0.08 : f > 0.9 ? 0.07 : 0; }
+      if (!k) continue;
+      const i = (py * w + px) * 4;
+      const to = k > 0 ? [255, 255, 255] : [27, 20, 48];
+      for (let ch = 0; ch < 3; ch += 1) d[i + ch] = Math.round(src[i + ch] + (to[ch] - src[i + ch]) * Math.abs(k));
+    }
+  }
+  x.putImageData(img, 0, 0);
 }
 const blit = (ctx, img, x, y) => ctx.drawImage(img, Math.round(x), Math.round(y));
 
@@ -601,8 +635,9 @@ export function playShow(section, theme, { buddy = null, spot = null, scale = 4,
   const def = SHOWS[theme];
   const land = section.querySelector('canvas.map-land');
   if (!def || !land || running.has(section)) return null;
-  const aw = land.width;
-  const ah = land.height;
+  const z = Number(land.dataset.z) || 1; // the land is drawn with z fine pixels per map pixel
+  const aw = land.width / z;
+  const ah = land.height / z;
   const canvas = document.createElement('canvas');
   canvas.className = 'map-show';
   canvas.setAttribute('aria-hidden', 'true');

@@ -48,9 +48,10 @@ export function defaultTasks() {
     ...extra,
   });
   return [
-    t('Brush teeth', '🪥', 'morning', ALL_DAYS),
-    t('Make bed', '🛏️', 'morning', ALL_DAYS),
-    t('Clear bedroom floor', '🧸', 'morning', ALL_DAYS),
+    // linked to the buddy's house (houserules.js): the toothbrush, the bed and the floor
+    t('Brush teeth', '🪥', 'morning', ALL_DAYS, { house: 'teeth' }),
+    t('Make bed', '🛏️', 'morning', ALL_DAYS, { house: 'bed' }),
+    t('Clear bedroom floor', '🧸', 'morning', ALL_DAYS, { house: 'floor' }),
     t('Piano practice', '🎹', 'afternoon', WEEKDAYS, { verify: 'parent', minutes: 30 }),
     t('Chore of the week', '🧽', 'afternoon', [1, 2, 3, 4], { verify: 'parent' }),
     t('Chore of the week: deep clean', '✨', 'afternoon', [5], { verify: 'parent' }),
@@ -460,6 +461,51 @@ export function streakInfo(state, kid, today) {
   });
 }
 
+/**
+ * The real-world weekly reward (settings.weeklyReward, like "Pick the Friday
+ * movie"). It lands on Friday once every school day, Monday to Friday, is done:
+ * all of that day's chores done and parent-approved, or the day excused by a
+ * parent. Off-week tasks aren't scheduled, so they never count, and exercise is
+ * optional. A missed day loses that week's reward even if a streak freeze saved
+ * the streak. Weekend chores still count for streaks and coins, but not for the
+ * reward. Days before the kid started don't count, and a week with no finished
+ * day at all (all excused) doesn't earn it. It is worked out again from the
+ * history each time, so a parent approving Thursday's chores late on Saturday
+ * still earns it; it stays earned through Sunday.
+ * days: one { key, state } per Monday to Friday: done, excused, missed, today, future or before (the kid's start).
+ */
+export function weeklyRewardInfo(state, kid, today) {
+  return memoize(`reward|${kid.id}|${today}`, () => {
+    const monday = weekStart(today);
+    const friday = addDays(monday, 4);
+    const days = [];
+    let done = 0;
+    let open = 0; // days not finished yet: today, or still to come
+    let lost = false;
+    for (let i = 0; i < 5; i += 1) {
+      const key = addDays(monday, i);
+      let st;
+      if (kid.startDate && key < kid.startDate) st = 'before';
+      else if (key > today) st = 'future';
+      else {
+        const s = dayStatus(state, kid, key, today);
+        if (s.complete) st = 'done';
+        else if (s.excused) st = 'excused';
+        else if (key === today) st = 'today';
+        else st = 'missed';
+      }
+      if (st === 'done') done += 1;
+      if (st === 'missed') lost = true;
+      if (st === 'today' || st === 'future') open += 1;
+      days.push({ key, state: st });
+    }
+    const earned = today >= friday && !lost && !open && done > 0;
+    // a kid who starts after Monday can still earn it, but one who starts on the weekend waits for next week
+    if (kid.startDate && kid.startDate > friday) lost = true;
+    return { monday, friday, days, done, earned, lost };
+  });
+}
+
 /** Days complete (or excused) out of days so far this calendar month. */
 export function monthDays(state, kid, today) {
   const first = `${today.slice(0, 8)}01`;
@@ -705,6 +751,12 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
 
 // ---------- games with visiting buddies ----------
 export const GAMES_PER_DAY = 4;
+/** The daily games before 2026-11-06 (PR #55), when play logs had no cap yet. */
+export const OLD_GAMES_PER_DAY = 8;
+
+/** Free extra games every Saturday, kept and used just like treasure chest games. */
+export const SATURDAY_GAMES = 2;
+export const freeGamesOn = (key) => (dayOfWeek(key) === 6 ? SATURDAY_GAMES : 0);
 
 /** Games a kid may play with visitors in a day: 4, plus 2 for each week of the current exercise streak (up to 3). */
 export function gamesPerDay(exerciseWeeks = 0) {
@@ -737,12 +789,44 @@ export function carriedGames(kid, today, chestYesterday = 0, fallbackCap = GAMES
   return Math.max(0, chestYesterday - Math.max(0, (log.n || 0) - cap));
 }
 
+/**
+ * Games a kid may play before today's chores are done: only the chest games
+ * carried over from yesterday (they were earned already, and run out tonight).
+ * Every game played today counts against them first, so the total for the day
+ * stays the same.
+ */
+export function earlyGames(kid, today, carried = 0) {
+  const used = kid?.playLog?.day === today ? kid.playLog.n || 0 : 0;
+  return Math.max(0, carried - used);
+}
+
 /** kid.playLog after one more game today. cap: today's games that run out at bedtime. */
 export function logGame(kid, today, cap) {
   const log = kid?.playLog;
   if (log?.day === today) return { ...log, n: (log.n || 0) + 1, cap };
   const prev = log?.day ? { day: log.day, n: log.n || 0, ...(Number.isFinite(log.cap) ? { cap: log.cap } : {}) } : undefined;
   return { day: today, n: 1, cap, ...(prev ? { prev } : {}) };
+}
+
+// ---------- borrowing a visitor's gear ----------
+// A visitor with a ball, stick or rod that the kid doesn't own lends it for a
+// couple of games a day, so the kid can try it. kid.lendLog is { day, counts: { gear: games } }.
+
+export const LEND_GAMES = 2;
+
+/** Borrowed games left today with a kind of gear (soccer, hockey, football, rod). */
+export function lendLeft(kid, today, gear) {
+  const log = kid?.lendLog;
+  const used = log?.day === today ? log.counts?.[gear] || 0 : 0;
+  return Math.max(0, LEND_GAMES - used);
+}
+
+/** kid.lendLog after one more borrowed game today. */
+export function logLend(kid, today, gear) {
+  const log = kid?.lendLog;
+  const counts = log?.day === today ? { ...log.counts } : {};
+  counts[gear] = (counts[gear] || 0) + 1;
+  return { day: today, counts };
 }
 
 // ---------- the kid's own plan ----------

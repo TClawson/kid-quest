@@ -41,7 +41,7 @@ try {
               if (d.stage === 'air') {
                 seenAir ??= g.t;
                 if (g.t - seenAir > 0.15) g.drag(g.ball.tx, g.ball.ty - 6);
-                if (g.t >= d.catchAt && !d.tried) g.tap(g.ball.tx, g.ball.ty);
+                if (g.t >= d.catchAt - 0.05 && !d.tried) { const bt = g.button(); g.tap(bt.x, bt.y); }
               } else seenAir = null;
             }
             g.step(1 / 30);
@@ -61,6 +61,27 @@ try {
       assert.ok(r.score > 0, `${where}: catches score points`);
       assert.equal(r.offField, 0, `${where}: buddies stay on the field`);
     }
+    // the miss messages tell timing from position: force each kid-catch case and read the pops
+    const said = await page.evaluate(async () => {
+      const { Football } = await import('./js/football.js');
+      const run = (tap, atBall) => {
+        const g = new Football({ W: 213, H: 120, seed: 5, kid: { name: 'A', buddy: { species: 'fox', outfit: {} } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} } } });
+        g.down = { ...g.down, catcher: g.kid, thrower: g.vis, stage: 'air', route: 'short', zone: 'green', tap, tried: true, catchAt: 0, nextAt: 0 };
+        g.ball = { ...g.ball, tx: 100, ty: 80, x0: 40, y0: 80, T: 1, t0: 0, state: 'air' };
+        g.kid.x = atBall ? 100 : 20; g.kid.y = 80;
+        g.r = () => 0.9; g.pops = [];
+        g.land();
+        return g.pops.map((q) => q.text);
+      };
+      return { early: run('early', true), late: run('late', true), none: run(null, true), fumble: run('yellow', true), wrong: run('green', false), both: run('late', false), great: run('green', true) };
+    });
+    assert.deepEqual(said.early, ['Too early!']);
+    assert.deepEqual(said.late, ['Too late!']);
+    assert.deepEqual(said.none, ['Too late!']);
+    assert.deepEqual(said.fumble, ['Fumbled!']);
+    assert.deepEqual(said.wrong, ['Missed!']);
+    assert.deepEqual(said.both.slice().sort(), ['Missed!', 'Too late!']);
+    assert.deepEqual(said.great, ['Great catch!', '+5']);
     console.log(results.map((r) => `${r.W}x${r.H}/${r.seed}: ${r.score} pts, plays ${r.plays.kid}+${r.plays.vis}`).join('; '));
     assert.deepEqual(errors, []);
     await page.close();
@@ -117,6 +138,16 @@ try {
     assert.equal(await page.evaluate(() => document.querySelector('.playground').game.down.stage), 'wait', 'the tap set the aim');
     await page.waitForFunction(() => document.querySelector('.playground').game.ball.state === 'air');
     if (shots) await page.screenshot({ path: `${shots}/football-${name}.png` });
+    // a real finger on the CATCH button (not a direct tap() call) must count as a catch tap
+    await page.waitForFunction(() => { const g = document.querySelector('.playground').game; return g.down.stage === 'pick' && g.down.catcher === g.kid && g.ready(); }, null, { timeout: 15000 });
+    const cone2 = await page.evaluate(() => document.querySelector('.playground').game.down.cones.short);
+    await page.mouse.click(...at(...cone2));
+    await page.waitForFunction(() => { const g = document.querySelector('.playground').game; return g.down.catcher === g.kid && g.down.stage === 'air' && !g.down.tried; }, null, { timeout: 15000 });
+    const bt = await page.evaluate(() => document.querySelector('.playground').game.button());
+    await page.mouse.click(...at(bt.x, bt.y));
+    const tapped = await page.evaluate(() => { const d = document.querySelector('.playground').game.down; return [d.tried, d.tap]; });
+    assert.equal(tapped[0], true, 'pressing the CATCH button with a finger registers the tap');
+    assert.ok(tapped[1], 'the tap has a timing color');
     // end the session early and check the best score is kept
     await page.waitForFunction(() => document.querySelector('.playground').game.down.stage === 'result');
     await page.evaluate(() => { const g = document.querySelector('.playground').game; g.score = 35; g.left = 0.05; });

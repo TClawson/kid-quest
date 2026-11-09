@@ -18,6 +18,9 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); min-height: 100%; }
+/* No page zoom: a small pinch (or a double tap) by a kid used to leave the whole app zoomed in,
+   so the next screen showed a giant buddy. Scrolling still works. */
+html { touch-action: pan-x pan-y; }
 body { -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; touch-action: manipulation; }
@@ -167,6 +170,7 @@ label { color: var(--ink); }
 .game-pick { display: grid; gap: 10px; margin: 14px 0; }
 .game-pick .btn { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .game-pick .btn small { font-size: 0.75em; opacity: 0.85; }
+.visitor-invite { margin: 8px 0 0; padding: 8px 10px; background: #fff3d6; color: var(--px-ink); border: 2px solid var(--px-ink); border-radius: 6px; font-weight: 700; line-height: 1.3; }
 .modal-card { background: var(--card); border-radius: 26px; padding: 24px; width: min(440px, 100%); max-height: 92vh; overflow: auto; animation: rise 0.25s ease-out; }
 .big-emoji { font-size: 4rem; }
 .pin { text-align: center; }
@@ -297,7 +301,8 @@ label { color: var(--ink); }
 
 .map-buddy { position: absolute; z-index: 3; transform: translate(-50%, -100%); margin-top: -28px; pointer-events: none; }
 .map-buddy .buddy { background: none; border-radius: 0; overflow: visible; }
-.buddy-mini { width: 86px; height: 86px; }
+.buddy-mini { width: 96px; height: 96px; } /* 4 screen pixels per buddy pixel */
+@media (max-width: 600px) { .buddy-mini { width: 72px; height: 72px; } }
 .map-buddy.hop { animation: buddy-arrive 0.6s ease-out; }
 
 @keyframes node-pulse { 0% { box-shadow: 0 7px 0 color-mix(in srgb, var(--kid) 60%, #000), 0 0 0 0 color-mix(in srgb, var(--kid) 50%, transparent); } 100% { box-shadow: 0 7px 0 color-mix(in srgb, var(--kid) 60%, #000), 0 0 0 22px transparent; } }
@@ -328,6 +333,25 @@ label { color: var(--ink); }
 .buddy-svg .flame-1 { animation: px-flame-b 0.3s steps(1, end) infinite; }
 @keyframes px-flame-a { 0% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes px-flame-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+/* the magic wand: once every chore is done the glow breathes, the star twinkles,
+   and every few seconds a burst of colored sparks flies out (four frames) */
+.buddy-svg .wand-full .wand-glow { animation: wand-breathe 1.6s ease-in-out infinite; }
+.buddy-svg .wand-tip-0 { animation: px-flame-a 0.5s steps(1, end) infinite; }
+.buddy-svg .wand-tip-1 { animation: px-flame-b 0.5s steps(1, end) infinite; }
+.buddy-svg .wand-spark { opacity: 0; animation: 3.4s steps(1, end) infinite; }
+.buddy-svg .wand-spark-0 { animation-name: wand-spark-0; }
+.buddy-svg .wand-spark-1 { animation-name: wand-spark-1; }
+.buddy-svg .wand-spark-2 { animation-name: wand-spark-2; }
+.buddy-svg .wand-spark-3 { animation-name: wand-spark-3; }
+@keyframes wand-breathe { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+@keyframes wand-spark-0 { 0%, 76% { opacity: 0; } 76.01%, 81% { opacity: 1; } 81.01%, 100% { opacity: 0; } }
+@keyframes wand-spark-1 { 0%, 81% { opacity: 0; } 81.01%, 86% { opacity: 1; } 86.01%, 100% { opacity: 0; } }
+@keyframes wand-spark-2 { 0%, 86% { opacity: 0; } 86.01%, 91% { opacity: 1; } 91.01%, 100% { opacity: 0; } }
+@keyframes wand-spark-3 { 0%, 91% { opacity: 0; } 91.01%, 96% { opacity: 1; } 96.01%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .buddy-svg .wand-full .wand-glow, .buddy-svg .wand-tip-0, .buddy-svg .wand-tip-1 { animation: none; }
+  .buddy-svg .wand-tip-1 { opacity: 0; }
+}
 .item .piano-need { font-weight: 700; color: var(--kid, var(--brand)); }
 
 /* coins and the shop */
@@ -344,14 +368,15 @@ label { color: var(--ink); }
 
 /* visiting buddies in the village at the top of the quest map */
 .map-visitors { position: absolute; inset: 0 0 auto 0; height: 0; z-index: 2; }
-.map-visitor { position: absolute; top: 68px; width: 64px; margin-left: -32px; display: grid; justify-items: center; cursor: pointer; }
+.map-visitor { position: absolute; top: 64px; width: 80px; margin-left: -40px; display: grid; justify-items: center; cursor: pointer; }
 .map-visitors.arrive .map-visitor { animation: visitor-arrive 0.7s ease-out both; }
 .map-visitor.talking { z-index: 1; }
 .map-visitors.arrive .map-visitor.inner { animation-delay: 0.2s; }
 .map-visitors.arrive .map-visitor.playing { animation-delay: 0.4s; }
-.map-visitor.inner { top: 84px; }
+.map-visitor.inner { top: 86px; }
 /* live buddies (live.js) breathe and hop by themselves: no floating */
-.visitor-buddy { width: 58px; height: 58px; }
+.visitor-buddy { width: 72px; height: 72px; } /* 3 screen pixels per buddy pixel */
+@media (max-width: 600px) { .visitor-buddy { width: 60px; height: 60px; margin-top: 6px; } }
 .visitor-buddy svg { width: 100%; height: 100%; display: block; }
 .visitor-name { margin-top: -4px; font-size: 0.7rem; font-weight: 800; color: #fff; background: var(--kid); border: 2px solid var(--px-ink); border-radius: 4px; padding: 0 5px; line-height: 1.4; }
 .visitor-bubble { position: absolute; top: 100%; left: 50%; width: max-content; max-width: 130px; margin-top: 6px; transform: translateX(-50%) scale(0.6); opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; font-size: 0.8rem; font-weight: 700; line-height: 1.2; text-align: center; background: #fff3d6; color: var(--px-ink); border: 2px solid var(--px-ink); border-radius: 6px; padding: 3px 5px; box-shadow: 2px 2px 0 var(--px-ink); }
@@ -384,11 +409,15 @@ label { color: var(--ink); }
 .moves-kind { margin: 14px 0 2px; font-size: 1rem; }
 
 /* fishing visitors cast into the village pond (see pondSpots in maparts.js) */
-.map-visitor { --line: 98px; }
-.map-visitor.inner { --line: 82px; }
+.map-visitor { --line: 124px; }
+.map-visitor.inner { --line: 102px; }
 .map-visitor.face-left .visitor-buddy svg, .map-visitor.face-left .visitor-buddy canvas { transform: scaleX(-1); }
-.fish-line { position: absolute; top: 12px; left: 60px; width: 1px; height: var(--line); background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 0.5px rgba(42, 24, 56, 0.35); pointer-events: none; transform-origin: top; }
-.map-visitor.face-left .fish-line { left: 3px; }
+.fish-line { position: absolute; top: 22px; left: 74px; width: 2px; height: var(--line); background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 0.5px rgba(42, 24, 56, 0.35); pointer-events: none; transform-origin: top; }
+.map-visitor.face-left .fish-line { left: 4px; }
+@media (max-width: 600px) {
+  .map-visitor { --line: 121px; } .map-visitor.inner { --line: 99px; }
+  .fish-line { top: 25px; left: 68px; } .map-visitor.face-left .fish-line { left: 10px; }
+}
 .bobber { position: absolute; bottom: -4px; left: -3px; width: 7px; height: 7px; border-radius: 2px; background: linear-gradient(#e03131 50%, #fff 50%); border: 1px solid var(--px-ink); animation: bobber 1.6s steps(2, end) infinite; }
 @keyframes bobber { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
 .map-visitor.reeling .fish-line { animation: reel-line 3.4s steps(6, end) both; }
@@ -399,8 +428,8 @@ label { color: var(--ink); }
 .fish-catch svg { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .map-visitor.reeling .fish-catch { animation: catch-pop 3.4s steps(1, end) both; }
 @keyframes catch-pop {
-  0%, 25% { opacity: 0; transform: translate(26px, 90px); }
-  30% { opacity: 1; transform: translate(22px, 50px) rotate(20deg); }
+  0%, 25% { opacity: 0; transform: translate(26px, 120px); }
+  30% { opacity: 1; transform: translate(22px, 66px) rotate(20deg); }
   35% { transform: translate(14px, 18px) rotate(-20deg); }
   40% { transform: translate(6px, -8px) rotate(10deg); }
   45%, 55%, 65%, 75% { transform: translate(0, -14px) rotate(-8deg); }
@@ -410,8 +439,8 @@ label { color: var(--ink); }
 }
 .map-visitor.face-left .fish-catch { animation-name: catch-pop-left; }
 @keyframes catch-pop-left {
-  0%, 25% { opacity: 0; transform: translate(-26px, 90px); }
-  30% { opacity: 1; transform: translate(-22px, 50px) rotate(-20deg); }
+  0%, 25% { opacity: 0; transform: translate(-26px, 120px); }
+  30% { opacity: 1; transform: translate(-22px, 66px) rotate(-20deg); }
   35% { transform: translate(-14px, 18px) rotate(20deg); }
   40% { transform: translate(-6px, -8px) rotate(-10deg); }
   45%, 55%, 65%, 75% { transform: translate(0, -14px) rotate(8deg); }
@@ -424,8 +453,8 @@ label { color: var(--ink); }
 .map-visitor.doing-move .fish-line { opacity: 0; }
 
 /* visitors with the same gear play together on a small field or rink (see drawField in maparts.js) */
-.map-visitor.playing { top: 118px; }
-.map-game { position: absolute; top: 170px; height: 0; pointer-events: none; }
+.map-visitor.playing { top: 200px; } /* placePlayers in maparts.js puts players and ball on their field */
+.map-game { position: absolute; top: 250px; height: 0; pointer-events: none; }
 .game-ball { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); line-height: 0; }
 .game-ball svg { display: block; image-rendering: pixelated; }
 .game-soccer .game-ball { animation: ball-pass 2.4s steps(12, end) infinite; }
@@ -461,7 +490,7 @@ label { color: var(--ink); }
 .map-game.host-field::before { content: ''; position: absolute; left: 0; right: 0; top: -24px; height: 44px; }
 @media (prefers-reduced-motion: reduce) { .game-ball { animation: none !important; } }
 /* on a phone the fields are small, so the players are too */
-@media (max-width: 600px) { .map-visitor.playing { top: 126px; } .map-visitor.playing .visitor-buddy { width: 46px; height: 46px; } }
+@media (max-width: 600px) { .map-visitor.playing .visitor-buddy { width: 48px; height: 48px; } }
 /* near the map's edge, the speech bubble opens toward the middle so it isn't cut off */
 .map-visitor.edge-left .visitor-bubble { left: 0; transform: scale(0.6); transform-origin: top left; }
 .map-visitor.edge-left.talking .visitor-bubble { transform: none; }
@@ -500,6 +529,8 @@ label { color: var(--ink); }
 .listen-meter i { background: #adb5bd; transition: width 0.08s; }
 .listen-meter i.loud { background: #40c057; }
 .listen-bar em, .listen-meter em { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--px-ink); }
+.dance-lead { display: grid; gap: 6px; margin-bottom: 8px; }
+.dance-lead input[type=range] { width: 100%; accent-color: var(--brand); }
 .listen-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; padding: 6px 0; }
 .listen-line { position: relative; height: 18px; background: #0001; border-radius: 4px; overflow: hidden; }
 .listen-line .dot { position: absolute; top: 4px; margin-left: -5px; }
@@ -541,6 +572,8 @@ span.dot.other { background: #f76707; }
 
 /* habits: month count, habit stars, the kid's plan, last week's look-back, the family party */
 .month-line { margin: 10px 0 0; }
+.reward-line { margin: 10px 0 0; }
+.reward-line.earned { color: var(--kid, inherit); font-size: 1.1em; }
 .habits h2 small { font-size: 0.8rem; }
 .habits .plan-btn { margin: 0 0 10px; }
 .habit-row { display: flex; gap: 10px; align-items: center; background: var(--card); border-radius: 12px; padding: 8px 10px; margin: 6px 0; }

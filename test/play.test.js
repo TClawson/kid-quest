@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gameFor, levelObstacles, rng, kickWindows, heightSpread } from '../js/play.js';
 import { needle, zoneAt, SHOT_ODDS, STEAL_ODDS, Z } from '../js/hockey.js';
-import { gamesPerDay, gamesLeft, carriedGames, logGame } from '../js/logic.js';
+import { gamesPerDay, gamesLeft, carriedGames, earlyGames, logGame } from '../js/logic.js';
 
 test('visitors play their ball game or go fishing, the same one all day, or tag', () => {
   assert.equal(gameFor({}), 'tag');
@@ -97,4 +97,27 @@ test('chest games keep for one more day', () => {
   assert.equal(gamesLeft(kid, t, 0, 0 + carriedGames(kid, t, 2)), 3);
   // carried games are used before today's chest games, so tomorrow only today's unused chest games carry
   assert.equal(carriedGames({ playLog: { day: t, n: 6, cap: 5 } }, '2026-11-07', 2), 1);
+});
+
+test('carried chest games can be played before chores', () => {
+  const t = '2026-11-06', y = '2026-11-05';
+  assert.equal(earlyGames({ playLog: { day: y, n: 4, cap: 4 } }, t, 2), 2, 'both carried games, first thing');
+  assert.equal(earlyGames({ playLog: { day: t, n: 1 } }, t, 2), 1, 'one played already');
+  assert.equal(earlyGames({ playLog: { day: t, n: 2 } }, t, 2), 0, 'used up: the rest wait for chores');
+  assert.equal(earlyGames({}, t, 0), 0, 'nothing carried, nothing early');
+  // played early, the day's total stays the same once chores are done
+  const kid = { playLog: { day: t, n: 2 } };
+  assert.equal(gamesLeft(kid, t, 0, 2), 4);
+});
+
+test('chest games from before the cap was saved keep under the old 8-game day', () => {
+  // last night: 6 games under the old limit of 8, no cap saved, +2 from the chest
+  assert.equal(carriedGames({ playLog: { day: '2026-11-05', n: 6 } }, '2026-11-06', 2, 8), 2);
+});
+
+test('Saturday brings two free games, other days none', async () => {
+  const { freeGamesOn, SATURDAY_GAMES } = await import('../js/logic.js');
+  assert.equal(SATURDAY_GAMES, 2);
+  assert.equal(freeGamesOn('2026-11-07'), 2); // a Saturday
+  for (const d of ['2026-11-06', '2026-11-08', '2026-11-09', '2026-11-04']) assert.equal(freeGamesOn(d), 0);
 });

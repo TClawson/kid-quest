@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, defaultTasks, newId } from '../js/logic.js';
-import { migrate, splitState, joinState, diffDocs, createStore, localBackend, STORAGE_KEY } from '../js/store.js';
+import { migrate, splitState, joinState, diffDocs, diffFields, nestFields, planWrites, DELETE, createStore, localBackend, STORAGE_KEY } from '../js/store.js';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -132,3 +132,38 @@ test('migrate moves worn items a kid owned to their current buddy', () => {
   assert.deepEqual(s.kids[0].owned, ['bg-ocean']);
   assert.deepEqual(s.kids[0].buddyOwned, { cat: ['hat-cap'] });
 });
+
+test('nestFields turns field changes into one nested object for a merging set', () => {
+  const before = { entry: { tasks: { a: { status: 'done' }, b: { status: 'done' } }, note: 'x' } };
+  const after = { entry: { tasks: { a: { status: 'approved' } }, bonus: 5 } };
+  const nested = nestFields(diffFields(before, after));
+  assert.deepEqual(nested.entry.tasks.a, { status: 'approved' });
+  assert.equal(nested.entry.tasks.b, DELETE);
+  assert.equal(nested.entry.note, DELETE);
+  assert.equal(nested.entry.bonus, 5);
+});
+
+test('planWrites: merge new documents, update changed fields, patch pending creates', () => {
+  const before = splitState({ ...emptyStateForPlan(), log: { '2026-11-01': { k1: { tasks: { a: { status: 'done' } } } } } });
+  const afterState = emptyStateForPlan();
+  afterState.settings.sound = false; // device only
+  afterState.kids[0].spent = 5;
+  afterState.log = { '2026-11-02': { k1: { tasks: {} } } };
+  const after = splitState(afterState);
+  const changes = diffDocs(before, after);
+  const plan = planWrites(changes, before, after);
+  const byPath = Object.fromEntries(plan.map((w) => [w.path, w]));
+  assert.equal(byPath.device, undefined, 'device settings stay on the device');
+  assert.equal(byPath['days/2026-11-02_k1'].op, 'merge');
+  assert.deepEqual(byPath['days/2026-11-02_k1'].data, { date: '2026-11-02', kidId: 'k1', entry: { tasks: {} } });
+  assert.equal(byPath['days/2026-11-01_k1'].op, 'delete');
+  assert.equal(byPath['kids/k1'].op, 'update');
+  assert.deepEqual(byPath['kids/k1'].fields, [[['spent'], 5]]);
+  const pending = planWrites(changes, before, after, new Set(['kids/k1']));
+  assert.equal(pending.find((w) => w.path === 'kids/k1').op, 'patch');
+  assert.equal(planWrites(changes, null, after).every((w) => w.op === 'merge' || w.op === 'delete'), true);
+});
+
+function emptyStateForPlan() {
+  return migrate({ kids: [{ id: 'k1', name: 'Ava', tasks: [], spent: 0 }], log: {} });
+}

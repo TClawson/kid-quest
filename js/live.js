@@ -100,6 +100,9 @@ export function live(key) {
     beat: (p) => {
       const now = performance.now();
       st.beat = { at: now, period: Math.max(250, p), index: (st.beat?.index ?? -1) + 1 };
+      // draw the beat's bounce now, not at the next of the 12 frames a second (up to 83 ms late)
+      st.frame = null;
+      liveStart();
     },
     noBeat: () => { st.beat = null; },
     touch: () => wake(st, performance.now()),
@@ -144,8 +147,8 @@ function paint(canvas, buf) {
     const c = buf[i];
     if (!c) continue;
     let v = rgb.get(c);
-    if (!v) { v = [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]; rgb.set(c, v); }
-    img.data[i * 4] = v[0]; img.data[i * 4 + 1] = v[1]; img.data[i * 4 + 2] = v[2]; img.data[i * 4 + 3] = 255;
+    if (!v) { v = [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16), c.length > 7 ? parseInt(c.slice(7, 9), 16) : 255]; rgb.set(c, v); }
+    img.data[i * 4] = v[0]; img.data[i * 4 + 1] = v[1]; img.data[i * 4 + 2] = v[2]; img.data[i * 4 + 3] = v[3];
   }
   ctx.putImageData(img, 0, 0);
 }
@@ -178,7 +181,7 @@ function tick() {
     }
     if (st.pose && !st.drawn.has(canvas)) {
       st.drawn.add(canvas);
-      paint(canvas, render(rigFor(key, canvas.dataset.bg !== '0'), st.pose, step));
+      paint(canvas, render(rigFor(key, canvas.dataset.bg !== '0'), st.pose, step, { wand: looks.get(key)?.wand }));
     }
   }
 }

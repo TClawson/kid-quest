@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ROUTES, needle, zoneAt, catchWindows, visCatch, waitFor, reachFor, MISS, VIS_THROW, SLACK } from '../js/football.js';
+import { ROUTES, needle, zoneAt, catchWindows, visCatch, waitFor, reachFor, MISS, VIS_THROW, SLACK, WANDER, wanderAt } from '../js/football.js';
 
 const share = (zone, tier) => { let n = 0; for (let i = 0; i < 1000; i += 1) if (zoneAt((i + 0.5) / 1000, tier) === zone) n += 1; return n / 1000; };
 
@@ -15,10 +15,11 @@ test('aiming: green is a narrow band in the middle, a little wider with a better
   assert.ok(ROUTES.deep.sweep < ROUTES.short.sweep, 'the needle is faster for deep throws');
 });
 
-test('catching: smaller windows for deep and off-target throws, bigger with a better ball', () => {
+test('catching: roomy windows, a bit smaller for deep throws, bigger with a better ball', () => {
   const w = (r, z, t) => catchWindows(r, z, t).green;
   assert.ok(w('deep', 'green', 1) < w('short', 'green', 1));
-  assert.ok(w('short', 'red', 1) < w('short', 'yellow', 1) && w('short', 'yellow', 1) < w('short', 'green', 1));
+  assert.ok(w('deep', 'red', 1) >= 0.11, 'timing the catch is still doable, even deep');
+  assert.equal(w('short', 'red', 1), w('short', 'green', 1), "a wobbly throw doesn't make the timing harder");
   assert.ok(w('short', 'green', 3) > w('short', 'green', 1));
   for (const r of Object.keys(ROUTES)) assert.ok(catchWindows(r, 'green').yellow > catchWindows(r, 'green').green);
   assert.ok(reachFor(3) > reachFor(1));
@@ -27,8 +28,8 @@ test('catching: smaller windows for deep and off-target throws, bigger with a be
   assert.ok(MISS.red > MISS.yellow && MISS.yellow > MISS.green);
 });
 
-test('the visitor throws green 60%, catches good throws more often, and less on long routes', () => {
-  assert.equal(VIS_THROW.green, 0.6);
+test('the visitor throws green about a third of the time, catches good throws more often, and less on long routes', () => {
+  assert.ok(VIS_THROW.green <= 0.4, 'the visitor throws a perfect spiral about a third of the time');
   assert.ok(visCatch('short', 'green') > visCatch('short', 'yellow') && visCatch('short', 'yellow') > visCatch('short', 'red'));
   assert.ok(visCatch('deep', 'green') < visCatch('short', 'green'));
 });
@@ -42,4 +43,21 @@ test('longer throws stay up longer, and the thrower waits just long enough to ge
   }
   assert.ok(waitFor(160, 0, ROUTES.deep.flight) > waitFor(40, 0, ROUTES.short.flight), 'longer routes wait longer');
   assert.equal(waitFor(0, 0, 2), 0.3, 'never throws right away');
+});
+
+test('a spiral lands where it was aimed; yellow throws wander a bit, red ones a lot, slower than a buddy runs', () => {
+  const ph = [0.3, 1.1, 2.2, 4];
+  assert.deepEqual(wanderAt('green', 1, ph), [0, 0]);
+  assert.deepEqual(wanderAt('red', 0, ph), [0, 0], 'starts where it was aimed');
+  assert.ok(WANDER.red > WANDER.yellow && WANDER.yellow > 0);
+  const most = (zone) => { let far = 0; let fast = 0; let prev = wanderAt(zone, 0, ph);
+    for (let s = 0.01; s < 3; s += 0.01) { const p = wanderAt(zone, s, ph); far = Math.max(far, Math.hypot(...p)); fast = Math.max(fast, Math.hypot(p[0] - prev[0], p[1] - prev[1]) / 0.01); prev = p; }
+    return { far, fast }; };
+  assert.ok(most('red').far > most('yellow').far && most('yellow').far > reachFor(1) * 0.5);
+  assert.ok(most('red').fast < 60 * 0.8, 'a buddy can keep up with it');
+});
+
+test('throw speed is random per throw, within a modest range', async () => {
+  const { FLIGHT_MIN, FLIGHT_MAX } = await import('../js/football.js');
+  assert.ok(FLIGHT_MIN < 1 && FLIGHT_MAX > 1 && FLIGHT_MAX - FLIGHT_MIN >= 0.3 && FLIGHT_MIN >= 0.8 && FLIGHT_MAX <= 1.3);
 });

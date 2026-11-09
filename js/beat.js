@@ -293,15 +293,18 @@ export function createBeatFollower({ tune = BEAT, rng = Math.random } = {}) {
   /**
    * The beats that have come by now (ms), while there is a beat to follow. sounding: whether
    * the piano is still sounding (a held note); left out, the buddy keeps dancing a short
-   * while after each note.
+   * while after each note. lead (ms): hand each beat out this much early, so a move started
+   * at (beat - lead) lands on the beat the kid played, after the mic, the note finder and the
+   * screen have each taken their time. The beats are foretold, so this costs nothing.
    */
-  function beats(now, sounding) {
+  function beats(now, sounding, lead = 0) {
     if (sounding) lastSound = now;
     else if (sounding === false && lastSound == null) lastSound = -Infinity;
     const out = [];
     if (!est || nextBeat == null) return out;
-    while (now >= nextBeat) {
-      if (danceable(nextBeat) && now - nextBeat <= tune.late) { out.push(nextBeat); lastBeat = nextBeat; }
+    const by = now + lead;
+    while (by >= nextBeat) {
+      if (danceable(nextBeat) && by - nextBeat <= tune.late) { out.push(nextBeat); lastBeat = nextBeat; }
       nextBeat += est.p;
     }
     return out;

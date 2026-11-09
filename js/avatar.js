@@ -357,6 +357,50 @@ const ITEM_ART = {
     '...KBBK...',
     '....KK....',
   ], { Y: '#fcc419', B: '#4dabf7' }],
+  // ----- the wizard set (the wand is drawn by wandCells, below) -----
+  // a midnight-blue hat with a floppy tip, stars, a moon and a gold band
+  'hat-wizard-star': [4, 0, [
+    '.YK.............',
+    '.KBK............',
+    '..KBKK..........',
+    '...KBBK.........',
+    '....KBWBK.......',
+    '....KBBBBK......',
+    '...KBBYBBBK.....',
+    '...KBWBBBMBK....',
+    '..KBBBBBBBMMK...',
+    '.KGGGGYGGGGGGK..',
+    'KKKKKKKKKKKKKKKK',
+    'KBBBBBBBBBBBBBBK',
+    '.KKKKKKKKKKKKKK.',
+  ], { B: SH('#2b3a8f', '#4c5fc7', '#1a2460'), G: SH('#f2c94c', '#ffe58a', '#c99a1e'), Y: '#ffe066', W: '#ffffff', M: '#fff3bf' }],
+  // a long white beard under the nose (it hides the mouth, as beards do)
+  'face-beard': [7, 15, [
+    '.KWWKKWWK.',
+    'KWWWWWWWWK',
+    'KWWwWWwWWK',
+    '.KWWWWWWK.',
+    '..KWwWWK..',
+    '...KWWK...',
+    '....KK....',
+  ], { W: SH('#f1f3f5', '#ffffff', '#c5cad3'), w: '#d6dbe3' }],
+  // a starry cloak behind the buddy; its open front and clasp are 'neck-robe~front'
+  'neck-robe': [3, 16, [
+    '...KKKKKKKKKKKK...',
+    '..KBBBBBBBBBBBBK..',
+    '.KBBBYBBBBBBBBBBK.',
+    '.KBBBBBBBBBBBYBBK.',
+    'KBBYBBBBBBBBBBBBBK',
+    'KBBBBBBBBBBBBBYBBK',
+    'KBBBBBBBBBBBBBBBBK',
+    'KGGGGGGGGGGGGGGGGK',
+  ], { B: SH('#2b3a8f', '#4c5fc7', '#1a2460'), G: '#f2c94c', Y: '#ffe066' }, true],
+  'neck-robe~front': [6, 18, [
+    '....KYYK....',
+    'KBBGKKKKGBBK',
+    'KBBG....GBBK',
+    'KBBG....GBBK',
+  ], { B: SH('#2b3a8f', '#4c5fc7', '#1a2460'), G: '#f2c94c', Y: SH('#ffe066', '#fff3bf', '#f59f00') }],
   // ----- buddy specials (one kind of buddy each, see items.js) -----
   // fox: a furry frontier cap with a ringed tail hanging down the side
   'hat-coonskin': [5, 4, [
@@ -446,6 +490,127 @@ const ITEM_ART = {
     '...............KK.',
   ], { M: SH('#1c7ed6', '#4dabf7', '#1864ab') }],
 };
+
+// ---------- the magic wand (the "hand" slot) ----------
+// Held by the buddy's side: on the left, or on the right when sports gear is held
+// on the left. power (0 to 1) is how much of today's chores are done: the star at
+// the tip glows brighter and wider as it grows. At 1 (everything done) it
+// twinkles, and every few seconds it sprays sparks of every color.
+const WAND = [
+  '...K....',
+  '..KtK...',
+  '.KtTtK..',
+  '..KtK...',
+  '...KSK..',
+  '....SK..',
+  '....KSK.',
+  '.....SK.',
+  '.....SK.',
+  '.....KSK',
+  '......GK',
+  '......GK',
+  '......K.',
+];
+const WAND_AT = [0, 8]; // the grid's top-left corner in the scene
+const WAND_TIP = [3, 10]; // the middle of the star
+const SPARK_COLORS = ['#ff6b6b', '#ffa94d', '#ffe066', '#69db7c', '#38d9a9', '#4dabf7', '#b197fc', '#f783ac'];
+const SPARK_EVERY = 40; // frames (12 a second): a burst every 3 or 4 seconds
+const SPARK_LONG = 8; // frames a burst lasts
+
+/** Which side the wand goes on: away from sports gear held on the left (a ball, a stick). */
+export function wandSide(gearKind) {
+  return ['soccer', 'football', 'hockey'].includes(gearKind) ? 'right' : 'left';
+}
+
+/** A burst of sparks at this frame, or null: { u: 0 to 1 through the burst, k: which burst }. */
+export function sparkAt(frame) {
+  const k = Math.floor(frame / SPARK_EVERY);
+  const start = (k * 7 + 3) % (SPARK_EVERY - SPARK_LONG); // a little uneven, so it feels alive
+  const i = (frame % SPARK_EVERY) - start;
+  return i >= 0 && i < SPARK_LONG ? { u: i / SPARK_LONG, k } : null;
+}
+
+/**
+ * The wand's pixels: [{ x, y, c, a }] (a is how solid, 0 to 1). part: 'glow' (the
+ * light around the tip), 'wand', or 'sparks'. frame makes it twinkle and spark when
+ * power is 1; spark: a burst to draw ({ u, k }), else the burst at this frame.
+ */
+export function wandCells(power = 0, side = 'left', frame = 0, part = 'all', spark = undefined) {
+  const p = Math.max(0, Math.min(1, Number(power) || 0));
+  const full = p >= 1;
+  const out = [];
+  const flip = (x) => (side === 'right' ? SIZE - 1 - x : x);
+  const put = (x, y, c, a = 1) => {
+    if (x < 0 || y < 0 || x >= SIZE || y >= SIZE || a <= 0.02) return;
+    out.push({ x: flip(x), y, c, a: Math.min(1, a) });
+  };
+  const [cx, cy] = WAND_TIP;
+  const twinkle = full && Math.floor(frame / 3) % 2;
+  if ((part === 'all' || part === 'glow') && p > 0) {
+    // a soft round light, wider and stronger with every chore
+    const R = 2.8 + 1.7 * p;
+    const strong = 0.35 + 0.6 * p;
+    for (let y = Math.floor(cy - R); y <= cy + R; y += 1) {
+      for (let x = Math.floor(cx - R); x <= cx + R; x += 1) {
+        const d = Math.hypot(x - cx, y - cy);
+        if (d > R || Math.abs(x - cx) + Math.abs(y - cy) <= 2) continue;
+        put(x, y, '#fff3bf', strong * Math.min(1, 1.15 - (d - 2) / (R - 1.6)));
+      }
+    }
+  }
+  if (part === 'all' || part === 'wand') {
+    // the star lights up: first its middle, then its points turn gold, then even its outline glows
+    const pal = {
+      T: p > 0 ? (twinkle ? '#fff3bf' : '#ffffff') : '#a597bd',
+      t: twinkle ? '#ffffff' : mix('#7d6f99', '#ffd43b', Math.min(1, p * 1.4)),
+      S: '#7a4a24',
+      G: '#f2c94c',
+    };
+    const rim = p >= 0.85 ? '#ffe066' : p >= 0.5 ? '#f59f00' : OUT;
+    WAND.forEach((row, j) => [...row].forEach((ch, i) => {
+      if (ch === '.') return;
+      // the stick's outline is a dark wood brown, softer than black at this size
+      const k = j > 3 ? '#3d2412' : rim;
+      put(WAND_AT[0] + i, WAND_AT[1] + j, ch === 'K' ? k : pal[ch]);
+    }));
+    if (full) {
+      // rays: up, down and sideways, then the corners, back and forth
+      const rays = twinkle ? [[4, 0], [-4, 0], [0, -4], [0, 4]] : [[3, 3], [-3, -3], [3, -3], [-3, 3]];
+      for (const [dx, dy] of rays) put(cx + dx, cy + dy, '#ffffff');
+    }
+  }
+  if ((part === 'all' || part === 'sparks') && full) {
+    const b = spark === undefined ? sparkAt(frame) : spark;
+    if (b) {
+      // six sparks fly up and out from the star (away from the buddy), each a different color, then fall and fade
+      for (let i = 0; i < 6; i += 1) {
+        const ang = ((185 + i * 30 + (b.k % 3) * 6) * Math.PI) / 180;
+        const dist = 3.5 + 6 * b.u;
+        const x = Math.round(cx + Math.cos(ang) * dist);
+        const y = Math.round(cy + Math.sin(ang) * dist + b.u * b.u * 3);
+        const c = SPARK_COLORS[(i + b.k * 3) % SPARK_COLORS.length];
+        const a = b.u < 0.6 ? 1 : 1 - ((b.u - 0.6) / 0.4) * 0.75;
+        put(x, y, c, a);
+        // a little cross while the spark is fresh
+        if (b.u < 0.3) { put(x + 1, y, c, a * 0.8); put(x - 1, y, c, a * 0.8); put(x, y + 1, c, a * 0.8); put(x, y - 1, c, a * 0.8); put(x, y, '#ffffff', a); }
+      }
+    }
+  }
+  return out;
+}
+
+const cellsSvg = (cells) => cells.map(({ x, y, c, a }) => `<rect x="${x}" y="${y}" width="1" height="1" fill="${c}"${a < 1 ? ` opacity="${a.toFixed(2)}"` : ''}/>`).join('');
+
+/** The wand as SVG: glow and wand, plus (when everything is done) spark frames that CSS plays now and then. */
+function wandSvg(power, side) {
+  const p = Math.max(0, Math.min(1, Number(power) || 0));
+  const glow = p > 0 ? `<g class="wand-glow">${cellsSvg(wandCells(p, side, 0, 'glow'))}</g>` : '';
+  const wand = p >= 1
+    ? [0, 3].map((f, i) => `<g class="wand-tip wand-tip-${i}">${cellsSvg(wandCells(p, side, f, 'wand'))}</g>`).join('')
+    : cellsSvg(wandCells(p, side, 0, 'wand'));
+  const sparks = p >= 1 ? [0, 1, 2, 3].map((i) => `<g class="wand-spark wand-spark-${i}">${cellsSvg(wandCells(p, side, 0, 'sparks', { u: i / 4, k: 1 }))}</g>`).join('') : '';
+  return `<g class="wand${p >= 1 ? ' wand-full' : ''}">${glow}${wand}${sparks}</g>`;
+}
 
 // ---------- music items: an instrument the buddy sits at ----------
 // behind: drawn before the buddy (cabinet, pipes), front: drawn over the buddy's body (keys).
@@ -642,7 +807,7 @@ export function ballSvg(kind, tier = 1) {
   const w = Math.max(...rows.map((r) => r.length));
   const px = new Pixels();
   px.grid(0, 0, rows, pal);
-  return `<svg class="ball-svg pixel" viewBox="0 0 ${w} ${rows.length}" width="${w * 2.4}" height="${rows.length * 2.4}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${px.svg()}</svg>`;
+  return `<svg class="ball-svg pixel" viewBox="0 0 ${w} ${rows.length}" width="${w * 2}" height="${rows.length * 2}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${px.svg()}</svg>`;
 }
 
 /** The same ball (or puck) as colors, row by row (null for see-through), for canvas games. */
@@ -979,7 +1144,9 @@ export function gearOf(id) {
 }
 
 /**
- * buddy: { species, outfit: { background, hat, face, neck, music, sport } }
+ * buddy: { species, outfit: { background, hat, face, neck, hand, music, sport }, wand }
+ *   wand: how much of today's chores are done (0 to 1), for the magic wand's glow. It is
+ *   never saved: the app adds it when it draws the buddy.
  * mood: happy | excited | proud | sleepy | sad
  * opts.background: false to draw the character only (for small chips)
  * opts.trick: { move: move id, kind, tier } to draw the buddy doing a move
@@ -1023,7 +1190,10 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
   const neckBehind = ITEM_ART[neck]?.[4];
   const capeBehind = neckBehind ? itemLayer(neck) : '';
   const neckFront = !neckBehind ? itemLayer(neck)
-    : neck === 'neck-cape' ? '<rect x="10" y="18" width="4" height="1" fill="#fcc419"/>' : '';
+    : neck === 'neck-cape' ? '<rect x="10" y="18" width="4" height="1" fill="#fcc419"/>' : itemLayer(`${neck}~front`);
+  // the wand glows with today's chores (buddy.wand, 0 to 1), on the side away from held gear
+  const hand = worn(o.hand);
+  const wand = hand === 'hand-wand' ? wandSvg(buddy.wand, wandSide(gear?.kind || gearOf(o.sport)?.kind)) : '';
 
   // a piano and sports don't mix: the piano steps aside while the buddy holds gear or shows off
   const music = trick || gearOf(o.sport) ? undefined : o.music;
@@ -1040,6 +1210,7 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
       ${neckFront}
       ${itemLayer(face)}
       ${itemLayer(hat)}
+      ${wand}
       ${inChar ? gearSvg : ''}
       ${musicLayer(music, 'front')}
       ${musicLayer(music, 'flames')}
@@ -1093,6 +1264,8 @@ export function liveLook(buddy) {
     hat: worn(o.hat),
     face: worn(o.face),
     neck,
+    neckFront: neck && ITEM_ART[`${neck}~front`] ? `${neck}~front` : undefined,
+    wand: worn(o.hand) === 'hand-wand' ? { side: wandSide(gear?.kind) } : null,
     music: music && MUSIC_ART[music] ? {
       behind: toCells(musicPx(music, 'behind')),
       front: toCells(musicPx(music, 'front')),
