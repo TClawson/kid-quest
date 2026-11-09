@@ -148,6 +148,11 @@ export async function joinFamily(code, state) {
   const fid = c.familyId;
   let kidId = null;
   if (c.role === 'kid') {
+    // a code made for a kid already in the family must match this device's kid,
+    // or joining would upload this device's kid as a second copy
+    if (c.kidId && state.kids.length === 1 && state.kids[0].id !== c.kidId) {
+      throw Object.assign(new Error(`This code is for a kid who is already in the family, and this device's ${state.kids[0].name || 'kid'} is a different kid. Ask a parent for a code for a new kid instead.`), { code: 'which-kid' });
+    }
     if (state.kids.length === 1) kidId = state.kids[0].id;
     else if (!state.kids.length && c.kidId) kidId = c.kidId;
     else throw Object.assign(new Error('This device needs exactly one kid to join as a kid’s device.'), { code: 'which-kid' });

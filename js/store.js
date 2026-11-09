@@ -16,6 +16,12 @@ export const STORAGE_KEY = 'kidquest.v1';
 export const DEVICE_SETTINGS = ['sound', 'music', 'questView'];
 
 // Bring saved data from any older version up to the current shape.
+// Careful: what migrate changes is never written back to the family's cloud
+// copy (saves only send what changed after loading). So a migration must only
+// fill in missing fields with defaults. Moving data from one field to another
+// (like moveWornToBuddy) can lose it: a later save writes the field it moved
+// out of, but not the one it moved into. For a move, write a one-time repair
+// that runs after loading and then saves, like repairAllowanceStart.
 export function migrate(s) {
   const base = emptyState();
   const kids = (s.kids || []).map((k) => {
