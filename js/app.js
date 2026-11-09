@@ -28,6 +28,7 @@ import { villageHtml, mountVillages, cameOut } from './village.js';
 import { houseHtml, mountHouses, cameIn } from './house.js';
 import { houseChores, shelfLevel, isInside, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
+import { applyGrants } from './grants.js';
 import { furnitureThumb } from './houseart.js';
 import { leaderboard, recordWeekBest, weekOf } from './leaderboard.js';
 import { recordCatch, catchSpecies, bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
@@ -81,7 +82,13 @@ const store = cloudCfg
 
 function save() {
   try {
-    store.save(state);
+    const { changed, removed } = store.save(state);
+    // A family update held back while a dialog was open is now older than this
+    // device's own data. Applying it when the dialog closes would undo what was
+    // just saved (a kid buys something, then right away buys something else on
+    // top of the old data, and the first purchase is lost). The write we just
+    // sent comes back as a fresh update that holds both, so drop the old one.
+    if (changed.length || removed.length) pendingRemote = null;
   } catch {
     toast('Could not save. Is storage full?');
   }
@@ -2822,6 +2829,7 @@ function stampAllowance() {
   } else if (repairAllowanceStart(state)) {
     save();
   }
+  if (applyGrants(state)) save();
 }
 
 function render() {
