@@ -28,4 +28,4 @@
 .watch .watch-goal { display: block; margin-top: 4px; font-weight: 700; }
 .watch .watch-goal.done { color: #2b8a3e; }
 .watch .watch-session { margin: 0; font-weight: 700; color: var(--muted); }
-.watch .watch-extra { color: #a8701e; font-weight: 800; }
+.watch .watch-note { margin: 0; font-weight: 700; color: #a8701e; }

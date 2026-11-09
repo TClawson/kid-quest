@@ -74,7 +74,7 @@ export function applyRemote(next) {
   setState(next);
   store.replace(state);
   if (ui.view === 'setup' && state.settings.pinHash) ui.view = 'home';
-  if (ui.view !== 'timer') render();
+  if (ui.view !== 'timer' && ui.view !== 'watch') render();
 }
 
 export function familyCard() {

@@ -160,6 +160,8 @@ function mount(section, handlers) {
 
   const mem = memory.get(data.kid) || {};
   memory.set(data.kid, mem);
+  // a new look moves the furniture: start again by the door
+  if (mem.tier !== data.tier) { mem.x = null; mem.tier = data.tier; }
   if (mem.entering || mem.x == null) {
     // in through the door: a step in from the doorway
     Object.assign(mem, { ...res.spots.wake, face: 1, cam: null, path: [], goal: null });

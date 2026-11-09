@@ -24,36 +24,53 @@ export function musicTier(progress) {
   return tier;
 }
 
-/** Piano days still to go before the music house opens (0 once it is open). */
+/**
+ * Piano days in a row still to go before the music house opens (0 once it is open). It
+ * counts from the current piano streak, since the best streak only grows along with it.
+ */
 export function daysToMusicHouse(progress) {
+  if (musicTier(progress)) return 0;
   const first = itemById(MUSIC_TIERS[0].piano);
-  return Math.max(0, pianoDaysNeeded(first, progress) - (progress.pianoBest || 0));
+  return Math.max(1, pianoDaysNeeded(first, progress) - (progress.piano || 0));
 }
 
 // ---------- the piano stopwatch ----------
 // The stopwatch is the practice timer counting up instead of down. While today's piano
-// timer chore still has time to go, stopwatch time fills it (and finishes the chore when it
-// is full), just like the timer; time past that is extra practice, kept in the day's entry
-// (entry.pianoExtra, seconds). With no piano timer chore today, it is all extra.
+// timer chores still have time to go, stopwatch time fills them in order (and finishes
+// each one when it is full), just like the timer; time past that is extra practice, kept
+// in the day's entry (entry.pianoExtra, seconds). With no piano timer chore today, it is
+// all extra.
 
 /** Whether stopwatch time also counts toward today's piano chore (Taylor's call). */
 export const WATCH_FILLS_CHORE = true;
 
+/** A stopwatch left running (or forgotten in another app) pauses itself after this long. */
+export const WATCH_MAX_RUN_MS = 2 * 3600_000;
+
 /**
  * Where a stopwatch run's seconds have gone so far. run: {
- *   day, since (ms when this run started), base (the chore's seconds before it; 0 with no chore),
+ *   day, since (ms when this run started),
+ *   chores: [{ id, base, total }]: the piano chores it fills, in order (base: their seconds
+ *     before it, total: their length in seconds),
  *   extra (extra seconds before it), session (seconds on the stopwatch this visit, before it),
- * } and total: the chore's length in seconds (0 when it isn't counting toward a chore).
- * Returns { chore, extra, session, gained }: the chore's seconds (never past total), the day's
- * extra seconds, this visit's seconds, and the seconds this run added.
+ * }. A run stops counting at midnight and after WATCH_MAX_RUN_MS.
+ * Returns { fill: { choreId: seconds }, extra, session, gained, capped }: each chore's seconds
+ * (never past its total), the day's extra seconds, this visit's seconds, the seconds this run
+ * added, and whether the run reached its limit.
  */
-export function watchSplit(run, now, total = 0) {
-  const end = Math.min(now, dayEnd(run.day));
+export function watchSplit(run, now) {
+  const limit = run.since + WATCH_MAX_RUN_MS;
+  const end = Math.min(now, dayEnd(run.day), limit);
   const gained = Math.max(0, Math.floor((end - run.since) / 1000));
-  const session = (run.session || 0) + gained;
-  if (!total) return { chore: 0, extra: (run.extra || 0) + gained, session, gained };
-  const sum = (run.base || 0) + gained;
-  return { chore: Math.min(total, sum), extra: (run.extra || 0) + Math.max(0, sum - total), session, gained };
+  let left = gained;
+  const fill = {};
+  for (const c of run.chores || []) {
+    const base = c.base || 0;
+    const add = Math.min(left, Math.max(0, c.total - base));
+    fill[c.id] = base + add;
+    left -= add;
+  }
+  return { fill, extra: (run.extra || 0) + left, session: (run.session || 0) + gained, gained, capped: now >= limit };
 }
 
 /**

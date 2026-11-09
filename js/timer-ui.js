@@ -8,7 +8,7 @@ import { runSeconds, CHEERS, pickCheer, effortCheers } from './practice.js';
 import { startListening, buddyState, TUNING } from './listen.js';
 import { createBeatFollower } from './beat.js';
 import { loadRecognizer } from './hear.js';
-import { watchSplit, WATCH_FILLS_CHORE } from './musicrules.js';
+import { watchSplit, WATCH_FILLS_CHORE, WATCH_MAX_RUN_MS } from './musicrules.js';
 import {
   state, ui, today, esc, kidById, taskById, liveKey, dressed,
   save, render, viewKid, markDone, askParentNowOrLater,
@@ -47,8 +47,8 @@ function runTask() {
   return kid && task && task.minutes > 0 ? { kid, task } : null;
 }
 
-export function startTimer() {
-  if (ui.view === 'watch') { startWatch(); return; }
+export function startTimer(tapped = false) {
+  if (ui.view === 'watch') { startWatch(tapped); return; }
   const kid = kidById(ui.kidId);
   const task = kid && taskById(kid, today(), ui.taskId);
   if (!task) return;
@@ -81,7 +81,7 @@ export function stopTimer(rerender = true) {
 // Bring the saved seconds up to the clock. Returns true when the timer is done.
 function syncTimer(force = false) {
   const run = timer.run;
-  if (run?.watch) return syncWatch(force);
+  if (run?.watch) { syncWatch(force); return false; }
   const found = runTask();
   if (!found) return false;
   const { kid, task } = found;
@@ -153,7 +153,7 @@ export function leaveTimer() {
     const kid = kidById(timer.run.kidId);
     if (!kid || !pianoTasks(kid).some((t) => t.background)) { stopTimer(); return; }
     syncWatch(true);
-    timer.run.awayFrom = watchSplit(timer.run, Date.now(), watchTotal()).session;
+    timer.run.awayFrom = watchSplit(timer.run, Date.now()).fill;
     keepRun();
     return;
   }
@@ -267,11 +267,12 @@ export const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStar
 
 
 // ---------- the piano stopwatch (in the music house) ----------
-// The practice timer counting up. While today's piano timer chore still has time to go,
-// stopwatch time fills it, and finishes the chore when it's full, just like the timer;
-// after that (or with no piano chore today) it's extra practice, kept in the day's entry
-// as pianoExtra. It listens and naps like the timer when the piano chore is set to listen,
-// and keeps counting in other apps when the piano chore is set to.
+// The practice timer counting up. While today's piano timer chores still have time to go,
+// stopwatch time fills them in order, and finishes each one when it's full, just like the
+// timer; after that (or with no piano chore today) it's extra practice, kept in the day's
+// entry as pianoExtra. It listens and naps like the timer when a piano chore is set to
+// listen, and keeps counting in other apps when one is set to. A run pauses itself after
+// WATCH_MAX_RUN_MS, so a forgotten stopwatch doesn't count all day.
 
 /** Today's piano timer chores for a kid. */
 function pianoTasks(kid) {
@@ -279,78 +280,79 @@ function pianoTasks(kid) {
   return tasksForDay(state, kid, t, t).filter((x) => isPianoTask(x) && x.minutes > 0);
 }
 
-/** The piano chore stopwatch time goes to: one with time still to go that isn't done yet. */
-function watchChore(kid) {
-  if (!WATCH_FILLS_CHORE) return null;
+/**
+ * Today's piano chores by where they stand: toFill (time still to go), unchecked (full, but
+ * nobody has marked them done or sent them to a parent yet), and all of them.
+ */
+function pianoChores(kid) {
   const entry = entryFor(state, kid.id, today());
-  return pianoTasks(kid).find((x) => {
-    const st = entry?.tasks?.[x.id];
-    return st?.status !== 'done' && st?.status !== 'pending' && (st?.seconds || 0) < x.minutes * 60;
-  }) || null;
+  const all = pianoTasks(kid);
+  const st = (x) => entry?.tasks?.[x.id];
+  const open = all.filter((x) => st(x)?.status !== 'done' && st(x)?.status !== 'pending');
+  const full = (x) => (st(x)?.seconds || 0) >= x.minutes * 60;
+  return { entry, all, toFill: open.filter((x) => !full(x)), unchecked: open.filter(full) };
 }
 
 /** What the stopwatch shows: today's piano time, the chores' goal, and the extra past it. */
 export function pianoToday(kid) {
-  const entry = entryFor(state, kid.id, today());
-  const tasks = pianoTasks(kid);
-  const chore = tasks.reduce((n, x) => n + Math.min(x.minutes * 60, entry?.tasks?.[x.id]?.seconds || 0), 0);
-  const goal = tasks.reduce((n, x) => n + x.minutes * 60, 0);
-  const done = tasks.length > 0 && tasks.every((x) => ['done', 'pending'].includes(entry?.tasks?.[x.id]?.status) || (entry?.tasks?.[x.id]?.seconds || 0) >= x.minutes * 60);
+  const { entry, all, toFill, unchecked } = pianoChores(kid);
+  const chore = all.reduce((n, x) => n + Math.min(x.minutes * 60, entry?.tasks?.[x.id]?.seconds || 0), 0);
+  const goal = all.reduce((n, x) => n + x.minutes * 60, 0);
   const extra = entry?.pianoExtra || 0;
-  return { chore, goal, extra, total: chore + extra, done };
+  // over: no chore has time left to fill (done, sent to a parent, or full)
+  return { chore, goal, extra, total: chore + extra, over: all.length > 0 && !toFill.length, unchecked: unchecked.length };
 }
 
-/** The length of the chore the running stopwatch fills, in seconds (0 for none). */
-function watchTotal() {
-  const run = timer.run;
-  const kid = run && kidById(run.kidId);
-  const task = kid && run.taskId ? taskById(kid, run.day, run.taskId) : null;
-  return task?.minutes > 0 ? task.minutes * 60 : 0;
-}
-
-export function startWatch() {
+/** Start (or carry on) the stopwatch. tapped: the kid pressed Start, so a full chore nobody checked yet is asked about again. */
+export function startWatch(tapped = false) {
   const kid = kidById(ui.kidId);
   if (!kid) return;
-  const task = watchChore(kid);
-  const entry = entryFor(state, kid.id, today());
-  timer.run = {
-    kidId: kid.id, day: today(), since: Date.now(), watch: true,
-    taskId: task?.id || null, base: task ? entry?.tasks?.[task.id]?.seconds || 0 : 0,
-    extra: entry?.pianoExtra || 0, session: ui.watchSession || 0,
-  };
+  const { entry, toFill, unchecked } = pianoChores(kid);
+  const chores = WATCH_FILLS_CHORE
+    ? toFill.map((x) => ({ id: x.id, base: entry?.tasks?.[x.id]?.seconds || 0, total: x.minutes * 60 }))
+    : [];
+  timer.run = { kidId: kid.id, day: today(), since: Date.now(), watch: true, chores, done: [], extra: entry?.pianoExtra || 0, session: ui.watchSession || 0 };
+  ui.watchNote = '';
   keepRun();
   resumeTimer();
+  if (tapped && unchecked.length) finishWatchChores(kid, unchecked.map((x) => x.id));
 }
 
-/** Bring the chore's seconds and the extra up to the clock. Returns true when the chore just filled up. */
+/**
+ * Bring the chores' seconds and the extra up to the clock. Returns the ids of chores that
+ * have filled up and still need finishing.
+ */
 function syncWatch(force = false) {
   const run = timer.run;
   const kid = kidById(run?.kidId);
-  if (!kid) return false;
-  const task = run.taskId ? taskById(kid, run.day, run.taskId) : null;
-  const total = task?.minutes > 0 ? task.minutes * 60 : 0;
+  if (!kid) return [];
   const now = Date.now();
-  const split = watchSplit(run, now, total);
+  const split = watchSplit(run, now);
   ui.watchSession = split.session;
   const entry = entryFor(state, kid.id, run.day, true);
   let changed = false;
   let urgent = force;
-  if (total) {
-    const had = entry.tasks[task.id];
+  const filled = [];
+  for (const c of run.chores || []) {
+    const sec = split.fill[c.id];
+    const had = entry.tasks[c.id];
     const cur = { status: 'inprogress', ...(had || {}) };
-    if (split.chore > (cur.seconds || 0)) { cur.seconds = split.chore; changed = true; }
-    if (run.awayFrom != null) {
-      const away = Math.max(0, split.session - run.awayFrom);
-      if (away) { cur.away = (cur.away || 0) + away; changed = true; urgent = true; }
+    let mine = !had;
+    if (sec > (cur.seconds || 0)) { cur.seconds = sec; mine = true; }
+    // time this chore filled while the stopwatch ran in another app, for the parent to see
+    if (run.awayFrom) {
+      const away = Math.max(0, sec - (run.awayFrom[c.id] ?? sec));
+      if (away) { cur.away = (cur.away || 0) + away; mine = true; urgent = true; }
     }
-    if (changed || !had) { entry.tasks[task.id] = cur; changed = true; }
-    if (!had || split.chore >= total) urgent = true;
+    if (mine) { entry.tasks[c.id] = cur; changed = true; }
+    if (!had) urgent = true;
+    if (sec >= c.total && !run.done?.includes(c.id)) { filled.push(c.id); urgent = true; }
   }
-  if (run.awayFrom != null) { run.awayFrom = null; keepRun(); }
+  if (run.awayFrom) { run.awayFrom = null; keepRun(); }
   if (split.extra > (entry.pianoExtra || 0)) { entry.pianoExtra = split.extra; changed = true; }
   if (changed) timer.dirty = true;
   if (timer.dirty && (urgent || now - timer.savedAt >= TIMER_SAVE_MS)) { timer.savedAt = now; timer.dirty = false; save(); }
-  return total > 0 && split.chore >= total;
+  return filled;
 }
 
 function tickWatch() {
@@ -365,35 +367,44 @@ function tickWatch() {
     if (ui.view === 'watch') { ui.view = 'kid'; render(); }
     return;
   }
-  if (filled) { finishWatchChore(kid, taskById(kid, run.day, run.taskId)); return; }
+  if (filled.length) finishWatchChores(kid, filled);
+  if (watchSplit(run, Date.now()).capped) {
+    // left running for hours: take a break until the kid says they're still playing
+    stopEars();
+    stopTimer(false);
+    ui.watchNote = `The stopwatch paused after ${WATCH_MAX_RUN_MS / 3600_000} hours. Still playing? Tap Keep going!`;
+    if (ui.view === 'watch') render();
+    return;
+  }
   updateWatchUi(kid);
 }
 
-/** The stopwatch filled today's piano chore: it's done (or a parent checks it), and the stopwatch keeps going. */
-function finishWatchChore(kid, task) {
+/**
+ * Piano chores the stopwatch filled up: each one is done (or a parent checks it), with a
+ * cheer, and the stopwatch keeps going. Chores already done or sent to a parent meanwhile
+ * (a parent on another phone) are left alone.
+ */
+function finishWatchChores(kid, ids) {
   const run = timer.run;
-  const entry = entryFor(state, kid.id, run.day, true);
-  // carry on counting from here, as extra
-  timer.run = { ...run, taskId: null, base: 0, since: Date.now(), extra: entry.pianoExtra || 0, session: ui.watchSession || 0 };
-  keepRun();
+  if (run) { run.done = [...(run.done || []), ...ids]; keepRun(); }
+  const day = run?.day || today();
+  const entry = entryFor(state, kid.id, day);
+  const tasks = ids.map((id) => taskById(kid, day, id))
+    .filter((t) => t && !['done', 'pending'].includes(entry?.tasks?.[t.id]?.status));
+  if (!tasks.length) return;
   sounds.day();
   confetti(80, 1800);
-  if (!task) return;
-  if (task.verify === 'self') markDone(kid, task, 'self', document.querySelector('.watch .ring'));
-  else askParentNowOrLater(kid, task, document.querySelector('.watch .ring'));
-  // the next chore with time to go (a kid with two piano chores) picks up from here
-  const next = watchChore(kid);
-  if (next) {
-    timer.run = { ...timer.run, taskId: next.id, base: entryFor(state, kid.id, run.day)?.tasks?.[next.id]?.seconds || 0 };
-    keepRun();
-  }
+  const anchor = document.querySelector('.watch .ring');
+  for (const t of tasks) if (t.verify === 'self') markDone(kid, t, 'self', anchor);
+  // a parent checks one at a time; another one waiting is asked about on the next Start
+  const ask = tasks.find((t) => t.verify !== 'self');
+  if (ask) askParentNowOrLater(kid, ask, anchor);
 }
 
 function watchNumbers(kid) {
   const p = pianoToday(kid);
   const session = ui.watchSession || 0;
-  const over = p.goal > 0 && p.chore >= p.goal;
-  return { ...p, session, over, ring: p.goal ? (over ? 1 : p.chore / p.goal) : (p.total % 600) / 600 };
+  return { ...p, session, ring: p.goal ? (p.over ? 1 : p.chore / p.goal) : (p.total % 600) / 600 };
 }
 
 function updateWatchUi(kid) {
@@ -405,13 +416,14 @@ function updateWatchUi(kid) {
   $ring?.style.setProperty('--p', n.ring);
   $ring?.classList.toggle('over', n.over);
   const $goal = document.getElementById('watch-goal');
-  if ($goal) { $goal.textContent = watchGoalText(n); $goal.classList.toggle('done', n.over); }
+  if ($goal) { $goal.textContent = watchGoalText(n); $goal.classList.toggle('done', n.over && !n.unchecked); }
   const $s = document.getElementById('watch-session');
   if ($s) $s.textContent = `This time: ${mmss(n.session)}`;
 }
 
 function watchGoalText(n) {
   if (!n.goal) return n.extra ? 'Extra practice!' : 'No piano chore today. Just for fun!';
+  if (n.over && n.unchecked) return 'Goal reached! A parent needs to check it';
   if (n.over) return n.extra ? `Goal done ✓ +${mmss(n.extra)} extra` : 'Goal done ✓';
   return `Goal ${mmss(n.goal)}`;
 }
@@ -442,7 +454,7 @@ export function viewWatch() {
           <div class="ring-inner">
             <small>Piano today</small>
             <div class="timer-left watch-today" id="watch-today">${mmss(n.total)}</div>
-            <small class="watch-goal ${n.over ? 'done' : ''}" id="watch-goal">${esc(watchGoalText(n))}</small>
+            <small class="watch-goal ${n.over && !n.unchecked ? 'done' : ''}" id="watch-goal">${esc(watchGoalText(n))}</small>
           </div>
         </div>
         <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
@@ -451,6 +463,7 @@ export function viewWatch() {
         </button>
       </div>
       <p class="watch-session" id="watch-session">This time: ${mmss(n.session)}</p>
+      ${ui.watchNote && !running ? `<p class="watch-note">${esc(ui.watchNote)}</p>` : ''}
       ${listens ? `<p class="timer-ears" id="ears"><b id="ears-text" aria-live="polite"${earsText() ? '' : ' hidden'}>${esc(earsText())}</b></p>` : ''}
       <button class="btn huge" data-action="${running ? 'timer-pause' : 'timer-start'}">${running ? 'Pause' : n.session ? 'Keep going' : 'Start'}</button>
       <p class="muted small">${tip}</p>

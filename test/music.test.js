@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, defaultTasks, addDays } from '../js/logic.js';
 import { itemById } from '../js/items.js';
-import { MUSIC_TIERS, tierInfo, musicTier, daysToMusicHouse, watchSplit, studioOpen } from '../js/musicrules.js';
+import { MUSIC_TIERS, tierInfo, musicTier, daysToMusicHouse, watchSplit, studioOpen, WATCH_MAX_RUN_MS } from '../js/musicrules.js';
 import { dayEnd } from '../js/practice.js';
 import { villageLayout, VILLAGE_THEMES } from '../js/villagemaps.js';
 
@@ -27,38 +27,54 @@ test('the music house opens with the first piano and changes with every better o
 });
 
 test('piano days still to go before the music house opens', () => {
-  assert.equal(daysToMusicHouse({ pianoBest: 0, pianoPerWeek: 5 }), 10);
-  assert.equal(daysToMusicHouse({ pianoBest: 7, pianoPerWeek: 5 }), 3);
-  assert.equal(daysToMusicHouse({ pianoBest: 10, pianoPerWeek: 5 }), 0);
-  assert.equal(daysToMusicHouse({ pianoBest: 40, pianoPerWeek: 5 }), 0, 'never below zero');
+  assert.equal(daysToMusicHouse({ piano: 0, pianoBest: 0, pianoPerWeek: 5 }), 10);
+  assert.equal(daysToMusicHouse({ piano: 7, pianoBest: 7, pianoPerWeek: 5 }), 3);
+  // a broken streak counts from where it is now: the best only grows along with it
+  assert.equal(daysToMusicHouse({ piano: 6, pianoBest: 7, pianoPerWeek: 5 }), 4);
+  assert.equal(daysToMusicHouse({ piano: 0, pianoBest: 10, pianoPerWeek: 5 }), 0, 'open for good once earned');
+  assert.equal(daysToMusicHouse({ piano: 40, pianoBest: 40, pianoPerWeek: 5 }), 0);
   assert.equal(daysToMusicHouse({}), 10, 'no piano yet: Mon-Fri');
 });
 
 // ---------- the piano stopwatch ----------
 
+const since = new Date(`${day}T16:00:00`).getTime();
+const at = (s) => since + s * 1000;
+
 test('the stopwatch fills the chore first, then counts extra', () => {
-  const since = new Date(`${day}T16:00:00`).getTime();
-  const run = { day, since, base: 1780, extra: 0, session: 0 };
-  assert.deepEqual(watchSplit(run, since + 10_000, 1800), { chore: 1790, extra: 0, session: 10, gained: 10 });
-  assert.deepEqual(watchSplit(run, since + 20_000, 1800), { chore: 1800, extra: 0, session: 20, gained: 20 });
-  assert.deepEqual(watchSplit(run, since + 45_000, 1800), { chore: 1800, extra: 25, session: 45, gained: 45 });
+  const run = { day, since, chores: [{ id: 'p', base: 1780, total: 1800 }], extra: 0, session: 0 };
+  assert.deepEqual(watchSplit(run, at(10)), { fill: { p: 1790 }, extra: 0, session: 10, gained: 10, capped: false });
+  assert.deepEqual(watchSplit(run, at(20)), { fill: { p: 1800 }, extra: 0, session: 20, gained: 20, capped: false });
+  assert.deepEqual(watchSplit(run, at(45)), { fill: { p: 1800 }, extra: 25, session: 45, gained: 45, capped: false });
   // earlier extra and earlier stopwatch time this visit carry on
   const later = { ...run, extra: 60, session: 100 };
-  assert.deepEqual(watchSplit(later, since + 45_000, 1800), { chore: 1800, extra: 85, session: 145, gained: 45 });
+  assert.deepEqual(watchSplit(later, at(45)), { fill: { p: 1800 }, extra: 85, session: 145, gained: 45, capped: false });
+});
+
+test('two piano chores fill one after the other, even all at once', () => {
+  const run = { day, since, chores: [{ id: 'a', base: 300, total: 900 }, { id: 'b', base: 0, total: 900 }], extra: 0 };
+  assert.deepEqual(watchSplit(run, at(500)).fill, { a: 800, b: 0 });
+  // 25 minutes in another app: the first fills, the second gets the rest
+  assert.deepEqual(watchSplit(run, at(1500)).fill, { a: 900, b: 900 });
+  assert.equal(watchSplit(run, at(1500)).extra, 0);
+  assert.equal(watchSplit(run, at(1600)).extra, 100);
 });
 
 test('with no piano chore left, it is all extra', () => {
-  const since = new Date(`${day}T16:00:00`).getTime();
-  assert.deepEqual(watchSplit({ day, since, extra: 30 }, since + 90_500, 0), { chore: 0, extra: 120, session: 90, gained: 90 });
+  assert.deepEqual(watchSplit({ day, since, extra: 30 }, at(90.5)), { fill: {}, extra: 120, session: 90, gained: 90, capped: false });
+  assert.deepEqual(watchSplit({ day, since, chores: [] }, at(5)).extra, 5);
 });
 
-test('the stopwatch stops at midnight and never runs backwards', () => {
-  const since = dayEnd(day) - 60_000;
-  const s = watchSplit({ day, since, base: 0 }, dayEnd(day) + 3_600_000, 1800);
+test('the stopwatch stops at midnight, after the run limit, and never runs backwards', () => {
+  const late = dayEnd(day) - 60_000;
+  const s = watchSplit({ day, since: late, chores: [{ id: 'p', base: 0, total: 1800 }] }, dayEnd(day) + 3_600_000);
   assert.equal(s.gained, 60, 'time after midnight belongs to no one');
-  assert.equal(s.chore, 60);
-  const back = watchSplit({ day, since, base: 100 }, since - 5000, 1800);
-  assert.deepEqual([back.gained, back.chore], [0, 100], 'a clock set back adds nothing');
+  assert.equal(s.fill.p, 60);
+  const back = watchSplit({ day, since: late, chores: [{ id: 'p', base: 100, total: 1800 }] }, late - 5000);
+  assert.deepEqual([back.gained, back.fill.p], [0, 100], 'a clock set back adds nothing');
+  const forgot = watchSplit({ day, since: at(-6 * 3600) }, at(0));
+  assert.equal(forgot.gained, WATCH_MAX_RUN_MS / 1000, 'a forgotten stopwatch counts its limit, no more');
+  assert.equal(forgot.capped, true);
 });
 
 // ---------- the recording studio waits for today's chores ----------

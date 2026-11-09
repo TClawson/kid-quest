@@ -2061,7 +2061,7 @@ const actions = {
     setTimeout(() => celebrateIfDue(kidById(ui.kidId)), 300);
   },
   task: (el) => onTaskTap(el.dataset.id, el),
-  'timer-start': () => { wakeEars(); startTimer(); startEars(); },
+  'timer-start': () => { wakeEars(); startTimer(true); startEars(); },
   'timer-pause': () => { stopEars(); stopTimer(); },
   'timer-buddy': () => buddyCheer(),
   'timer-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
@@ -2624,7 +2624,7 @@ const fired = new Set();
 
 setInterval(() => {
   const t = today();
-  if (t !== lastDay) { lastDay = t; if (ui.view !== 'timer') render(); }
+  if (t !== lastDay) { lastDay = t; if (ui.view !== 'timer' && ui.view !== 'watch') render(); }
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   for (const r of state.settings.reminders) {
