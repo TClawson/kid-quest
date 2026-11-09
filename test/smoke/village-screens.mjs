@@ -18,7 +18,7 @@ function family(done = 2, plan = false) {
   s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: addDays(day, -20), seenUnlocks: [], seenMoves: [], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } });
   if (plan) {
     const [teeth, bed, floor, piano, chore] = tasks;
-    s.kids[0].plan = { order: [bed, teeth, floor, chore, piano].map((t) => t.id), cues: { [bed.id]: 'When I wake up', [teeth.id]: 'After breakfast', [piano.id]: 'After snack' }, week: '2026-11-09' };
+    s.kids[0].plan = { order: [chore, bed, teeth, floor, piano].map((t) => t.id), cues: { [bed.id]: 'When I wake up', [teeth.id]: 'After breakfast', [piano.id]: 'After snack' }, week: '2026-11-09' };
   }
   s.log[day] = { kid_ava: { tasks: Object.fromEntries(tasks.slice(0, done).map((t) => [t.id, { status: 'done', by: 'self' }])) } };
   return s;
@@ -42,14 +42,16 @@ for (const [label, viewport] of [['tablet', { width: 800, height: 1280 }], ['pho
   await page.clock.runFor(1500);
   const shot = async (name) => { const box = await page.locator('.village-view').boundingBox(); const y = await page.evaluate(() => window.scrollY); await page.screenshot({ path: `${out}/${name}-${label}.png`, clip: { ...box, y: box.y + y }, fullPage: true }); };
   await shot('1-start');
-  // walk to the owl (make bed) and talk
-  await page.evaluate(() => document.querySelector('.villager[data-kind="owl"]').click());
+  // walk to a villager with a quest (not the piano timer) and talk; bed, teeth and floor are done in the house
+  await page.evaluate(() => [...document.querySelectorAll('.villager[data-vid]')].find((e) => !/Piano/.test(e.getAttribute('aria-label'))).click());
   await page.clock.runFor(4000);
   await shot('2-talk');
   await page.click('.v-dialog [data-v="do"]');
   await page.clock.runFor(1500);
+  // a parent-checked chore asks for a parent first: later
+  if (await page.locator('#modal [data-action="modal-close"]').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(1500); }
   await shot('3-thanks');
-  await page.click('.v-dialog [data-v="bye"]');
+  if (await page.locator('.v-dialog:not([hidden]) [data-v="bye"]').count()) await page.click('.v-dialog [data-v="bye"]');
   // walk south across the bridge
   const box = await page.locator('.village-view').boundingBox();
   await page.mouse.click(box.x + box.width / 2, box.y + box.height - 40);
@@ -58,7 +60,7 @@ for (const [label, viewport] of [['tablet', { width: 800, height: 1280 }], ['pho
   await page.clock.runFor(3000);
   await shot('4-south');
   // with the kid's own plan: steps numbered, an off-plan villager points back to the plan
-  await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), family(0, true));
+  await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), family(3, true));
   await page.reload();
   await page.click('[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
@@ -74,6 +76,7 @@ for (const [label, viewport] of [['tablet', { width: 800, height: 1280 }], ['pho
   await shot('7-plan-step');
   await page.click('.v-dialog [data-v="do"]');
   await page.clock.runFor(1500);
+  if (await page.locator('#modal [data-action="modal-close"]').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(1500); }
   await shot('8-plan-thanks');
   if (label === 'tablet') {
     // the whole village at once

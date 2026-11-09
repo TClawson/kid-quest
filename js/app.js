@@ -1031,6 +1031,13 @@ function villageView(kid, s, entry, mood) {
   });
   // the buddy's house: where the day starts, and wherever the kid left the buddy after that
   if (isInside(kid.id, today())) return houseView(kid, list, mood);
+  // chores linked to the house (bed, teeth, floor) are done in the house, not given out by
+  // villagers; the house door shows what's still waiting in there
+  const hc = houseChores(state, kid, today());
+  const inHouse = new Set(['bed', 'teeth', 'floor'].map((k) => hc[k]?.id).filter(Boolean));
+  const homeOpen = list.filter((q) => inHouse.has(q.id) && (q.st === 'todo' || q.st === 'current'));
+  const homeNext = homeOpen.find((q) => q.st === 'current') || homeOpen[0];
+  const home = homeOpen.length ? { left: homeOpen.length, icon: homeNext.icon, task: homeNext.name, step: homeNext.step, now: homeOpen.some((q) => q.st === 'current') } : null;
   const c = chestFor(kid, today());
   // each map has its own village; a finished treasure map for it puts up its landmark
   const theme = kidTheme(kid);
@@ -1047,7 +1054,8 @@ function villageView(kid, s, entry, mood) {
     kidName: kid.name,
     kidColor: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
     buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
-    tasks: list,
+    tasks: list.filter((q) => !inHouse.has(q.id)),
+    home,
     planned,
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
   });

@@ -213,6 +213,8 @@ function visitorsMarkup(visit, L) {
  *   shop: { open, left }: whether the buddy shop is open, and how many quests are left before it is,
  *   visit: { host, visitors: [{ id, name, color, html, line, news, rod }], areas: [{ side, kind, members, ball, tap }] },
  *   landmark: { html, name, w, h } or null: a finished treasure map's landmark,
+ *   home: { left, icon, task, step, now } or null: chores still waiting inside the kid's house (bed,
+ *     teeth, floor), which villagers don't give out; now: the plan's next step is one of them,
  * }
  */
 export function villageHtml(v) {
@@ -228,6 +230,7 @@ export function villageHtml(v) {
     people: people.map((p) => ({ id: p.id, kind: p.kind, period: p.period, x: p.x, y: p.y, tasks: p.tasks.map(quest) })),
     planned: Boolean(v.planned), chest: { ready: v.chest.ready, opened: v.chest.opened }, shop,
     areas: greenAreas(v.visit, L), spots: visitorSpots(v.visit, L), landmark: lm,
+    home: v.home || null,
   };
   const folk = people.map((p) => {
     const a = activeQuest(p.tasks);
@@ -244,6 +247,9 @@ export function villageHtml(v) {
         <span class="v-bubble"><span class="v-icon">${shop.open ? '👕' : '🔒'}</span></span>
         <canvas class="v-sprite" width="16" height="${villagerGrid('badger').length}"></canvas>
       </button>` : '';
+  // chores waiting inside the house: a bubble over the door, like a villager's
+  const home = v.home && v.home.left > 0 ? v.home : null;
+  const homeBubble = home ? `<span class="v-bubble v-home-bubble" style="left:${L.home.w / 2}px">${home.step && v.planned ? `<span class="v-step">${home.step}</span>` : ''}<span class="v-icon">${esc(home.icon)}</span>${home.left > 1 ? `<span class="v-badge more">×${home.left}</span>` : ''}</span>` : '';
   const am = people.some((p) => p.period === 'morning');
   const pm = people.some((p) => p.period !== 'morning');
   const [mx, my, mt] = L.labels.morning; const [ax, ay, at] = L.labels.afternoon;
@@ -254,7 +260,7 @@ export function villageHtml(v) {
           <canvas class="village-land" width="${L.W}" height="${L.H}" aria-hidden="true"></canvas>
           <canvas class="v-life" width="${L.W}" height="${L.H}" style="width:${L.W}px;height:${L.H}px" aria-hidden="true"></canvas>
           <div class="v-label home-label" style="left:${L.home.x + L.home.w / 2}px;top:${L.home.y + 10}px">${esc(v.kidName)}'s house</div>
-          <button class="v-home" style="left:${L.home.x}px;top:${L.home.y - 12}px;width:${L.home.w}px;height:${L.home.h + 12}px;z-index:${L.home.y + L.home.h - 2}" aria-label="Go into ${esc(v.kidName)}'s house"><span class="v-home-door" style="left:${L.home.w / 2}px">🚪</span></button>
+          <button class="v-home${home ? ' has-quests' : ''}${home?.now ? ' now' : ''}" style="left:${L.home.x}px;top:${L.home.y - 12}px;width:${L.home.w}px;height:${L.home.h + 12}px;z-index:${L.home.y + L.home.h - 2}" aria-label="Go into ${esc(v.kidName)}'s house${home ? ` (${home.left} to do inside)` : ''}"><span class="v-home-door" style="left:${L.home.w / 2}px">🚪</span>${homeBubble}</button>
           ${am ? `<div class="v-label period" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
           ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
           ${folk}${keeper}
@@ -637,9 +643,11 @@ function mount(section, handlers) {
     const el = els.get(p.id);
     const q = activeQuest(p.tasks);
     const more = p.tasks.filter((t) => t.st === 'todo' || t.st === 'current');
-    const next = allQuests.find((t) => t.st === 'current');
-    const nextOwner = next && people.find((o) => o.tasks.includes(next));
-    const goNext = next && nextOwner !== p ? `<button class="btn" data-v="go" data-to="${esc(nextOwner.id)}">Next quest: ${esc(next.icon)}</button>` : '';
+    // the next quest may be waiting in the kid's house (bed, teeth, floor)
+    const next = allQuests.find((t) => t.st === 'current') || (data.home?.now ? { task: data.home.task, icon: data.home.icon, home: true } : null);
+    const nextOwner = next && !next.home && people.find((o) => o.tasks.includes(next));
+    const goNext = next?.home ? `<button class="btn" data-v="go" data-to="home">Next quest: ${esc(next.icon)}</button>`
+      : next && nextOwner !== p ? `<button class="btn" data-v="go" data-to="${esc(nextOwner.id)}">Next quest: ${esc(next.icon)}</button>` : '';
     let text; let buttons; let quest = '';
     const offPlan = data.planned && next && q.st === 'todo' && next !== q;
     if (mode === 'thanks' || doneAll(p)) {
@@ -700,6 +708,7 @@ function mount(section, handlers) {
     const p = personById(dialog.dataset.vid);
     if (b.dataset.v === 'bye' || !p) { closeDialog(); return; }
     if (b.dataset.v === 'do') { closeDialog(); handlers.onTask(b.dataset.q || activeQuest(p.tasks).id, els.get(p.id)); }
+    if (b.dataset.v === 'go' && b.dataset.to === 'home') { closeDialog(); walkTo(L.start.x, L.start.y, { home: true }); return; }
     if (b.dataset.v === 'go') { const q = personById(b.dataset.to); if (q) goTalk(q); }
   });
 
@@ -851,7 +860,9 @@ function mount(section, handlers) {
     const arrow = e.target.closest('.v-arrow');
     if (arrow) {
       handlers.sound?.('tap');
-      if (arrow.dataset.vid === 'chest') goChest(); else if (arrow.dataset.vid === 'shop') goShop(); else goTalk(personById(arrow.dataset.vid));
+      if (arrow.dataset.vid === 'chest') goChest(); else if (arrow.dataset.vid === 'shop') goShop();
+      else if (arrow.dataset.vid === 'home') walkTo(L.start.x, L.start.y, { home: true });
+      else goTalk(personById(arrow.dataset.vid));
       return;
     }
     if (e.target.closest('.villager.keeper')) { handlers.sound?.('tap'); goShop(); return; }
@@ -871,17 +882,21 @@ function mount(section, handlers) {
 
   // ---- arrows to quests off screen ----
   // arrows point to the villagers of the first part of the day that still has quests (morning, then after school)
+  // the kid's house counts as a morning stop while its chores (bed, teeth, floor) are left
+  const homeStop = data.home ? { id: 'home', x: L.home.x + L.home.w / 2, y: L.home.y + L.home.h - 38, period: 'morning', icon: data.home.icon, now: data.home.now } : null;
   const openFolk = () => {
-    const left = people.filter((p) => p.tasks.some((t) => t.st === 'todo' || t.st === 'current'));
+    const left = people.filter((p) => p.tasks.some((t) => t.st === 'todo' || t.st === 'current'))
+      .map((p) => ({ id: p.id, x: p.x, y: p.y - 22, period: p.period, icon: activeQuest(p.tasks).icon, now: p.tasks.some((t) => t.st === 'current') }));
+    if (homeStop) left.unshift(homeStop);
     // with a plan, only the plan's next step gets an arrow
-    if (data.planned) return left.filter((p) => p.tasks.some((t) => t.st === 'current'));
+    if (data.planned) return left.filter((p) => p.now);
     const am = left.filter((p) => p.period === 'morning');
     return am.length ? am : left;
   };
   // arrow buttons are kept and moved (not redrawn), so a tap lands even while the view slides
   const arrowEls = new Map();
   const drawArrows = () => {
-    const list = openFolk().map((p) => ({ id: p.id, x: p.x, y: p.y - 22, icon: activeQuest(p.tasks).icon, now: p.tasks.some((t) => t.st === 'current') }));
+    const list = openFolk();
     if (!list.length && data.chest.ready) list.push({ id: 'chest', x: L.chest.x, y: L.chest.y - 10, icon: '🎁' });
     // all done, chest opened: the shop is open
     else if (!list.length && data.shop.open && L.shop && !data.chest.ready) list.push({ id: 'shop', x: L.shop.x, y: L.shop.y - 22, icon: '👕' });
