@@ -66,6 +66,12 @@ function resumeTimer() {
   render();
 }
 
+/**
+ * Whether a running timer or stopwatch is on screen: redraws from a family update or the
+ * day rollover wait then (the page keeps itself up to date while it runs).
+ */
+export const timerOnScreen = () => (ui.view === 'timer' || (ui.view === 'watch' && timer.running));
+
 export function stopTimer(rerender = true) {
   if (timer.run) syncTimer(true);
   timer.running = false;
@@ -128,10 +134,10 @@ function tickTimer() {
   const $ring = document.getElementById('timer-ring');
   if ($t) $t.textContent = mmss(total - sec);
   if ($ring) $ring.style.setProperty('--p', sec / total);
-  if (finished) finishTimer(kid, task);
+  if (finished) finishTimer(kid, task, timer.run.day);
 }
 
-function finishTimer(kid, task) {
+function finishTimer(kid, task, day = today()) {
   stopEars();
   stopTimer(false);
   sounds.day();
@@ -139,8 +145,8 @@ function finishTimer(kid, task) {
   ui.view = 'kid';
   ui.kidId = kid.id;
   render();
-  if (task.verify === 'self') markDone(kid, task, 'self');
-  else askParentNowOrLater(kid, task);
+  if (task.verify === 'self') markDone(kid, task, 'self', undefined, day);
+  else askParentNowOrLater(kid, task, undefined, day);
 }
 
 // Leaving the app: a task set to keep counting in other apps carries on (and
@@ -193,7 +199,7 @@ export function restoreTimer() {
   if (run.day !== today()) { stopTimer(false); return; }
   if (syncTimer(true)) {
     // the time ran out while the app was closed
-    setTimeout(() => finishTimer(found.kid, found.task), 300);
+    setTimeout(() => finishTimer(found.kid, found.task, run.day), 300);
     return;
   }
   ui.view = 'timer';
@@ -395,10 +401,10 @@ function finishWatchChores(kid, ids) {
   sounds.day();
   confetti(80, 1800);
   const anchor = document.querySelector('.watch .ring');
-  for (const t of tasks) if (t.verify === 'self') markDone(kid, t, 'self', anchor);
+  for (const t of tasks) if (t.verify === 'self') markDone(kid, t, 'self', anchor, day);
   // a parent checks one at a time; another one waiting is asked about on the next Start
   const ask = tasks.find((t) => t.verify !== 'self');
-  if (ask) askParentNowOrLater(kid, ask, anchor);
+  if (ask) askParentNowOrLater(kid, ask, anchor, day);
 }
 
 function watchNumbers(kid) {

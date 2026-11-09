@@ -41,7 +41,7 @@ import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 import { state, setState, provide } from './ctx.js';
 import {
-  startTimer, stopTimer, leaveTimer, returnToTimer, restoreTimer, mmss, buddyCheer,
+  startTimer, stopTimer, leaveTimer, returnToTimer, restoreTimer, timerOnScreen, mmss, buddyCheer,
   ears, startEars, stopEars, wakeEars, viewTimer, viewWatch,
   listenTest, viewListen, startListenTest, stopListenTest, setLastListenMood, LISTEN_MODE_KEY, DANCE_LEAD, DANCE_LEAD_KEY,
 } from './timer-ui.js';
@@ -521,10 +521,11 @@ function setTask(kid, key, task, value) {
   save();
 }
 
-function markDone(kid, task, by, anchor) {
-  setTask(kid, today(), task, { status: 'done', at: Date.now(), by });
+// day: the day the chore belongs to (a practice timer's day, when a parent signs off after midnight)
+function markDone(kid, task, by, anchor, day = today()) {
+  setTask(kid, day, task, { status: 'done', at: Date.now(), by });
   sounds.task();
-  const { xp, coins, gems } = taskPay(state, kid, today(), task, today());
+  const { xp, coins, gems } = taskPay(state, kid, day, task, today());
   floatText([gems && `+${gems} 💎`, xp && `+${xp} XP`, coins && `+${coins} 🪙`].filter(Boolean).join(' · ') || 'Done!', anchor);
   ui.cheerUntil = Date.now() + 2600;
   ui.cheerKid = kid.id;
@@ -534,7 +535,7 @@ function markDone(kid, task, by, anchor) {
   setTimeout(() => { if (ui.view === 'kid' && Date.now() >= ui.cheerUntil) render(); }, 2700);
 }
 
-function askParentNowOrLater(kid, task, anchor) {
+function askParentNowOrLater(kid, task, anchor, day = today()) {
   openModal(`
     <div class="center">
       <div class="big-emoji">${esc(task.icon)}</div>
@@ -547,11 +548,11 @@ function askParentNowOrLater(kid, task, anchor) {
     </div>`);
   modalActions['pin-now'] = () => {
     closeModal();
-    pinPad({ title: 'Parent sign-off', subtitle: `${kid.name}: ${task.name}`, onSuccess: () => markDone(kid, task, 'parent', anchor) });
+    pinPad({ title: 'Parent sign-off', subtitle: `${kid.name}: ${task.name}`, onSuccess: () => markDone(kid, task, 'parent', anchor, day) });
   };
   modalActions['pin-later'] = () => {
     closeModal();
-    setTask(kid, today(), task, { status: 'pending', at: Date.now() });
+    setTask(kid, day, task, { status: 'pending', at: Date.now() });
     sounds.pending();
     toast('Saved! A parent will check it.');
     render();
@@ -1091,7 +1092,7 @@ function musicView(kid, list, mood, tier) {
 }
 
 const musicHandlers = {
-  onPiano: () => { ui.view = 'watch'; ui.watchSession = 0; render(); },
+  onPiano: () => { ui.view = 'watch'; ui.watchSession = 0; ui.watchNote = ''; render(); },
   onExit: () => {
     const kid = kidById(ui.kidId);
     if (!kid) return;
@@ -2624,7 +2625,7 @@ const fired = new Set();
 
 setInterval(() => {
   const t = today();
-  if (t !== lastDay) { lastDay = t; if (ui.view !== 'timer' && ui.view !== 'watch') render(); }
+  if (t !== lastDay) { lastDay = t; if (!timerOnScreen()) render(); }
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   for (const r of state.settings.reminders) {
