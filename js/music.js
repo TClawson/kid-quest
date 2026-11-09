@@ -161,7 +161,9 @@ function scheduleStep(r, song, s, t) {
   // arpeggio (pulse 2), two notes per step
   const arp = song.arp;
   if (arp && barIndex >= (arp.from || 0)) {
-    const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 1, 2];
+    // four notes to a beat either way, so the pattern keeps the song's beat (three would turn
+    // around every dotted eighth and sound like a rhythm of its own)
+    const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 2, 1, 2];
     // (a swung eighth is long or short, and its two notes share it evenly)
     const half = (step * (1 + (i % 2 ? -1 : 1) * (song.swing || 0))) / 2;
     for (let k = 0; k < 2; k += 1) {
