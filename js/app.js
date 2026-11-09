@@ -121,6 +121,10 @@ const $modal = document.getElementById('modal');
 const today = () => dateKey();
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kidById = (id) => state.kids.find((k) => k.id === id);
+// The kid as they are now. A family update replaces state (and every kid
+// object), so anything that runs later (a timeout, a game callback) must look
+// the kid up again, or its changes land on an old copy and never save.
+const currentKid = (kid) => kidById(kid.id) || kid;
 
 function progressFor(kid) {
   const t = today();
@@ -441,7 +445,7 @@ function showMastered(kid) {
       <p>${again ? 'You kept it up for another two months. It really is part of who you are!' : `You did ${fresh.length > 1 ? 'these' : 'it'} on almost every day for two months. That's not a chore anymore, it's part of who you are!`}</p>
       <p class="muted small">Stars stay for good, and every 60 days you keep it up earns another. Your weekly coins stay the same: from Monday more of them come from the habits you're still building.</p>
       <button class="btn huge" data-action="modal-close">Awesome!</button>
-    </div>`, () => setTimeout(() => showUnlocks(kid), 250));
+    </div>`, () => setTimeout(() => showUnlocks(currentKid(kid)), 250));
   return true;
 }
 
@@ -539,7 +543,7 @@ function showNewMoves(kid) {
       <p>${fresh.map((m) => `<b>${esc(m.move.name)}</b>`).join(', ')}</p>
       <p class="muted small">Best exercise streak: ${who.exBest} ${who.exBest === 1 ? 'week' : 'weeks'} 💪 Tap your buddy anytime to see a move.</p>
       <button class="btn huge" data-action="modal-close">Awesome!</button>
-    </div>`, () => setTimeout(() => showUnlocks(kid), 250));
+    </div>`, () => setTimeout(() => showUnlocks(currentKid(kid)), 250));
   setTimeout(() => { const el = $modal.querySelector('.buddy-tap'); if (el) doMove(el, who, first.move.id); }, 500);
   return true;
 }
@@ -568,10 +572,10 @@ function celebrateIfDue(kid) {
   if (freeGamesOn(t) && sat?.sat !== t && $modal.hidden) {
     state.celebrations[kid.id] = { ...(sat || {}), sat: t };
     save();
-    return showSaturdayGames(kid, () => setTimeout(() => celebrateIfDue(kid), 250));
+    return showSaturdayGames(kid, () => setTimeout(() => celebrateIfDue(currentKid(kid)), 250));
   }
   const info = streakInfo(state, kid, t);
-  const after = () => setTimeout(() => showUnlocks(kid), 250);
+  const after = () => setTimeout(() => showUnlocks(currentKid(kid)), 250);
   const seen = state.celebrations[kid.id];
   // the weekly reward shows once a week, as soon as it is earned: on Friday, or
   // later in the weekend if a parent approves a day's chores late
@@ -741,7 +745,7 @@ function markDone(kid, task, by, anchor) {
   ui.cheerKid = kid.id;
   live(liveKey(kid)).cheer();
   render();
-  setTimeout(() => celebrateIfDue(kid), 700);
+  setTimeout(() => celebrateIfDue(currentKid(kid)), 700);
   setTimeout(() => { if (ui.view === 'kid' && Date.now() >= ui.cheerUntil) render(); }, 2700);
 }
 
@@ -3029,7 +3033,7 @@ const actions = {
     confetti(80, 1600);
     toast(`${item.name} is yours!`);
     render();
-    if (item.gems) setTimeout(() => showUnlocks(kid), 700);
+    if (item.gems) setTimeout(() => showUnlocks(currentKid(kid)), 700);
   },
   'try-move': (el) => {
     const kid = kidById(ui.kidId);
@@ -3734,6 +3738,7 @@ actions['game-test'] = (el) => {
 };
 
 function playWith(kid, v, kind) {
+  const kid0 = kid; // callbacks run later: look the kid up again each time
   const gear = bestGear(v.owned);
   const best = kid.playBest?.[kind] || 0;
   openPlay({
@@ -3744,8 +3749,9 @@ function playWith(kid, v, kind) {
     map: kidTheme(kid),
     day: today(),
     sounds,
-    gamesLeft: () => playableFor(kid),
+    gamesLeft: () => playableFor(currentKid(kid0)),
     onStart: () => {
+      const kid = currentKid(kid0);
       if (borrows(kid, kind)) kid.lendLog = logLend(kid, today(), GEAR_KEY[kind]);
       kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
       save();
@@ -3753,16 +3759,19 @@ function playWith(kid, v, kind) {
     // the map's bubbles change when the games run out
     onClose: () => render(),
     onScore: (score) => {
+      const kid = currentKid(kid0);
       kid.playBest = { ...(kid.playBest || {}), [kind]: score };
       save();
     },
     // every game's score counts toward this week's family chart (the chart on the house wall)
     onOver: (score) => {
+      const kid = currentKid(kid0);
       const week = recordWeekBest(kid, kind, score, today());
       if (week !== kid.gameBests) { kid.gameBests = week; save(); }
     },
     // fishing: the biggest of each kind of fish goes in the fish book (in the house)
     onCatch: (c) => {
+      const kid = currentKid(kid0);
       const sp = catchSpecies(c.map, c.kind);
       const got = sp && recordCatch(kid.fishRecords, { species: sp.id, size: c.size, points: c.points, date: today() });
       if (!got?.isNew) return null;

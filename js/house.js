@@ -289,7 +289,7 @@ function mount(section, handlers) {
 
   let last = performance.now();
   const tick = (now) => {
-    if (!section.isConnected) return;
+    if (!section.isConnected) { window.removeEventListener('resize', onResize); return; }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (me.path.length) {
@@ -311,7 +311,9 @@ function mount(section, handlers) {
     place();
     requestAnimationFrame(tick);
   };
-  window.addEventListener('resize', measure, { passive: true });
+  // removed with the screen (tick stops then too), so redraws don't pile up listeners
+  const onResize = () => { if (section.isConnected) measure(); else window.removeEventListener('resize', onResize); };
+  window.addEventListener('resize', onResize, { passive: true });
   place();
   requestAnimationFrame(tick);
 }
