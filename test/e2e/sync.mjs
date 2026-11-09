@@ -149,6 +149,30 @@ try {
   await until('merge on Ava’s tablet', () => merged(ava.page));
   log('✓ offline change syncs and merges with a parent change');
 
+  // ---- Both devices create the same new day while Ava is offline: neither
+  // device's change is lost (a whole-document create used to replace the other)
+  const fresh = addDays(today, -5);
+  await ava.ctx.setOffline(true);
+  await ava.page.evaluate(([day, id]) => {
+    const s = window.kidQuest.state;
+    s.log[day] = { kid_ava: { tasks: { [id]: { status: 'done' } } } };
+    window.kidQuest.save();
+  }, [fresh, teeth.id]);
+  await mom.page.evaluate((day) => {
+    const s = window.kidQuest.state;
+    s.log[day] = { kid_ava: { tasks: {}, excused: true } };
+    window.kidQuest.save();
+  }, fresh);
+  await new Promise((r) => setTimeout(r, 1500));
+  await ava.ctx.setOffline(false);
+  const bothNew = async (page) => {
+    const e = (await stateOf(page)).log[fresh]?.kid_ava;
+    return e?.excused === true && e.tasks?.[teeth.id]?.status === 'done';
+  };
+  await until('new day merged on mom’s phone', () => bothNew(mom.page));
+  await until('new day merged on Ava’s tablet', () => bothNew(ava.page));
+  log('✓ a day created on two devices at once keeps both changes');
+
   // ---- Ava buys two things in a row while a parent's change waits behind the buy
   // dialog: both purchases stick (the held-back update used to undo the first one)
   await mom.page.evaluate((day) => {
