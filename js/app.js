@@ -7,21 +7,12 @@ import {
   defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
-  gamesLeft,
-  carriedGames,
-  freeGamesOn,
-  SATURDAY_GAMES,
-  earlyGames,
-  logGame, lendLeft, logLend,
-  gamesPerDay,
-  GAMES_PER_DAY,
-  OLD_GAMES_PER_DAY,
-  withMemo, monthDays, habitInfo, MASTERED_PAY, COMEBACK_BONUS, CUES, cueFor, planOrder, planSentence,
-  todaySummary, familyDay, FAMILY_GOAL, weekLookback, isPianoTask, milestoneFor, milestoneFresh,
+  withMemo, monthDays, habitInfo, MASTERED_PAY, CUES, cueFor, planOrder, planSentence,
+  todaySummary, familyDay, FAMILY_GOAL, milestoneFor, milestoneFresh,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
-import { liveHtml, live, liveStart, feel, partyAll } from './live.js';
+import { liveHtml, live, liveStart, partyAll } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
 import { villageHtml, mountVillages, cameOut } from './village.js';
@@ -30,26 +21,34 @@ import { houseChores, shelfLevel, isInside, setInside, HOUSE_CHORES, houseChoreB
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
 import { applyGrants } from './grants.js';
 import { furnitureThumb } from './houseart.js';
-import { leaderboard, recordWeekBest, weekOf } from './leaderboard.js';
-import { recordCatch, catchSpecies, bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
+import { leaderboard, weekOf } from './leaderboard.js';
+import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
-import { pickVisitors, visitorLines, planVisits, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
-import { gameFor, GAME_NAMES } from './play.js';
+import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
+import { GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { SPOTS as FISH_SPOTS } from './fishing.js';
-import { runSeconds, CHEERS, pickCheer, effortCheers } from './practice.js';
-import { startListening, buddyState, TUNING } from './listen.js';
-import { createBeatFollower } from './beat.js';
-import { loadRecognizer } from './hear.js';
 import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
 import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, secretSize, SECRETS } from './treasure-art.js';
 import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
+import { state, setState, provide } from './ctx.js';
+import {
+  startTimer, stopTimer, leaveTimer, returnToTimer, restoreTimer, mmss, buddyCheer,
+  ears, startEars, stopEars, wakeEars, viewTimer,
+  listenTest, viewListen, startListenTest, stopListenTest, setLastListenMood, LISTEN_MODE_KEY, DANCE_LEAD, DANCE_LEAD_KEY,
+} from './timer-ui.js';
+import {
+  pendingRemote, setPendingRemote, loadCloud, onCloudStatus, startCloud, applyRemote,
+  familyCard, familyCreate, familyJoin, familyJoinGo, familyInvite, showCode, familyLeave,
+} from './sync-ui.js';
+import { showUnlocks, celebrateIfDue } from './celebrate.js';
+import { moveIds, gamesLeftFor, playableFor, visitPlan, gamesWith, pickGame, playWith } from './play-ui.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
 
@@ -89,13 +88,13 @@ function save() {
     // top of the old data, and the first purchase is lost). The write we just
     // sent comes back as a fresh update that holds both, so drop the old one.
     // Device settings never go to the family, so they send nothing back.
-    if ([...changed, ...removed].some((p) => p !== 'device')) pendingRemote = null;
+    if ([...changed, ...removed].some((p) => p !== 'device')) setPendingRemote(null);
   } catch {
     toast('Could not save. Is storage full?');
   }
 }
 
-let state = store.load();
+setState(store.load());
 if (cloudCfg && !localStorage.getItem(CLOUD_CACHE_KEY)) {
   // first start after joining on a device with nothing to bring: keep this
   // device's own sound and map settings, wait for the family's data
@@ -280,7 +279,7 @@ function closeModal() {
   const cb = modalOnClose;
   modalOnClose = null;
   cb?.();
-  if (pendingRemote && $modal.hidden) { const next = pendingRemote; pendingRemote = null; applyRemote(next); }
+  if (pendingRemote && $modal.hidden) { const next = pendingRemote; setPendingRemote(null); applyRemote(next); }
 }
 
 $modal.addEventListener('click', (e) => {
@@ -369,109 +368,7 @@ function confirmModal({ title, text, yes = 'Yes', no = 'Cancel', danger = false,
 }
 let modalYes = null;
 
-// ---------- celebrations ----------
-
-function celebrate({ kid, emoji, title, text, sound, big = false, onClose = null }) {
-  sound();
-  confetti(big ? 260 : 140, big ? 4000 : 2600);
-  openModal(`
-    <div class="celebrate ${big ? 'big' : ''}">
-      ${kid ? buddyHtml(kid, big ? 'proud' : 'excited', 'xl') : `<div class="celebrate-emoji">${emoji}</div>`}
-      ${big ? `<div class="celebrate-emoji small">${emoji}</div>` : ''}
-      <h1>${esc(title)}</h1>
-      <p>${esc(text)}</p>
-      <button class="btn huge" data-action="modal-close">Awesome!</button>
-    </div>`, onClose);
-}
-
-/** Show any newly unlocked wardrobe items. Returns true if something was shown. */
-function showUnlocks(kid) {
-  if (!$modal.hidden) return false;
-  if (showMastered(kid)) return true;
-  if (showLookback(kid)) return true;
-  if (showNewMoves(kid)) return true;
-  const ids = newUnlocks(kid, progressFor(kid));
-  if (!ids.length) return false;
-  kid.seenUnlocks = [...(kid.seenUnlocks || []), ...ids];
-  kid.newItems = [...(kid.newItems || []), ...ids];
-  save();
-  const items = ids.map(itemById);
-  const preview = { ...dressed(kid), outfit: { ...kid.buddy.outfit, [items[0].slot]: items[0].id } };
-  sounds.day();
-  confetti(120, 2400);
-  openModal(`
-    <div class="celebrate">
-      <div class="buddy buddy-xl mood-excited">${buddySvg(preview, 'excited')}</div>
-      <h1>New stuff unlocked!</h1>
-      <p>${items.map((i) => `<b>${esc(i.name)}</b>`).join(', ')}</p>
-      <div class="stack">
-        ${storeOpen(state, kid, today()).open
-          ? `<button class="btn huge" data-action="unlock-try" data-slot="${items[0].slot}">Try it on!</button>
-        <button class="btn ghost" data-action="modal-close">Later</button>`
-          : `<p class="muted">Try it on once today's chores are done.</p>
-        <button class="btn huge" data-action="modal-close">OK</button>`}
-      </div>
-    </div>`);
-  return true;
-}
-
-/** The key a habit star is remembered by once celebrated: the task id for the first, then id#2, id#3… */
-const starKey = (h, n) => (n === 1 ? h.task.id : `${h.task.id}#${n}`);
-
-/** A habit star the kid just earned (see habitInfo): celebrated once each. */
-function showMastered(kid) {
-  const seen = new Set(kid.seenMastered || []);
-  const fresh = [...habitInfo(state, kid, today()).values()].filter((h) => h.stars.some((_, i) => !seen.has(starKey(h, i + 1))));
-  if (!fresh.length) return false;
-  kid.seenMastered = [...seen, ...fresh.flatMap((h) => h.stars.map((_, i) => starKey(h, i + 1)))];
-  const again = fresh.every((h) => h.stars.length > 1);
-  save();
-  sounds.week();
-  confetti(200, 3200);
-  openModal(`
-    <div class="celebrate">
-      ${buddyHtml(kid, 'proud', 'xl')}
-      <div class="celebrate-emoji small">⭐</div>
-      <h1>${again ? 'Another habit star!' : 'Habit mastered!'}</h1>
-      <p>${fresh.map((h) => `${esc(h.task.icon)} <b>${esc(h.task.name)}</b> ${'⭐'.repeat(Math.min(5, h.stars.length))}`).join(', ')}</p>
-      <p>${again ? 'You kept it up for another two months. It really is part of who you are!' : `You did ${fresh.length > 1 ? 'these' : 'it'} on almost every day for two months. That's not a chore anymore, it's part of who you are!`}</p>
-      <p class="muted small">Stars stay for good, and every 60 days you keep it up earns another. Your weekly coins stay the same: from Monday more of them come from the habits you're still building.</p>
-      <button class="btn huge" data-action="modal-close">Awesome!</button>
-    </div>`, () => setTimeout(() => showUnlocks(currentKid(kid)), 250));
-  return true;
-}
-
-/** Once a week: how last week went, task by task, next to four weeks before. Then plan the new week. */
-function showLookback(kid) {
-  const t = today();
-  const monday = weekStart(t);
-  if (kid.lookbackSeen === monday) return false;
-  const lb = weekLookback(state, kid, t);
-  // only once there is a real week to look back on (a kid who used the app last week)
-  if (lb.days < 4 || !lb.tasks.some((r) => r.done > 0)) return false;
-  kid.lookbackSeen = monday;
-  save();
-  const rows = planOrder(kid, lb.tasks.map((r) => r.task)).map((task) => lb.tasks.find((r) => r.task.id === task.id)).map((r) => {
-    const b = r.before;
-    const better = b && r.done / r.of > b.done / b.of;
-    return `<div class="look-row ${better ? 'better' : ''}"><span>${esc(r.task.icon)} ${esc(r.task.name)}</span><b>${r.done} of ${r.of}</b>${b ? `<small>${better ? '⬆ ' : ''}4 weeks ago: ${b.done} of ${b.of}</small>` : ''}</div>`;
-  }).join('');
-  const ups = lb.tasks.filter((r) => r.before && r.done / r.of > r.before.done / r.before.of);
-  const lead = ups.length
-    ? `You got better at ${ups.length === 1 ? esc(ups[0].task.name.toLowerCase()) : `${ups.length} things`} since a month ago. Your practice is working!`
-    : `You finished every task on ${lb.daysDone} of ${lb.days} days.`;
-  openModal(`
-    <div class="lookback">
-      <h1>📅 Last week</h1>
-      <p>${lead}</p>
-      <div class="look-rows">${rows}</div>
-      <div class="stack">
-        <button class="btn huge" data-action="plan" data-kid="${kid.id}">📝 Plan this week</button>
-        <button class="btn ghost" data-action="modal-close">Later</button>
-      </div>
-    </div>`);
-  return true;
-}
+// ---------- celebrations (see celebrate.js) ----------
 
 // ---------- the kid's plan: order and cues ----------
 
@@ -515,112 +412,6 @@ function openPlan(kid) {
   ui.planKid = kid.id;
   ui.planDraft = { order: planOrder(kid, questTasks(kid.tasks)).map((x) => x.id), cues: { ...(kid.plan?.cues || {}) } };
   planModal(kid);
-}
-
-/** Moves the kid's buddy just learned from the exercise streak (or from new gear). Shows the first one in action. */
-function showNewMoves(kid) {
-  const who = mover(kid);
-  const seen = new Set(kid.seenMoves || []);
-  const fresh = unlockedMoves(who.owned, who.exBest).filter((m) => !seen.has(m.move.id));
-  if (!fresh.length) return false;
-  kid.seenMoves = [...seen, ...fresh.map((m) => m.move.id)];
-  save();
-  const first = fresh[0];
-  sounds.week();
-  confetti(140, 2600);
-  openModal(`
-    <div class="celebrate">
-      <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" data-move="${first.move.id}" aria-label="See the move again">${buddyHtml(kid, 'excited', 'xl')}</button>
-      <h1>New move${fresh.length > 1 ? 's' : ''}!</h1>
-      <p>${fresh.map((m) => `<b>${esc(m.move.name)}</b>`).join(', ')}</p>
-      <p class="muted small">Best exercise streak: ${who.exBest} ${who.exBest === 1 ? 'week' : 'weeks'} 💪 Tap your buddy anytime to see a move.</p>
-      <button class="btn huge" data-action="modal-close">Awesome!</button>
-    </div>`, () => setTimeout(() => showUnlocks(currentKid(kid)), 250));
-  setTimeout(() => { const el = $modal.querySelector('.buddy-tap'); if (el) doMove(el, who, first.move.id); }, 500);
-  return true;
-}
-
-/** Saturday morning: two free games pop up like a chest prize. */
-function showSaturdayGames(kid, onClose) {
-  const words = prizeText({ kind: 'games', games: SATURDAY_GAMES });
-  sounds.tap();
-  openModal(`
-    <div class="celebrate chest-card chest-wood">
-      <div class="chest-shake">${chestSvg('wood', false, 7)}</div>
-      <div class="chest-reveal">
-        <div class="chest-behind">${chestSvg('wood', true, 5)}</div>
-        <div class="prize-art"><div class="prize-emoji">⚽</div></div>
-        <h1>Saturday: ${esc(words.title.replace(/^(\d+) extra/, '$1 free'))}</h1>
-        <p>${esc(words.text)}</p>
-        <button class="btn huge" data-action="modal-close">Awesome!</button>
-      </div>
-    </div>`, onClose);
-  setTimeout(() => { sounds.day(); confetti(90, 2200); }, 1000);
-}
-
-function celebrateIfDue(kid) {
-  const t = today();
-  const sat = state.celebrations[kid.id];
-  if (freeGamesOn(t) && sat?.sat !== t && $modal.hidden) {
-    state.celebrations[kid.id] = { ...(sat || {}), sat: t };
-    save();
-    return showSaturdayGames(kid, () => setTimeout(() => celebrateIfDue(currentKid(kid)), 250));
-  }
-  const info = streakInfo(state, kid, t);
-  const after = () => setTimeout(() => showUnlocks(currentKid(kid)), 250);
-  const seen = state.celebrations[kid.id];
-  // the weekly reward shows once a week, as soon as it is earned: on Friday, or
-  // later in the weekend if a parent approves a day's chores late
-  const reward = state.settings.weeklyReward?.trim() ? weeklyRewardInfo(state, kid, t) : null;
-  const rewardNew = Boolean(reward?.earned && seen?.reward !== reward.monday);
-  const dayNew = info.todayComplete && seen?.day !== t;
-  if (!rewardNew && !dayNew) return showUnlocks(kid);
-  const next = { ...(seen || {}) };
-  if (info.todayComplete) { next.day = t; next.streak = info.streak; }
-  if (rewardNew) next.reward = reward.monday;
-  state.celebrations[kid.id] = next;
-  save();
-  if (rewardNew) {
-    celebrate({
-      kid,
-      onClose: after,
-      emoji: '🏆',
-      title: 'WEEKLY REWARD!',
-      text: `You did every chore Monday to Friday! Your reward: ${state.settings.weeklyReward}. Show a parent!${dayNew ? ' Then tap your treasure chest!' : ''}`,
-      sound: sounds.week,
-      big: true,
-    });
-  } else if (info.inARow > 0 && info.inARow % 7 === 0) {
-    const weeks = info.inARow / 7;
-    celebrate({
-      kid,
-      onClose: after,
-      emoji: '🔥',
-      title: weeks === 1 ? 'A WHOLE WEEK!' : `${weeks} WEEKS IN A ROW!`,
-      text: `${info.inARow} days in a row!${info.freezes ? ' You have a streak freeze ❄️ saved up.' : ''} Tap your treasure chest!`,
-      sound: sounds.week,
-      big: true,
-    });
-  } else if (info.comebacks.includes(t)) {
-    celebrate({
-      kid,
-      onClose: after,
-      emoji: '💪',
-      title: 'Welcome back!',
-      text: `You bounced back after a missed day. That's how habits are built! +${COMEBACK_BONUS} 🪙 bonus. Your streak is ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 Tap the treasure chest to open it!`,
-      sound: sounds.day,
-    });
-  } else {
-    celebrate({
-      kid,
-      onClose: after,
-      emoji: '🌟',
-      title: 'Quest complete!',
-      text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 ${effortNote(kid)} Tap the treasure chest to open it!`,
-      sound: sounds.day,
-    });
-  }
-  return true;
 }
 
 // ---------- the treasure chest (see treasure.js) ----------
@@ -790,169 +581,7 @@ function onTaskTap(id, anchor) {
   else askParentNowOrLater(kid, task, anchor);
 }
 
-// ---------- practice timer ----------
-
-// The timer counts from clock times (see practice.js). While it runs, the run is
-// also kept in this device's storage, so if Android closes the app in the
-// background, opening it again picks the timer back up.
-const RUN_KEY = 'kidquest.practiceRun';
-const timer = { running: false, interval: null, wakeLock: null, run: null, savedAt: 0 };
-// While the timer runs its seconds go to the family every 15 s, not every tick
-// (the count is rebuilt from timer.run anyway). Pausing or finishing saves now.
-const TIMER_SAVE_MS = 15000;
-
-function keepRun() {
-  try {
-    if (timer.run) localStorage.setItem(RUN_KEY, JSON.stringify(timer.run));
-    else localStorage.removeItem(RUN_KEY);
-  } catch { /* the timer still works while the app stays open */ }
-}
-
-async function grabWakeLock() {
-  try {
-    timer.wakeLock = await navigator.wakeLock?.request('screen');
-  } catch {
-    timer.wakeLock = null;
-  }
-}
-
-function runTask() {
-  const kid = kidById(timer.run?.kidId);
-  const task = kid && taskById(kid, timer.run.day, timer.run.taskId);
-  return kid && task && task.minutes > 0 ? { kid, task } : null;
-}
-
-function startTimer() {
-  const kid = kidById(ui.kidId);
-  const task = kid && taskById(kid, today(), ui.taskId);
-  if (!task) return;
-  const done = entryFor(state, kid.id, today())?.tasks?.[task.id]?.seconds || 0;
-  timer.run = { kidId: kid.id, taskId: task.id, day: today(), since: Date.now(), base: done };
-  keepRun();
-  resumeTimer();
-}
-
-function resumeTimer() {
-  timer.running = true;
-  grabWakeLock();
-  clearInterval(timer.interval);
-  timer.interval = setInterval(tickTimer, 1000);
-  render();
-}
-
-function stopTimer(rerender = true) {
-  if (timer.run) syncTimer(true);
-  timer.running = false;
-  timer.run = null;
-  keepRun();
-  clearInterval(timer.interval);
-  timer.interval = null;
-  timer.wakeLock?.release?.().catch(() => {});
-  timer.wakeLock = null;
-  if (rerender && ui.view === 'timer') render();
-}
-
-// Bring the saved seconds up to the clock. Returns true when the timer is done.
-function syncTimer(force = false) {
-  const run = timer.run;
-  const found = runTask();
-  if (!found) return false;
-  const { kid, task } = found;
-  const total = task.minutes * 60;
-  const now = Date.now();
-  const entry = entryFor(state, kid.id, run.day, true);
-  const cur = { status: 'inprogress', ...(entry.tasks[task.id] || {}) };
-  const sec = Math.max(cur.seconds || 0, runSeconds(run, now, total));
-  let changed = sec !== cur.seconds || !entry.tasks[task.id];
-  let urgent = force || !entry.tasks[task.id] || sec >= total;
-  if (run.awayFrom != null) {
-    // count how much of the timer ran in another app, so a parent can see it
-    const away = Math.max(0, sec - run.awayFrom);
-    if (away) { cur.away = (cur.away || 0) + away; changed = true; urgent = true; }
-    run.awayFrom = null;
-    keepRun();
-  }
-  if (!changed) return sec >= total;
-  cur.seconds = sec;
-  entry.tasks[task.id] = cur;
-  if (urgent || now - timer.savedAt >= TIMER_SAVE_MS) { timer.savedAt = now; save(); }
-  return sec >= total;
-}
-
-function tickTimer() {
-  if (document.visibilityState !== 'visible' || !timer.run) return;
-  const found = runTask();
-  if (!found) return stopTimer();
-  const { kid, task } = found;
-  const finished = syncTimer();
-  if (timer.run.day !== today()) {
-    // midnight passed: yesterday's time stays with yesterday
-    stopEars();
-    stopTimer(false);
-    if (ui.view === 'timer') { ui.view = 'kid'; render(); }
-    return;
-  }
-  const total = task.minutes * 60;
-  const sec = entryFor(state, kid.id, timer.run.day)?.tasks?.[task.id]?.seconds || 0;
-  const $t = document.getElementById('timer-left');
-  const $ring = document.getElementById('timer-ring');
-  if ($t) $t.textContent = mmss(total - sec);
-  if ($ring) $ring.style.setProperty('--p', sec / total);
-  if (finished) finishTimer(kid, task);
-}
-
-function finishTimer(kid, task) {
-  stopEars();
-  stopTimer(false);
-  sounds.day();
-  confetti(80, 1800);
-  ui.view = 'kid';
-  ui.kidId = kid.id;
-  render();
-  if (task.verify === 'self') markDone(kid, task, 'self');
-  else askParentNowOrLater(kid, task);
-}
-
-// Leaving the app: a task set to keep counting in other apps carries on (and
-// remembers where it was, to show the parent the time spent away); any other
-// timer pauses.
-function leaveTimer() {
-  if (!timer.running) return;
-  const found = runTask();
-  if (!found?.task.background) { stopTimer(); return; }
-  syncTimer(true);
-  timer.run.awayFrom = entryFor(state, found.kid.id, timer.run.day)?.tasks?.[found.task.id]?.seconds || 0;
-  keepRun();
-}
-
-function returnToTimer() {
-  if (!timer.running) return;
-  grabWakeLock();
-  tickTimer();
-}
-
-// The app was closed while a timer ran: pick it up again.
-function restoreTimer() {
-  let run = null;
-  try { run = JSON.parse(localStorage.getItem(RUN_KEY) || 'null'); } catch { run = null; }
-  if (!run?.kidId || !run.taskId || !run.day || !run.since) return;
-  timer.run = run;
-  const found = runTask();
-  if (!found || ui.view === 'setup') { timer.run = null; keepRun(); return; }
-  if (run.day !== today()) { stopTimer(false); return; }
-  if (syncTimer(true)) {
-    // the time ran out while the app was closed
-    setTimeout(() => finishTimer(found.kid, found.task), 300);
-    return;
-  }
-  ui.view = 'timer';
-  ui.kidId = run.kidId;
-  ui.taskId = run.taskId;
-  timer.running = true;
-  grabWakeLock();
-  timer.interval = setInterval(tickTimer, 1000);
-}
-
+// The practice timer and piano listening live in timer-ui.js.
 document.addEventListener('visibilitychange', () => {
   // the microphone is only used while this screen is showing
   if (document.visibilityState !== 'visible') {
@@ -965,233 +594,6 @@ document.addEventListener('visibilitychange', () => {
   }
   if (document.visibilityState === 'visible') { returnToTimer(); render(); startEars(); }
 });
-
-// The buddy on the timer page says a cheer when tapped.
-let lastCheer = -1;
-let cheerTimeout = 0;
-let cheerTaps = 0;
-let lastEffort = '';
-
-/** What a kid has really done lately, for praise that names the effort (see effortCheers). */
-function effortFacts(kid) {
-  const t = today();
-  const piano = pianoStreakInfo(state, kid, t);
-  const week = weekStart(t);
-  let pianoWeek = 0;
-  let minutesWeek = 0;
-  for (let key = week; key <= t; key = addDays(key, 1)) {
-    const entry = entryFor(state, kid.id, key);
-    for (const task of tasksForDay(state, kid, key, t).filter(isPianoTask)) {
-      const st = entry?.tasks?.[task.id];
-      if (st?.status === 'done' || st?.status === 'pending') pianoWeek += 1;
-      minutesWeek += Math.floor((st?.seconds || 0) / 60);
-    }
-  }
-  const habit = [...habitInfo(state, kid, t).values()].find((h) => isPianoTask(h.task));
-  return { name: kid.name, pianoStreak: piano.streak, pianoWeek, minutesWeek, pianoHabit: habit ? { done: habit.done, goal: habit.goal, mastered: Boolean(habit.mastered) } : null, month: monthDays(state, kid, t) };
-}
-
-/** One true sentence about the kid's effort, for the end-of-day celebration. */
-function effortNote(kid) {
-  const t = today();
-  const m = monthDays(state, kid, t);
-  const near = [...habitInfo(state, kid, t).values()].filter((h) => !h.mastered).sort((a, b) => b.done / b.goal - a.done / a.goal)[0];
-  if (near && near.done / near.goal >= 0.5) return `${near.task.name}: ${near.done} of ${near.goal} toward a habit star ⭐`;
-  if (m.days >= 5) return `That's ${m.done} of ${m.days} days done this month.`;
-  return '';
-}
-
-function buddyCheer() {
-  const kid = kidById(ui.kidId);
-  const $b = document.querySelector('.timer-buddy');
-  const $say = $b?.querySelector('.timer-bubble');
-  if (!kid || !$say) return;
-  if (!['head', 'silly'].includes($b.querySelector('canvas.live-buddy')?.dataset.zone)) live(liveKey(kid)).giggle();
-  // every other tap names something the kid has really done (effort praise), the rest are plain cheers
-  const facts = effortCheers(effortFacts(kid)).filter((line) => line !== lastEffort);
-  if (facts.length && (cheerTaps += 1) % 2 === 0) {
-    lastEffort = facts[Math.floor(Math.random() * facts.length)];
-    $say.textContent = lastEffort;
-  } else {
-    lastCheer = pickCheer(lastCheer);
-    $say.textContent = CHEERS[lastCheer](kid.name);
-  }
-  $b.classList.remove('hop');
-  void $b.offsetWidth; // restart the hop
-  $b.classList.add('talking', 'hop');
-  $b.querySelector('.timer-sprite')?.addEventListener('animationend', () => $b.classList.remove('hop'), { once: true });
-  sounds.tap();
-  clearTimeout(cheerTimeout);
-  cheerTimeout = setTimeout(() => $b.classList.remove('talking'), 4000);
-}
-
-const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-
-// ---------- listening during practice ----------
-// A timer task with "Listen to the piano" on listens while its timer runs and the
-// timer page is on screen (listen.js; Google's recognizer decides what is piano).
-// The buddy dances on the kid's beat (beat.js), or hops on notes when there is no
-// beat. With no piano for 30 s it gets bored; after 60 s it falls asleep and the
-// timer pauses, and playing again wakes it and the timer carries on. Without
-// Google's recognizer (offline the first time) the buddy still dances, but it
-// can't tell piano from talking, so it never falls asleep. Nothing is recorded.
-const ears = { run: null, beat: null, side: 1, token: 0, loading: false, error: '', google: false, from: 0, mood: '', asleep: false, asleepAt: 0, woke: -Infinity, lastUi: 0 };
-const EARS_NAP = 10 * 60_000;   // asleep this long: stop listening and let the screen turn off
-
-/** The timer page's task, when it listens. */
-function earsTask() {
-  if (ui.view !== 'timer') return null;
-  const kid = kidById(ui.kidId);
-  const task = kid && taskById(kid, today(), ui.taskId);
-  return task?.listen && task.minutes > 0 ? { kid, task } : null;
-}
-
-async function startEars() {
-  if (ears.run || ears.loading || !earsTask() || !(timer.running || ears.asleep)) return;
-  const token = ++ears.token;
-  ears.error = '';
-  ears.loading = true;
-  updateEarsUi();
-  try {
-    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
-    const recognizer = await loadRecognizer().catch(() => null);
-    if (token !== ears.token || !earsTask() || !timer.running) return;
-    const run = await startListening(onEarsFrame, { mode: 'google', recognizer });
-    if (token !== ears.token || !earsTask() || !timer.running) { run.stop(); return; }
-    Object.assign(ears, { run, beat: createBeatFollower(), google: run.listener.mode !== 'builtin', from: performance.now(), mood: '', asleep: false, woke: -Infinity });
-  } catch (e) {
-    if (token === ears.token) ears.error = e?.name === 'NotAllowedError' ? 'blocked' : e?.name === 'NotFoundError' || e?.name === 'NoMic' ? 'nomic' : 'other';
-  } finally {
-    if (token === ears.token) ears.loading = false;
-    updateEarsUi();
-  }
-}
-
-function stopEars() {
-  ears.token++;
-  ears.run?.stop();
-  Object.assign(ears, { run: null, beat: null, loading: false, asleep: false, mood: '' });
-}
-
-/** The timer page's live buddy. */
-function earsBuddy() {
-  const kid = earsTask()?.kid;
-  return kid ? live(liveKey(kid)) : null;
-}
-
-/** The kid tapped Start or Keep going: the quiet clock starts again. */
-function wakeEars() {
-  ears.asleep = false;
-  ears.from = performance.now();
-}
-
-function onEarsFrame(listener, events, now) {
-  if (ears.run?.listener !== listener) return;
-  if (!earsTask() || (!timer.running && !ears.asleep)) { stopEars(); updateEarsUi(); return; }
-  const $b = document.querySelector('.timer .timer-buddy');
-  const beat = ears.beat;
-  const builtin = listener.mode === 'builtin';
-  const piano = pianoNow(listener, now);
-  const dancing = piano && beat.following(now);
-  for (const ev of events) {
-    if (ev.type === 'onset') {
-      beat.note(ev.at, ev);
-      if (!builtin && !dancing && piano && !ears.asleep) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
-    } else if (ev.type === 'piano' && builtin && !dancing) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
-  }
-  const lead = danceLead();
-  for (const b of beat.beats(now, listener.state.loud, lead)) {
-    if (!piano || ears.asleep) continue;
-    atBeat(b, lead, now, () => {
-      if (ears.run?.listener !== listener) return;
-      danceBeat(ears, document.querySelector('.timer .timer-buddy'), null, beat.period);
-      earsBuddy()?.beat(beat.period);
-    });
-  }
-
-  if (!ears.run.running) {
-    // Chrome keeps the sound off until the screen is tapped (after the app reopened)
-    ears.from = now;
-  } else if (ears.asleep) {
-    if (piano) {
-      // playing again wakes the buddy, and the timer carries on
-      Object.assign(ears, { asleep: false, woke: now, from: now, mood: 'playing' });
-      earsBuddy()?.surprise();
-      startTimer();
-      updateEarsUi(now);
-      return;
-    }
-    if (now - ears.asleepAt > EARS_NAP) { stopEars(); timer.wakeLock?.release?.().catch(() => {}); timer.wakeLock = null; render(); return; }
-  }
-  // seconds with no piano, counted from when listening (or the timer) last started
-  const since = Math.min(listener.since(now), (now - ears.from) / 1000);
-  ears.mood = ears.asleep ? 'asleep'
-    : ears.google ? buddyState(since, listener.state.lastPiano != null)
-      : piano ? 'playing' : 'waiting';
-  if (ears.mood === 'asleep' && !ears.asleep && timer.running) {
-    // a minute with no piano: the buddy falls asleep and the timer pauses (still
-    // listening, with the screen on, so playing wakes it)
-    ears.asleep = true;
-    ears.asleepAt = now;
-    stopTimer(false);
-    grabWakeLock();
-    render();
-    updateEarsUi(now);
-    return;
-  }
-  if (now - ears.lastUi > 100) { ears.lastUi = now; updateEarsUi(now); }
-}
-
-/**
- * How the timer page's buddy feels: listening for the piano, swaying to playing
- * with no steady beat, dancing (and humming) on the kid's beat, bored, asleep.
- */
-function timerFeel(mood, dancing = false) {
-  if (mood === 'playing') return dancing ? { valence: 0.95, arousal: 0.9, dance: 1, sing: 0.6, notes: true } : { valence: 0.85, arousal: 0.6, listen: 1 };
-  if (mood === 'waiting') return { valence: 0.5, arousal: 0.5, curious: 0.35 };
-  if (mood === 'bored') return { valence: -0.3, arousal: 0.2, sleep: 0.3 };
-  if (mood === 'asleep') return { valence: 0.1, arousal: 0.1, sleep: 1 };
-  return timer.running ? { valence: 0.75, arousal: 0.6 } : { valence: 0.6, arousal: 0.5 };
-}
-
-/**
- * The line under the buddy. It stays empty while the buddy listens or dances: it
- * only speaks up when the buddy is bored or asleep, or can't hear at all.
- */
-function earsText() {
-  if (ears.error === 'blocked') return 'I can’t hear you: the microphone is blocked. Ask a parent.';
-  if (ears.error === 'nomic') return 'I can’t hear you: no microphone was found.';
-  if (ears.error) return 'I can’t hear you right now. Try Pause, then Keep going.';
-  if (ears.asleep) return 'Asleep, so the timer is paused. Play to wake me up!';
-  if (ears.run && !ears.run.running) return 'Tap the screen so I can hear you!';
-  if (ears.run && ears.mood === 'bored') return 'I haven’t heard the piano in a while…';
-  return '';
-}
-
-function updateEarsUi(now = performance.now()) {
-  const $text = document.getElementById('ears-text');
-  if (!$text) return;
-  const text = earsText();
-  if ($text.textContent !== text) $text.textContent = text;
-  $text.hidden = !text;
-  const listener = ears.run?.listener;
-  const $b = document.querySelector('.timer .timer-buddy');
-  if (!(listener && pianoNow(listener, now) && ears.beat.following(now))) danceRest($b);
-  const kid = earsTask()?.kid;
-  const $sprite = $b?.querySelector('.timer-sprite');
-  if (!$sprite || !kid) return;
-  // the page keeps what it shows (a redraw may leave it be), so compare with the page
-  const mood = ears.run || ears.asleep ? ears.mood || 'waiting' : '';
-  if (mood !== $sprite.dataset.mood) $sprite.dataset.mood = mood;
-  feel(liveKey(kid), timerFeel(mood, Boolean(listener && pianoNow(listener, now) && ears.beat.following(now))));
-  // what it says (a cheer from a tap stays until it fades)
-  const say = now - ears.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';
-  const $say = $b.querySelector('.timer-bubble');
-  const mine = $say.dataset.ears || '';
-  if (say && (say !== mine || !$b.classList.contains('talking'))) { $say.textContent = say; $b.classList.add('talking'); }
-  else if (!say && mine && $say.textContent === mine) $b.classList.remove('talking');
-  $say.dataset.ears = say;
-}
 
 // ---------- views ----------
 
@@ -2024,338 +1426,6 @@ function exerciseSection(kid, tasks, entry) {
       </section>`;
 }
 
-function viewTimer() {
-  const kid = kidById(ui.kidId);
-  const task = kid && taskById(kid, today(), ui.taskId);
-  if (!task) { ui.view = 'kid'; return viewKid(); }
-  const done = entryFor(state, kid.id, today())?.tasks?.[task.id]?.seconds || 0;
-  const total = task.minutes * 60;
-  const naps = 'If the piano stops for a minute, it falls asleep and the timer pauses until you play again.';
-  const tip = task.background
-    ? `You can switch to another app, like Note Rush. The timer keeps counting. Come back here when you’re done.${task.listen ? ` On this screen your buddy listens and dances to your beat. ${naps}` : ''}`
-    : task.listen
-      ? `Keep the tablet on the piano with this screen open. Your buddy listens and dances to your beat. ${naps} The timer also pauses if you leave the app.`
-      : 'Keep the tablet near the piano with this screen open. The timer pauses if you leave the app.';
-  const mood = task.listen && (ears.run || ears.asleep) ? ears.mood || 'waiting' : '';
-  return `
-    <div class="screen timer center" style="--kid:${kid.color}">
-      <header class="kid-head">
-        <button class="btn ghost round" data-action="timer-back" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(task.icon)} ${esc(task.name)}</b><small>${esc(kid.name)}</small></div>
-      </header>
-      <div class="timer-stage">
-        <div class="ring" id="timer-ring" style="--p:${done / total}">
-          <div class="ring-inner">
-            <div class="timer-left" id="timer-left">${mmss(total - done)}</div>
-            <small>${timer.running ? 'Keep playing! 🎶' : ears.asleep ? 'Asleep 💤' : done ? 'Paused' : 'Ready?'}</small>
-          </div>
-        </div>
-        <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
-          <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
-        </button>
-      </div>
-      ${task.listen ? `<p class="timer-ears" id="ears"><b id="ears-text" aria-live="polite"${earsText() ? '' : ' hidden'}>${esc(earsText())}</b></p>` : ''}
-      <button class="btn huge" data-action="${timer.running ? 'timer-pause' : 'timer-start'}">${timer.running ? 'Pause' : done ? 'Keep going' : 'Start practice'}</button>
-      <p class="muted small">${tip}</p>
-    </div>`;
-}
-
-// ---------- piano listening test (parents) ----------
-// A test page to see how well the tablet hears piano playing, before the timer
-// uses it. It shows what the engine in listen.js hears, live. A switch picks who
-// decides what is piano: the built-in engine, Google's recognizer, or both.
-// Every new sound also goes to the beat follower (beat.js): while piano is playing
-// and it finds a beat, the buddy dances on it and a little metronome swings along.
-const listenTest = { run: null, events: [], error: '', settings: null, lastUi: 0, woke: 0, loading: false, beat: null, side: 1 };
-const LISTEN_MODE_KEY = 'kidquest.listenMode';
-const LISTEN_MODES = [['builtin', 'Built-in'], ['google', 'Google'], ['both', 'Both agree']];
-function listenMode() {
-  if (!ui.listenMode) {
-    try { ui.listenMode = localStorage.getItem(LISTEN_MODE_KEY); } catch { /* private window */ }
-    if (!LISTEN_MODES.some(([m]) => m === ui.listenMode)) ui.listenMode = 'google';
-  }
-  return ui.listenMode;
-}
-let lastListenMood = '';
-const LISTEN_MOODS = { playing: 'excited', waiting: 'happy', bored: 'sad', asleep: 'sleepy' };
-const LISTEN_LABELS = { playing: '🎹 Hearing piano', waiting: '👂 Listening…', bored: '😐 Bored (no piano for 30 s)', asleep: '😴 Asleep (the timer would pause)' };
-const LISTEN_SAY = { bored: 'I’m bored… play something!', asleep: 'Zzz…' };
-const LISTEN_BEAT = { none: 'Listening for a beat', free: 'No steady beat (that’s ok)' };
-
-function viewListen() {
-  const kid = kidById(ui.listenKid) || state.kids[0];
-  const buddy = kid?.buddy || { species: 'fox', outfit: {} };
-  const on = !!listenTest.run;
-  const mode = listenMode();
-  lastListenMood = '';
-  return `
-    <div class="screen listen">
-      <header class="top row">
-        <button class="btn ghost round" data-action="listen-back" aria-label="Back">←</button>
-        <h1 class="grow">Piano listening test</h1>
-      </header>
-      ${state.kids.length > 1 ? `<div class="row wrap listen-kids">${state.kids.map((k) => `<button class="btn ${k.id === kid?.id ? '' : 'ghost'}" data-action="listen-kid" data-id="${k.id}">${esc(k.name)}</button>`).join('')}</div>` : ''}
-      <div class="listen-stage">
-        <button class="timer-buddy listen-buddy" aria-label="Buddy">
-          <span class="timer-bubble" id="ls-say" aria-live="polite"></span>
-          <span class="timer-sprite" id="ls-sprite">${buddySvg(buddy, 'happy', { background: false })}</span>
-        </button>
-        <div class="listen-status">
-          <b id="ls-state">${on ? LISTEN_LABELS.waiting : 'Not listening'}</b>
-          <div class="listen-clock"><span id="ls-since">–</span> s since the last piano note</div>
-          <div class="listen-bar" aria-hidden="true"><i id="ls-since-bar"></i><em style="left:50%"></em><em style="left:100%"></em></div>
-          <small class="muted">Bored at ${TUNING.boredAfter} s · asleep at ${TUNING.asleepAfter} s</small>
-          <div class="listen-beat">
-            <div class="listen-metro" id="ls-metro" aria-hidden="true"><i id="ls-arm"></i></div>
-            <div><b id="ls-beat">${on ? LISTEN_BEAT.none : '–'}</b><small class="muted">The buddy dances when it finds your beat</small></div>
-          </div>
-        </div>
-      </div>
-      <div class="listen-modes" role="group" aria-label="Who decides what is piano">
-        <span class="muted small">Who decides:</span>
-        ${LISTEN_MODES.map(([m, label]) => `<button class="btn ${m === mode ? '' : 'ghost'}" data-action="listen-mode" data-mode="${m}" aria-pressed="${m === mode}">${label}</button>`).join('')}
-      </div>
-      <div class="listen-actions">
-        ${listenTest.loading ? '<p class="muted">Loading Google’s sound recognizer (about 25 MB the first time)…</p>'
-    : `<button class="btn huge" data-action="${on ? 'listen-stop' : 'listen-start'}">${on ? 'Stop listening' : 'Start listening'}</button>`}
-      </div>
-      ${listenTest.error ? `<p class="listen-error">${esc(listenTest.error)}</p>` : ''}
-      <div class="card listen-live">
-        <div class="listen-row"><span>Loudness</span><div class="listen-meter"><i id="ls-level"></i><em id="ls-gate"></em></div></div>
-        <div class="listen-row"><span>Last sound</span><b id="ls-last">–</b></div>
-        ${mode === 'builtin' ? '' : `<div class="listen-row"><span>Google hears</span><b id="ls-google">–</b></div>
-        <div class="listen-row"><span>Piano score</span><div class="listen-meter"><i id="ls-gpiano"></i><em style="left:${TUNING.googlePiano * 100}%"></em></div></div>`}
-        <div class="listen-row"><span>Piano notes</span><b id="ls-piano">0</b></div>
-        <div class="listen-row"><span>Other sounds</span><b id="ls-other">0</b></div>
-        <div class="listen-row"><span>Last 60 s</span><div class="listen-line" id="ls-line"></div></div>
-        <small class="muted"><span class="dot piano"></span> piano &nbsp; <span class="dot other"></span> talking or other noise</small>
-        <p class="muted small" id="ls-mic">${listenTest.settings ? micNote(listenTest.settings) : ''}</p>
-      </div>
-      <div class="card">${danceLeadSlider()}</div>
-      <div class="card">
-        <h2>Things to try</h2>
-        <ol class="small listen-tries">
-          <li>Put the tablet on the piano, where it sits during practice, and tap Start.</li>
-          <li>Try each “Who decides” choice: Built-in hears each note at once, Google knows piano from voices best but decides about half a second later, and Both agree counts a note only when both say piano.</li>
-          <li>Play slowly, then fast, then chords. Each note should add a green dot and make the buddy hop.</li>
-          <li>Play a song with a steady beat. After a few notes the buddy should dance on the beat and the metronome should swing with you, sometimes on every other beat. Speed up, slow down, switch songs, or stop for a moment, and see how fast it follows.</li>
-          <li>Noodle around with no beat. The buddy should hop on your notes but not dance (that’s fine).</li>
-          <li>Stop playing and talk near the tablet. Talking should add orange dots and not reset the clock.</li>
-          <li>Have a kid practice while others talk in the room.</li>
-          <li>Stop for 30 seconds (bored), then 60 (asleep), then play one note to wake the buddy.</li>
-          <li>Try very soft playing.</li>
-        </ol>
-        <p class="muted small">Nothing is recorded or saved. Google’s recognizer runs on this tablet too: only the recognizer itself downloads, the sound never leaves the tablet. Listening stops when you leave this page or the app.</p>
-      </div>
-    </div>`;
-}
-
-function micNote(st) {
-  const on = ['echoCancellation', 'noiseSuppression', 'autoGainControl'].filter((k) => st[k] === true);
-  return on.length
-    ? `⚠️ Chrome kept these voice filters on: ${on.join(', ')}. They can hide held piano notes.`
-    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}${st.notesFrom ? ` · notes from ${st.notesFrom}` : ''}${st.latency > 0 ? ` · Chrome says the mic is ${Math.round(st.latency * 1000)} ms behind` : ''}.`;
-}
-
-async function startListenTest() {
-  if (listenTest.run) return;
-  listenTest.error = '';
-  listenTest.events = [];
-  listenTest.beat = createBeatFollower();
-  const mode = listenMode();
-  let recognizer = null;
-  if (mode !== 'builtin') {
-    listenTest.loading = true;
-    render();
-    try {
-      recognizer = await loadRecognizer();
-    } catch (e) {
-      listenTest.error = `Couldn’t load Google’s recognizer, so the built-in one is listening. It needs the internet the first time. (${e?.message || e})`;
-    }
-    listenTest.loading = false;
-    if (ui.view !== 'listen') return;
-  }
-  try {
-    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
-    listenTest.run = await startListening(onListenFrame, { mode, recognizer });
-    listenTest.settings = { ...listenTest.run.settings, sampleRate: listenTest.run.sampleRate, notesFrom: listenTest.run.notesFrom };
-    grabWakeLock();
-  } catch (e) {
-    listenTest.run = null;
-    listenTest.error = e?.name === 'NotAllowedError'
-      ? 'The microphone is blocked. In Chrome, tap the icon left of the web address, then Permissions, and allow the microphone.'
-      : e?.name === 'NotFoundError' || e?.name === 'NoMic' ? 'No microphone was found on this device.'
-        : `Could not start the microphone (${e?.message || e}).`;
-  }
-  render();
-}
-
-function stopListenTest() {
-  listenTest.run?.stop();
-  listenTest.run = null;
-  if (!timer.running) { timer.wakeLock?.release?.().catch(() => {}); timer.wakeLock = null; }
-}
-
-/** Piano is playing now: Google heard piano in the last moment (or, built-in, a piano note did). */
-function pianoNow(listener, now) {
-  if (listener.mode !== 'builtin') return listener.hearingPiano(now);
-  return listener.state.lastPiano != null && now - listener.state.lastPiano < 1500;
-}
-
-/** Restarts one of a buddy's moves: a hop on a note, or a dance step on a beat. */
-function buddyStep($b, cls, ms) {
-  if (!$b) return;
-  $b.classList.remove('hop', 'dance-l', 'dance-r');
-  void $b.offsetWidth;
-  if (ms) $b.style.setProperty('--move', `${Math.round(ms)}ms`);
-  $b.classList.add(cls);
-}
-
-/**
- * A beat (p ms long): the buddy steps to the other side, and the metronome ticks
- * and swings over. st keeps which side it is on.
- */
-// The buddy is seen dancing a little after the kid plays: the mic, the note finder
-// (about 30 ms) and the screen each take their time. The beat follower foretells the beats,
-// so each dance move starts this many ms early and lands on the beat the kid played. The
-// delay differs from tablet to tablet; a parent can change it on the listening test page.
-const DANCE_LEAD_KEY = 'kidquest.danceLead';
-const DANCE_LEAD = { normal: 120, min: 0, max: 400, step: 10 };
-function danceLead() {
-  if (ui.danceLead == null) {
-    let v = null;
-    try { v = localStorage.getItem(DANCE_LEAD_KEY); } catch { /* private window */ }
-    const n = v == null ? NaN : Number(v);
-    ui.danceLead = Number.isFinite(n) ? Math.min(DANCE_LEAD.max, Math.max(DANCE_LEAD.min, n)) : DANCE_LEAD.normal;
-  }
-  return ui.danceLead;
-}
-
-/** The "dance earlier" slider on the listening test page. */
-function danceLeadSlider() {
-  const v = danceLead();
-  return `
-    <label class="dance-lead">
-      <span class="row"><b class="grow">Dance earlier</b><b data-dance-lead-out>${v} ms</b></span>
-      <input type="range" min="${DANCE_LEAD.min}" max="${DANCE_LEAD.max}" step="${DANCE_LEAD.step}" value="${v}" data-dance-lead aria-label="Dance earlier, in milliseconds">
-    </label>
-    <small class="muted">The tablet hears, works out and shows each beat a little late, so the dancing buddy starts each move this much early. Play a steady song: if the buddy bounces just after your notes, slide right; if just before, slide left. It counts for the piano timer on this tablet too (it starts at ${DANCE_LEAD.normal} ms).</small>`;
-}
-
-/** Runs fn when the beat at b (ms, as the follower heard it) should show: lead ms early. */
-function atBeat(b, lead, now, fn) {
-  const wait = b - lead - now;
-  if (wait <= 4) fn();
-  else setTimeout(fn, wait);
-}
-
-function danceBeat(st, $b, $m, p) {
-  st.side = -(st.side || 1);
-  buddyStep($b, st.side < 0 ? 'dance-l' : 'dance-r', Math.min(450, p * 0.85));
-  const $arm = $m?.querySelector('i');
-  if (!$arm) return;
-  $m.classList.remove('tick');
-  void $m.offsetWidth;
-  $m.classList.add('tick', 'on');
-  // it reaches the far side right on the next beat
-  $arm.style.transitionDuration = `${Math.round(p)}ms`;
-  $arm.style.transform = `rotate(${st.side * -26}deg)`;
-}
-
-/** No beat: the metronome comes to rest in the middle and the buddy stands up straight. */
-function danceRest($b, $m) {
-  if ($b && !$b.classList.contains('hop')) $b.classList.remove('dance-l', 'dance-r');
-  const $arm = $m?.querySelector('i');
-  if (!$arm || !$m.classList.contains('on')) return;
-  $m.classList.remove('on');
-  $arm.style.transitionDuration = '600ms';
-  $arm.style.transform = 'rotate(0deg)';
-}
-
-function onListenFrame(listener, events, now) {
-  const wasAsleep = lastListenMood === 'asleep';
-  const builtin = listener.mode === 'builtin';
-  const beat = listenTest.beat;
-  const piano = pianoNow(listener, now);
-  // with a beat to follow, the buddy dances on the beat; without one, it hops on each note
-  const dancing = piano && !!beat?.following(now);
-  for (const ev of events) {
-    if (ev.type === 'onset') {
-      beat?.note(ev.at, ev);
-      // Google decides about half a second late, so with it the buddy hops on each
-      // new sound while Google is hearing piano
-      if (!builtin && !dancing && listener.hearingPiano(now)) buddyStep(document.querySelector('.listen-buddy'), 'hop');
-      continue;
-    }
-    listenTest.events.push(ev);
-    if (ev.type === 'piano') {
-      if (builtin && !dancing) buddyStep(document.querySelector('.listen-buddy'), 'hop');
-      if (wasAsleep) listenTest.woke = now;
-    }
-  }
-  // beats come due between frames; one step per frame, and only while piano is playing
-  const lead = danceLead();
-  for (const b of beat?.beats(now, listener.state.loud, lead) || []) {
-    if (!pianoNow(listener, now)) continue;
-    atBeat(b, lead, now, () => {
-      if (listenTest.run?.listener !== listener) return;
-      danceBeat(listenTest, document.querySelector('.listen-buddy'), document.getElementById('ls-metro'), beat.period);
-    });
-  }
-  if (!builtin && wasAsleep && listener.hearingPiano(now)) listenTest.woke = now;
-  while (listenTest.events.length && now - listenTest.events[0].at > 60000) listenTest.events.shift();
-  if (now - listenTest.lastUi > 100) { listenTest.lastUi = now; updateListenUi(listener, now); }
-}
-
-function updateListenUi(listener, now) {
-  const $ = (id) => document.getElementById(id);
-  if (!$('ls-state')) return;
-  const st = listener.state;
-  const since = listener.since(now);
-  const mood = buddyState(since, st.lastPiano != null);
-  $('ls-state').textContent = LISTEN_LABELS[mood];
-  $('ls-since').textContent = Math.floor(since);
-  $('ls-since-bar').style.width = `${Math.min(100, (since / TUNING.asleepAfter) * 100)}%`;
-  const pct = (dbv) => Math.max(0, Math.min(100, (dbv + 80) * 1.25));
-  $('ls-level').style.width = `${pct(st.level)}%`;
-  $('ls-level').classList.toggle('loud', !!st.loud);
-  $('ls-gate').style.left = `${pct(st.floor + TUNING.gate)}%`;
-  if (st.last) {
-    $('ls-last').textContent = st.last.type === 'piano'
-      ? `Piano${st.last.note ? ` · ${st.last.note}` : ''}`
-      : 'Not piano (talking or noise)';
-    const f = st.last.f || {};
-    $('ls-last').title = `built-in: ${st.last.local ? 'piano' : 'not piano'} (wobble ${f.wobble?.toFixed(1) ?? '–'} cents, clean ${f.tonal?.toFixed(2)}, growth ${f.growth?.toFixed(1)} dB)${st.last.google != null ? `; Google: ${st.last.google ? 'piano' : 'not piano'}` : ''}`;
-  }
-  const g = st.google;
-  if (g && $('ls-google')) {
-    $('ls-google').textContent = g.top.map((c) => `${c.name} ${Math.round(c.score * 100)}%`).join(' · ');
-    $('ls-gpiano').style.width = `${Math.min(100, g.piano * 100)}%`;
-    $('ls-gpiano').classList.toggle('loud', g.isPiano);
-  }
-  $('ls-piano').textContent = st.pianoNotes;
-  $('ls-other').textContent = st.otherSounds;
-  const beat = listenTest.beat;
-  const piano = pianoNow(listener, now);
-  const dancing = piano && !!beat?.following(now);
-  $('ls-beat').textContent = dancing ? `Dancing at about ${beat.bpm} beats a minute` : piano ? LISTEN_BEAT.free : LISTEN_BEAT.none;
-  if (!dancing) danceRest(document.querySelector('.listen-buddy'), $('ls-metro'));
-  $('ls-line').innerHTML = listenTest.events
-    .map((e) => `<span class="dot ${e.type}" style="left:${100 - ((now - e.at) / 60000) * 100}%"></span>`).join('');
-  const say = now - listenTest.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';
-  const $say = $('ls-say');
-  if ($say.textContent !== say) $say.textContent = say;
-  $say.parentElement.classList.toggle('talking', !!say);
-  if (mood !== lastListenMood) {
-    lastListenMood = mood;
-    const kid = kidById(ui.listenKid) || state.kids[0];
-    $('ls-sprite').innerHTML = buddySvg(kid?.buddy || { species: 'fox', outfit: {} }, LISTEN_MOODS[mood], { background: false });
-    $('ls-sprite').parentElement.classList.toggle('bobbing', mood === 'playing' || mood === 'waiting');
-  }
-  if (listenTest.settings && $('ls-mic') && !$('ls-mic').textContent) $('ls-mic').textContent = micNote(listenTest.settings);
-}
-
 function viewWardrobe() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
@@ -2943,7 +2013,7 @@ const actions = {
     if (was) startListenTest();
   },
   'listen-stop': () => { stopListenTest(); render(); },
-  'listen-kid': (el) => { ui.listenKid = el.dataset.id; lastListenMood = ''; render(); },
+  'listen-kid': (el) => { ui.listenKid = el.dataset.id; setLastListenMood(''); render(); },
   'parent-exit': () => { ui.view = 'home'; ui.editKidId = null; render(); },
   tab: (el) => { ui.tab = el.dataset.tab; ui.editKidId = null; render(); },
   approve: (el) => approve(el.dataset.kid, el.dataset.key, el.dataset.task),
@@ -3271,301 +2341,12 @@ function importFile(file) {
       title: 'Restore backup?',
       text: `This replaces everything on this tablet with the backup (${data.kids.length} kids). The parent PIN becomes the one from the backup.`,
       yes: 'Restore', danger: true,
-      onYes: () => { state = migrate(data); setSound(state.settings.sound); save(); ui.view = 'home'; render(); toast('Backup restored'); },
+      onYes: () => { setState(migrate(data)); setSound(state.settings.sound); save(); ui.view = 'home'; render(); toast('Backup restored'); },
     });
   });
 }
 
-// ---------- family sync ----------
-
-let pendingRemote = null;
-
-// One shared load: the settings screen, a join and startup may all ask at once.
-let cloudLoading = null;
-function loadCloud() {
-  cloudLoading ||= import('./cloud.js')
-    .then(async (mod) => { await mod.connect(); cloud.mod = mod; return mod; })
-    .catch((err) => { cloudLoading = null; throw err; });
-  return cloudLoading;
-}
-
-function onCloudStatus({ pending, error }) {
-  const before = `${cloud.pending}|${cloud.error}`;
-  if (pending !== undefined) cloud.pending = pending;
-  if (error !== undefined) cloud.error = error;
-  if (`${cloud.pending}|${cloud.error}` !== before && ui.view === 'parent' && ui.tab === 'settings') render();
-}
-
-async function startCloud() {
-  let mod;
-  try {
-    mod = await loadCloud();
-  } catch (err) {
-    console.error(err);
-    onCloudStatus({ error: 'Could not load sync. It will try again next time the app opens.' });
-    return;
-  }
-  if (!mod.currentUser()) {
-    cloud.signedOut = true;
-    render();
-    return;
-  }
-  if (cloud.queued) {
-    const { before, after } = cloud.queued;
-    cloud.queued = null;
-    mod.writeChanges(cloudCfg.familyId, mod.changesBetween(before, after), before, after, onCloudStatus);
-  }
-  cloud.ready = true;
-  mod.startSync(cloudCfg, { onState: applyRemote, onStatus: onCloudStatus });
-  if (cloudCfg.role === 'kid') {
-    mod.watchBuddies(cloudCfg.familyId, (list) => {
-      if (stableJson(list) === stableJson(family.buddies)) return;
-      family.buddies = list;
-      try { localStorage.setItem(BUDDIES_KEY, JSON.stringify(list)); } catch { /* only a cache */ }
-      if (ui.view === 'kid' && $modal.hidden) render();
-    });
-  }
-}
-
-// A newer state from the family (another device, or this one's writes coming back).
-function applyRemote(next) {
-  cloud.gotState = true;
-  for (const k of DEVICE_SETTINGS) {
-    if (k in state.settings) next.settings[k] = state.settings[k];
-    else delete next.settings[k];
-  }
-  if (stableJson(next) === stableJson(state)) return;
-  // don't swap the data under an open dialog; apply it when the dialog closes
-  if (!$modal.hidden) { pendingRemote = next; return; }
-  state = next;
-  store.replace(state);
-  if (ui.view === 'setup' && state.settings.pinHash) ui.view = 'home';
-  if (ui.view !== 'timer') render();
-}
-
-function familyCard() {
-  if (!cloudCfg) {
-    return `
-    <div class="card">
-      <h2>Family sync</h2>
-      <p class="muted small">Keep progress safe in the cloud and share it between each kid's tablet and the parents' phones. Start the family on a parent's phone, then join each kid's tablet with a code.</p>
-      <div class="row wrap">
-        <button class="btn" data-action="family-create">Start a family</button>
-        <button class="btn ghost" data-action="family-join">Join with a code</button>
-      </div>
-    </div>`;
-  }
-  const who = cloudCfg.role === 'kid' ? `${esc(kidById(cloudCfg.kidId)?.name || 'A kid')}'s device` : `a parent (${esc(cloudCfg.email || 'signed in')})`;
-  const status = cloud.signedOut ? '⚠️ This device was signed out of the family. Stop syncing, then join again with a new code.'
-    : cloud.error ? `⚠️ Sync problem: ${esc(cloud.error)}`
-      : cloud.pending ? `⏳ ${navigator.onLine ? 'Saving to the cloud…' : 'Offline. Changes are kept here and will sync when back online.'}`
-        : '✅ Synced';
-  return `
-    <div class="card">
-      <h2>Family sync</h2>
-      <p class="small">This device syncs with your family as ${who}.</p>
-      <p class="muted small">${status}</p>
-      ${cloudCfg.role === 'parent' ? `
-      <div class="row wrap">
-        <button class="btn" data-action="family-invite-kid">Add a kid's device</button>
-        <button class="btn ghost" data-action="family-invite-parent">Add a parent</button>
-      </div>` : ''}
-      <button class="btn ghost" data-action="family-leave">Stop syncing on this device</button>
-    </div>`;
-}
-
-// A plain reason for a Firebase error, plus its code so a parent can pass it on.
-function cloudProblem(err, fallback) {
-  const code = err?.code || '';
-  const why = code === 'permission-denied' ? 'The family database turned this down. The Firestore security rules may not be published yet (Firebase console › Firestore › Rules).'
-    : code === 'unavailable' || !navigator.onLine ? 'Could not reach the cloud. Check the Wi-Fi and try again.'
-      : code.startsWith('auth/') ? 'Google sign-in did not finish. Check that Google sign-in is turned on and this site is an authorized domain in Firebase.'
-        : fallback;
-  return code ? `${why} (${code})` : why;
-}
-
-function busyModal(text) {
-  openModal(`<div data-sticky class="celebrate"><h2>${esc(text)}</h2><p class="muted">Keep the app open.</p></div>`);
-}
-
-function errorModal(title, text) {
-  openModal(`
-    <div class="celebrate">
-      <h2>${esc(title)}</h2>
-      <p>${esc(text)}</p>
-      <button class="btn" data-action="modal-close">OK</button>
-    </div>`);
-}
-
-// Switch this device to the family and restart the app on the cloud copy.
-function finishJoin(cfg, cacheState) {
-  localStorage.setItem(CLOUD_KEY, JSON.stringify(cfg));
-  if (cacheState) localStorage.setItem(CLOUD_CACHE_KEY, JSON.stringify(cacheState));
-  else localStorage.removeItem(CLOUD_CACHE_KEY);
-  window.location.reload();
-}
-
-async function familyCreate() {
-  if (!navigator.onLine) { errorModal('You are offline', 'Connect to Wi-Fi to start a family.'); return; }
-  let mod;
-  let user;
-  try {
-    mod = await loadCloud();
-    user = await mod.signInParent();
-  } catch (err) {
-    console.error(err);
-    errorModal('Sign-in did not finish', `Try again. If no Google window appears, allow pop-ups for this site.${err?.code ? ` (${err.code})` : ''}`);
-    return;
-  }
-  try {
-    busyModal('Checking your account…');
-    const existing = await mod.findFamily();
-    closeModal();
-    if (existing) {
-      confirmModal({
-        title: 'You already have a family',
-        text: `${user.email} is already in a family. Connect this device to it as a parent? This device's own data stays saved here and is not uploaded.`,
-        yes: 'Connect',
-        onYes: () => finishJoin({ ...existing, email: user.email }, null),
-      });
-      return;
-    }
-    confirmModal({
-      title: 'Start a family?',
-      text: `This uploads this device's settings, parent PIN${state.kids.length ? ` and ${state.kids.map((k) => k.name).join(', ')}` : ''} to your family's cloud, signed in as ${user.email}. A backup file is saved first.`,
-      yes: 'Start family',
-      onYes: async () => {
-        actions.export();
-        busyModal('Uploading…');
-        try {
-          const cfg = await mod.createFamily(state);
-          finishJoin({ ...cfg, email: user.email }, state);
-        } catch (err) {
-          console.error(err);
-          closeModal();
-          if (err?.code === 'permission-denied') {
-            errorModal('This account can’t start a family', `Only Google accounts on the family’s allowed list can start a family. If you are already in a family, ask a parent for a code instead. (${user.email})`);
-          } else {
-            errorModal('That did not work', `Nothing changed on this device. ${cloudProblem(err, 'Try again in a moment.')}`);
-          }
-        }
-      },
-    });
-  } catch (err) {
-    console.error(err);
-    closeModal();
-    errorModal('That did not work', cloudProblem(err, 'Check the connection and try again.'));
-  }
-}
-
-function familyJoin() {
-  openModal(`
-    <div class="celebrate">
-      <h2>Join your family</h2>
-      <p class="muted">On a parent's device, open Parents › Settings › Family sync and tap "Add a kid's device" or "Add a parent" to get a code.</p>
-      <input class="code-input" data-join-code autocomplete="off" autocapitalize="characters" placeholder="Code" maxlength="12">
-      <div class="stack">
-        <button class="btn huge" data-action="family-join-go">Join</button>
-        <button class="btn ghost" data-action="modal-close">Cancel</button>
-      </div>
-    </div>`);
-  loadCloud().catch(() => {});
-  setTimeout(() => $modal.querySelector('[data-join-code]')?.focus(), 50);
-}
-
-async function familyJoinGo() {
-  const input = $modal.querySelector('[data-join-code]');
-  let mod;
-  try { mod = await loadCloud(); } catch { errorModal('You are offline', 'Connect to Wi-Fi and try again.'); return; }
-  const code = mod.normalizeCode(input?.value);
-  const role = mod.codeRole(code);
-  if (!role || code.length < 6) { toast('That code doesn’t look right. Check it and try again.'); return; }
-  if (role === 'kid' && state.kids.length > 1) {
-    errorModal('More than one kid here', 'A kid’s device should hold just that kid. Use this device as a parent instead, or remove the extra kids first.');
-    return;
-  }
-  let user;
-  try {
-    user = role === 'parent' ? await mod.signInParent() : await mod.signInDevice();
-  } catch (err) {
-    console.error(err);
-    errorModal('Sign-in did not finish', `Try again. If no Google window appears, allow pop-ups for this site.${err?.code ? ` (${err.code})` : ''}`);
-    return;
-  }
-  if (role === 'kid' && state.kids.length) actions.export();
-  busyModal(role === 'kid' && state.kids.length ? `Uploading ${state.kids[0].name}'s progress…` : 'Joining…');
-  try {
-    const cfg = await mod.joinFamily(code, state);
-    finishJoin({ ...cfg, email: role === 'parent' ? user.email : null }, role === 'kid' && state.kids.length ? state : null);
-  } catch (err) {
-    console.error(err);
-    closeModal();
-    const msg = err.code === 'bad-code' ? 'That code is wrong or has expired. Ask for a new one.'
-      : err.code === 'which-kid' ? err.message
-        : err.code === 'check-failed' ? 'The upload did not check out, so this device keeps using its own copy. Try again later.'
-          : `Nothing changed on this device. ${cloudProblem(err, 'Check the connection and try again.')}`;
-    errorModal('Could not join', msg);
-  }
-}
-
-async function familyInvite(role) {
-  let kidId = null;
-  if (role === 'kid') {
-    openModal(`
-      <div class="celebrate">
-        <h2>Add a kid's device</h2>
-        <p class="muted">Whose device is it?</p>
-        <div class="stack">
-          <button class="btn" data-action="family-invite-for" data-kid="">A kid whose progress is on that device</button>
-          ${state.kids.map((k) => `<button class="btn ghost" data-action="family-invite-for" data-kid="${k.id}">${esc(k.name)} (already in the family)</button>`).join('')}
-          <button class="btn ghost" data-action="modal-close">Cancel</button>
-        </div>
-      </div>`);
-    return;
-  }
-  showCode(role, kidId);
-}
-
-async function showCode(role, kidId) {
-  busyModal('Making a code…');
-  try {
-    const mod = await loadCloud();
-    const code = await mod.makeJoinCode(cloudCfg.familyId, role, kidId);
-    const pretty = `${code.slice(0, 4)}-${code.slice(4)}`;
-    closeModal();
-    openModal(`
-      <div class="celebrate">
-        <h2>Join code</h2>
-        <p class="join-code">${pretty}</p>
-        <p class="muted">${role === 'parent'
-    ? 'On the other parent’s phone, open Kid Quest, tap "Join your family with a code" (or Parents › Settings › Family sync), enter this code, and sign in with Google.'
-    : 'On the kid’s device, open Kid Quest, go to Parents › Settings › Family sync, tap "Join with a code" and enter this code.'} It works for 30 minutes.</p>
-        <button class="btn" data-action="modal-close">Done</button>
-      </div>`);
-  } catch (err) {
-    console.error(err);
-    closeModal();
-    errorModal('Could not make a code', cloudProblem(err, 'Try again in a moment.'));
-  }
-}
-
-function familyLeave() {
-  confirmModal({
-    title: 'Stop syncing on this device?',
-    text: 'This device goes back to the copy it had before joining. Everything stays safe in the family cloud, and you can join again with a new code.',
-    yes: 'Stop syncing', danger: true,
-    onYes: async () => {
-      try {
-        const mod = await loadCloud();
-        mod.stopSync();
-        await mod.signOutDevice();
-      } catch { /* offline: still leave */ }
-      localStorage.removeItem(CLOUD_KEY);
-      localStorage.removeItem(CLOUD_CACHE_KEY);
-      window.location.reload();
-    },
-  });
-}
+// ---------- family sync (see sync-ui.js) ----------
 
 Object.assign(actions, {
   'family-create': () => familyCreate(),
@@ -3612,72 +2393,7 @@ actions.visitor = (el) => {
   if (!v || !doMove(el, { ...v, buddy: dressedVisitor(v) })) { sounds.tap(); live(`visit:${el.dataset.id}`).giggle(); }
 };
 
-// ---------- playing with a visitor ----------
-// What there is to play with a visitor: the game for the ball or stick the
-// kid's buddy is holding, the visitor's own game (the one on their field, or a
-// ball game they own, the same one all day), and always tag. More than one
-// and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
-// gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
-const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
-// the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
-const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod' };
-const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod' };
-/** True when the kid would play with the visitor's gear: they don't own that kind. */
-const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
-/** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
-const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).map((m) => m.move.id);
-const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
-// Chest games keep until the end of the next day (carriedGames).
-// Saturday also brings free games, which are not tied to the chest.
-const chestGames = (kid, day) => (entryFor(state, kid.id, day)?.chest?.games || 0) + freeGamesOn(day);
-// A log with no cap is from before the limit dropped from 8 to 4, so yesterday's daily games were 8 (plus exercise).
-const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks) + OLD_GAMES_PER_DAY - GAMES_PER_DAY);
-const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));
-// Before today's chores are done, only last night's carried chest games can be played.
-const playableFor = (kid, complete = dayStatus(state, kid, today(), today()).complete) =>
-  complete ? gamesLeftFor(kid) : Math.min(gamesLeftFor(kid), earlyGames(kid, today(), carriedFor(kid)));
-
-/** The game the kid's buddy is holding a ball or stick for, if any. */
-function heldGame(kid) {
-  const item = itemById(kid.buddy?.outfit?.sport);
-  return item && PLAY_KINDS.includes(item.kind) ? item.kind : null;
-}
-
-/** Who does what on the kid's map today (see planVisits): the kid's held gear gets its own field. */
-function visitPlan(kid, visitors) {
-  return planVisits(kid.id, visitors.map((v) => ({ id: v.id, gear: bestGear(v.owned) })), today(), heldGame(kid));
-}
-
-/** Fishing when the kid's buddy is holding a fishing rod (there's no field for it: the lake is in the game). */
-function heldRod(kid) {
-  return itemById(kid.buddy?.outfit?.sport)?.kind === 'rod' ? 'fishing' : null;
-}
-
-function gamesWith(kid, v, plan) {
-  const area = plan.areas.find((a) => a.members.includes(v.id));
-  // a visitor fishing at the village pond goes fishing with you
-  const theirs = area && PLAY_KINDS.includes(area.kind) ? area.kind : area?.kind === 'pond' ? 'fishing' : visitGame(v);
-  // a visitor only lends their gear for a couple of games a day
-  const lent = borrows(kid, theirs) && lendLeft(kid, today(), GEAR_KEY[theirs]) === 0 ? null : theirs;
-  return [...new Set([heldGame(kid) || heldRod(kid), lent, 'tag'].filter(Boolean))];
-}
-
-function pickGame(kid, v, games) {
-  const held = heldGame(kid) || heldRod(kid);
-  const note = (k) => (k === 'tag' ? 'No gear needed' : k === held ? `With your ${GEAR_WORD[k]}` : `With ${esc(v.name)}'s ${GEAR_WORD[k]}`);
-  const lend = games.find((k) => k !== held && borrows(kid, k));
-  const invite = lend
-    ? `<p class="visitor-invite">${esc(v.name)}: "Do you want to play? I brought my ${GEAR_NAME[lend]}! I'll share with you for a couple of games so you can try it!"</p>`
-    : '';
-  openModal(`
-    <h2>Play with ${esc(v.name)}</h2>
-    ${invite}
-    <div class="game-pick">
-      ${games.map((k) => `<button class="btn" data-action="play-pick" data-kind="${k}" data-id="${esc(v.id)}" data-host="${esc(kid.id)}">${GAME_NAMES[k]}<small>${note(k)}</small></button>`).join('')}
-    </div>
-    <button class="btn ghost" data-action="modal-close">Not now</button>`);
-}
+// ---------- playing with a visitor (see play-ui.js) ----------
 
 // the leaderboard's This week / All time tabs
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
@@ -3762,51 +2478,6 @@ actions['game-test'] = (el) => {
     sounds,
   });
 };
-
-function playWith(kid, v, kind) {
-  const kid0 = kid; // callbacks run later: look the kid up again each time
-  const gear = bestGear(v.owned);
-  const best = kid.playBest?.[kind] || 0;
-  openPlay({
-    kind,
-    best,
-    kid: { buddy: kid.buddy, name: kid.name, gear: bestGear(kid.owned || []), moves: moveIds(mover(kid)) },
-    visitor: { buddy: v.buddy, name: v.name, gear, moves: moveIds(v) },
-    map: kidTheme(kid),
-    day: today(),
-    sounds,
-    gamesLeft: () => playableFor(currentKid(kid0)),
-    onStart: () => {
-      const kid = currentKid(kid0);
-      if (borrows(kid, kind)) kid.lendLog = logLend(kid, today(), GEAR_KEY[kind]);
-      kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
-      save();
-    },
-    // the map's bubbles change when the games run out
-    onClose: () => render(),
-    onScore: (score) => {
-      const kid = currentKid(kid0);
-      kid.playBest = { ...(kid.playBest || {}), [kind]: score };
-      save();
-    },
-    // every game's score counts toward this week's family chart (the chart on the house wall)
-    onOver: (score) => {
-      const kid = currentKid(kid0);
-      const week = recordWeekBest(kid, kind, score, today());
-      if (week !== kid.gameBests) { kid.gameBests = week; save(); }
-    },
-    // fishing: the biggest of each kind of fish goes in the fish book (in the house)
-    onCatch: (c) => {
-      const kid = currentKid(kid0);
-      const sp = catchSpecies(c.map, c.kind);
-      const got = sp && recordCatch(kid.fishRecords, { species: sp.id, size: c.size, points: c.points, date: today() });
-      if (!got?.isNew) return null;
-      kid.fishRecords = got.records;
-      save();
-      return got.first ? 'first' : 'record';
-    },
-  });
-}
 
 // Fishing visitors now and then reel in something from the pond: what bites depends on the map.
 function fishBite() {
@@ -3923,6 +2594,15 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => reg.update()).catch(() => {});
 }
 navigator.storage?.persist?.().catch(() => {});
+
+// what the modules split out of app.js share (see ctx.js)
+provide({
+  ui, $modal, today, esc, kidById, taskById, liveKey, dressed,
+  save, render, viewKid, markDone, askParentNowOrLater,
+  toast, actions, openModal, closeModal, confirmModal,
+  cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY,
+  currentKid, buddyHtml, progressFor, mover, doMove, exerciseInfo, kidTheme,
+});
 
 restoreTimer();
 render();
