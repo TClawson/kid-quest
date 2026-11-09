@@ -17,7 +17,8 @@ function layout(vw, vh) {
 }
 
 /**
- * opts: { kid, visitor: { buddy, name, gear }, kind, best, sounds, onScore(score): a new best, onOver(score): any game's end }
+ * opts: { kid, visitor: { buddy, name, gear }, kind, best, sounds, onScore(score): a new best, onOver(score): any game's end,
+ *   onCatch(fish): fishing only, the kid landed a fish (see Fishing) }
  * Returns a function that closes the screen.
  */
 export function openPlay(opts) {
@@ -42,7 +43,7 @@ export function openPlay(opts) {
 
   const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : Play;
   // fishing: the lake for the kid's map, and today's bait odds
-  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000 });
+  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch });
   root.game = game; // for tests
   // fishing draws its lake and fish with finer pixels
   if (game.Z) { field.width = W * game.Z; field.height = H * game.Z; }

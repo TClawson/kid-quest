@@ -275,9 +275,15 @@ export function baitPic(map, bait, Z = 1) { return baitArt(spotFor(map).baits?.[
 
 // ---------- the game ----------
 export class Fishing {
-  /** opts: { W, H, kid, visitor, best, seed, map: Places background id, day: date string } */
+  /**
+   * opts: { W, H, kid, visitor, best, seed, map: Places background id, day: date string,
+   *   onCatch({ kind, size, points, map }): the kid landed a fish (size in inches); answers
+   *   'first' (a new fish for the kid's fish book), 'record' (bigger than the old record) or null }
+   */
   constructor(opts) {
     this.kind = 'fishing';
+    this.onCatch = opts.onCatch || null;
+    this.records = 0; // new fish-book records this session
     this.Z = 2; // the lake and fish are drawn with Z fine pixels for each game pixel
     this.map = opts.map;
     this.W = opts.W; this.H = opts.H;
@@ -955,7 +961,11 @@ export class Fishing {
     const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special' };
     this.points[c.who] += c.points;
     this.catches.push(c);
-    if (c.who === 'kid') { this.showCatch = c; this.sound = 'goal'; }
+    if (c.who === 'kid') {
+      this.showCatch = c; this.sound = 'goal';
+      const got = this.onCatch?.({ kind: f.likeKey, size: f.inches, points: c.points, map: this.map });
+      if (got === 'first' || got === 'record') { c.record = got; this.records += 1; }
+    }
     this.pop(c.who === 'kid' ? `+${c.points}` : `${this.vis.name}: ${f.name} +${c.points}`, c.who === 'kid' ? L.who.x + 10 : this.W / 2, this.surface - 30, '#b2f2bb', true);
     L.who.brain.set({ ...HAPPY, valence: 1, arousal: 0.8 });
   }
@@ -1034,7 +1044,7 @@ export class Fishing {
   }
 
   restart() {
-    this.phase = 'ready'; this.left = GAME_SECONDS; this.overtime = 0; this.points = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false;
+    this.phase = 'ready'; this.left = GAME_SECONDS; this.overtime = 0; this.points = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false; this.records = 0;
     this.ai.next = this.t + 2;
   }
 
@@ -1198,6 +1208,16 @@ export class Fishing {
       ctx.drawImage(c.pic, W / 2 - (c.pic.width * z) / 2, cy + u * 1.2, c.pic.width * z, c.pic.height * z);
       text(`${c.who === 'kid' ? this.kid.name : this.vis.name} caught a ${c.name}!`, W / 2, cy + ch - u * 3.2, u * 1.6, '#ffd43b');
       text(`${c.inches} inches · +${c.points} points${c.rare ? ' · RARE!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare ? '#ffd43b' : '#ffffff');
+      // a new record for the fish book in the house: a ribbon across the card's corner
+      if (c.record) {
+        const label = c.record === 'first' ? 'NEW FISH!' : 'NEW RECORD!';
+        const rw = u * (c.record === 'first' ? 9 : 11); const rh = u * 2;
+        const rx = cx + cw - rw + u * 1; const ry = cy - u * 0.9;
+        ctx.fillStyle = '#2f9e44'; ctx.fillRect(rx, ry, rw, rh);
+        ctx.strokeStyle = '#1b1430'; ctx.lineWidth = S * 0.6; ctx.strokeRect(rx, ry, rw, rh);
+        text(label, rx + rw / 2, ry + rh / 2, u * 1.2, '#ffffff');
+        if (Math.floor(this.t * 3) % 2) text(c.record === 'first' ? 'Added to your fish book!' : 'Your biggest one yet!', W / 2, cy + ch + u * 1.3, u * 1.2, '#b2f2bb');
+      }
     }
     if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) text(this.locked ? "That's all our games today!" : 'Pick a bait, then tap CAST!', W / 2, (this.surface + 10) * S, u * 1.8);
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
@@ -1207,7 +1227,7 @@ export class Fishing {
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
       const mine = this.catches.filter((c) => c.who === 'kid');
       text(`Time's up! ${this.points.kid} points`, W / 2, cy - u * 3.2, u * 2.4, '#ffd43b');
-      text(`${mine.length} ${mine.length === 1 ? 'fish' : 'fish'} · ${this.vis.name} got ${this.points.vis}`, W / 2, cy - u * 0.7, u * 1.4, '#e9ecef');
+      text(`${mine.length} fish${this.records ? ` · ${this.records} new in your fish book` : ''} · ${this.vis.name} got ${this.points.vis}`, W / 2, cy - u * 0.7, u * 1.4, '#e9ecef');
       text(this.newBest ? 'New best!' : `Best ${this.best} points`, W / 2, cy + u * 1.5, u * 1.6, this.newBest ? '#b2f2bb' : '#e9ecef');
       if (this.t - this.overAt > 1.2) text('Tap to fish again', W / 2, cy + u * 3.7, u * 1.3, '#ffffff');
     }

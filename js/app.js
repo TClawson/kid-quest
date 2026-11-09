@@ -28,8 +28,11 @@ import { villageHtml, mountVillages, cameOut } from './village.js';
 import { houseHtml, mountHouses, cameIn } from './house.js';
 import { houseChores, shelfLevel, isInside, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
+import { applyGrants } from './grants.js';
 import { furnitureThumb } from './houseart.js';
 import { leaderboard, recordWeekBest, weekOf } from './leaderboard.js';
+import { recordCatch, catchSpecies, bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
+import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
@@ -79,7 +82,13 @@ const store = cloudCfg
 
 function save() {
   try {
-    store.save(state);
+    const { changed, removed } = store.save(state);
+    // A family update held back while a dialog was open is now older than this
+    // device's own data. Applying it when the dialog closes would undo what was
+    // just saved (a kid buys something, then right away buys something else on
+    // top of the old data, and the first purchase is lost). The write we just
+    // sent comes back as a fresh update that holds both, so drop the old one.
+    if (changed.length || removed.length) pendingRemote = null;
   } catch {
     toast('Could not save. Is storage full?');
   }
@@ -1651,6 +1660,8 @@ function houseView(kid, list, mood) {
     shelf: shelfLevel(treasureFound(state.log, kid.id).trophies.size, TROPHIES.length),
     gear: bestGear(kid.owned || []),
     quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
+    tank: tankFish(kid),
+    fish: bookCount(kid.fishRecords).caught,
   });
 }
 
@@ -1658,6 +1669,8 @@ const houseHandlers = {
   onTask: (id, el) => onTaskTap(id, el),
   onTrophies: () => actions.trophies(),
   onLeaderboard: () => openLeaderboard(kidById(ui.kidId)),
+  onTank: () => openTankPicker(kidById(ui.kidId)),
+  onFishBook: () => openFishBook(kidById(ui.kidId)),
   onExit: () => {
     const kid = kidById(ui.kidId);
     if (!kid) return;
@@ -1667,6 +1680,102 @@ const houseHandlers = {
   },
   sound: () => sounds.tap(),
 };
+
+// ---------- the fish book and the fish tank (in the house) ----------
+// The kid's biggest catch of every kind of fish (kid.fishRecords, kept by the fishing game),
+// and the one they picked and named for their tank (kid.tank). See fishbook.js.
+
+const fishImgCache = new Map();
+/** A fish picture as an image URL: in color, or a dark shape for one not caught yet. */
+function fishImg(id, dark = false) {
+  const key = `${id}|${dark}`;
+  if (!fishImgCache.has(key)) {
+    const sp = fishSpecies(id);
+    const pic = fishPic(sp.look, 18, 2);
+    if (dark) {
+      const x = pic.getContext('2d');
+      x.globalCompositeOperation = 'source-in';
+      x.fillStyle = '#6e5a7e';
+      x.fillRect(0, 0, pic.width, pic.height);
+    }
+    fishImgCache.set(key, pic.toDataURL());
+  }
+  return fishImgCache.get(key);
+}
+
+const fishDate = (key) => (key ? new Date(`${key}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
+
+function openFishBook(kid) {
+  if (!kid) return;
+  const recs = kid.fishRecords || {};
+  const { caught, total } = bookCount(recs);
+  const pages = bookPages(recs, kidTheme(kid)).map((page) => {
+    const n = page.fish.filter((f) => f.record).length;
+    return `
+      <div class="fb-map">
+        <h3>🎣 ${esc(page.name)} <small>${n} of ${page.fish.length}</small></h3>
+        <div class="fb-grid ${n ? '' : 'mini'}">
+          ${page.fish.map((f) => (f.record ? `
+            <div class="fb-fish ${f.rare ? 'rare' : ''}">
+              ${kid.tank?.species === f.id ? '<span class="fb-tank" title="In your tank">🐟</span>' : ''}
+              <img src="${fishImg(f.id)}" alt="">
+              <b>${esc(f.name)}</b>
+              <span class="fb-size">${f.record.size} in</span>
+              <small>${esc(fishDate(f.record.date))}</small>
+            </div>` : `
+            <div class="fb-fish none ${f.rare ? 'rare' : ''}" title="${f.rare ? 'A rare fish!' : 'Not caught yet'}">
+              <img src="${fishImg(f.id, true)}" alt="">
+              <b>???</b>
+              <small>${f.rare ? 'A rare fish!' : 'Not caught yet'}</small>
+            </div>`)).join('')}
+        </div>
+      </div>`;
+  }).join('');
+  openModal(`
+    <div class="fishbook" style="--kid:${esc(kid.color)}">
+      <h2>📖 ${esc(kid.name)}'s fish book</h2>
+      <p class="muted small fb-count">${caught ? `${caught} of ${total} kinds of fish caught. Each one shows the biggest yet.` : `No fish yet! Go fishing with a visiting buddy: every kind you catch goes in here (${total} to find).`}</p>
+      ${pages}
+      <button class="btn" data-action="modal-close">Close</button>
+    </div>`);
+}
+
+function openTankPicker(kid) {
+  if (!kid) return;
+  const recs = kid.fishRecords || {};
+  const mine = bookPages(recs, kidTheme(kid)).flatMap((p) => p.fish.filter((f) => f.record).map((f) => ({ ...f, mapName: p.name })));
+  if (!mine.length) {
+    openModal(`
+      <div class="tankpick">
+        <h2>🐟 Your fish tank</h2>
+        <p>The tank is empty! Go fishing with a visiting buddy. Every fish you catch goes in your fish book, and then you can pick one to live here and give it a name.</p>
+        <button class="btn" data-action="modal-close">OK!</button>
+      </div>`);
+    return;
+  }
+  const now = tankFish(kid);
+  ui.tankPick = now?.species || mine[0].id;
+  openModal(`
+    <div class="tankpick" style="--kid:${esc(kid.color)}">
+      <h2>🐟 Your fish tank</h2>
+      <p class="muted small">Pick a fish from your fish book to swim in your tank.</p>
+      <div class="tp-grid">
+        ${mine.map((f) => `<button class="tp-fish ${f.id === ui.tankPick ? 'on' : ''}" data-action="tank-pick" data-species="${esc(f.id)}" aria-pressed="${f.id === ui.tankPick}">
+            <img src="${fishImg(f.id)}" alt="">
+            <b>${f.rare ? '⭐ ' : ''}${esc(f.name)}</b>
+            <small>${f.record.size} in · ${esc(f.mapName)}</small>
+          </button>`).join('')}
+      </div>
+      <label class="tp-name">Give it a name
+        <input id="tank-name" type="text" maxlength="${NICK_MAX}" autocomplete="off" spellcheck="false" placeholder="${esc(fishSpecies(ui.tankPick)?.name || '')}" value="${esc(now?.nickname && now.nickname !== now.name ? now.nickname : '')}">
+      </label>
+      <div class="tp-buttons">
+        <button class="btn" data-action="tank-save">Put it in the tank</button>
+        ${now ? '<button class="btn ghost" data-action="tank-empty">Empty the tank</button>' : ''}
+        <button class="btn ghost" data-action="modal-close">Cancel</button>
+      </div>
+    </div>`);
+}
 
 // ---------- the family leaderboard (the chart on the house wall) ----------
 // Every family kid's best in each visitor game, this week (Sunday to Saturday) and of all time.
@@ -2720,6 +2829,7 @@ function stampAllowance() {
   } else if (repairAllowanceStart(state)) {
     save();
   }
+  if (applyGrants(state)) save();
 }
 
 function render() {
@@ -3532,6 +3642,32 @@ function pickGame(kid, v, games) {
 // the leaderboard's This week / All time tabs
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
 
+actions['tank-pick'] = (el) => {
+  ui.tankPick = el.dataset.species;
+  $modal.querySelectorAll('.tp-fish').forEach((b) => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', String(b === el)); });
+  const input = $modal.querySelector('#tank-name');
+  if (input) input.placeholder = fishSpecies(ui.tankPick)?.name || '';
+};
+actions['tank-save'] = () => {
+  const kid = kidById(ui.kidId);
+  const tank = kid && makeTank(kid.fishRecords, ui.tankPick, $modal.querySelector('#tank-name')?.value);
+  if (!tank) return;
+  kid.tank = tank;
+  save();
+  closeModal();
+  sounds.tap();
+  toast(`🐟 ${tankFish(kid)?.nickname || 'Your fish'} is in the tank!`);
+  render();
+};
+actions['tank-empty'] = () => {
+  const kid = kidById(ui.kidId);
+  if (!kid) return;
+  delete kid.tank;
+  save();
+  closeModal();
+  render();
+};
+
 actions['play-pick'] = (el) => {
   const v = familyBuddies().find((b) => b.id === el.dataset.id);
   const kid = kidById(el.dataset.host);
@@ -3614,6 +3750,15 @@ function playWith(kid, v, kind) {
     onOver: (score) => {
       const week = recordWeekBest(kid, kind, score, today());
       if (week !== kid.gameBests) { kid.gameBests = week; save(); }
+    },
+    // fishing: the biggest of each kind of fish goes in the fish book (in the house)
+    onCatch: (c) => {
+      const sp = catchSpecies(c.map, c.kind);
+      const got = sp && recordCatch(kid.fishRecords, { species: sp.id, size: c.size, points: c.points, date: today() });
+      if (!got?.isNew) return null;
+      kid.fishRecords = got.records;
+      save();
+      return got.first ? 'first' : 'record';
     },
   });
 }

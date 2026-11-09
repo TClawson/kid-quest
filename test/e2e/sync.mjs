@@ -149,6 +149,41 @@ try {
   await until('merge on Ava’s tablet', () => merged(ava.page));
   log('✓ offline change syncs and merges with a parent change');
 
+  // ---- Ava buys two things in a row while a parent's change waits behind the buy
+  // dialog: both purchases stick (the held-back update used to undo the first one)
+  await mom.page.evaluate((day) => {
+    const s = window.kidQuest.state;
+    for (let i = 3; i <= 20; i += 1) {
+      const d = new Date(`${day}T12:00:00`); d.setDate(d.getDate() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      s.log[key] = { kid_ava: { tasks: Object.fromEntries(s.kids[0].tasks.map((t) => [t.id, { status: 'done', by: 'parent' }])) } };
+    }
+    window.kidQuest.save();
+  }, today);
+  await until('coins on Ava’s tablet', async () => Object.keys((await stateOf(ava.page)).log).length > 15);
+  await ava.page.evaluate(() => document.querySelector('[data-action="modal-close"]')?.click());
+  await ava.page.evaluate(() => document.querySelector('[data-action="wardrobe"]').click());
+  await ava.page.click('[data-action="wardrobe-slot"][data-slot="home"]');
+  await ava.page.click('[data-action="wardrobe-item"][data-id="home-chair-bean-blue-plain"]');
+  await ava.page.waitForSelector('[data-action="buy-confirm"]');
+  await mom.page.evaluate((day) => { window.kidQuest.state.log[day].kid_ava.note = 'nice work'; window.kidQuest.save(); }, today);
+  await new Promise((r) => setTimeout(r, 1500)); // the parent's change arrives while the dialog is open
+  await ava.page.click('[data-action="buy-confirm"]');
+  await ava.page.evaluate(async () => {
+    document.querySelector('[data-action="wardrobe-item"][data-id="home-art-fish"]').click();
+    await new Promise((r) => setTimeout(r, 300));
+    document.querySelector('[data-action="buy-confirm"]').click();
+  });
+  const both = async (page) => {
+    const s = await stateOf(page);
+    const k = s.kids.find((x) => x.id === 'kid_ava');
+    return ['home-chair-bean-blue-plain', 'home-art-fish'].every((id) => k.owned.includes(id)) && k.spent === 40 + 90 + 60 && s.log[today].kid_ava.note === 'nice work';
+  };
+  await until('both purchases on Ava’s tablet', () => both(ava.page));
+  await until('both purchases on mom’s phone', () => both(mom.page));
+  await ava.page.click('[data-action="wardrobe-back"]');
+  log('✓ two purchases in a row both stick');
+
   // ---- Mom adds Ben on her phone; Ben visits Ava's map wearing his outfit
   await mom.page.evaluate(() => {
     const s = window.kidQuest.state;
