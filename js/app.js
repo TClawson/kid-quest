@@ -132,13 +132,6 @@ function progressFor(kid) {
   const xp = totalXp(state, kid, t);
   const lv = levelFor(xp);
   const piano = pianoStreakInfo(state, kid, t);
-  if (!Array.isArray(kid.owned)) {
-    // first run with the shop: keep anything the kid had already reached by level, for free
-    kid.owned = ITEMS.filter((i) => i.price && LEGACY_LEVEL(i) <= lv.level).map((i) => i.id);
-    kid.spent = 0;
-    moveWornToBuddy(kid);
-    save();
-  }
   const coins = Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0));
   const gems = Math.max(0, totalGems(state, kid, t) - (kid.gemsSpent || 0));
   const ex = exerciseInfo(kid);
@@ -151,9 +144,7 @@ function progressFor(kid) {
  * this buddy can do when it visits.
  */
 function exerciseInfo(kid) {
-  const ex = exerciseStreakInfo(state, kid, today());
-  if ((kid.exBest || 0) < ex.best) { kid.exBest = ex.best; save(); }
-  return ex;
+  return exerciseStreakInfo(state, kid, today());
 }
 
 /** Everything a buddy needs to do its moves: its look, the kid's gear, and how far the exercise streak got. */
@@ -1308,6 +1299,9 @@ function familyBuddies() {
 function shareToday() {
   let changed = false;
   for (const k of state.kids) {
+    // the best exercise run, for this buddy's moves when it visits other kids' devices
+    const exBest = exerciseInfo(k).best;
+    if ((k.exBest || 0) < exBest) { k.exBest = exBest; changed = true; }
     // the kid's newest milestone, for visiting buddies to mention on other maps
     const m = milestoneFor(state, k, today());
     if (stableJson(m) !== stableJson(k.milestone)) { k.milestone = m; changed = true; }
@@ -1315,7 +1309,7 @@ function shareToday() {
     const now = todaySummary(state, k, today());
     if (stableJson(now) !== stableJson(k.today)) { k.today = now; changed = true; }
   }
-  if (changed) save();
+  return changed;
 }
 
 // ---------- cheering each other's milestones ----------
@@ -1892,8 +1886,6 @@ function viewKid() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
   const t = today();
-  snapshotToday(state, kid, t);
-  save();
   const { s, info } = kidSummary(kid);
   const xp = totalXp(state, kid, t);
   const lv = levelFor(xp);
@@ -2836,24 +2828,53 @@ let lastView = '';
 // amounts. repairAllowanceStart fixes families stamped by the older rule,
 // which started it the same day and lowered that day's coins.
 function stampAllowance() {
-  if (cloudCfg && !cloud.gotState) return;
+  if (cloudCfg && !cloud.gotState) return false;
+  let changed = false;
   if (!state.settings.allowance) {
     state.settings.allowance = { ...defaultAllowance(addDays(today(), 1)), startFixed: true };
-    save();
+    changed = true;
   } else if (repairAllowanceStart(state)) {
-    save();
+    changed = true;
   }
-  if (applyGrants(state)) save();
+  if (applyGrants(state)) changed = true;
+  return changed;
+}
+
+/** First run with the shop: keep anything the kid had already reached by level, for free. */
+function giveLegacyItems(kid) {
+  if (Array.isArray(kid.owned)) return false;
+  const lv = levelFor(totalXp(state, kid, today()));
+  kid.owned = ITEMS.filter((i) => i.price && LEGACY_LEVEL(i) <= lv.level).map((i) => i.id);
+  kid.spent = 0;
+  moveWornToBuddy(kid);
+  return true;
+}
+
+/**
+ * Everything that keeps the saved data up to date before a redraw (the
+ * allowance, one-time repairs, what other devices read about each kid, today's
+ * task list), saved once. The views themselves only read.
+ */
+function reconcile() {
+  let changed = stampAllowance();
+  for (const k of state.kids) if (giveLegacyItems(k)) changed = true;
+  if (shareToday()) changed = true;
+  const kid = ui.view === 'kid' && kidById(ui.kidId);
+  if (kid) {
+    // keep today's tasks and their pay as they are now, for the history
+    snapshotToday(state, kid, today());
+    changed = true; // save() only sends it if it actually changed
+  }
+  if (changed) save();
 }
 
 function render() {
-  stampAllowance();
   const scrollY = window.scrollY;
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
-  const html = withMemo(() => { shareToday(); return (views[ui.view] || viewHome)(); });
+  const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
   // load the sign-in code early, so a sign-in popup opens straight from the tap
   if (ui.view === 'setup' || (ui.view === 'parent' && ui.tab === 'settings')) loadCloud().catch(() => {});
   // Family sync can ask for a redraw many times a minute (another tablet saving, a piano timer
