@@ -55,6 +55,7 @@ export const ROOM = {
     shower: { x: 287, y: 6 },
     bathmat: { x: 252, y: 66 },
     basket: { x: 292, y: 148 },
+    tank: { x: 132, y: 133 }, // the fish tank on its cabinet, against the front wall right of the door
   },
 };
 const R = ROOM;
@@ -901,15 +902,83 @@ function basketArt() {
   });
 }
 
+// ---------- the fish tank ----------
+
+const WATER = ['#c8eef8', '#94d4ec', '#68b8e0', '#4a9ccc', '#3a82b8'];
+const PEBBLE = ['#e8c890', '#d4a86a', '#f0a8a0', '#a0c8f0', '#c8a8e8', '#a8784a', '#fff4dc'];
+
+/**
+ * The fish tank on a low wooden cabinet, with the fish book open on a little stand beside it.
+ * The fish itself, its bubbles and its name plaque are added on top by house.js (the fish
+ * swims), so the tank is drawn with clear water, gravel, plants and a little castle.
+ * TANK gives where those go, from the art's top-left corner.
+ */
+export const TANK = { w: 62, h: 39, water: [3, 4, 41, 13], bubbler: { x: 13, y: 18 }, plaque: { x: 23, y: 31 }, book: [46, 12, 16, 13] };
+
+function tankArt() {
+  return sprite(TANK.w, TANK.h, (b) => {
+    // the water, lighter near the top, then the gravel
+    for (let y = 3; y < 22; y += 1) for (let x = 2; x < 45; x += 1) {
+      const band = Math.min(4, (y - 3) / 4);
+      const lo = Math.floor(band); const k = band - lo;
+      b.set(x, y, k > bayer(x, y) && lo < 4 ? WATER[lo + 1] : WATER[lo]);
+    }
+    for (let x = 2; x < 45; x += 1) b.set(x, 3, WATER[0]); // the surface
+    for (let y = 18; y < 22; y += 1) for (let x = 2; x < 45; x += 1) {
+      if (y === 18 && h2(x, 7) < 0.45) continue; // a bumpy top
+      b.set(x, y, PEBBLE[Math.floor(h2(x * 3 + y, y * 7) * PEBBLE.length)]);
+    }
+    // swaying weed on the left, broad leaves on the right
+    for (const [x0, top, ph] of [[4, 7, 0], [6, 10, 2], [8, 8, 1]]) {
+      for (let y = top; y < 19; y += 1) { const x = x0 + (Math.floor((y + ph) / 3) % 2); b.set(x, y, y % 3 === 0 ? LEAF[4] : LEAF[2]); }
+    }
+    grid((x, y, c) => b.set(x, y, c), 37, 7, ['..l...', '.lL.l.', '.lLlL.', 'l.lLL.', 'lLl.Ll', '.lLlL.', '..lLl.', '..ss..', '..ss..', '..ss..', '.ssss.'], { l: LEAF[3], L: LEAF[5], s: LEAF[1] });
+    // a little castle, and the stone that bubbles
+    grid((x, y, c) => b.set(x, y, c), 26, 11, ['g.g.g.', 'gGgGgg', 'gGgggg', 'ggkkgg', 'gGkkgg', 'ggkkgg', 'gggggg'], { g: '#9894aa', G: '#c0bcc8', k: '#4a4560' });
+    grid((x, y, c) => b.set(x, y, c), 11, 17, ['.ss.', 'sSss'], { s: '#6e6a86', S: '#9894aa' });
+    // the glass: a dark frame and lid with a light under it, and a couple of shines on the front
+    for (let x = 1; x < 46; x += 1) { b.set(x, 0, SAGE[3]); b.set(x, 1, SAGE[1]); b.set(x, 2, SAGE[0]); b.set(x, 22, SAGE[1]); b.set(x, 23, SAGE[0]); }
+    for (let y = 0; y < 24; y += 1) { b.set(1, y, y < 3 || y > 21 ? b.get(1, y) : SAGE[2]); b.set(45, y, y < 3 || y > 21 ? b.get(45, y) : SAGE[0]); }
+    for (let x = 14; x < 32; x += 1) b.set(x, 1, '#fff4c8'); // the lid's light
+    for (let i = 0; i < 6; i += 1) { b.set(5 + i, 11 - i, 'rgba(255,255,255,0.45)', 'soft'); b.set(7 + i, 11 - i, 'rgba(255,255,255,0.25)', 'soft'); }
+    for (let i = 0; i < 3; i += 1) b.set(40 + i, 6 - i, 'rgba(255,255,255,0.4)', 'soft');
+    // the cabinet: a top, two doors under the tank and a narrow one, little feet
+    for (let y = 24; y < 39; y += 1) for (let x = 0; x < 62; x += 1) {
+      if (y === 38 && x > 2 && x < 59) continue; // feet only at the ends
+      let c = y === 24 ? WD[5] : y === 25 ? WD[4] : y >= 37 ? WD[1] : WD[3];
+      if (y > 26 && y < 36) {
+        for (const [a, z] of [[3, 22], [24, 43], [47, 58]]) {
+          if (x === a || x === z || y === 27 || y === 35) { if (x >= a && x <= z) c = WD[2]; } else if (x > a && x < z) c = x === a + 1 || y === 28 ? WD[4] : WD[3];
+        }
+      }
+      if (x === 0 || x === 61) c = WD[2];
+      b.set(x, y, c);
+    }
+    for (const [x, y] of [[20, 31], [26, 31], [50, 31]]) { b.set(x, y, GOLD[3]); b.set(x, y + 1, GOLD[1]); }
+    // the fish book, open on a little stand: a fish drawn on one page, notes on the other
+    const B = TANK.book;
+    for (let y = 2; y < 10; y += 1) for (let x = 1; x < 15; x += 1) b.set(B[0] + x, B[1] + y, '#2f6b4a');
+    for (let y = 1; y < 9; y += 1) for (let x = 2; x < 14; x += 1) {
+      if (y === 1 && (x === 2 || x === 7 || x === 8 || x === 13)) continue;
+      b.set(B[0] + x, B[1] + y, x === 7 || x === 8 ? '#e0d0a8' : x < 7 ? '#fdf4dc' : '#fffaf0');
+    }
+    grid((x, y, c) => b.set(x, y, c), B[0] + 2, B[1] + 3, ['.oo..', 'oOoo.o', 'ooooo', '.oo..o'], { o: '#f08c3a', O: '#3b2235' });
+    for (const y of [3, 5, 7]) for (let x = 9; x < 13; x += 1) if (!(y === 7 && x > 11)) b.set(B[0] + x, B[1] + y, '#b0a090');
+    for (let x = 4; x < 12; x += 1) b.set(B[0] + x, B[1] + 10, WD[2]);
+    for (const x of [5, 10]) b.set(B[0] + x, B[1] + 11, WD[1]);
+    for (let x = 3; x < 13; x += 1) b.set(B[0] + x, B[1] + 12, WD[3]);
+  });
+}
+
 // ---------- the mess ----------
 // Things left on the floor when the floor chore isn't done: [level it shows from, x, y, kind].
 // Level 1 is a few things out of place, 2 a proper mess, 3 a disaster.
 const MESS = [
-  [1, 56, 104, 'shirt'], [1, 152, 66, 'sock'], [1, 164, 136, 'book'], [1, 74, 80, 'blocks'], [1, 126, 146, 'car'],
-  [2, 178, 80, 'pants'], [2, 124, 62, 'paper'], [2, 222, 72, 'teddy'], [2, 76, 128, 'ball'], [2, 158, 152, 'crayons'], [2, 50, 68, 'sock2'], [2, 176, 128, 'paper2'],
-  [3, 146, 78, 'pile'], [3, 46, 118, 'backpack'], [3, 62, 56, 'pillow'], [3, 98, 132, 'puzzle'], [3, 84, 154, 'cup'], [3, 146, 162, 'shoes'],
+  [1, 56, 104, 'shirt'], [1, 152, 66, 'sock'], [1, 70, 146, 'book'], [1, 74, 80, 'blocks'], [1, 84, 140, 'car'],
+  [2, 178, 80, 'pants'], [2, 124, 62, 'paper'], [2, 222, 72, 'teddy'], [2, 76, 128, 'ball'], [2, 224, 128, 'crayons'], [2, 50, 68, 'sock2'], [2, 176, 128, 'paper2'],
+  [3, 146, 78, 'pile'], [3, 46, 118, 'backpack'], [3, 62, 56, 'pillow'], [3, 98, 132, 'puzzle'], [3, 84, 154, 'cup'], [3, 68, 162, 'shoes'],
   [2, 164, 100, 'heap'], [2, 92, 58, 'blocks2'], [2, 32, 104, 'paper3'],
-  [3, 172, 114, 'ball'], [3, 128, 52, 'sock'], [3, 60, 122, 'book'], [3, 176, 158, 'car'], [3, 40, 160, 'paper'], [3, 152, 116, 'crayons'], [3, 216, 106, 'sock2'], [3, 14, 102, 'toybox'], [3, 128, 128, 'heap2'],
+  [3, 172, 114, 'ball'], [3, 128, 52, 'sock'], [3, 60, 122, 'book'], [3, 166, 124, 'car'], [3, 40, 160, 'paper'], [3, 152, 116, 'crayons'], [3, 216, 106, 'sock2'], [3, 14, 102, 'toybox'], [3, 30, 136, 'heap2'],
   [3, 186, 58, 'book2'], [3, 106, 66, 'paper3'], [3, 188, 70, 'dino'], [3, 64, 92, 'blocks2'], [3, 116, 156, 'sock3'], [3, 222, 92, 'shirt2'],
 ];
 const MESS_ART = {
@@ -951,7 +1020,7 @@ function mess(px, level) {
     s.blit(px, x, y);
   }
   // a very messy room also has dust bunnies in the corners
-  if (level >= 3) for (const [x, y] of [[14, 102], [208, 66], [226, 164], [176, 168], [70, 50]]) grid(px, x, y, ['.gg.', 'gGgg', '.gg.'], { g: 'rgba(150,140,150,0.75)', G: 'rgba(210,200,210,0.85)' });
+  if (level >= 3) for (const [x, y] of [[14, 102], [208, 66], [226, 164], [127, 166], [70, 50]]) grid(px, x, y, ['.gg.', 'gGgg', '.gg.'], { g: 'rgba(150,140,150,0.75)', G: 'rgba(210,200,210,0.85)' });
 }
 
 // ---------- the whole room ----------
@@ -989,7 +1058,8 @@ function placeOf(spot, b) {
  *   away, mess: 0-3, shelf: 0-3, gear: bestGear(owned), color: the kid's color (the door),
  * }. Returns { pieces: [{ id, x, y, w, h, foot, canvas }] } for the pieces that stand out on
  * the floor (drawn by house.js as their own canvases, in front of or behind the buddy), and
- * blocks: [[x, y, w, h]...] where the buddy can't walk.
+ * blocks: [[x, y, w, h]...] where the buddy can't walk. The fish tank (ROOM.at.tank, TANK) is
+ * always one of the pieces.
  */
 export function paintRoom(canvas, o) {
   const { W, H } = R;
@@ -1079,6 +1149,8 @@ export function paintRoom(canvas, o) {
   const g = gearArt(o.gear);
   if (g) stand('gear', g, at.gear.x, at.gear.y, [at.gear.x, at.gear.y + 24, 38, 12]);
   stand('basket', basketArt(), at.basket.x, at.basket.y, [at.basket.x, at.basket.y + 8, 16, 10]);
+  // the fish tank is always there (free): the buddy looks in from behind it
+  stand('tank', tankArt(), at.tank.x, at.tank.y, [at.tank.x, at.tank.y + 4, TANK.w, TANK.h - 4]);
   return { pieces, blocks };
 }
 

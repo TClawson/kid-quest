@@ -1,12 +1,15 @@
 // The buddy's house, inside: a walkable room plus a bathroom, part of the village world.
 // The kid taps to walk the buddy round it, like in the village (same A* walking, same pixel
 // scale). The bed, the toothbrush and the floor show today's chores (houserules.js); the
-// trophy shelf opens the trophies, the chart on the wall the family leaderboard, and the
-// door leads back out to the village. houseart.js draws it all.
+// trophy shelf opens the trophies, the chart on the wall the family leaderboard, the fish
+// tank its fish picker (its fish swims in it, fishbook.js) and the book beside it the fish
+// book, and the door leads back out to the village. houseart.js draws it all.
 
-import { ROOM, paintRoom } from './houseart.js';
+import { ROOM, TANK, paintRoom } from './houseart.js';
 import { makeGrid, findPath } from './village.js';
 import { furnitureById } from './furniture.js';
+import { fishSpecies } from './fishbook.js';
+import { fishPic } from './fishart.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const R = ROOM;
@@ -20,7 +23,10 @@ export const HOUSE_SPOTS = {
   bed: { x: 54, y: 74 },
   sink: { x: 262, y: 66 },
   floor: { x: 120, y: 142 },
+  tank: { x: 156, y: 131 }, // just behind the tank, looking in
+  book: { x: 186, y: 131 },
 };
+const T = ROOM.at.tank;
 // the tappable things: [x, y, w, h] boxes over the art
 const HOT = {
   shelf: [84, 8, 34, 48],
@@ -28,6 +34,8 @@ const HOT = {
   door: [96, 158, 32, 26],
   bed: [9, 20, 36, 80],
   sink: [250, 8, 24, 52],
+  tank: [T.x + 1, T.y, 45, 39],
+  book: [T.x + TANK.book[0], T.y + TANK.book[1] - 2, TANK.book[2], 27],
 };
 // the floating bubbles over a chore that's still to do
 const BUBBLE = { bed: { x: 26, y: 30 }, teeth: { x: 262, y: 22 }, floor: { x: 120, y: 84 } };
@@ -52,13 +60,24 @@ const DONE_SAY = {
  *   kidId, kidName, color, buddy: live buddy markup,
  *   layout: homeLayout(kid), chores: { bed, teeth, floor: { id, name, icon, st, verify, timer, sub } or null },
  *   mess (0-3), shelf (0-3), gear: bestGear(owned), quests: quests left outside (for the door sign),
+ *   tank: fishbook.js tankFish(kid) (the fish in the tank, null when empty), fish: how many kinds
+ *   of fish the kid has caught,
  * }
  */
 export function houseHtml(h) {
   const data = {
     kid: h.kidId, name: h.kidName, color: h.color, layout: Object.fromEntries(Object.entries(h.layout || {}).map(([k, v]) => [k, v?.id || null])),
     chores: h.chores, mess: h.mess || 0, shelf: h.shelf || 0, gear: h.gear || {},
+    tank: h.tank ? { species: h.tank.species, len: h.tank.len } : null,
   };
+  const W = TANK.water;
+  // the tank's fish swims in the water (clipped to the glass), with bubbles; its name on a plaque
+  const tank = `
+          <div class="h-water" style="left:${T.x + W[0]}px;top:${T.y + W[1]}px;width:${W[2]}px;height:${W[3] + 4}px;z-index:${T.y + TANK.h + 1}">
+            <span class="h-fish" hidden></span>
+            ${[0, 1, 2].map((i) => `<i class="h-bubble" style="left:${TANK.bubbler.x - W[0] + (i % 2)}px;animation-delay:${i * 0.9}s"></i>`).join('')}
+          </div>
+          <span class="h-plaque ${h.tank ? '' : 'empty'}" style="left:${T.x + TANK.plaque.x}px;top:${T.y + TANK.plaque.y}px;z-index:${T.y + TANK.h + 2}">${h.tank ? esc(h.tank.nickname) : h.fish ? 'Pick a fish!' : 'Empty tank'}</span>`;
   const spot = (id, label, extra = '') => { const [x, y, w, hh] = HOT[id]; return `<button class="h-spot" data-spot="${id}" style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px" aria-label="${esc(label)}">${extra}</button>`; };
   const bubbles = Object.entries(BUBBLE).map(([kind, at]) => {
     const t = h.chores?.[kind];
@@ -72,6 +91,9 @@ export function houseHtml(h) {
           <canvas class="house-room" width="${R.W}" height="${R.H}" aria-hidden="true"></canvas>
           ${spot('shelf', 'Trophy shelf', '<span class="h-tag">🏆</span>')}
           ${spot('chart', 'Family game scores', '<span class="h-tag">📊</span>')}
+          ${tank}
+          ${spot('tank', h.tank ? `Fish tank: ${h.tank.nickname}` : 'Fish tank', `<span class="h-tag">🐟 ${h.tank ? 'Tank' : h.fish ? 'Pick a fish' : 'Fish tank'}</span>`)}
+          ${spot('book', 'Fish book', '<span class="h-tag">📖 Fish book</span>')}
           ${spot('bed', 'Bed')}
           ${spot('sink', 'Sink')}
           ${spot('door', 'Go outside', `<span class="h-tag out">⬇ Outside${h.quests ? ` · ${h.quests} ${h.quests === 1 ? 'quest' : 'quests'}` : ''}</span>`)}
@@ -94,7 +116,7 @@ export function cameIn(kidId) { memory.set(kidId, { ...HOUSE_SPOTS.door, face: 1
 /**
  * Starts every house inside root. handlers: {
  *   onTask(taskId, el): the kid says a chore is done, onTrophies(), onLeaderboard(),
- *   onExit(): the buddy went out the door, sound(name),
+ *   onTank(): the fish picker, onFishBook(), onExit(): the buddy went out the door, sound(name),
  * }
  */
 export function mountHouses(root, handlers) {
@@ -219,6 +241,8 @@ function mount(section, handlers) {
       setTimeout(() => handlers.onExit?.(), 380);
     } else if (goal.use === 'shelf') handlers.onTrophies?.();
     else if (goal.use === 'chart') handlers.onLeaderboard?.();
+    else if (goal.use === 'tank') handlers.onTank?.();
+    else if (goal.use === 'book') handlers.onFishBook?.();
     else if (goal.use) choreTalk(goal.use);
   };
   const walkTo = (x, y, goal = null) => {
@@ -259,8 +283,9 @@ function mount(section, handlers) {
     walkTo(x, y);
   });
 
-  // the trophy and chart tags show when the buddy is close
-  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"]')].map((el) => ({ el, at: HOUSE_SPOTS[el.dataset.spot] }));
+  // the trophy, chart, tank and book tags show when the buddy is close
+  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"]')].map((el) => ({ el, at: HOUSE_SPOTS[el.dataset.spot] }));
+  const swim = tankSwimmer(section, data.tank);
 
   let last = performance.now();
   const tick = (now) => {
@@ -281,7 +306,8 @@ function mount(section, handlers) {
     const k = Math.min(1, dt * 5);
     cam.x += (t.x - cam.x) * k; cam.y += (t.y - cam.y) * k;
     Object.assign(mem, { x: me.x, y: me.y, face: me.face, cam, S, path: me.path, goal: me.goal });
-    for (const g of tags) g.el.classList.toggle('near', Math.hypot(me.x - g.at.x, me.y - g.at.y) < 48);
+    for (const g of tags) g.el.classList.toggle('near', Math.hypot(me.x - g.at.x, me.y - g.at.y) < (g.el.dataset.spot === 'tank' || g.el.dataset.spot === 'book' ? 26 : 48));
+    swim?.(now / 1000);
     place();
     requestAnimationFrame(tick);
   };
@@ -290,3 +316,51 @@ function mount(section, handlers) {
   requestAnimationFrame(tick);
 }
 
+
+// ---- the fish tank ----
+const fishCache = new Map();
+// Fish are drawn with 2 fine pixels for each village pixel, as in the fishing game, so even a
+// little one has its colors, scales and fins (at 1 it would be mostly outline).
+const FZ = 2;
+/** The tank's fish as a canvas (FZ fine pixels per village pixel), small enough for the tank. */
+function tankFishPic(species, len) {
+  const key = `${species}|${len}`;
+  if (!fishCache.has(key)) {
+    const sp = fishSpecies(species);
+    if (!sp) return null;
+    let n = len; let pic = fishPic(sp.look, n, FZ);
+    while (n > 8 && (pic.height / FZ > TANK.water[3] + 2 || pic.width / FZ > TANK.water[2] * 0.62)) { n -= 1; pic = fishPic(sp.look, n, FZ); }
+    fishCache.set(key, pic);
+  }
+  return fishCache.get(key);
+}
+
+/**
+ * Puts the tank's fish in the water and returns tick(seconds) to swim it: back and forth along
+ * the tank, turning round at the ends, bobbing a little. Null for an empty tank.
+ */
+function tankSwimmer(section, tank) {
+  const holder = section.querySelector('.h-fish');
+  if (!tank || !holder) return null;
+  const pic = tankFishPic(tank.species, tank.len || 14);
+  if (!pic) return null;
+  const c = section.ownerDocument.createElement('canvas');
+  c.width = pic.width; c.height = pic.height;
+  c.getContext('2d').drawImage(pic, 0, 0);
+  holder.append(c);
+  const pw = pic.width / FZ; const ph = pic.height / FZ;
+  holder.style.width = `${pw}px`; holder.style.height = `${ph}px`;
+  holder.hidden = false;
+  const [, , w, h] = TANK.water;
+  const span = Math.max(1, w - pw + 2); // from just past the left glass to the right
+  const lap = 7 + span / 6; // seconds there and back
+  const midY = Math.max(-1, Math.min(h + 3 - ph, Math.round((h - ph) / 2)));
+  return (t) => {
+    const k = (t % lap) / lap; // 0..1: right then back left, easing at the ends
+    const going = k < 0.5;
+    const e = 0.5 - 0.5 * Math.cos(Math.PI * (going ? k * 2 : (1 - k) * 2));
+    const x = Math.round((-1 + e * span) * FZ) / FZ;
+    const y = Math.round((midY + Math.sin(t * 1.7) * 1.4) * FZ) / FZ;
+    holder.style.transform = `translate(${x}px, ${y}px)${going ? ' scaleX(-1)' : ''}`;
+  };
+}
