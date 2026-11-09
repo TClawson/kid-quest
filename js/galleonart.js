@@ -9,7 +9,7 @@
 // gold glints in the sand. Tapped, the octopus wakes, opens its big eyes, waves an arm and puffs
 // a giggly cloud of ink.
 
-import { mix, h2, vnoise, bayer, Buf, inEll, grid, pixelBuffer } from './pixelkit.js';
+import { mix, h2, vnoise, bayer, Buf, inEll, grid, pixelBuffer, clamp } from './pixelkit.js';
 import { OB } from './oceanart.js';
 
 export const GALLEON = { w: 184, h: 124 };
@@ -24,7 +24,6 @@ const GD = ['#6a3a1e', '#a0682a', '#d49a36', '#f4c850', '#fff0a8'];
 const AQ = ['#1a5a6a', '#2a8a8a', '#4ac0b0', '#8aeed8', '#d4fff4']; // a soft sea-green glow
 const KP = OB.kelp;
 const INK = '#141c34';
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- where things are (art pixels) ----------
 

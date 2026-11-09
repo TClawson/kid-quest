@@ -13,7 +13,7 @@
 // The still parts are painted once into ImageData and canvases; startKapok() redraws the moving
 // parts about ten times a second. village.js uses it for the landmark whose art is 'kapok'.
 
-import { mix, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer } from './pixelkit.js';
+import { mix, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer, clamp, line } from './pixelkit.js';
 import { sel, tg } from './castleart.js';
 import { PB } from './meadowart.js';
 import { RB } from './rainforestart.js';
@@ -29,8 +29,6 @@ const CR = [
   ['#1a3020', '#264826', '#36622a', '#4a7e30', '#649c36', '#84b840', '#aad252', '#d6ea78'],
   ['#0c2a2c', '#123e38', '#1a5844', '#22744e', '#30905a', '#4cac68', '#76c87c', '#ace29a'],
 ];
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const line = (x0, y0, x1, y1, fn) => { const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5)); for (let i = 0; i <= n; i += 1) fn(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), i / n); };
 
 const TRUNK = { cx: 86, top: 60, foot: 140 };
 const trunkHw = (y) => 10 + Math.max(0, (y - 100) / 40) ** 2.2 * 12;

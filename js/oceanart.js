@@ -10,7 +10,7 @@
 // a single putImageData. villageprops.js calls paintOcean() for the ocean map; every other map
 // keeps its own painter.
 
-import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pixelBuffer, pathField } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pixelBuffer, pathField, clamp, oval, grow, inRound } from './pixelkit.js';
 import { propB, groundShadow, laundryB } from './meadowart.js';
 
 // ---------- the palette ----------
@@ -30,7 +30,6 @@ export const OB = {
 };
 const SF = OB.floor; const PS = OB.path; const PL = OB.pearl; const NC = OB.nacre; const DP = OB.deep; const RK = OB.rock; const ST = OB.stone;
 const KP = OB.kelp; const BR = OB.brass; const GW = OB.glow; const INK = OB.ink;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- the sea floor ----------
 
@@ -450,13 +449,6 @@ function rockO(px, X, Y, w = 22, h = 16) {
 }
 
 // ---------- the green, under the sea ----------
-
-const oval = (Z, x, y) => { const dx = (x + 0.5 - (Z.x + Z.w / 2)) / (Z.w / 2); const dy = (y + 0.5 - (Z.y + Z.h / 2)) / (Z.h / 2); return 1 - (dx * dx + dy * dy); };
-const grow = (Z, g) => ({ x: Z.x - g, y: Z.y - g, w: Z.w + g * 2, h: Z.h + g * 2 });
-const inRound = (x, y, x0, y0, w, h, r) => {
-  const cx = Math.max(x0 + r, Math.min(x0 + w - r, x + 0.5)); const cy = Math.max(y0 + r, Math.min(y0 + h - r, y + 0.5));
-  return (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= r * r;
-};
 
 /** The fishing spot: a blue hole in the sea floor, a rim of rock, its far wall in ledges, dark and deep in the middle. */
 function blueHoleB(px, Z, seed) {

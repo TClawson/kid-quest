@@ -8,7 +8,7 @@
 // a single putImageData. villageprops.js calls paintMeadow() for the meadow; every other map
 // keeps its own painter.
 
-import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, stones, pathField, pixelBuffer } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, Buf, grid, inEll, stones, pathField, pixelBuffer, oval, grow, bbox } from './pixelkit.js';
 import { bigTree, bush } from './villageart.js';
 
 export const PB = {
@@ -133,12 +133,6 @@ export function grassB(px, W, H, seed, o = {}) {
 }
 
 // ---------- paths and plazas ----------
-
-function bbox(lines, pad) {
-  const xs = lines.flat().map((p) => p[0]); const ys = lines.flat().map((p) => p[1]);
-  const x0 = Math.floor(Math.min(...xs) - pad); const y0 = Math.floor(Math.min(...ys) - pad);
-  return [x0, y0, Math.ceil(Math.max(...xs) + pad) - x0, Math.ceil(Math.max(...ys) + pad) - y0];
-}
 
 /** A pebble: no line on top, a warm dark line under it. */
 export function pebbleB(px, x, y, k) {
@@ -411,10 +405,6 @@ function bridgeB(px, c, seed = 81) {
     }
   }, { pad: 10 });
 }
-
-/** An oval in a box: how far into it (x, y) is, 1 in the middle, 0 at the edge, negative outside. */
-const oval = (Z, x, y) => { const dx = (x + 0.5 - (Z.x + Z.w / 2)) / (Z.w / 2); const dy = (y + 0.5 - (Z.y + Z.h / 2)) / (Z.h / 2); return 1 - (dx * dx + dy * dy); };
-const grow = (Z, g) => ({ x: Z.x - g, y: Z.y - g, w: Z.w + g * 2, h: Z.h + g * 2 });
 
 /** The village fishing pond on the green: a dark earth rim at the back, sand at the front, stones, lily pads, reeds. */
 function pondB(px, Z, seed) {

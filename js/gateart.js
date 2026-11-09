@@ -9,7 +9,7 @@
 // tail. Tapped, it lifts its head, opens its wings, sneezes a spark and counts its coins; the
 // portcullis creaks up a little. While the map's show plays it stays awake to watch.
 
-import { mix, h2, bayer, Buf, grid, inEll, pixelBuffer } from './pixelkit.js';
+import { mix, h2, bayer, Buf, grid, inEll, pixelBuffer, clamp } from './pixelkit.js';
 import { CB, sel, tg, masonry, coneRoof } from './castleart.js';
 import { PB } from './meadowart.js';
 
@@ -17,7 +17,6 @@ export const GATE = { w: 156, h: 156 };
 const W = GATE.w; const H = GATE.h;
 const St = CB.stone; const Sl = CB.slate; const Au = CB.gold; const Gl = CB.glow; const INK = CB.ink; const Tb = CB.timber;
 const LF = PB.leaf; const Wd = PB.wood;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- where things are (art pixels) ----------
 

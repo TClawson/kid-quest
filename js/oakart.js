@@ -6,7 +6,7 @@
 // sits in a root, and little glowing mushrooms ring its feet. A cheap overlay animates it:
 // drifting motes, glows that breathe, the face's slow blink, the owl peeking out.
 
-import { h2, vnoise, bayer, Buf, inEll, grid, pixelBuffer } from './pixelkit.js';
+import { h2, vnoise, bayer, Buf, inEll, grid, pixelBuffer, clamp } from './pixelkit.js';
 
 export const OAK = { w: 156, h: 152 };
 const W = OAK.w; const H = OAK.h; const CX = 78;
@@ -18,7 +18,6 @@ const GLOW = ['#7a3a3a', '#c86a3a', '#f0a848', '#ffd878', '#fff4c8'];
 const INK = '#3b2235';
 const SHROOM = ['#4a9a98', '#7ad8c8', '#c8fff0']; // the glowing mushrooms: shade, cap, light
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // the trunk: a twisting waist, flaring into its limbs above and its roots below, lumpy all the way
 const TOP = 76; const BASE = 136;
 const trunkX = (y) => CX - 1 + Math.sin((y - 60) / 13) * 3;

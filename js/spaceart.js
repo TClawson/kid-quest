@@ -11,7 +11,7 @@
 // a single putImageData. villageprops.js calls paintSpace() for the space map; every other map
 // keeps its own painter.
 
-import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pixelBuffer, pathField } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pixelBuffer, pathField, clamp, oval, grow, inRound } from './pixelkit.js';
 import { propB, groundShadow } from './meadowart.js';
 
 // ---------- the palette ----------
@@ -26,7 +26,6 @@ export const SB = {
   ink: '#181830',
 };
 const MG = SB.dust; const SKY = SB.sky; const RK = SB.rock; const ST = SB.steel; const GW = SB.glow; const HZ = SB.hazard; const INK = SB.ink;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- the moon dust ----------
 
@@ -520,12 +519,6 @@ function laundryS(px, X, Y, w) {
 
 // ---------- the green, on the moon ----------
 
-const oval = (Z, x, y) => { const dx = (x + 0.5 - (Z.x + Z.w / 2)) / (Z.w / 2); const dy = (y + 0.5 - (Z.y + Z.h / 2)) / (Z.h / 2); return 1 - (dx * dx + dy * dy); };
-const grow = (Z, g) => ({ x: Z.x - g, y: Z.y - g, w: Z.w + g * 2, h: Z.h + g * 2 });
-const inRound = (x, y, x0, y0, w, h, r) => {
-  const cx = Math.max(x0 + r, Math.min(x0 + w - r, x + 0.5)); const cy = Math.max(y0 + r, Math.min(y0 + h - r, y + 0.5));
-  return (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= r * r;
-};
 const GOO = ['#0c3428', '#12503a', '#1a7046', '#28944e', '#48b45a', '#7cd47a', '#bdf0a8', '#e8ffd8'];
 
 /** The fishing spot: a crater full of glowing green moon goo, a lit rocky rim, its far wall showing, bubbles on top. */

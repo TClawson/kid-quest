@@ -9,7 +9,7 @@
 // One canvas pixel per village pixel, painted into one ImageData and shown with a single
 // putImageData. villageprops.js calls paintVolcano() for 'bg-volcano' only.
 
-import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pathField, pixelBuffer } from './pixelkit.js';
+import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pathField, pixelBuffer, clamp, line, bbox, cobble } from './pixelkit.js';
 import { PB, propB, groundShadow, flowerB, laundryB } from './meadowart.js';
 import { sel, tg } from './castleart.js';
 
@@ -33,14 +33,6 @@ const A = VB.ash; const R = VB.rock; const LV = VB.lava; const J = VB.jungle; co
 const MT = VB.mat; const BS = VB.bamboo; const SA = VB.bsand; const STM = VB.steam; const GS = VB.glass;
 const Wd = PB.wood; const INK = '#2e2238';
 const CANOPY = [VB.jungle, VB.teal, VB.lime];
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
-function bbox(lines, pad) {
-  const xs = lines.flat().map((p) => p[0]); const ys = lines.flat().map((p) => p[1]);
-  const x0 = Math.floor(Math.min(...xs) - pad); const y0 = Math.floor(Math.min(...ys) - pad);
-  return [x0, y0, Math.ceil(Math.max(...xs) + pad) - x0, Math.ceil(Math.max(...ys) + pad) - y0];
-}
-const line = (x0, y0, x1, y1, fn) => { const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5)); for (let i = 0; i <= n; i += 1) fn(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), i / n); };
 
 // ---------- the ground: ash in the middle, the jungle's lawn round the edges ----------
 
@@ -285,16 +277,6 @@ const COB = [
   ['#38364a', '#545266', '#727084', '#9290a2', '#b4b2c2'], // grey stone
 ];
 const MORTAR = '#2a2026';
-const WIDTHS = [6, 5, 7, 6, 5, 7, 6, 5]; const CUM = WIDTHS.reduce((a, w) => [...a, a[a.length - 1] + w], [0]); const SPAN = CUM[CUM.length - 1];
-function cobble(x, y, seed) {
-  const row = Math.floor(y / 4); const v = y - row * 4;
-  const s = Math.floor(h2(row, 1, seed) * SPAN);
-  const q = x + s; const rep = Math.floor(q / SPAN); const m = q - rep * SPAN;
-  let i = 0; while (CUM[i + 1] <= m) i += 1;
-  const w = WIDTHS[i]; const u = m - CUM[i];
-  const id = rep * 8 + i;
-  return { u, v, w, row, id, cx: x - u + w / 2, cy: row * 4 + 1.5, mortar: u === w - 1 || v === 3 };
-}
 function cobbleColor(c, seed, worn = 0) {
   if (c.mortar) return MORTAR;
   const hk = h2(c.id, c.row, seed);

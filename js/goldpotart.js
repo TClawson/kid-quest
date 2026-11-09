@@ -12,13 +12,12 @@
 // The still parts are painted once into ImageData and canvases; startGoldpot() redraws the moving
 // parts about ten times a second. village.js uses it for the landmark whose art is 'goldpot'.
 
-import { mix, h2, vnoise, bayer, Buf, grid, inEll, ramp, pixelBuffer } from './pixelkit.js';
+import { mix, h2, vnoise, bayer, Buf, grid, inEll, ramp, pixelBuffer, clamp } from './pixelkit.js';
 import { sel, tg } from './castleart.js';
 
 export const GOLDPOT = { w: 152, h: 150 };
 const W = GOLDPOT.w; const H = GOLDPOT.h;
 const INK = '#3a2850';
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // the palettes
 const CL = ['#6e5c9c', '#8c7cb8', '#ab9ed0', '#c9c0e4', '#e2ddf2', '#f3f0fb', '#ffffff']; // cloud, lavender to white
