@@ -2,6 +2,7 @@
 // settings card with its start / join / invite / leave flows (split out of
 // app.js; shared things come from ctx.js).
 import { stableJson, DEVICE_SETTINGS } from './store.js';
+import { timerOnScreen } from './timer-ui.js';
 import {
   state, setState, ui, $modal, esc, kidById, toast, render, actions,
   openModal, closeModal, confirmModal,
@@ -74,7 +75,7 @@ export function applyRemote(next) {
   setState(next);
   store.replace(state);
   if (ui.view === 'setup' && state.settings.pinHash) ui.view = 'home';
-  if (ui.view !== 'timer') render();
+  if (!timerOnScreen()) render();
 }
 
 export function familyCard() {

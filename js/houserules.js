@@ -102,10 +102,12 @@ export function shelfLevel(count, total) {
 
 // ---------- inside or outside ----------
 // Where the buddy is lives on this device only (each kid has their own tablet user), per kid:
-// the first time the app opens on a new day the buddy wakes up inside; after that, wherever
-// the kid left it (inside or out) is where it is when the app opens again that day.
+// the first time the app opens on a new day the buddy wakes up inside its house; after that,
+// wherever the kid left it (its house, the music house, or out in the village) is where it
+// is when the app opens again that day.
 
 const KEY = 'kidquest.house';
+export const PLACES = ['house', 'music', 'out'];
 
 function readAll(storage) {
   try { return JSON.parse(storage?.getItem(KEY) || '{}') || {}; } catch { return {}; }
@@ -115,23 +117,31 @@ function writeAll(storage, all) {
 }
 
 /**
- * Whether the kid's buddy is inside its house today. A new day starts inside. The very
- * first time (before the house existed) the buddy starts outside, next to its house, so the
- * kid finds the door. Saves what it decided, so it holds for the rest of the day.
+ * Where the kid's buddy is today: 'house' (its own house), 'music' (the music house) or
+ * 'out' (the village). A new day starts in its house. The very first time (before the house
+ * existed) the buddy starts outside, next to its house, so the kid finds the door. Saves
+ * what it decided, so it holds for the rest of the day.
  */
-export function isInside(kidId, today, storage = globalThis.localStorage) {
+export function placeOf(kidId, today, storage = globalThis.localStorage) {
   const all = readAll(storage);
   const was = all[kidId];
-  if (was && was.day === today) return Boolean(was.inside);
-  const inside = Boolean(was); // first time ever: outside
-  all[kidId] = { day: today, inside };
+  if (was && was.day === today) return PLACES.includes(was.place) ? was.place : was.inside ? 'house' : 'out';
+  const place = was ? 'house' : 'out'; // first time ever: outside
+  all[kidId] = { day: today, inside: place === 'house', place };
   writeAll(storage, all);
-  return inside;
+  return place;
 }
 
-/** The buddy went in (true) or out (false). */
-export function setInside(kidId, today, inside, storage = globalThis.localStorage) {
+/** The buddy went into its house, the music house, or out to the village. */
+export function setPlace(kidId, today, place, storage = globalThis.localStorage) {
+  const p = PLACES.includes(place) ? place : 'out';
   const all = readAll(storage);
-  all[kidId] = { day: today, inside: Boolean(inside) };
+  all[kidId] = { day: today, inside: p === 'house', place: p };
   writeAll(storage, all);
 }
+
+/** Whether the kid's buddy is inside its own house today (see placeOf). */
+export const isInside = (kidId, today, storage = globalThis.localStorage) => placeOf(kidId, today, storage) === 'house';
+
+/** The buddy went in (true) or out (false) of its own house. */
+export const setInside = (kidId, today, inside, storage = globalThis.localStorage) => setPlace(kidId, today, inside ? 'house' : 'out', storage);
