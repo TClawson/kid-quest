@@ -27,6 +27,7 @@ import { leaderboard, weekOf } from './leaderboard.js';
 import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
+import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
@@ -1093,6 +1094,7 @@ function musicView(kid, list, mood, tier) {
 
 const musicHandlers = {
   onPiano: () => { ui.view = 'watch'; ui.watchSession = 0; ui.watchNote = ''; render(); },
+  onSheets: () => openSongbook(),
   onExit: () => {
     const kid = kidById(ui.kidId);
     if (!kid) return;
@@ -1955,7 +1957,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -2012,7 +2014,7 @@ function render() {
   const scrollY = window.scrollY;
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
-  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
+  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
   const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
   // load the sign-in code early, so a sign-in popup opens straight from the tap
@@ -2031,6 +2033,7 @@ function render() {
   mountVillages($app, villageHandlers);
   mountHouses($app, houseHandlers);
   mountMusicHouses($app, musicHandlers);
+  mountSongbook($app);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
@@ -2463,6 +2466,7 @@ actions.visitor = (el) => {
 // ---------- playing with a visitor (see play-ui.js) ----------
 
 // the leaderboard's This week / All time tabs
+Object.assign(actions, songbookActions);
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
 
 actions['tank-pick'] = (el) => {

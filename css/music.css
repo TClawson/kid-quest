@@ -29,3 +29,49 @@
 .watch .watch-goal.done { color: #2b8a3e; }
 .watch .watch-session { margin: 0; font-weight: 700; color: var(--muted); }
 .watch .watch-note { margin: 0; font-weight: 700; color: #a8701e; }
+
+/* ---------- the sheet music stand's songbook (js/songbook.js) ---------- */
+.songbook .song-intro { margin: 4px 0 12px; }
+.song-tier h3 { margin: 16px 0 8px; font-family: var(--px-font); }
+.song-tier.locked h3 { color: var(--muted); }
+.song-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.song-card { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 8px; text-align: left; padding: 10px 12px; border: 2px solid var(--px-ink, #2b2238); border-radius: 6px; background: #fffaf0; box-shadow: 0 3px 0 var(--px-ink, #2b2238); color: inherit; font: inherit; cursor: pointer; }
+.song-card b { font-family: var(--px-font); font-size: 1.15rem; line-height: 1.1; }
+.song-card small, .song-card .song-stars { grid-column: 2; }
+.song-card .song-icon { grid-row: span 3; font-size: 1.6rem; }
+.song-card .song-stars { color: #e8a317; letter-spacing: 2px; }
+.song-card.locked { background: #efeaf4; box-shadow: none; color: var(--muted); cursor: default; }
+.song-card.locked .song-icon { filter: grayscale(1); opacity: 0.6; }
+.song-card:not(.locked):active { transform: translateY(2px); box-shadow: 0 1px 0 var(--px-ink, #2b2238); }
+
+.song-tools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin: 8px 0 10px; }
+/* the buttons stay on top while the music scrolls by, so Stop is always in reach */
+.songbook.piece .song-tools { position: sticky; top: 0; z-index: 5; margin: 0 -8px 6px; padding: 8px; background: var(--bg); }
+.sheet-wait { margin: 0; padding: 24px; text-align: center; }
+.song-tools .tabs { margin: 0; }
+.song-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.song-buttons .btn.on { background: var(--brand); color: #fff; }
+.song-play.playing { background: #e8590c; }
+.sheet { background: #fffdf7; border: 2px solid var(--px-ink, #2b2238); border-radius: 6px; padding: 6px 4px; min-height: 240px; color: #111; }
+.sheet svg { display: block; }
+.sheet .abcjs-chord { font-weight: 700; fill: #5f3dc4; }
+.sheet .abcjs-lyric { fill: #7a6a8a; }
+/* the bar being played */
+.sheet .abcjs-note.now, .sheet .abcjs-rest.now, .sheet .abcjs-beam-elem.now { fill: var(--kid, #e8590c); stroke: var(--kid, #e8590c); }
+.sheet .abcjs-lyric.now, .sheet .abcjs-chord.now { fill: var(--kid, #e8590c); }
+.song-tip { margin-top: 8px; }
+/* without abcjs: chord names over note names, bar by bar */
+.lead-sheet { display: grid; grid-template-columns: repeat(var(--per, 4), 1fr); gap: 0; }
+.lead-bar { display: grid; gap: 4px; padding: 8px; border-left: 2px solid #ccc; font-size: 1.1rem; }
+.lead-bar b { color: #5f3dc4; }
+.lead-bar.now { background: #fff3bf; }
+/* a phone on its side: smaller buttons, so the music has room */
+@media (max-height: 500px) {
+  .songbook.piece .song-tools { padding: 4px 8px; gap: 4px 8px; }
+  .song-levels button, .song-hands button, .song-buttons .btn { padding: 4px 8px; font-size: 0.85rem; }
+}
+@media (max-width: 600px) {
+  .song-tools { justify-content: flex-start; }
+  .song-levels button, .song-hands button { padding: 6px 8px; font-size: 0.9rem; }
+  .song-buttons .btn { padding: 8px 10px; font-size: 0.95rem; }
+}

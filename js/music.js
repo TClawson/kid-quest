@@ -161,10 +161,14 @@ function scheduleStep(r, song, s, t) {
   // arpeggio (pulse 2), two notes per step
   const arp = song.arp;
   if (arp && barIndex >= (arp.from || 0)) {
-    const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 1, 2];
+    // four notes to a beat either way, so the pattern keeps the song's beat (three would turn
+    // around every dotted eighth and sound like a rhythm of its own)
+    const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 2, 1, 2];
+    // (a swung eighth is long or short, and its two notes share it evenly)
+    const half = (step * (1 + (i % 2 ? -1 : 1) * (song.swing || 0))) / 2;
     for (let k = 0; k < 2; k += 1) {
       const tone = tones[order[(i * 2 + k) % order.length]];
-      voice(r, arp.wave || 'square', hz(tone + ((arp.octave ?? 4) + 1) * 12), at + k * (step / 2), (step / 2) * 0.8, arp.vol ?? 0.07, arp.env);
+      voice(r, arp.wave || 'square', hz(tone + ((arp.octave ?? 4) + 1) * 12), at + k * half, half * 0.8, arp.vol ?? 0.07, arp.env);
     }
   }
 
@@ -261,6 +265,147 @@ export async function renderSong(theme, loops = 1, sampleRate = 44100) {
   const r = rig(off, master, song, step);
   for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s % (song.lead.length * song.beat), 0.05 + s * step);
   return off.startRendering();
+}
+
+// ---------- the sheet music stand (see songbook.js) ----------
+
+/**
+ * Play one piece from the songbook once: a map song ('bg-meadow') or a show's tune
+ * ('show:bg-meadow'), at tempo (1 is the game's speed, 0.7 slower to follow along).
+ * Returns { step (seconds an eighth), beat (steps a bar), steps, at() (steps played so far,
+ * fractional; negative before the first note), done(), stop() }, or null without sound.
+ */
+export function playPiece(id, { tempo = 1 } = {}) {
+  const a = context();
+  if (!a) return null;
+  const song = compile(id);
+  const step = 60 / song.bpm / 2 / tempo;
+  const steps = song.lead.length * song.beat;
+  const master = a.createGain();
+  master.gain.value = VOLUME * 1.6 * (song.gain || 1);
+  master.connect(a.destination);
+  const r = rig(a, master, song, step);
+  const t0 = a.currentTime + 0.15;
+  let next = 0;
+  let timer = 0;
+  const schedule = () => {
+    while (next < steps && t0 + next * step < a.currentTime + 0.3) {
+      scheduleStep(r, song, next, t0 + next * step);
+      next += 1;
+    }
+    if (next >= steps) clearInterval(timer);
+  };
+  schedule();
+  timer = setInterval(schedule, 100);
+  let stopped = false;
+  return {
+    step,
+    beat: song.beat,
+    steps,
+    // steps heard so far (the speaker plays a little after the clock, more on Bluetooth)
+    at: () => (a.currentTime - (a.outputLatency || a.baseLatency || 0) - t0) / step,
+    // done once the last note (and its echo, on the dreamy songs) has faded
+    done: () => stopped || a.currentTime > t0 + steps * step + (song.echo ? 1.5 : 0.4),
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      const t = a.currentTime;
+      master.gain.cancelScheduledValues(t);
+      master.gain.setValueAtTime(master.gain.value, t);
+      master.gain.linearRampToValueAtTime(0.0001, t + 0.15);
+      setTimeout(() => master.disconnect(), 400);
+    },
+  };
+}
+
+/**
+ * Where a spot in the music (in eighths) falls when the song swings: every second eighth comes
+ * `swing` of an eighth late (as scheduleStep plays it), and what lies between moves with it.
+ */
+export function swingAt(x, swing = 0) {
+  const pair = Math.floor(x / 2) * 2;
+  const r = x - pair;
+  return pair + (r < 1 ? r * (1 + swing) : 1 + swing + (r - 1) * (1 - swing));
+}
+
+/**
+ * Play a piano version from the songbook (arrange.js): notes [{ midi, start, len, hand }] in
+ * eighths, with a soft piano-like voice, bpm at tempo; steps a bar; swing as in the song.
+ * Returns the same handle as playPiece, or null without sound.
+ */
+export function playNotes(notes, { bpm, beat, tempo = 1, swing = 0 }) {
+  const a = context();
+  if (!a) return null;
+  const step = 60 / bpm / 2 / tempo;
+  // a swung song plays its piano versions swung, like the game does
+  if (swing) notes = notes.map((n) => ({ ...n, start: swingAt(n.start, swing), len: swingAt(n.start + n.len, swing) - swingAt(n.start, swing) }));
+  const steps = Math.ceil(Math.max(0, ...notes.map((n) => n.start + n.len)) / beat) * beat;
+  const master = a.createGain();
+  master.gain.value = 0.55;
+  const squash = a.createDynamicsCompressor(); // many notes at once stay below clipping
+  master.connect(squash).connect(a.destination);
+  const t0 = a.currentTime + 0.15;
+  const list = [...notes].sort((x, y) => x.start - y.start);
+  let next = 0;
+  let timer = 0;
+  const schedule = () => {
+    while (next < list.length && t0 + list[next].start * step < a.currentTime + 0.3) {
+      const n = list[next];
+      pianoNote(a, master, n.midi, t0 + n.start * step, n.len * step, n.hand === 'lh' ? 0.11 : 0.14);
+      next += 1;
+    }
+    if (next >= list.length) clearInterval(timer);
+  };
+  schedule();
+  timer = setInterval(schedule, 100);
+  let stopped = false;
+  return {
+    step,
+    beat,
+    steps,
+    at: () => (a.currentTime - (a.outputLatency || a.baseLatency || 0) - t0) / step,
+    done: () => stopped || a.currentTime > t0 + steps * step + 0.8,
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      const t = a.currentTime;
+      master.gain.cancelScheduledValues(t);
+      master.gain.setValueAtTime(master.gain.value, t);
+      master.gain.linearRampToValueAtTime(0.0001, t + 0.15);
+      setTimeout(() => master.disconnect(), 400);
+    },
+  };
+}
+
+/** One piano-ish note: a soft triangle with a touch of its octave, struck and dying away. */
+function pianoNote(a, out, midi, t, dur, vel) {
+  const f = 440 * 2 ** ((midi - 69) / 12);
+  const g = a.createGain();
+  const tone = a.createBiquadFilter();
+  tone.type = 'lowpass';
+  tone.frequency.value = Math.min(6000, f * 5);
+  const o1 = a.createOscillator();
+  o1.type = 'triangle';
+  o1.frequency.value = f;
+  const o2 = a.createOscillator();
+  o2.frequency.value = f * 2;
+  const g2 = a.createGain();
+  g2.gain.value = 0.2;
+  o1.connect(tone);
+  o2.connect(g2).connect(tone);
+  tone.connect(g).connect(out);
+  const end = t + Math.max(0.08, dur);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vel, t + 0.006);
+  g.gain.setTargetAtTime(vel * 0.15, t + 0.006, 0.5); // the strike dies away while held
+  g.gain.setTargetAtTime(0, end, 0.06); // and stops when the key comes up
+  o1.start(t);
+  o2.start(t);
+  o1.stop(end + 0.5);
+  o2.stop(end + 0.5);
+  o1.onended = () => g.disconnect();
 }
 
 // ---------- the secret shows (see mapshow.js) ----------

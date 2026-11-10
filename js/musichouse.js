@@ -78,7 +78,6 @@ function room(doc, data) {
 
 // what the stations say while they're still being built (each gets its own screen soon)
 const SOON = {
-  sheets: (n) => `Sheet music for the songs from your maps is on its way, ${n}! The more pianos you earn, the more songs you'll find here.`,
   studio: (n) => `Your recording studio is almost ready, ${n}! Soon you'll record your piano and mix it with music from the game.`,
   lab: () => 'Beep boop! The Note-o-Matic will turn your piano playing into other instruments. It\'s nearly finished!',
 };
