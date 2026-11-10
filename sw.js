@@ -73,6 +73,8 @@ const SHELL = [
   'js/testrec.js',
   'js/studiokit.js',
   'js/remix.js',
+  'js/listener.js',
+  'js/notomatic.js',
   'js/arrange.js',
   'js/arrangements.js',
   'js/houseart.js',
