@@ -21,6 +21,7 @@ export const SLOTS = [
   { id: 'music', name: 'Music', icon: '🎹' },
   { id: 'sport', name: 'Sports', icon: '⚽' },
   { id: 'home', name: 'Home', icon: '🏠' }, // furniture for the buddy's house (furniture.js)
+  { id: 'garden', name: 'Garden', icon: '🌱' }, // seed packets and garden decorations (gardenrules.js): not ITEMS, app.js draws this tab itself
 ];
 
 // Slots the buddy wears. Bought items in these slots belong to one buddy: switching

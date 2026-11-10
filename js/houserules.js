@@ -103,11 +103,11 @@ export function shelfLevel(count, total) {
 // ---------- inside or outside ----------
 // Where the buddy is lives on this device only (each kid has their own tablet user), per kid:
 // the first time the app opens on a new day the buddy wakes up inside its house; after that,
-// wherever the kid left it (its house, the music house, or out in the village) is where it
+// wherever the kid left it (its house, the music house, the garden, or out in the village) is where it
 // is when the app opens again that day.
 
 const KEY = 'kidquest.house';
-export const PLACES = ['house', 'music', 'out'];
+export const PLACES = ['house', 'music', 'garden', 'out'];
 
 function readAll(storage) {
   try { return JSON.parse(storage?.getItem(KEY) || '{}') || {}; } catch { return {}; }
@@ -117,8 +117,8 @@ function writeAll(storage, all) {
 }
 
 /**
- * Where the kid's buddy is today: 'house' (its own house), 'music' (the music house) or
- * 'out' (the village). A new day starts in its house. The very first time (before the house
+ * Where the kid's buddy is today: 'house' (its own house), 'music' (the music house),
+ * 'garden' (the backyard garden) or 'out' (the village). A new day starts in its house. The very first time (before the house
  * existed) the buddy starts outside, next to its house, so the kid finds the door. Saves
  * what it decided, so it holds for the rest of the day.
  */
@@ -132,7 +132,7 @@ export function placeOf(kidId, today, storage = globalThis.localStorage) {
   return place;
 }
 
-/** The buddy went into its house, the music house, or out to the village. */
+/** The buddy went into its house, the music house, the garden, or out to the village. */
 export function setPlace(kidId, today, place, storage = globalThis.localStorage) {
   const p = PLACES.includes(place) ? place : 'out';
   const all = readAll(storage);

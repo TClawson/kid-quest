@@ -10,6 +10,7 @@ import { makeGrid, findPath } from './village.js';
 import { furnitureById } from './furniture.js';
 import { fishSpecies } from './fishbook.js';
 import { fishPic } from './fishart.js';
+import { vaseArt, basketArt as veggieBasketArt, bowlArt } from './gardenart.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const R = ROOM;
@@ -61,7 +62,8 @@ const DONE_SAY = {
  *   layout: homeLayout(kid), chores: { bed, teeth, floor: { id, name, icon, st, verify, timer, sub } or null },
  *   mess (0-3), shelf (0-3), gear: bestGear(owned), quests: quests left outside (for the door sign),
  *   tank: fishbook.js tankFish(kid) (the fish in the tank, null when empty), fish: how many kinds
- *   of fish the kid has caught,
+ *   of fish the kid has caught, garden: { thirsty } (plants waiting for water, for the Garden tag),
+ *   harvest: gardenrules.js houseHarvest (the vases, baskets and fruit bowl the garden puts out),
  * }
  */
 export function houseHtml(h) {
@@ -69,6 +71,7 @@ export function houseHtml(h) {
     kid: h.kidId, name: h.kidName, color: h.color, layout: Object.fromEntries(Object.entries(h.layout || {}).map(([k, v]) => [k, v?.id || null])),
     chores: h.chores, mess: h.mess || 0, shelf: h.shelf || 0, gear: h.gear || {},
     tank: h.tank ? { species: h.tank.species, len: h.tank.len } : null,
+    harvest: h.harvest || null,
   };
   const W = TANK.water;
   // the tank's fish swims in the water (clipped to the glass), with bubbles; its name on a plaque
@@ -102,6 +105,7 @@ export function houseHtml(h) {
           <span class="v-target" hidden></span>
         </div>
         <div class="h-sign">🏠 ${esc(h.kidName)}'s house</div>
+        <button class="h-gbtn" data-garden aria-label="Go to the garden">🌱 Garden${h.garden?.thirsty ? `<i>💧${h.garden.thirsty}</i>` : ''}</button>
         <div class="v-dialog" hidden></div>
       </div>
     </section>`;
@@ -116,7 +120,8 @@ export function cameIn(kidId) { memory.set(kidId, { ...HOUSE_SPOTS.door, face: 1
 /**
  * Starts every house inside root. handlers: {
  *   onTask(taskId, el): the kid says a chore is done, onTrophies(), onLeaderboard(),
- *   onTank(): the fish picker, onFishBook(), onExit(): the buddy went out the door, sound(name),
+ *   onTank(): the fish picker, onFishBook(), onGarden(): the buddy went out to the garden,
+ *   onExit(): the buddy went out the door, sound(name),
  * }
  */
 export function mountHouses(root, handlers) {
@@ -157,6 +162,8 @@ function mount(section, handlers) {
     c.style.cssText = `left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px;z-index:${p.foot}`;
     world.insertBefore(c, buddyEl);
   }
+
+  harvestPieces(section, world, buddyEl, res.pieces.find((p) => p.id === 'table'), data.harvest);
 
   // where the buddy can walk: the floor, round the furniture, through the bathroom doorway
   const pt = R.partition;
@@ -234,7 +241,12 @@ function mount(section, handlers) {
     targetEl.hidden = true;
     if (!goal) return;
     if (goal.face) me.face = goal.face;
-    if (goal.use === 'door') {
+    if (goal.use === 'garden') {
+      // out the door and round the back to the garden
+      buddyEl.classList.add('going-out');
+      handlers.sound?.('tap');
+      setTimeout(() => handlers.onGarden?.(), 380);
+    } else if (goal.use === 'door') {
       // out the door: a step down through the doorway, then the village
       buddyEl.classList.add('going-out');
       handlers.sound?.('tap');
@@ -253,7 +265,7 @@ function mount(section, handlers) {
     buddyEl.classList.add('walking');
   };
   const use = (what) => {
-    const spot = what === 'teeth' ? HOUSE_SPOTS.sink : HOUSE_SPOTS[what] || HOUSE_SPOTS.floor;
+    const spot = what === 'teeth' ? HOUSE_SPOTS.sink : what === 'garden' ? HOUSE_SPOTS.door : HOUSE_SPOTS[what] || HOUSE_SPOTS.floor;
     const goal = { use: what, face: what === 'bed' ? -1 : undefined };
     if (Math.hypot(me.x - spot.x, me.y - spot.y) < 16) { me.goal = goal; arrive(); return; }
     walkTo(spot.x, spot.y, goal);
@@ -262,6 +274,7 @@ function mount(section, handlers) {
   view.addEventListener('click', (e) => {
     if (e.target.closest('.v-dialog')) return;
     e.stopPropagation();
+    if (e.target.closest('.h-gbtn')) { handlers.sound?.('tap'); use('garden'); return; }
     const chore = e.target.closest('.h-chore');
     if (chore) { handlers.sound?.('tap'); use(chore.dataset.chore); return; }
     const sp = e.target.closest('.h-spot');
@@ -318,6 +331,46 @@ function mount(section, handlers) {
   requestAnimationFrame(tick);
 }
 
+
+// ---- what the garden puts in the house ----
+// Vases of flowers and the fruit bowl stand on the table (placed by the table piece's box, since
+// the table art differs); baskets of vegetables stand on the floor beside it. Each is its own
+// little canvas, sorted with the buddy by where its feet are.
+const asCanvas = (doc, art) => {
+  if (!art) return null;
+  if (art.getContext) return art;
+  return art.canvas || null;
+};
+function harvestPieces(section, world, buddyEl, table, harvest) {
+  if (!table || !harvest) return;
+  const doc = section.ownerDocument;
+  const put = (art, id, cx, footY, z) => {
+    const src = asCanvas(doc, art);
+    if (!src) return;
+    const c = doc.createElement('canvas');
+    c.width = src.width; c.height = src.height;
+    c.getContext('2d').drawImage(src, 0, 0);
+    c.className = 'h-piece';
+    c.dataset.piece = id;
+    c.style.cssText = `left:${Math.round(cx - (src.ax ?? src.width / 2))}px;top:${Math.round(footY - (src.ay ?? src.height))}px;width:${src.width}px;height:${src.height}px;z-index:${z}`;
+    world.insertBefore(c, buddyEl);
+  };
+  // the tabletop: its middle (the small table has its chair on the left, the others a chair at each end)
+  // and a little way down the piece
+  const cx = table.x + table.w * (table.w < 56 ? 0.64 : 0.5);
+  const top = table.y + Math.round(table.h * TABLE_TOP);
+  const z = table.foot + 1;
+  const vases = harvest.vases || [];
+  const bowl = harvest.bowl?.length;
+  // with the bowl in front in the middle, the first two vases stand behind it at each side
+  const on = vases.slice(0, 2);
+  on.forEach((seed, i) => put(vaseArt(seed), `vase${i}`, cx + (bowl ? (i ? 11 : -11) : on.length === 1 ? 0 : (i ? 8 : -8)), top + 2, z));
+  if (bowl) put(bowlArt(harvest.bowl), 'bowl', cx + 1, top + 6, z + 1);
+  // a third vase stands on the floor in front of the table
+  if (vases[2]) put(vaseArt(vases[2]), 'vase2', table.x + 8, table.foot + 6, table.foot + 6);
+  (harvest.baskets || []).forEach((seed, i) => put(veggieBasketArt(seed), `basket${i}`, table.x + table.w + 6 + i * 13, table.foot - 1 - (i % 2) * 2, table.foot - 1 + (i % 2)));
+}
+const TABLE_TOP = 0.42;
 
 // ---- the fish tank ----
 const fishCache = new Map();

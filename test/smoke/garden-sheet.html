@@ -1,0 +1,132 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>body{background:#2a1e2a;margin:0;padding:8px;font:12px sans-serif;color:#fff8e7} canvas{image-rendering:pixelated;display:block} .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px} .cell{text-align:center} .scene{position:relative;overflow:hidden} .scene canvas{position:absolute} h3{margin:6px 0;font-size:13px;color:#ffd878}</style></head>
+<body><div id="out"></div>
+<script type="module">
+// A sheet of the garden art (js/gardenart.js), for previews:
+// ?mode=yards|plants|trees|decor|thumbs|house|full|compare|shields&scale=3 (full: &shield=bubble&theme=ocean)
+import * as GA from '../../js/gardenart.js';
+import { SEEDS, KINDS, DECOR, gardenLayout } from '../../js/gardenrules.js';
+import { paintRoom, ROOM } from '../../js/houseart.js';
+import { homeLayout, FURNITURE } from '../../js/furniture.js';
+const { YARD } = GA;
+const q = new URLSearchParams(location.search);
+const S = Number(q.get('scale') || 3);
+const mode = q.get('mode') || 'yards';
+const out = document.getElementById('out');
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+const row = (title) => { if (title) out.append(el('h3', '', title)); const r = el('div', 'row'); out.append(r); return r; };
+const cell = (r, c, label, s = S) => { const w = el('div', 'cell'); const k = document.createElement('canvas'); k.width = c.width; k.height = c.height; k.getContext('2d').drawImage(c, 0, 0); k.style.width = `${c.width * s}px`; w.append(k); if (label) w.append(el('div', '', label)); r.append(w); return w; };
+const decor = (id) => DECOR.find((d) => d.id === id);
+const kidWith = (ids) => { const k = { owned: ids, gardenDecor: {} }; for (const id of ids) k.gardenDecor[decor(id).spot] = id; return k; };
+
+// a whole garden scene: the yard, its pieces, plants, decorations and critters, sorted by foot
+function scene(o, s = S) {
+  const holder = el('div', 'scene');
+  holder.style.width = `${YARD.W * s}px`; holder.style.height = `${YARD.H * s}px`;
+  const base = document.createElement('canvas');
+  const res = GA.paintYard(base, { layout: o.layout, color: o.color });
+  base.style.cssText = `left:0;top:0;width:${YARD.W * s}px`;
+  holder.append(base);
+  const things = [...res.pieces.map((p) => ({ c: p.canvas, x: p.x, y: p.y, foot: p.foot }))];
+  const add = (c, fx, fy, foot = fy) => things.push({ c, x: fx - c.ax, y: fy - c.ay, foot });
+  (o.beds || []).forEach((p, i) => { if (p) { const b = YARD.beds[i]; add(GA.plantArt(p.seed, p.stage, p), b.foot.x, b.foot.y); } });
+  (o.trees || []).forEach((p, i) => { if (p) { const t = YARD.trees[i]; add(GA.plantArt(p.seed, p.stage, p), t.x, t.y); } });
+  const L = o.layout || {};
+  for (const spot of ['water', 'bees', 'seat']) { const d = L[spot]; if (d && d.art !== 'pond' && GA.decorArt) add(GA.decorArt(d.id), YARD.spots[spot].x, YARD.spots[spot].y); }
+  if (L.can && GA.canArt) add(GA.canArt(L.can.id), YARD.spots.can.x, YARD.spots.can.y);
+  if (o.buddy) { const b = document.createElement('canvas'); b.width = 24; b.height = 24; const g = b.getContext('2d'); g.fillStyle = '#e8846a'; g.fillRect(6, 6, 12, 16); g.fillStyle = '#ffd0b0'; g.fillRect(7, 2, 10, 8); g.fillStyle = '#3b2235'; g.fillRect(9, 5, 2, 2); g.fillRect(13, 5, 2, 2); b.ax = 12; b.ay = 23; add(b, o.buddy.x, o.buddy.y); }
+  for (const [kind, frame, x, y, hue] of o.critters || []) { const c = kind === 'b' ? GA.butterflyArt(frame, hue) : kind === 'e' ? GA.beeArt(frame) : GA.birdArt(frame); add(c, x, y, 999); }
+  things.sort((a, b) => a.foot - b.foot);
+  for (const t of things) { const k = document.createElement('canvas'); k.width = t.c.width; k.height = t.c.height; k.getContext('2d').drawImage(t.c, 0, 0); k.style.cssText = `left:${t.x * s}px;top:${t.y * s}px;width:${t.c.width * s}px`; holder.append(k); }
+  if (o.shield) { const c = GA.shieldArt(o.shield, o.theme); const k = document.createElement('canvas'); k.width = c.width; k.height = c.height; k.getContext('2d').drawImage(c, 0, 0); k.style.cssText = `left:0;top:0;width:${YARD.W * s}px`; holder.append(k); }
+  if (q.get('blocks')) for (const [x, y, w, h] of GA.yardBlocks(o.layout)) { const d = el('div'); d.style.cssText = `position:absolute;left:${x * s}px;top:${y * s}px;width:${w * s}px;height:${h * s}px;outline:1px solid red`; holder.append(d); }
+  return holder;
+}
+
+const FULL = {
+  beds: [
+    { seed: 'seed-sunflower', stage: 3 }, { seed: 'seed-tomato', stage: 4 },
+    { seed: 'seed-tulip', stage: 3 }, { seed: 'seed-carrot', stage: 4 },
+    { seed: 'seed-daisy', stage: 2 }, { seed: 'seed-pumpkin', stage: 4 },
+  ],
+  trees: [{ seed: 'seed-apple', stage: 5, fruit: 4 }, { seed: 'seed-cherry', stage: 4 }],
+  critters: [['b', 0, 120, 70, 330], ['b', 1, 214, 108, 45], ['b', 2, 70, 128, 200], ['e', 0, 104, 92], ['e', 1, 286, 120], ['r', 0, 52, 146]],
+};
+const fancyKid = kidWith(['garden-fence-picket', 'garden-path-stones', 'garden-birdbath', 'garden-beehouse', 'garden-bench', 'garden-can-copper']);
+
+if (mode === 'yards') {
+  for (const f of ['garden-fence-basic', 'garden-fence-picket', 'garden-fence-flower']) {
+    const r = row(decor(f).name);
+    for (const p of [null, 'garden-path-stones', 'garden-path-brick']) {
+      const ids = [f, ...(p ? [p] : [])];
+      const w = el('div', 'cell'); w.append(scene({ layout: gardenLayout(kidWith(ids)) }, Number(q.get('ys') || 2)), el('div', '', p ? decor(p).name : 'dirt path')); r.append(w);
+    }
+  }
+  const r = row('pond');
+  const w = el('div', 'cell'); w.append(scene({ layout: gardenLayout(kidWith(['garden-pond', 'garden-swing', 'garden-beehouse', 'garden-fence-flower', 'garden-path-brick'])) }, 2)); r.append(w);
+} else if (mode === 'plants') {
+  for (const s of SEEDS.filter((s) => s.kind !== 'tree')) {
+    const r = row(`${s.name} (normal, then droopy)`);
+    for (const droopy of [false, true]) for (let st = 0; st < KINDS[s.kind].stages; st += 1) cell(r, GA.plantArt(s.id, st, { droopy }), `${droopy ? 'droopy ' : ''}${st}`);
+  }
+} else if (mode === 'trees') {
+  for (const s of SEEDS.filter((s) => s.kind === 'tree')) {
+    const r = row(`${s.name}: stages 0-5, fruit 0/3/5, droopy`);
+    for (let st = 0; st < 6; st += 1) cell(r, GA.plantArt(s.id, st, { fruit: st === 5 ? 1 : 0 }), `${st}`, 2);
+    for (const f of [0, 3, 5]) cell(r, GA.plantArt(s.id, 5, { fruit: f }), `fruit ${f}`, 2);
+    cell(r, GA.plantArt(s.id, 3, { droopy: true }), 'droopy 3', 2);
+    cell(r, GA.plantArt(s.id, 5, { droopy: true, fruit: 3 }), 'droopy 5', 2);
+  }
+} else if (mode === 'decor') {
+  let r = row('decorations');
+  for (const id of ['garden-birdbath', 'garden-beehouse', 'garden-bench', 'garden-swing']) cell(r, GA.decorArt(id), decor(id).name);
+  r = row('watering cans: upright and pouring, and water drops');
+  for (const id of ['garden-can-basic', 'garden-can-copper', 'garden-can-rainbow']) { cell(r, GA.canArt(id, 0), decor(id).name, 5); cell(r, GA.canArt(id, 1), 'pouring', 5); }
+  for (let f = 0; f < 3; f += 1) cell(r, GA.waterDrops(f), `drops ${f}`, 5);
+  r = row('critters');
+  for (const hue of [330, 45, 200, 280]) for (let f = 0; f < 3; f += 1) cell(r, GA.butterflyArt(f, hue), `${hue}/${f}`, 6);
+  for (let f = 0; f < 2; f += 1) cell(r, GA.beeArt(f), `bee ${f}`, 6);
+  for (let f = 0; f < 3; f += 1) cell(r, GA.birdArt(f), `bird ${f}`, 6);
+} else if (mode === 'thumbs') {
+  let r = row('seed packets');
+  for (const s of SEEDS) { const c = GA.seedThumb(document, s.id); c.ax = 0; cell(r, c, s.name, 4); }
+  r = row('decorations');
+  for (const d of DECOR) { const c = GA.decorThumb(document, d.id); if (c) cell(r, c, d.name, 3); }
+} else if (mode === 'house') {
+  let r = row('vases');
+  for (const s of SEEDS.filter((s) => s.kind === 'flower')) cell(r, GA.vaseArt(s.id), s.name, 5);
+  r = row('baskets');
+  for (const s of SEEDS.filter((s) => s.kind === 'veg')) cell(r, GA.basketArt(s.id), s.name, 5);
+  r = row('fruit bowls');
+  for (const fr of [[], ['seed-apple'], ['seed-apple', 'seed-orange', 'seed-cherry'], ['seed-cherry', 'seed-cherry', 'seed-apple', 'seed-orange', 'seed-apple'], ['seed-orange', 'seed-orange', 'seed-orange', 'seed-orange', 'seed-orange']]) cell(r, GA.bowlArt(fr), `${fr.length}`, 5);
+  // on the house table
+  r = row('in the house');
+  const owned = FURNITURE.filter((f) => f.price).map((f) => f.id);
+  const holder = el('div', 'scene'); holder.style.width = `${ROOM.W * S}px`; holder.style.height = `${ROOM.H * S}px`;
+  const c = document.createElement('canvas'); const res = paintRoom(c, { layout: homeLayout({ owned, home: { table: 'home-table-round' } }), made: true, teeth: true, mess: 0, shelf: 1, gear: {}, color: '#e03131' });
+  c.style.cssText = `left:0;top:0;width:${ROOM.W * S}px`; holder.append(c);
+  for (const p of res.pieces) { const k = p.canvas; k.style.cssText = `left:${p.x * S}px;top:${p.y * S}px;width:${p.w * S}px`; holder.append(k); }
+  const at = (src, fx, fy) => { const k = document.createElement('canvas'); k.width = src.width; k.height = src.height; k.getContext('2d').drawImage(src, 0, 0); k.style.cssText = `left:${(fx - src.ax) * S}px;top:${(fy - src.ay) * S}px;width:${src.width * S}px;z-index:500`; holder.append(k); };
+  at(GA.vaseArt('seed-sunflower'), 112, 99); at(GA.bowlArt(['seed-apple', 'seed-orange', 'seed-cherry', 'seed-apple']), 130, 101); at(GA.basketArt('seed-pumpkin'), 86, 128); at(GA.basketArt('seed-carrot'), 104, 130);
+  r.append(holder);
+} else if (mode === 'full') {
+  const lay = gardenLayout(fancyKid);
+  out.append(scene({ ...FULL, layout: lay, shield: q.get('shield'), theme: q.get('theme'), buddy: q.get('buddy') ? { x: 160, y: 126 } : null }, S));
+} else if (mode === 'compare') {
+  const r = row();
+  const owned = FURNITURE.filter((f) => f.price).map((f) => f.id);
+  const holder = el('div', 'scene'); holder.style.width = `${ROOM.W * S}px`; holder.style.height = `${ROOM.H * S}px`;
+  const c = document.createElement('canvas'); const res = paintRoom(c, { layout: homeLayout({ owned, home: { bed: 'home-bed-quilt', table: 'home-table-round', couch: 'home-couch', chair: 'home-chair-cozy', corner: 'home-hammock', lamp: 'home-lamp', rug: 'home-rug-round', art: 'home-art-sunset' } }), made: true, teeth: true, mess: 0, shelf: 2, gear: {}, color: '#e03131' });
+  c.style.cssText = `left:0;top:0;width:${ROOM.W * S}px`; holder.append(c);
+  for (const p of res.pieces) { const k = p.canvas; k.style.cssText = `left:${p.x * S}px;top:${p.y * S}px;width:${p.w * S}px`; holder.append(k); }
+  r.append(holder, scene({ ...FULL, layout: gardenLayout(fancyKid), color: '#e03131' }, S));
+} else if (mode === 'shields') {
+  for (const [kind, theme] of [['bubble', 'ocean'], ['bubble', 'space'], ['bubble', 'galaxy'], ['heat', 'volcano']]) {
+    const r = row(`${kind} / ${theme}`);
+    cell(r, GA.shieldArt(kind, theme), 'overlay alone', 2);
+    const w = el('div', 'cell'); w.append(scene({ ...FULL, layout: gardenLayout(fancyKid), shield: kind, theme }, 2)); r.append(w);
+  }
+}
+document.body.dataset.ready = '1';
+</script></body></html>
