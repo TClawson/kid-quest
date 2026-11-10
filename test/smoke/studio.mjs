@@ -88,6 +88,10 @@ async function start(viewport, done, s = family(done)) {
     };
     window.kqStarts = 0;
     window.kqStops = 0;
+    // the notes handed to the studio's renders (a render given up hands over no more)
+    window.kqNotes = 0;
+    const osc = OfflineAudioContext.prototype.createOscillator;
+    OfflineAudioContext.prototype.createOscillator = function (...a) { window.kqNotes += 1; return osc.apply(this, a); };
     const P = AudioBufferSourceNode.prototype;
     const s = P.start;
     const t = P.stop;
@@ -186,6 +190,10 @@ async function toSettings(page) {
   await page.click('[data-action="tab"][data-tab="settings"]');
   await page.waitForSelector('[data-action="studio-test"]');
 }
+/** The buttons matching `sel` that are under 44 px tall or wide: [text, width, height]. */
+const tooSmall = (page, sel) => page.evaluate((sel) => [...document.querySelectorAll(sel)].map((el) => { const r = el.getBoundingClientRect(); return [el.textContent.trim(), Math.round(r.width), Math.round(r.height)]; }).filter(([, w, h]) => w < 44 || h < 44), sel);
+/** Whether two elements' boxes overlap. */
+const overlap = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 const noSideScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${b}`);
 
@@ -568,6 +576,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await measure();
   // the take is kept: a second tap on Undo straight away does nothing
   for (let i = 0; i < 60 && !(await clips(page, 1).count()); i += 1) await wait(page, 50);
+  // (the label says Saving… a moment longer, until the take is kept on the tablet)
+  for (let i = 0; i < 60 && await recBtn.textContent() !== '● Record'; i += 1) await wait(page, 50);
   await measure();
   assert.deepEqual(sizes.map((x) => x[0]), ['● Record', 'Get ready… 4', '■ Stop recording', 'Saving…', '● Record'].slice(0, sizes.length).map((t, i) => (i === 1 ? sizes[1][0] : t)));
   assert.equal(new Set(sizes.map((x) => x[1])).size, 1, `Record keeps its width: ${JSON.stringify(sizes)}`);
@@ -822,6 +832,330 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   // the kids' studio is still shut for Ava (no piano, chores not done)
   await page.evaluate(async () => { const c = await import('./js/ctx.js'); c.ui.kidId = 'kid_ava'; c.ui.view = 'studio'; c.render(); });
   assert.equal(await page.locator('.studio-screen').count(), 0, 'Ava still needs a piano and her chores');
+  await ctx.close();
+}
+
+// 9. the remix kit: backing tracks, a song's cymbals and hook, voices, kits, higher and lower,
+// moving into the mix's key; Undo and Redo, a reload, and playing it all
+{
+  const { ctx, page } = await start(TABLET, true);
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-backing');
+  const backing = page.locator('#studio .st-backing');
+  const clipOf = (sel) => page.locator(`#studio .st-clip${sel}`);
+  const draft = () => page.evaluate(async () => (await import('./js/studio-store.js')).loadMixes('kid_ava', true).then((m) => m.draft));
+  // an empty desk shows the backing tracks of both beats, the waltz ones marked and apart,
+  // after the four-beat ones under their own heading
+  assert.equal(await backing.locator('h3').textContent(), 'Backing tracks');
+  assert.equal(await backing.locator('[data-action="st-loop"]').count(), 6, 'six chord loops');
+  assert.equal(await backing.locator('[data-action="st-loop"].on').textContent(), 'Sunny, in C major', 'the chosen loop says its key');
+  const four = backing.locator('.st-songs[data-meter="4"]');
+  const waltzTime = backing.locator('.st-waltz-time');
+  assert.deepEqual(await four.locator('.st-group-name b').allTextContents(), ['Beats', 'Cymbals', 'Bass lines', 'Chords', 'Sparkles']);
+  assert.ok(await backing.locator('[data-pattern="beat-waltz"] .st-waltz').count(), 'a waltz beat is marked: 3 beats');
+  assert.equal(await waltzTime.locator('h4').textContent(), 'Waltz time: 3 beats in a bar');
+  assert.equal(await four.locator('.st-waltz').count(), 0, 'no waltz among the four-beat ones');
+  const waltzOnes = await waltzTime.locator('[data-action="st-back-add"]').evaluateAll((els) => els.map((e) => e.dataset.pattern));
+  assert.deepEqual(waltzOnes.sort(), ['bass-long3', 'bass-waltz', 'beat-sway', 'beat-waltz', 'chords-held3', 'chords-oompah', 'cym-lift3', 'cym-ticks3', 'sparkle-up3'], 'every waltz one, and only those');
+  assert.ok(await page.evaluate(() => { const [a, b] = ['.st-songs[data-meter="4"]', '.st-waltz-time'].map((s) => document.querySelector(`#studio .st-backing ${s}`).getBoundingClientRect()); return b.top >= a.bottom; }), 'the waltz ones come after');
+  // every button there is big enough for a finger
+  assert.deepEqual(await tooSmall(page, '#studio .st-shelf .st-part .btn, #studio .st-loops .btn, #studio .st-vol'), []);
+  assert.equal(await backing.locator('[data-action="st-back-hear"]').count(), await backing.locator('[data-action="st-back-add"]').count(), 'every one can be heard first');
+  // a song lists its new pieces
+  const meadowParts = await page.locator('.st-song[data-song="bg-meadow"] [data-action="st-add"]').allTextContents();
+  for (const name of ['Hook', 'Kick and snare', 'Cymbals']) assert.ok(meadowParts.some((t) => t.includes(name)), `Forest Village has ${name}`);
+  await backing.screenshot({ path: `${out}/shelf-backing-tablet.png` });
+
+  // hear one first, then a beat, a bass line and chords: the House band sticker
+  await page.click('[data-action="st-back-hear"][data-pattern="bass-walk"]');
+  await wait(page, 300);
+  await page.click('[data-action="st-back-add"][data-pattern="beat-rock"]');
+  assert.match(await page.locator('.st-bar').textContent(), /Speed 120/, 'a backing track starts the mix at speed 120');
+  assert.equal(await backing.locator('.st-waltz').count(), 0, 'now only four-beat backing tracks');
+  await page.click('[data-action="st-back-add"][data-pattern="bass-walk"]');
+  await page.click('[data-action="st-back-add"][data-pattern="chords-held"]');
+  await wait(page, 200);
+  assert.equal(await page.locator('.st-sticker[data-sticker="house"]').count(), 1, 'the House band sticker');
+  assert.match(await page.locator('.st-mixname').textContent(), /C major/, 'the chords gave the mix a key');
+  // change the loop: the bass line and the chords follow
+  await page.click('[data-action="st-loop"][data-loop="spooky"]');
+  assert.equal(await backing.locator('[data-action="st-loop"].on').textContent(), 'Spooky, in A minor');
+  assert.match(await toastText(page), /Spooky chords/);
+  assert.equal(await page.locator('#studio .st-clip.group-chords small').first().textContent(), 'Spooky chords');
+
+  // a song's cymbals and its hook
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="cymbals"]');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="hook"]');
+  const hook = clipOf('.kind-hook');
+  assert.equal(await hook.count(), 1);
+  near((await place(hook)).width, 25, 'a hook is 2 bars: 8 of 32 beats');
+  // its voice: the chooser, Deep bass moves it down, the Remixer sticker, an icon on the clip
+  await page.click('[data-action="st-chooser"][data-what="voice"]');
+  const chooser = page.locator('#studio .st-chooser');
+  assert.equal(await chooser.locator('.st-choice').count(), 11, 'its own sound and ten voices');
+  assert.match(await chooser.locator('.st-choice.on').textContent(), /Its own sound/);
+  await chooser.locator('[data-voice="deep"]').click();
+  await wait(page, 100);
+  // (what happened shows under the choices while the chooser is open, not in a toast over them)
+  assert.match(await page.locator('#studio .st-said').textContent(), /Now it plays as Deep bass\. It moved 2 octaves lower/);
+  assert.match(await page.locator('#studio .st-said').textContent(), /New sticker: Remixer!/);
+  assert.doesNotMatch(await toastText(page), /Now it plays|sticker/, 'no toast over the choices');
+  assert.equal(await hook.getAttribute('data-voice'), 'deep');
+  assert.equal(await hook.getAttribute('data-shift'), '-24');
+  assert.equal(await hook.locator('.st-vicon').textContent(), '🐋', 'the voice\'s icon on the clip');
+  assert.equal(await page.locator('.st-sticker[data-sticker="remixer"]').count(), 1, 'the Remixer sticker');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.locator('#studio .st-tools').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${out}/voice-chooser-tablet.png` });
+  // an octave higher
+  await page.click('[data-action="st-shift"][data-d="12"]');
+  assert.equal(await hook.getAttribute('data-shift'), '-12');
+  assert.match(await page.locator('.st-what small').textContent(), /Deep bass, 1 octave lower/);
+  assert.deepEqual(await tooSmall(page, '#studio .st-tools .btn'), [], 'the remix buttons are big enough');
+  // a drum clip's kit; drums have no key
+  await clipOf('.kind-cymbals').click();
+  assert.equal(await clipOf('.kind-cymbals').locator('.st-key').count(), 0, 'no key on a drums clip');
+  assert.equal(await page.locator('.st-what b').textContent(), '🔔 Cymbals from Forest Village');
+  assert.equal(await page.locator('[data-action="st-shift"]').count(), 0, 'drums don\'t go higher or lower');
+  await page.click('[data-action="st-chooser"][data-what="kit"]');
+  assert.equal(await page.locator('#studio .st-chooser .st-choice').count(), 3);
+  await page.click('[data-action="st-kit"][data-kit="tiny"]');
+  assert.equal(await clipOf('.kind-cymbals').getAttribute('data-kit'), 'tiny');
+  assert.equal(await clipOf('.kind-cymbals').locator('.st-vicon').textContent(), '🐭');
+
+  // a part in another key, moved into the mix's
+  await page.click('[data-action="st-add"][data-song="bg-sunset"][data-part="lead"]');
+  const sunny = clipOf('.kind-lead');
+  assert.match(await sunny.locator('.st-key').textContent(), /F major · another key/);
+  assert.equal(await page.locator('[data-action="st-fit"]').textContent(), '🎯 Move into C major');
+  await page.click('[data-action="st-fit"]');
+  assert.match(await toastText(page), /Moved into C major/);
+  assert.equal(await sunny.getAttribute('data-shift'), '-5');
+  assert.equal(await sunny.locator('.st-key').textContent(), 'C major', 'it fits now');
+  assert.equal(await page.locator('[data-action="st-fit"]').count(), 0);
+
+  // Undo and Redo a voice change
+  await hook.click();
+  await page.click('[data-action="st-chooser"][data-what="voice"]');
+  await page.click('[data-action="st-voice"][data-voice="musicbox"]');
+  assert.equal(await hook.getAttribute('data-voice'), 'musicbox');
+  assert.equal(await hook.getAttribute('data-shift'), '-12', 'a second voice doesn\'t move it again');
+  await page.click('[data-action="st-undo"]');
+  assert.equal(await hook.getAttribute('data-voice'), 'deep', 'Undo');
+  await page.click('[data-action="st-redo"]');
+  assert.equal(await hook.getAttribute('data-voice'), 'musicbox', 'Redo');
+  assert.ok(await noSideScroll(page), 'no sideways scrolling on the tablet');
+
+  // after a reload it is all still there
+  await wait(page, 800);
+  const kept = await draft();
+  const how = (m) => m.tracks.flat().map((c) => [c.kind, c.part || c.pattern, c.loop || '', c.voice || '', c.kit || '', c.shift || 0].join(' ')).sort();
+  await page.reload();
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-clip');
+  assert.equal(await page.locator('#studio .st-clip').count(), 6);
+  assert.equal(await clipOf('.kind-hook').getAttribute('data-voice'), 'musicbox');
+  assert.equal(await clipOf('.kind-cymbals').getAttribute('data-kit'), 'tiny');
+  assert.equal(await clipOf('.kind-lead').getAttribute('data-shift'), '-5');
+  assert.equal(await backing.locator('[data-action="st-loop"].on').textContent(), 'Spooky, in A minor', 'the chord picker shows the mix\'s chords');
+  assert.deepEqual(how(await draft()), how(kept));
+  assert.ok(how(kept).includes('backing chords-held spooky   0'));
+  for (const id of ['house', 'remixer']) assert.equal(await page.locator(`.st-sticker[data-sticker="${id}"]`).count(), 1);
+
+  // play it all: the sounds are made first, and the kid sees so (Stop still works)
+  const starts = await page.evaluate(() => window.kqStarts);
+  await page.click('[data-action="st-play"]');
+  assert.match(await page.locator('#studio .st-ready').textContent(), /Getting the music ready/);
+  assert.match(await page.locator('[data-action="st-play"]').textContent(), /Stop/);
+  assert.equal(await page.locator('[data-action="st-play"]').isEnabled(), true);
+  await page.screenshot({ path: `${out}/waiting-tablet.png` });
+  // Stop while waiting: nothing plays; Play again
+  await page.click('[data-action="st-play"]');
+  assert.equal(await page.locator('#studio .st-ready').count(), 0);
+  await wait(page, 300);
+  assert.equal((await page.evaluate(async () => (await import('./js/studio.js')).studioSound())).playing, false, 'stopped while waiting');
+  await page.click('[data-action="st-play"]');
+  for (let i = 0; i < 100 && await page.locator('#studio .st-ready').count(); i += 1) await wait(page, 100);
+  assert.equal(await page.locator('#studio .st-ready').count(), 0, 'the wait ends');
+  await wait(page, 1500);
+  assert.match(await page.locator('[data-action="st-play"]').textContent(), /Stop/);
+  assert.ok(await page.evaluate(() => window.kqStarts) - starts >= 6, 'every clip sounds');
+  assert.equal(await page.locator('.st-note').count(), 0, 'no part broke');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: `${out}/remixed-desk-tablet.png` });
+  await page.click('[data-action="st-play"]');
+
+  // ten fast taps on voices: the sounds nobody waits for any more are given up, not all made
+  await wait(page, 500);
+  const lead = clipOf('.kind-lead');
+  await lead.click();
+  await page.click('[data-action="st-chooser"][data-what="voice"]');
+  const settle = async () => { let n = -1; for (let i = 0; i < 60; i += 1) { await wait(page, 200); const m = await page.evaluate(() => window.kqNotes); if (m === n) return m; n = m; } return n; };
+  let n0 = await settle();
+  await page.click('[data-action="st-voice"][data-voice="organ"]');
+  const one = (await settle()) - n0;
+  assert.ok(one > 40, `a whole tune's notes: ${one}`);
+  n0 = await settle();
+  // (all in one go, faster than a sound is made: made in full, the ten would hand over about 1000 notes)
+  await page.evaluate((list) => { for (const v of list) document.querySelector(`#studio [data-action="st-voice"][data-voice="${v}"]`).click(); }, ['beep', 'buzz', 'reed', 'steel', 'strings', 'robot', 'musicbox', 'deep', 'organ', 'flute']);
+  const ten = (await settle()) - n0;
+  // the last one (Flute: a note and its vibrato) is made in full, the others give up after their first second
+  assert.ok(ten < 3 * one, `ten taps made ${ten} notes; one sound has ${one}`);
+  assert.equal(await lead.getAttribute('data-voice'), 'flute');
+  await ctx.close();
+}
+
+// 10. phone: the voice chooser, and the remix kit on the parent's test desk
+{
+  const { ctx, page } = await start({ width: 390, height: 844 }, false, firstDay());
+  await page.reload();
+  await toSettings(page);
+  await page.click('[data-action="studio-test"]');
+  await page.waitForSelector('#studio .st-backing');
+  assert.ok(await noSideScroll(page), 'the backing tracks fit a phone');
+  await page.click('[data-action="st-back-add"][data-pattern="chords-hop"]');
+  await page.click('[data-action="st-add"][data-song="show:bg-meadow"][data-part="hook"]');
+  await page.click('[data-action="st-chooser"][data-what="voice"]');
+  await page.click('[data-action="st-voice"][data-voice="musicbox"]');
+  assert.equal(await page.locator('#studio .st-clip.kind-hook').getAttribute('data-voice'), 'musicbox');
+  assert.equal(await page.locator('.st-sticker[data-sticker="remixer"]').count(), 1);
+  assert.ok(await noSideScroll(page), 'no sideways scrolling with the chooser open');
+  // the message is under the choices, and nothing covers them
+  const said = page.locator('#studio .st-said');
+  assert.match(await said.textContent(), /Now it plays as Music box\..*New sticker: Remixer!/);
+  // (the preview's sound is made, then the studio is drawn again: wait for that before measuring)
+  for (let i = 0; i < 100 && /Getting the new sound ready/.test(await said.textContent()); i += 1) await wait(page, 100);
+  assert.doesNotMatch(await said.textContent(), /Getting the new sound ready/);
+  assert.doesNotMatch(await toastText(page), /Now it plays|sticker/, 'no toast over the choices');
+  const boxes = await page.evaluate(() => {
+    const box = (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+    return { said: box(document.querySelector('#studio .st-said')), choices: [...document.querySelectorAll('#studio .st-choice')].map(box) };
+  });
+  assert.equal(boxes.choices.length, 11);
+  for (const b of boxes.choices) assert.ok(!overlap(boxes.said, b), 'the message covers no voice');
+  await page.locator('#studio .st-remix').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  assert.ok(await said.evaluate((el) => el.getBoundingClientRect().bottom <= window.innerHeight), 'the message is on screen with the choices');
+  await page.screenshot({ path: `${out}/voice-chooser-phone.png` });
+  // big enough for a finger on a phone: Voice, Higher, Lower, the chords, the 🔊 buttons, the
+  // parts, the tracks' loudness, Undo and Redo, the loop's length and the speed
+  assert.deepEqual(await tooSmall(page, '#studio .st-tools .btn, #studio .st-loops .btn, #studio .st-shelf .st-part .btn, #studio .st-vol, #studio .st-undos .btn, #studio .st-step .btn'), []);
+  await ctx.close();
+}
+
+// 11. how loud each track is: while it plays, mute and unmute, Undo and Redo, a reload, a phone
+{
+  const { ctx, page } = await start(TABLET, true);
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-backing');
+  const sound = () => page.evaluate(async () => (await import('./js/studio.js')).studioSound());
+  const draft = () => page.evaluate(async () => (await import('./js/studio-store.js')).loadMixes('kid_ava', true).then((m) => m.draft));
+  await page.click('[data-action="st-back-add"][data-pattern="beat-rock"]');
+  await page.click('[data-action="st-back-add"][data-pattern="chords-held"]');
+  await page.click('[data-action="st-unselect"]');
+  const vol = (t) => page.locator(`#studio .st-vol[data-track="${t}"]`);
+  assert.deepEqual(await tooSmall(page, '#studio .st-vol'), [], 'the loudness buttons are big enough');
+  assert.equal(await vol(0).textContent(), '1🔉', 'the usual loudness');
+  // the mix is stored without levels until one changes
+  await wait(page, 800);
+  assert.equal('vols' in await draft(), false);
+  const bar = () => page.evaluate(() => ['st-play', 'st-rec', 'st-undo'].map((a) => { const r = document.querySelector(`[data-action="${a}"]`).getBoundingClientRect(); return [r.x, r.y + window.scrollY, r.width, r.height].map(Math.round).join(' '); }));
+  const before = await bar();
+  await page.click('[data-action="st-play"]');
+  for (let i = 0; i < 100 && !(await sound()).playing; i += 1) await wait(page, 100);
+  await wait(page, 500);
+  assert.deepEqual((await sound()).tracks, [1, 1, 1, 1]);
+  const stops = await page.evaluate(() => window.kqStops);
+  // louder while it plays: heard at once, and the music plays on
+  await vol(0).click();
+  const panel = page.locator('#studio .st-volpanel');
+  assert.match(await panel.textContent(), /Track 1.*Usual loudness/);
+  assert.equal(await panel.locator('.st-dots i.on').count(), 3);
+  assert.deepEqual(await bar(), before, 'Play, Record and Undo stay where they were');
+  await page.click('[data-action="st-vol-step"][data-d="1"]');
+  await wait(page, 200);
+  let now = await sound();
+  assert.equal(now.playing, true, 'still playing');
+  // (a balance, never a boost: the loudest track plays as usual, the others 3 dB under it)
+  near(now.tracks[0], 1, 'track 1 is the loudest');
+  near(now.tracks[1], 10 ** (-3 / 20), 'track 2 is 3 dB under it');
+  assert.equal(await page.evaluate(() => window.kqStops), stops, 'nothing was stopped: the music didn\'t start again');
+  assert.equal(await panel.locator('.st-dots i.on').count(), 4);
+  assert.equal(await vol(0).textContent(), '1🔊');
+  await page.screenshot({ path: `${out}/track-volume-tablet.png` });
+  // mute and unmute
+  await page.click('[data-action="st-vol-mute"]');
+  await wait(page, 200);
+  now = await sound();
+  assert.equal(now.tracks[0], 0, 'muted');
+  assert.equal(now.playing, true);
+  assert.equal(await page.locator('[data-action="st-vol-mute"]').textContent(), '🔈 Unmute');
+  assert.equal(await page.locator('#studio .st-lane[data-track="0"].muted').count(), 1, 'its clips look faded');
+  assert.equal(await vol(0).textContent(), '1🔇');
+  await page.click('[data-action="st-vol-mute"]');
+  await wait(page, 200);
+  now = await sound();
+  assert.equal(await panel.locator('.st-dots i.on').count(), 4, 'unmuted: back to the level it had');
+  near(now.tracks[0], 1, 'the loudest track plays as usual');
+  near(now.tracks[1], 10 ** (-3 / 20), 'and the others balance 3 dB under it');
+  await page.click('[data-action="st-vol-mute"]');
+  await wait(page, 200);
+  // Undo and Redo
+  await page.click('[data-action="st-undo"]');
+  await wait(page, 200);
+  assert.equal((await sound()).tracks[0], 1, 'Undo: unmuted again');
+  await page.click('[data-action="st-undo"]');
+  await wait(page, 200);
+  assert.equal((await sound()).tracks[0], 0, 'Undo: muted');
+  await page.click('[data-action="st-redo"]');
+  await wait(page, 200);
+  now = await sound();
+  assert.deepEqual([now.tracks[0], now.playing], [1, true]);
+  await page.click('[data-action="st-vol-step"][data-d="1"]');
+  await wait(page, 200);
+  now = await sound();
+  near(now.tracks[0], 1, 'level 5: still as usual');
+  near(now.tracks[1], 10 ** (-6 / 20), 'the others 6 dB under it');
+  for (let i = 0; i < 3; i += 1) await page.click('[data-action="st-vol-step"][data-d="-1"]');
+  await wait(page, 200);
+  now = await sound();
+  near(now.tracks[0], 10 ** (-6 / 20), 'three quieter, level 2: -6 dB');
+  assert.equal(now.tracks[1], 1, 'and the others back to usual');
+  assert.equal(await page.evaluate(() => window.kqStops), stops, 'the music never started again');
+  await page.click('[data-action="st-play"]');
+  // a reload keeps the levels; a track muted before it unmutes to the usual level
+  await wait(page, 800);
+  assert.deepEqual((await draft()).vols, [2, 3, 3, 3]);
+  await vol(1).click();
+  await page.click('[data-action="st-vol-step"][data-d="1"]');
+  await page.click('[data-action="st-vol-mute"]');
+  await wait(page, 800);
+  assert.deepEqual((await draft()).vols, [2, 0, 3, 3]);
+  await page.reload();
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-vol');
+  assert.equal(await vol(0).textContent(), '1🔉');
+  assert.equal(await vol(1).textContent(), '2🔇');
+  await vol(1).click();
+  await page.click('[data-action="st-vol-mute"]');
+  assert.equal(await page.locator('#studio .st-volpanel .st-dots i.on').count(), 3, 'nothing remembered: the usual level');
+  assert.ok(await noSideScroll(page));
+  await ctx.close();
+}
+{
+  const { ctx, page } = await start({ width: 390, height: 844 }, true);
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-backing');
+  await page.click('[data-action="st-back-add"][data-pattern="beat-rock"]');
+  await page.click('[data-action="st-unselect"]');
+  const bar = () => page.evaluate(() => ['st-play', 'st-rec', 'st-undo'].map((a) => { const r = document.querySelector(`[data-action="${a}"]`).getBoundingClientRect(); return [r.x, r.y + window.scrollY, r.width, r.height].map(Math.round).join(' '); }));
+  const before = await bar();
+  await page.click('#studio .st-vol[data-track="1"]');
+  await page.click('[data-action="st-vol-step"][data-d="-1"]');
+  assert.deepEqual(await bar(), before, 'the transport doesn\'t move');
+  assert.ok(await noSideScroll(page), 'no sideways scrolling with the panel open');
+  assert.deepEqual(await tooSmall(page, '#studio .st-vol, #studio .st-volpanel .btn'), []);
+  await page.locator('#studio .st-desk').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await page.screenshot({ path: `${out}/track-volume-phone.png` });
   await ctx.close();
 }
 

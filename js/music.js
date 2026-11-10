@@ -2,6 +2,7 @@
 // synthesized live with Web Audio (pulse waves, a triangle bass and noise drums, like old
 // consoles). No audio files. A small look-ahead scheduler keeps the timing steady.
 import { SONGS, SHOW_SONGS, barChords } from './songs.js';
+import { VOICES, KITS, DRUM_HALVES } from './studiokit.js';
 
 const VOLUME = 0.07;
 const SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -32,6 +33,7 @@ export function stepChords(entry, beat) {
 
 /** Compile a song once: bars of note tokens, and the chord's pitch classes at every step. */
 const compiled = new Map();
+export function songScore(id) { return compile(id); }
 function compile(id) {
   if (compiled.has(id)) return compiled.get(id);
   const s = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] || SHOW_SONGS['bg-meadow'] : SONGS[id] || SONGS['bg-meadow'];
@@ -98,7 +100,13 @@ function rig(ac, out, song, seconds) {
   return r;
 }
 
+/**
+ * One note. wave: an oscillator type or one of r.waves (the game's own sounds, as they always
+ * were), or a voice's settings (studiokit.js VOICES: wave or harm, env, attack, ring,
+ * vibrato, twin, soft) for the studio's remix kit.
+ */
 function voice(r, wave, f, t, dur, vol, env = 'hold', dest = r.out) {
+  if (wave && typeof wave === 'object') { styledVoice(r, wave, f, t, dur, vol ?? wave.vol, dest); return; }
   const { ac } = r;
   const o = ac.createOscillator();
   const g = ac.createGain();
@@ -121,13 +129,88 @@ function voice(r, wave, f, t, dur, vol, env = 'hold', dest = r.out) {
   o.stop(t + dur + 0.02);
 }
 
-function drum(r, t, kind, vol = 1) {
+/** A wave of its own from overtone strengths (a voice's harm), made once for each context. */
+function harmWave(r, harm) {
+  const key = `harm:${harm.join(',')}`;
+  if (!r.waves[key]) {
+    const real = new Float32Array(harm.length + 1);
+    const imag = new Float32Array(harm.length + 1);
+    harm.forEach((v, k) => { imag[k + 1] = v; });
+    r.waves[key] = r.ac.createPeriodicWave(real, imag);
+  }
+  return r.waves[key];
+}
+
+/** A note in one of the remix kit's voices (see voice()). */
+function styledVoice(r, v, f, t, dur, vol, dest) {
+  const { ac } = r;
+  const env = v.env || 'hold';
+  // a plucked voice with a ring lets a short note ring on
+  const len = env === 'pluck' ? Math.max(dur, v.ring || 0) : dur;
+  const g = ac.createGain();
+  const attack = Math.min(v.attack || 0, len * 0.5);
+  if (attack > 0) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + attack);
+  } else g.gain.setValueAtTime(vol, t);
+  if (env === 'pluck') {
+    g.gain.exponentialRampToValueAtTime(vol * 0.25, t + Math.max(attack + 0.005, Math.min(len * 0.8, 0.35)));
+    g.gain.linearRampToValueAtTime(0.0001, t + len);
+  } else {
+    g.gain.setValueAtTime(vol, t + Math.max(attack, len * 0.8));
+    g.gain.linearRampToValueAtTime(0.0001, t + len);
+  }
+  let into = g;
+  if (v.soft) {
+    // a low-pass takes the edge off
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = Math.min(18000, f * v.soft);
+    lp.connect(g);
+    into = lp;
+  }
+  const oscs = [];
+  const make = (cents, level) => {
+    const o = ac.createOscillator();
+    if (v.harm) o.setPeriodicWave(harmWave(r, v.harm));
+    else if (r.waves[v.wave]) o.setPeriodicWave(r.waves[v.wave]);
+    else o.type = v.wave || 'square';
+    o.frequency.setValueAtTime(f, t);
+    if (cents) o.detune.value = cents;
+    if (level === 1) o.connect(into);
+    else { const lg = ac.createGain(); lg.gain.value = level; o.connect(lg).connect(into); }
+    oscs.push(o);
+  };
+  // a twin (a copy a few cents off) makes it fuller (the clip's loudness is set after rendering)
+  if (v.twin) { make(0, 0.6); make(v.twin, 0.6); } else make(0, 1);
+  const end = t + len + 0.02;
+  if (v.vibrato) {
+    const lfo = ac.createOscillator();
+    const depth = ac.createGain();
+    lfo.frequency.value = v.vibrato.rate;
+    depth.gain.value = v.vibrato.cents;
+    lfo.connect(depth);
+    for (const o of oscs) depth.connect(o.detune);
+    lfo.start(t);
+    lfo.stop(end);
+  }
+  g.connect(dest);
+  for (const o of oscs) { o.start(t); o.stop(end); }
+  r.spent?.push({ end, node: g }); // see renderInSlices
+}
+
+// the game's own drums (studiokit.js KITS.chip is the same kit, for the studio)
+export const GAME_KIT = { kick: [140, 45, 0.15], tom: [220, 90, 0.2], snare: { len: 0.12, hp: 1200, vol: 0.35 }, hat: { len: 0.03, hp: 6000, vol: 0.12 }, open: { len: 0.18, hp: 6000, vol: 0.12 } };
+
+/** One drum: k kick, t tom, s snare, h hat, o open hat. kit: a kit's settings (studiokit.js KITS), else the game's. */
+function drum(r, t, kind, vol = 1, kit = null) {
   const { ac, out } = r;
+  const K = kit || GAME_KIT;
   if (kind === 'k' || kind === 't') {
     const o = ac.createOscillator();
     const g = ac.createGain();
     o.type = 'triangle';
-    const [from, to, len] = kind === 'k' ? [140, 45, 0.15] : [220, 90, 0.2];
+    const [from, to, len] = kind === 'k' ? K.kick : K.tom;
     o.frequency.setValueAtTime(from, t);
     o.frequency.exponentialRampToValueAtTime(to, t + len * 0.8);
     g.gain.setValueAtTime(0.9 * vol, t);
@@ -139,13 +222,15 @@ function drum(r, t, kind, vol = 1) {
   }
   const src = ac.createBufferSource();
   src.buffer = r.noise;
+  const hit = kind === 's' ? K.snare : kind === 'o' ? K.open : K.hat;
+  const { len } = hit;
+  if (len > r.noise.duration) src.loop = true; // a long open hat outlasts the noise
   const g = ac.createGain();
-  const len = kind === 's' ? 0.12 : kind === 'o' ? 0.18 : 0.03;
-  g.gain.setValueAtTime((kind === 's' ? 0.35 : 0.12) * vol, t);
+  g.gain.setValueAtTime(hit.vol * vol, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + len);
   const hp = ac.createBiquadFilter();
   hp.type = 'highpass';
-  hp.frequency.value = kind === 's' ? 1200 : 6000;
+  hp.frequency.value = hit.hp;
   src.connect(hp).connect(g).connect(out);
   src.start(t);
   src.stop(t + len + 0.01);
@@ -164,7 +249,9 @@ function holdLength(bar, i) {
  * every step of every bar), loop (bars that go round, before a closing bar), leadWave, leadVol, leadEnv,
  * arp { wave, from, octave, order, vol }, bass (one [chordToneIndex, octave] or null per step),
  * drums (patterns of k kick, s snare, h hat, o open hat, t tom; split evenly over the 16 bars), swing.
- * only: just one part ('lead', 'arp', 'bass' or 'drums'), for the recording studio.
+ * only: just one part ('lead', 'arp', 'bass' or 'drums'), for the recording studio; or a
+ * piece of one: 'hook' (the tune), 'beat' (the drums' kick, snare and toms) or 'cymbals' (the
+ * drums' hats). Without it, everything plays as it always has.
  */
 function scheduleStep(r, song, s, t, only = null) {
   const { beat } = song;
@@ -179,7 +266,7 @@ function scheduleStep(r, song, s, t, only = null) {
 
   // lead (pulse 1)
   const n = bar[i];
-  if ((!only || only === 'lead') && n !== '-' && n !== '.') {
+  if ((!only || only === 'lead' || only === 'hook') && n !== '-' && n !== '.') {
     voice(r, song.leadWave || 'square', hz(midi(n)), at, holdLength(bar, i) * step * 0.95, song.leadVol ?? 0.32, song.leadEnv, r.lead);
   }
 
@@ -213,13 +300,14 @@ function scheduleStep(r, song, s, t, only = null) {
   if (b && (!only || only === 'bass')) voice(r, 'triangle', hz(tones[b[0]] + (b[1] + 1) * 12), at, step * (b[2] || 0.9), 0.55);
 
   // drums
-  if (only && only !== 'drums') return;
+  if (only && only !== 'drums' && !DRUM_HALVES[only]) return;
+  const half = only ? DRUM_HALVES[only] : null;
   const sets = song.drums;
   const set = sets[Math.min(sets.length - 1, Math.floor((barIndex * sets.length) / bars))];
   const fill = song.fill && barIndex === bars - 1 ? song.fill : null;
   for (const line of fill || set) {
     const ch = line[i];
-    if (ch && ch !== '.') drum(r, at, ch, song.drumVol ?? 1);
+    if (ch && ch !== '.' && (!half || half.includes(ch))) drum(r, at, ch, song.drumVol ?? 1);
   }
 }
 
@@ -306,30 +394,151 @@ export async function renderSong(theme, loops = 1, sampleRate = 44100) {
 
 // ---------- the recording studio (see studio.js) ----------
 
-/** The parts of a song the studio can use on their own: the tune, the arpeggio, the bass, the drums. */
+/**
+ * The parts of a song the studio can use on their own: the tune and its hook (its first two
+ * bars), the arpeggio, the bass, the drums, and the drums' two halves (the kick and snare,
+ * the cymbals) when the drums have them.
+ */
 export function songParts(id) {
   const song = compile(id);
-  return ['lead', ...(song.arp ? ['arp'] : []), ...(song.bass.some(Boolean) ? ['bass'] : []), ...(song.drums.some((set) => set.some((line) => /[^.]/.test(line))) ? ['drums'] : [])];
+  const lines = [...song.drums.flat(), ...(song.fill || [])];
+  const has = (chars) => lines.some((line) => [...line].some((ch) => chars.includes(ch)));
+  return [
+    'lead', 'hook', ...(song.arp ? ['arp'] : []), ...(song.bass.some(Boolean) ? ['bass'] : []),
+    ...(song.drums.some((set) => set.some((line) => /[^.]/.test(line))) ? ['drums'] : []),
+    ...(has(DRUM_HALVES.beat) ? ['beat'] : []), ...(has(DRUM_HALVES.cymbals) ? ['cymbals'] : []),
+  ];
+}
+
+/** How many bars of a song a part lasts: the hook is its first 2 bars, the rest the whole song. */
+export const partBars = (id, part) => (part === 'hook' ? Math.min(2, compile(id).lead.length) : compile(id).lead.length);
+
+/**
+ * How a song plays one part, to play it some other way: { steps (once through), swing, echo
+ * (the tune's), drumVol, voice (its own sound as voice settings, for a note part) }.
+ */
+export function partStyle(id, part) {
+  const song = compile(id);
+  const own = {
+    lead: { wave: song.leadWave || 'square', env: song.leadEnv || 'hold', vol: song.leadVol ?? 0.32 },
+    arp: { wave: song.arp?.wave || 'square', env: song.arp?.env || 'hold', vol: song.arp?.vol ?? 0.07 },
+    bass: { wave: 'triangle', env: 'hold', vol: 0.55 },
+  };
+  own.hook = own.lead;
+  return {
+    steps: partBars(id, part) * song.beat, swing: song.swing || 0, echo: ['lead', 'hook'].includes(part) ? song.echo || 0 : 0,
+    drumVol: song.drumVol ?? 1, voice: own[part] || null,
+  };
 }
 
 /**
  * One part of a song, once through, as an AudioBuffer at the studio's speed (bpm). The
  * arpeggio plays from the first bar (in the game it waits a few bars). Peaks at about `peak`.
  */
-export async function renderPart(id, part, bpm, sampleRate = 44100, peak = 0.5) {
+export async function renderPart(id, part, bpm, sampleRate = 44100, peak = 0.5, alive = null) {
   const base = compile(id);
   const song = part === 'arp' && base.arp ? { ...base, arp: { ...base.arp, from: 0 } } : base;
   const step = 60 / bpm / 2;
-  const steps = song.lead.length * song.beat;
-  const off = new OfflineAudioContext(1, Math.ceil((steps * step + (song.echo && part === 'lead' ? 1.5 : 0.3)) * sampleRate), sampleRate);
+  const steps = partBars(id, part) * song.beat;
+  const off = new OfflineAudioContext(1, Math.ceil((steps * step + (song.echo && (part === 'lead' || part === 'hook') ? 1.5 : 0.3)) * sampleRate), sampleRate);
   const r = rig(off, off.destination, song, step);
-  for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s, s * step, part);
-  const buf = await off.startRendering();
+  const buf = await renderInSlices(off, r, (from, to) => {
+    const last = Math.min(steps, Math.ceil(to / step));
+    for (let s = Math.max(0, Math.ceil(from / step)); s < last; s += 1) scheduleStep(r, song, s, s * step, part);
+  }, alive);
+  return toLevel(buf, peak);
+}
+
+/**
+ * Render an OfflineAudioContext, handing it the notes a second at a time. A note that waits in
+ * the context costs a little on every block of sound until it has played, so a whole song
+ * handed over at once took far longer than its length (four times the notes took twelve times
+ * as long). plan(from, to) schedules everything that starts in [from, to) seconds; it is called
+ * with stretches that together cover the whole sound, each once (in order, unless a pause is
+ * refused: then its stretch comes early). alive(): once it
+ * says false no more notes are handed over, and the rest renders quickly as silence (for a
+ * sound nobody is waiting for any more). r: the rig; notes put themselves on r.spent to be
+ * taken out of the context after they end.
+ */
+const SLICE = 1;     // seconds of notes handed over at a time
+const AHEAD = 0.05;  // and this long before they sound (a pause lands on a whole block, a few ms late)
+function renderInSlices(off, r, plan, alive = null) {
+  const pauses = [];
+  r.spent = []; // notes that can be taken out of the context once they have sounded: { end, node }
+  if (typeof off.suspend === 'function') {
+    // a pause must fall on a block boundary inside the sound
+    for (let t = SLICE; Math.ceil((t * off.sampleRate) / 128) * 128 < off.length; t += SLICE) pauses.push(t);
+  }
+  const upTo = (i) => (i < pauses.length ? pauses[i] + AHEAD : Infinity);
+  plan(0, upTo(0));
+  pauses.forEach((t, i) => {
+    off.suspend(t).then(() => {
+      try {
+        // a finished note with two oscillators stays in the context (and keeps costing) unless it is taken out
+        r.spent = r.spent.filter(({ end, node }) => {
+          if (end + AHEAD > t) return true;
+          try { node.disconnect(); } catch { /* gone already */ }
+          return false;
+        });
+        if (!alive || alive()) plan(t + AHEAD, upTo(i + 1));
+      } finally { off.resume(); }
+    }, () => {
+      // this pause was refused: hand its stretch over now, early, so no note is lost
+      if (!alive || alive()) plan(t + AHEAD, upTo(i + 1));
+    });
+  });
+  return off.startRendering();
+}
+
+/**
+ * Set a rendered sound's loudness (peak 0: leave it as it is). A sound as steady as the game's
+ * square-wave tune gets its loudest sample at `peak`. A sound that is mostly quiet under a few
+ * tall peaks (a plucked voice, drums) would be much softer to the ear at the same peak, so it
+ * gets half of the difference back (in decibels), at most LIFT times: its peaks then stand
+ * above `peak`, which the studio's soft clip has room for.
+ */
+const STEADY = 0.77; // a square-wave tune's average level (RMS) over its loudest sample, as measured
+const LIFT = 1.6;    // about 4 dB
+export function levelGain(top, rms, peak) {
+  if (!(peak > 0) || !(top > 0)) return 1;
+  const lift = rms > 0 ? Math.min(LIFT, Math.max(1, Math.sqrt((STEADY * top) / rms))) : 1;
+  return (peak / top) * lift;
+}
+function toLevel(buf, peak) {
   const data = buf.getChannelData(0);
   let top = 0;
-  for (let i = 0; i < data.length; i += 1) top = Math.max(top, Math.abs(data[i]));
-  if (top > 0) for (let i = 0; i < data.length; i += 1) data[i] *= peak / top;
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 1) { top = Math.max(top, Math.abs(data[i])); sum += data[i] * data[i]; }
+  const gain = levelGain(top, Math.sqrt(sum / Math.max(1, data.length)), peak);
+  if (gain !== 1) for (let i = 0; i < data.length; i += 1) data[i] *= gain;
   return buf;
+}
+
+/**
+ * Notes or drums as an AudioBuffer, for the studio's remix kit (see remix.js): events are
+ * notes { at, len (steps), midi } or drums { at, kind }, `steps` long (eighth notes) at bpm.
+ * voice: a VOICES id or voice settings, for the notes; kit: a KITS id or kit settings, for the
+ * drums (the game's own when absent); shift: semitones every note moves; swing: as in a song
+ * (every second eighth comes late); echo: a song's echo; vol: the drums' loudness; peak: as
+ * in renderPart (0 leaves it as it comes out); alive: see renderInSlices.
+ */
+export async function renderEvents(events, { bpm, steps, voice: v = 'beep', kit = null, shift = 0, swing = 0, echo = 0, vol = 1, sampleRate = 44100, peak = 0.5, alive = null } = {}) {
+  const settings = typeof v === 'string' ? VOICES[v] || VOICES.beep : v;
+  const K = typeof kit === 'string' ? KITS[kit] || null : kit;
+  const step = 60 / bpm / 2;
+  const tail = echo ? 1.5 : 0.3 + (settings.env === 'pluck' ? settings.ring || 0 : 0);
+  const off = new OfflineAudioContext(1, Math.ceil((steps * step + tail) * sampleRate), sampleRate);
+  const r = rig(off, off.destination, { echo }, step);
+  const timed = events.map((e) => ({ e, at: swingAt(e.at, swing) * step })).sort((x, y) => x.at - y.at);
+  let next = 0;
+  const buf = await renderInSlices(off, r, (from, to) => {
+    for (; next < timed.length && timed[next].at < to; next += 1) {
+      const { e, at } = timed[next];
+      if (e.kind) drum(r, at, e.kind, vol, K);
+      else voice(r, settings, hz(e.midi + shift), at, e.len * step, settings.vol, settings.env, r.lead);
+    }
+  }, alive);
+  return toLevel(buf, peak);
 }
 
 // ---------- the sheet music stand (see songbook.js) ----------

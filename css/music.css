@@ -120,9 +120,25 @@
 /* the timeline: track numbers, a ruler of bars, four lanes over a beat grid */
 .st-desk { background: #fffaf0; border: 3px solid var(--px-ink); border-radius: 6px; padding: 8px 8px 10px; box-shadow: 0 4px 0 var(--px-ink); min-width: 0; }
 .st-mixname { margin: 0 0 6px; font-weight: 700; color: var(--px-ink); overflow-wrap: anywhere; }
-.st-time { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 0 6px; }
+.st-time { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 0 6px; }
 .st-names { display: grid; grid-template-rows: 20px repeat(4, 64px); gap: 4px; }
 .st-names span { display: grid; place-items: center; font: 700 1.1rem var(--px-font); color: var(--px-ink); }
+/* a track's loudness button: its number over a speaker */
+.st-vol { display: grid; place-items: center; align-content: center; gap: 0; min-width: 44px; min-height: 44px; padding: 0; border: 2px solid var(--px-ink); border-radius: 6px; background: #fff; color: var(--px-ink); cursor: pointer; font: inherit; line-height: 1; }
+.st-vol b { font: 700 1.1rem var(--px-font); }
+.st-vol i { font-style: normal; font-size: 1.1rem; }
+.st-vol.lvl-0 { background: #e9ecef; border-style: dashed; }
+.st-vol.on { box-shadow: inset 0 0 0 3px var(--kid, var(--brand)); }
+.st-lane.muted .st-clip { opacity: 0.4; filter: grayscale(0.6); }
+.st-volpanel { display: grid; gap: 6px; margin-top: 8px; padding: 8px 10px; background: #fff; border: 3px solid var(--kid, var(--px-ink)); border-radius: 6px; }
+.st-vol-what { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 0; }
+.st-vol-what b { font: 700 1.15rem var(--px-font); }
+.st-vol-buttons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.st-vol-buttons .btn { min-height: 44px; }
+.st-dots { display: inline-flex; gap: 4px; padding: 0 4px; }
+.st-dots i { width: 14px; height: 14px; border: 2px solid var(--px-ink); border-radius: 50%; background: #fff; }
+.st-dots i.on { background: var(--kid, var(--brand)); }
+.st-dots.off i { border-style: dashed; }
 .st-lanes { position: relative; display: grid; grid-template-rows: 20px repeat(4, 64px); gap: 4px; min-width: 0; }
 .st-ruler { position: relative; border-bottom: 2px solid var(--px-ink); }
 .st-ruler span { position: absolute; bottom: 0; padding-left: 3px; border-left: 2px solid var(--px-ink); font: 700 0.95rem/1.2 var(--px-font); color: var(--px-ink); }
@@ -139,6 +155,17 @@
 .st-clip.kind-arp, .st-add.kind-arp { background: #d0bfff; }
 .st-clip.kind-bass, .st-add.kind-bass { background: #8ce99a; }
 .st-clip.kind-drums, .st-add.kind-drums { background: #ffa8a8; }
+.st-clip.kind-hook, .st-add.kind-hook { background: #ffec99; }
+.st-clip.kind-beat, .st-add.kind-beat { background: #ffc9c9; }
+.st-clip.kind-cymbals, .st-add.kind-cymbals, .st-clip.group-cymbals, .st-add.group-cymbals { background: #ffd8a8; }
+.st-clip.group-beats, .st-add.group-beats { background: #ffa8a8; }
+.st-clip.group-bass, .st-add.group-bass { background: #b2f2bb; }
+.st-clip.group-chords, .st-add.group-chords { background: #a5d8ff; }
+.st-clip.group-sparkles, .st-add.group-sparkles { background: #e5dbff; }
+/* a backing track: stripes, so it shows it belongs to no song */
+.st-clip.kind-backing { background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0 6px, transparent 6px 12px); }
+.st-vicon { font-style: normal; margin-right: 2px; }
+.st-clip .st-key.no { color: #a61e4d; opacity: 1; }
 .st-clip.kind-take { background: #fff; background: color-mix(in srgb, var(--kid, #74c0fc) 45%, #fff); }
 .st-clip.gone { background: #e9ecef; color: var(--muted); }
 .st-clip.sel { outline: 3px solid var(--kid, var(--brand)); outline-offset: 1px; z-index: 2; box-shadow: 0 0 0 5px #fff; overflow: visible; }
@@ -174,6 +201,14 @@
 .st-what { display: grid; margin: 0; }
 .st-what b { font-family: var(--px-font); font-size: 1.15rem; }
 .st-tool-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+/* the remix buttons, and the chooser of voices or kits */
+.st-remix { padding-top: 6px; border-top: 2px dashed #d0bfff; }
+.st-remix .btn.on { background: var(--px-ink); color: #fff; }
+.st-movekey { background: #ffd43b; color: var(--px-ink); }
+.st-chooser { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px; padding: 8px; background: #f8f4ff; border: 2px solid var(--px-ink); border-radius: 6px; }
+.st-choice { justify-content: flex-start; gap: 8px; min-height: 44px; text-align: left; }
+.st-choice i { font-style: normal; font-size: 1.3rem; }
+.st-choice.on { background: #fff; box-shadow: inset 0 0 0 3px var(--kid, var(--brand)), 0 3px 0 var(--px-ink); font-weight: 700; }
 
 /* stickers the mix has earned */
 .st-stickers { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -188,10 +223,10 @@
 /* the parts shelf */
 .st-shelf p { margin: 0 0 8px; }
 .st-songs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 10px; }
-.st-song { display: grid; gap: 4px; padding: 8px 10px; background: #fffaf0; border: 2px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); }
-.st-song p { margin: 0; }
-.st-song-name { display: flex; gap: 6px; align-items: center; }
-.st-song-name b { font-family: var(--px-font); font-size: 1.15rem; line-height: 1.1; }
+.st-song, .st-group { display: grid; gap: 4px; padding: 8px 10px; background: #fffaf0; border: 2px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); }
+.st-song p, .st-group p { margin: 0; }
+.st-song-name, .st-group-name { display: flex; gap: 6px; align-items: center; }
+.st-song-name b, .st-group-name b { font-family: var(--px-font); font-size: 1.15rem; line-height: 1.1; }
 .st-song-info { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .st-fit { color: #2b8a3e; font-weight: 700; }
 .st-fit.no { color: var(--muted); font-weight: 400; }
@@ -202,6 +237,21 @@
 .st-part .st-add { color: var(--px-ink); border-radius: 6px 0 0 6px; padding: 6px 10px; }
 .st-part .st-hear { border-radius: 0 6px 6px 0; border-left-width: 0; padding: 6px 8px; min-width: 38px; }
 .st-part .st-hear.on { background: #e8590c; color: #fff; }
+/* the backing tracks: the chord picker, and each button's name over its waltz mark */
+.st-backing { margin-top: 4px; }
+.st-loops { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.st-loop.on { background: #fff; box-shadow: inset 0 0 0 3px var(--kid, var(--brand)), 0 3px 0 var(--px-ink); font-weight: 700; }
+.st-group { align-content: start; }
+.st-group .st-add { display: grid; justify-items: start; text-align: left; line-height: 1.15; }
+.st-group .st-add .st-waltz { font-size: 0.72rem; }
+.st-waltz-time { margin-top: 14px; padding-top: 10px; border-top: 3px dashed #d9b779; }
+.st-waltz-time h4 { margin: 0 0 4px; font: 700 1.15rem var(--px-font); color: #8a5a00; }
+/* fingers: every button on the shelf and in the remix tools is at least 44 px each way */
+.st-shelf .st-part .btn, .st-loops .btn, .st-tools .btn.small-btn { min-height: 44px; }
+.st-part .st-hear { min-width: 46px; }
+.st-ready { flex: 1 1 100%; margin: 0; padding: 6px 10px; background: #fff3d6; color: var(--px-ink); border: 2px solid var(--px-ink); border-radius: 6px; font-weight: 700; }
+.st-said { display: grid; gap: 4px; margin: 0; padding: 8px 10px; background: #fff3d6; border: 2px solid var(--px-ink); border-radius: 6px; font-weight: 700; line-height: 1.3; }
+.st-making i { font-style: normal; }
 
 /* my mixes and help */
 .st-panel { padding: 10px 12px; background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); }
@@ -225,19 +275,23 @@
   .st-main { width: 100%; }
   .st-main .btn { flex: 1; min-width: 0; padding: 8px 6px; white-space: nowrap; }
   .st-undos { width: 100%; flex-wrap: nowrap; }
-  .st-undos .btn { flex: 1; min-width: 0; padding: 6px; min-height: 40px; }
+  .st-undos .btn { flex: 1; min-width: 0; padding: 6px; min-height: 44px; }
   .st-more { margin-left: 0; width: 100%; flex-wrap: nowrap; gap: 6px; }
   .st-more .btn { flex: 1 1 auto; min-width: 0; padding: 8px 6px; font-size: 0.9rem; white-space: nowrap; }
   .st-more [data-panel="help"] { flex: 0 0 48px; }
   .st-step { flex: 1 1 150px; justify-content: space-between; gap: 4px; }
-  .st-step .btn.round { width: 40px; min-height: 40px; }
+  .st-step .btn.round { width: 44px; min-height: 44px; }
   .st-val small { font-size: 0.7rem; }
   .st-val { min-width: 0; }
-  .st-time { grid-template-columns: 16px minmax(0, 1fr); gap: 0 4px; }
+  .st-time { grid-template-columns: 44px minmax(0, 1fr); gap: 0 4px; }
+  .st-vol-buttons .btn { flex: 1 1 auto; padding: 6px 8px; }
+  .st-dots { flex: 1 1 100%; justify-content: center; order: -1; }
   .st-names, .st-lanes { grid-template-rows: 20px repeat(4, 58px); }
   .st-clip { padding: 0 3px; }
   .st-clip b { font-size: 0.9rem; }
-  .st-tool-buttons .btn { flex: 1 1 auto; padding: 6px 8px; }
+  .st-tool-buttons .btn { flex: 1 1 auto; padding: 6px 8px; min-height: 44px; }
+  .st-chooser { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 6px; }
+  .st-loops .btn { flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .st-rec.recording, .st-sticker.pop { animation: none; }

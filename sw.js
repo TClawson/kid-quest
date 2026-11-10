@@ -64,6 +64,8 @@ const SHELL = [
   'js/studio-audio.js',
   'js/mic.js',
   'js/testrec.js',
+  'js/studiokit.js',
+  'js/remix.js',
   'js/arrange.js',
   'js/arrangements.js',
   'js/houseart.js',
