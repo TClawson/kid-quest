@@ -1215,7 +1215,8 @@ function soundOf(c, mixKey, swing = 0) {
   const how = { voice: (c.kind === 'notes' ? notesVoice(c) : c.voice) || '', kit: c.kit || '', shift: c.shift || 0 };
   if (c.kind === 'part') return { kind: 'part', song: c.song, part: c.part, ...how };
   // the kid's notes: their name (nid) says which notes, so copies share one rendering
-  if (c.kind === 'notes') return { kind: 'notes', nid: c.nid, notes: c.notes, beats: c.total, swing, ...how };
+  // (and their role says how loud they play: a band part sits under its tune, studiorules.js roleLevel)
+  if (c.kind === 'notes') return { kind: 'notes', nid: c.nid, notes: c.notes, beats: c.total, role: c.role || '', swing, ...how };
   const notes = clipSound(c) === 'notes';
   const loop = notes ? (LOOPS[c.loop] ? c.loop : 'sunny') : '';
   // a backing track swings with the mix's song parts (studiorules.js backingSwing)
@@ -1226,7 +1227,7 @@ function soundOf(c, mixKey, swing = 0) {
 const mixSound = (c, mix) => soundOf(c, mix.key, clipSwing(mix, c));
 
 /** Where a sound at a speed is kept among the rendered ones. */
-const soundKey = (s, bpm) => [s.kind, s.song || s.pattern || s.nid, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? '', s.swing || 0, s.kind === 'notes' ? `${s.beats}:${s.notes.length}` : ''].join('|');
+const soundKey = (s, bpm) => [s.kind, s.song || s.pattern || s.nid, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? '', s.swing || 0, s.kind === 'notes' ? `${s.beats}:${s.notes.length}:${s.role || ''}` : ''].join('|');
 
 /** The sounds a mix plays (soundKey), worked out once a mix. */
 const keysMade = new WeakMap();

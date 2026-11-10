@@ -5,7 +5,7 @@
 // tidied reading becomes a notes clip with those four notes in order, which takes a voice and
 // goes higher; Undo brings the take back with its sound, and a sweep of the tablet's takes
 // keeps it while Undo can. The same take opens again without listening again. The band
-// version puts a band on another track. A reload keeps the notes clips. A silent take says
+// version puts a band on another track, which plays under the tune in the mix. A reload keeps the notes clips. A silent take says
 // so kindly; Stop during the listening stops it. A browser without module Workers listens on
 // the page itself. Then a phone. Saves screenshots.
 // Run: node test/smoke/notomatic.mjs [outDir]
@@ -43,7 +43,12 @@ async function start(viewport, { noWorker = false } = {}) {
     window.kqStarts = 0;
     const P = AudioBufferSourceNode.prototype;
     const s = P.start;
-    P.start = function (...a) { window.kqStarts += 1; return s.apply(this, a); };
+    window.kqPeaks = []; // each sound started: [seconds long, its loudest sample]
+    P.start = function (...a) {
+      window.kqStarts += 1;
+      if (this.buffer) { const d = this.buffer.getChannelData(0); let m = 0; for (let i = 0; i < d.length; i += 1) m = Math.max(m, Math.abs(d[i])); window.kqPeaks.push([this.buffer.duration, m]); }
+      return s.apply(this, a);
+    };
   }, noWorker);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
@@ -477,6 +482,29 @@ const LONG = Array.from({ length: 40 }, (_, i) => [[60, 62, 64, 65, 67, 65, 64, 
   await playing(page);
   await page.click('[data-action="st-play"]');
   assert.equal((await draft(page)).tracks[0][0].total, 84);
+  await ctx.close();
+}
+
+// 2c. in the mix a band part plays well under its tune (the same notes in the same voice, one clip of each role)
+{
+  const { ctx, page } = await start(TABLET);
+  await page.evaluate(async (desk) => {
+    const { saveMix } = await import('./js/studio-store.js');
+    const { newMix } = await import('./js/studiorules.js');
+    const notes = [{ at: 0, len: 1.8, midi: 60 }, { at: 2, len: 1.8, midi: 64 }, { at: 4, len: 1.8, midi: 67 }, { at: 6, len: 1.8, midi: 72 }];
+    // (the tune is 4 beats long and the band 6, so their sounds can be told apart)
+    const clip = (id, role, beats) => ({ id, kind: 'notes', nid: `n${id}`, role, start: 0, len: beats, from: 0, total: beats, own: 'organ', notes });
+    await saveMix(desk, 'draft', { ...newMix(), bpm: 120, bars: 2, tracks: [[clip(1, 'tune', 4)], [clip(2, 'band', 6)], [], []], next: 3 });
+  }, DESK);
+  await openDesk(page);
+  await page.evaluate(() => { window.kqPeaks.length = 0; });
+  await page.click('[data-action="st-play"]');
+  await page.waitForFunction(() => window.kqPeaks.length >= 2, null, { timeout: 20000 });
+  const peaks = await page.evaluate(() => window.kqPeaks);
+  await page.click('[data-action="st-play"]');
+  const tune = peaks.find(([d]) => d < 2.6); const band = peaks.find(([d]) => d > 2.6);
+  assert.ok(tune && band, `both clips sound: ${JSON.stringify(peaks)}`);
+  assert.ok(band[1] > 0.25 * tune[1] && band[1] < 0.6 * tune[1], `the band part sits under the tune: band ${band[1]}, tune ${tune[1]}`);
   await ctx.close();
 }
 
