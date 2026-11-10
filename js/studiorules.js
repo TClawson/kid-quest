@@ -413,6 +413,14 @@ export function addTake(mix, track, take, beats, at = 0, { lead = 0 } = {}) {
  */
 export const READING_VOICES = { band: { tune: 'beep', band: 'organ' } };
 
+/**
+ * How loud a part of the kid's notes plays next to the others, by role: a band part sits well
+ * under the tune it was made for (the tune is the kid's; the band only carries it). The kid
+ * can still turn its track up.
+ */
+export const ROLE_LEVEL = { band: 0.4 };
+export const roleLevel = (role) => (Object.hasOwn(ROLE_LEVEL, role) ? ROLE_LEVEL[role] : 1);
+
 /** The voice a part of a reading starts in, or null for the notes' own voice. */
 export const readingVoice = (readingId, role) => READING_VOICES[readingId]?.[role] || null;
 

@@ -26,7 +26,7 @@ import {
   TRACKS, MIX_SLOTS, PART_NAMES, BPM_RANGE, BACKING_BPM, newMix, sourceOf, maxBars, mixBeats, mixSeconds, addPart, addTake, moveClip,
   trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges, shelfSongs,
   addBacking, setLoop, setVoice, setKit, shiftClip, moveIntoKey, clipFits, clipKey, remixed, splitShift, backingBeats, backingSwing,
-  setTrackVolume, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME, takeToNotes, clipSwing, readingVoice, NOTES_VOICE, ownVoice, notesVoice,
+  setTrackVolume, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME, takeToNotes, clipSwing, readingVoice, roleLevel, NOTES_VOICE, ownVoice, notesVoice,
   keptHeard, readingOptions, mostNotesBeats,
 } from './studiorules.js';
 import { READINGS, readings } from './notomatic.js';
@@ -1252,7 +1252,7 @@ function wanted(key) {
 function renderSound(s, bpm, rate, alive = null) {
   if (s.kind === 'notes') {
     // (never longer than a loop can be, whatever was stored)
-    return renderEvents(s.notes, { bpm, steps: Math.min(s.beats, mostNotesBeats(4)) * 2, swing: s.swing || 0, sampleRate: rate, alive, voice: s.voice || NOTES_VOICE, shift: s.shift });
+    return renderEvents(s.notes, { bpm, steps: Math.min(s.beats, mostNotesBeats(4)) * 2, swing: s.swing || 0, sampleRate: rate, alive, voice: s.voice || NOTES_VOICE, shift: s.shift, peak: 0.5 * roleLevel(s.role) });
   }
   if (s.kind === 'part') {
     if (!s.voice && !s.kit && !s.shift) return renderPart(s.song, s.part, bpm, rate, 0.5, alive);
@@ -2084,7 +2084,7 @@ async function hearReading(id) {
   const made = `${id}|${bpm}|${swing}|${ac.sampleRate}`;
   if (!nom.bufs.has(made)) {
     nom.bufs.set(made, Promise.all(parts.map((p) => renderEvents(p.notes, {
-      bpm, steps: Math.max(1, p.beats) * 2, swing: p.follows ? swing : 0, voice: readingVoice(id, p.role) || NOTES_VOICE, sampleRate: ac.sampleRate,
+      bpm, steps: Math.max(1, p.beats) * 2, swing: p.follows ? swing : 0, voice: readingVoice(id, p.role) || NOTES_VOICE, sampleRate: ac.sampleRate, peak: 0.5 * roleLevel(p.role),
     }))).catch(() => null));
   }
   const job = nom.bufs.get(made);

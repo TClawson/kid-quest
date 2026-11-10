@@ -333,6 +333,23 @@ test('the tune leaves out an overtone above it and the left hand passing under i
   assert.deepEqual(topLine([]), []);
 });
 
+test('the tune keeps a dip into the left hand\'s keys, but not a left hand with a line of its own', () => {
+  const n = (at, midi, right = true) => ({ at, len: 2, midi, right });
+  // E4 C4 A3 C4 E4 over block chords, twice: the A3 is under the split, alone on its strike
+  const chord = (at, low) => [n(at, low, false), n(at, low + 4, false), n(at, low + 7, false)];
+  const phrase = (at, dip) => [n(at, 64), n(at + 2, 60), n(at + 4, dip, dip >= 60), n(at + 6, 60), n(at + 8, 64), n(at + 10, 65), n(at + 12, 62), n(at + 14, 60), ...chord(at, 36), ...chord(at + 8, 41)];
+  const dips = [...phrase(0, 57), ...phrase(16, 62)];
+  assert.deepEqual(topLine(dips).map((x) => x.midi), [64, 60, 57, 60, 64, 65, 62, 60, 64, 60, 62, 60, 64, 65, 62, 60]);
+  // a chord struck between the tune's notes is not a dip, and neither is a low note far under the tune
+  const under = [n(0, 72), n(4, 74), n(8, 76), ...chord(2, 48), n(6, 50, false)];
+  assert.deepEqual(topLine(under).map((x) => x.midi), [72, 74, 76]);
+  // a left hand that walks in single notes between the tune's notes, close under it: none of it is the tune
+  const walk = [];
+  for (let at = 0; at < 32; at += 4) walk.push(n(at, 64 + ((at / 4) % 3)), n(at + 2, 59 + ((at / 4) % 2), false));
+  assert.ok(topLine(walk).every((x) => x.right), 'a note of the walking left hand got into the tune');
+  assert.equal(topLine(walk).length, 8);
+});
+
 test('chords and the band part, by hand', () => {
   // two bars of four: C E G under a C, then F A C under an A
   const bar = (at, list) => list.map((midi) => ({ at, len: 8, midi }));

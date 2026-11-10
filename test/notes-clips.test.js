@@ -10,7 +10,7 @@ import { clipSound, clipEvents, backingKey, shiftKey, sameSig } from '../js/remi
 import {
   newMix, addPart, addTake, addBacking, takeToNotes, findClip, setVoice, shiftClip, moveIntoKey, clipFits, clipKey, copyClip,
   trimClip, moveClip, setBpm, setBars, removeClip, schedule, badges, cleanMix, takesIn, remixed, clipSwing, backingSwing, ownVoice, notesVoice,
-  readingVoice, validKey, newNid, mixBeats, NOTES_VOICE, MOST_NOTES, keptHeard, readingOptions, mostNotesBeats,
+  readingVoice, roleLevel, validKey, newNid, mixBeats, NOTES_VOICE, MOST_NOTES, keptHeard, readingOptions, mostNotesBeats,
 } from '../js/studiorules.js';
 
 const must = (r) => { assert.equal(r.error, null, r.error || ''); return r; };
@@ -144,6 +144,11 @@ test('the band version: the tune in the take\'s place, the band on the track wit
   assert.equal(readingVoice('band', 'tune'), 'beep');
   assert.equal(readingVoice('tidy', 'tune'), null);
   assert.equal(readingVoice('heard', 'tune'), null);
+  // the band part sits well under the tune it was made for; every other part plays at full level
+  assert.ok(roleLevel('band') > 0.2 && roleLevel('band') < 0.6);
+  assert.equal(roleLevel('tune'), 1);
+  assert.equal(roleLevel(undefined), 1);
+  assert.equal(roleLevel('toString'), 1);
   assert.equal(remixed(t.clip), false);
   assert.equal(remixed(b.clip), false);
   // what is played: the voice it plays in

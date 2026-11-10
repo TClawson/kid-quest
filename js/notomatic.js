@@ -361,19 +361,48 @@ export function bandPart(chords, { bar = 8, under = 72 } = {}) {
 // ---------- the tune ----------
 
 const OVERTONES = [12, 19, 24]; // an octave, an octave and a fifth, two octaves
+const LONE_MOST = 0.12; // a left hand with a line of its own: more than this share of the strikes are single notes of the left hand
 
 /**
- * The tune of tidied notes: the top note of each strike of the right hand. Two things are
- * kept out of it. A top note far from the tune around it that sits an overtone above another
- * note of its strike is most likely that note's overtone, heard as a note: the lower one is
- * the tune. And a strike whose top is far below the tune around it is the left hand passing
- * through (the tune's note is still ringing above it).
+ * The tune of tidied notes: the top note of each strike of the right hand, and the notes where
+ * the tune dips into the left hand's keys for a moment. Two things are kept out of it. A top
+ * note far from the tune around it that sits an overtone above another note of its strike is
+ * most likely that note's overtone, heard as a note: the lower one is the tune. And a strike
+ * whose top is far below the tune around it is the left hand passing through (the tune's note
+ * is still ringing above it).
  */
 export function topLine(notes) {
   const by = new Map();
   for (const n of notes) { if (!by.has(n.at)) by.set(n.at, []); by.get(n.at).push(n); }
   const strikesOf = [...by.entries()].sort((a, b) => a[0] - b[0]).map(([, list]) => list);
-  const tops = strikesOf.map((list) => { const r = list.filter((n) => n.right); return r.length ? r.reduce((a, n) => (n.midi > a.midi ? n : a)) : null; });
+  const highest = (list) => list.reduce((a, n) => (n.midi > a.midi ? n : a));
+  const tops = strikesOf.map((list) => { const r = list.filter((n) => n.right); return r.length ? highest(r) : null; });
+  // A tune dips into the left hand's keys now and then, and comes back. A strike with no
+  // right-hand note is the tune too when its top note is a step or a small leap (a fourth at
+  // most) from the tune's note next to it in time (within `near` steps), stands alone or well
+  // above the rest of its strike, and is not down among the notes the left hand just played.
+  const near = 8;
+  const follow = (dir) => {
+    let tune = null; let left = null; // the tune's note and the left hand's top note, last seen
+    for (let i = dir > 0 ? 0 : strikesOf.length - 1; i >= 0 && i < strikesOf.length; i += dir) {
+      const list = strikesOf[i];
+      if (!tops[i]) {
+        const top = highest(list);
+        const rest = list.filter((n) => n !== top);
+        const close = tune && Math.abs(top.at - tune.at) <= near && Math.abs(top.midi - tune.midi) <= 5;
+        const clear = !rest.length || top.midi - highest(rest).midi > 7;
+        const above = !left || Math.abs(top.at - left.at) > 2 * near || top.midi >= left.midi + 2;
+        if (close && clear && above) tops[i] = top;
+      }
+      const under = list.filter((n) => n !== tops[i]);
+      if (under.length) left = highest(under);
+      if (tops[i]) tune = tops[i];
+    }
+  };
+  // (only where the left hand plays chords under the tune or rests: when it plays a line of
+  // single notes of its own, there is no telling its notes near the tune from a dip)
+  const lone = strikesOf.filter((list, i) => !tops[i] && list.length === 1).length;
+  if (lone <= LONE_MOST * strikesOf.length) { follow(1); follow(-1); }
   const middle = (list) => (list.length ? [...list].sort((x, y) => x - y)[list.length >> 1] : null);
   const out = [];
   tops.forEach((top, i) => {
