@@ -17,6 +17,7 @@ import { addDays } from './logic.js';
 export { bloomHint } from './bloomhints.js';
 import { bloomSpotsFor } from './bloomspots.js';
 import { treeArt, flowerArt, critterArt, CRITTERS } from './bloomart.js';
+import { spriteFor } from './seasonlife.js';
 
 // ---------- what the village looks like today ----------
 
@@ -71,8 +72,8 @@ export function gardenLine(kids, today) {
 // ---------- the painted layers ----------
 
 const layerCache = new Map(); // map|today|hash -> { ground, trees: Map(spot -> canvas) }
-function layersFor(mapId, bloom) {
-  const key = `${mapId}|${bloom.today}|${bloom.hash}`;
+function layersFor(mapId, bloom, se) {
+  const key = `${mapId}|${bloom.today}|${bloom.hash}|${se.season}${Math.round(se.progress * 20)}`;
   let hit = layerCache.get(key);
   if (hit) return hit;
   const spots = bloomSpotsFor(mapId);
@@ -91,7 +92,7 @@ function layersFor(mapId, bloom) {
     const at = spots.trees[spot];
     return at && { at, c: treeArt(mapId, spot, stage, bloom.wilt) };
   }).filter(Boolean);
-  hit = { ground, trees, spots };
+  hit = { ground: spriteFor(ground, se, mapId), trees: trees.map((t) => ({ at: t.at, c: spriteFor(t.c, se, mapId) })), spots };
   if (layerCache.size > 6) layerCache.delete(layerCache.keys().next().value);
   layerCache.set(key, hit);
   return hit;
@@ -257,12 +258,13 @@ function startCritters(section, L, bloom, spots, cam) {
 
 /**
  * Add the garden to a live village. section: the village element; L: its layout; data: the
- * village's data (data.bloom is bloomData); ground: the land's canvas; cam: { host, toMap }.
+ * village's data (data.bloom is bloomData); ground: the land's canvas; se: the season
+ * (seasonNow in seasonlife.js), so cached layers and sprites are the right colours; cam: { host, toMap }.
  */
-export function mountBloom(section, L, data, ground, cam) {
+export function mountBloom(section, L, data, ground, se, cam) {
   const bloom = data.bloom;
   if (!bloom || (!bloom.trees.length && !bloom.flowers.length)) return;
-  const layers = layersFor(L.id, bloom);
+  const layers = layersFor(L.id, bloom, se);
   // flowers go flat on the ground
   ground.getContext('2d').drawImage(layers.ground, 0, 0);
   // trees stand where the buddy and villagers stand: sorted by their feet

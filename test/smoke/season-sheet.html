@@ -1,0 +1,191 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>body{background:#1e1a26;margin:0;padding:8px;font:bold 13px sans-serif;color:#fff} canvas{image-rendering:pixelated;display:block} h2{margin:6px 0;font-size:15px} .row{display:flex;gap:8px;align-items:flex-start} .cell{display:flex;flex-direction:column;gap:4px} pre{font:12px monospace;margin:0}</style></head>
+<body><div id="out" style="display:inline-block"></div>
+<script type="module">
+// The seasons on every map (js/seasonfx.js), for previews (test/smoke/season-preview.mjs).
+//   ?mode=village&map=bg-meadow&season=winter&p=0.5   one village in a season: its tinted land, the
+//                                                     family's trees and flowers and the landmark through
+//                                                     seasonSprite, villagers, and a frozen frame of weather
+//   ?mode=row&map=bg-meadow                           the same village through the year, side by side
+//   ?mode=yard                                        the garden behind the buddy's house through the year
+//   ?mode=sprites                                     the village's own trees and flowers through the year
+//   ?mode=cost                                        how long each call takes
+//   &scale=2  &noweather=1
+import { seasonTint, seasonSprite, weather, stepParticles, drawParticles } from '../../js/seasonfx.js';
+import { villageLayout, VILLAGE_THEMES } from '../../js/villagemaps.js';
+import { paintVillage } from '../../js/villageprops.js';
+import { drawVillager } from '../../js/villageart.js';
+import { treeArt, flowerArt } from '../../js/bloomart.js';
+import { bloomSpotsFor } from '../../js/bloomspots.js';
+
+const q = new URLSearchParams(location.search);
+const mode = q.get('mode') || 'village';
+const map = q.get('map') || 'bg-meadow';
+const S = Number(q.get('scale') || 2);
+const out = document.getElementById('out');
+const YEAR = [['spring', 0.5], ['summer', 0.5], ['autumn', 0.2], ['autumn', 0.8], ['winter', 0.5]];
+const nameOf = (s, p) => (s === 'autumn' ? `${s} ${p < 0.5 ? 'early' : 'late'} (${p})` : `${s} (${p})`);
+
+function big(c, k = S) {
+  const b = document.createElement('canvas'); b.width = c.width * k; b.height = c.height * k;
+  const x = b.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(c, 0, 0, b.width, b.height);
+  return b;
+}
+function caption(b, text, k = S) {
+  const x = b.getContext('2d'); x.font = `bold ${Math.max(11, 7 * k)}px sans-serif`;
+  const w = x.measureText(text).width; x.fillStyle = 'rgba(0,0,0,0.6)'; x.fillRect(0, 0, w + 14, 10 * k + 4); x.fillStyle = '#fff'; x.fillText(text, 7, 8 * k);
+}
+/** A frozen frame of the weather: run it a while, then draw it over. */
+function weatherOver(ctx, W, H, season, mapId, p, secs = 14) {
+  if (q.get('noweather')) return;
+  const wx = weather(season, mapId, p);
+  if (!wx) return;
+  const ov = document.createElement('canvas'); ov.width = W; ov.height = H;
+  let st = stepParticles({}, 0, W, H, wx);
+  for (let t = 0; t < secs; t += 1 / 15) st = stepParticles(st, 1 / 15, W, H, wx);
+  drawParticles(ov.getContext('2d'), st);
+  ctx.drawImage(ov, 0, 0);
+}
+
+const landKept = new Map();
+function land(mapId) {
+  if (!landKept.has(mapId)) {
+    const L = villageLayout(mapId);
+    landKept.set(mapId, paintVillage(document.createElement('canvas'), L, { homeRoof: '#e03131', areas: [{ ...L.green.left, kind: 'pond', side: 'left' }, { ...L.green.right, kind: 'soccer', side: 'right' }] }));
+  }
+  return landKept.get(mapId);
+}
+
+const LANDMARKS = { oak: ['oakart.js', 'startOak'], wreck: ['wreckart.js', 'startWreck'], galleon: ['galleonart.js', 'startGalleon'], cave: ['caveart.js', 'startCave'], gate: ['gateart.js', 'startGate'], stone: ['stoneart.js', 'startStone'], kapok: ['kapokart.js', 'startKapok'], goldpot: ['goldpotart.js', 'startGoldpot'], starwhale: ['starwhaleart.js', 'startStarwhale'] };
+const lmKept = new Map();
+async function landmark(L) {
+  const lm = L.landmark;
+  if (lmKept.has(L.id)) return lmKept.get(L.id);
+  let c = null;
+  try {
+    const [file, fn] = LANDMARKS[lm.art];
+    const mod = await import(`../../js/${file}`);
+    c = document.createElement('canvas'); c.width = lm.w; c.height = lm.h;
+    mod[fn](c, null)(1000);
+    c.ax = 0; c.ay = 0;
+  } catch (e) { console.log('note: landmark', e.message); }
+  lmKept.set(L.id, c);
+  return c;
+}
+
+/** The village in a season, at one canvas pixel per village pixel. */
+async function village(mapId, season, p) {
+  const L = villageLayout(mapId);
+  const spots = bloomSpotsFor(mapId);
+  const c = document.createElement('canvas'); c.width = L.W; c.height = L.H;
+  const x = c.getContext('2d');
+  x.drawImage(seasonTint(land(mapId), season, mapId, p), 0, 0);
+  const items = [];
+  const put = (a, px, py, ay = py) => items.push({ y: ay, draw: () => x.drawImage(a, Math.round(px - (a.ax || 0)), Math.round(py - (a.ay || 0))) });
+  // a family's few months of trees and flowers
+  spots.flowers.forEach((f, i) => { if (i % 2 === 0) { const a = seasonSprite(flowerArt(mapId, i % 4, 3, 0, i % 5, i), season, p, mapId); x.drawImage(a, Math.round(f.x - a.ax), Math.round(f.y - a.ay)); } });
+  spots.trees.forEach((t, i) => { if (i % 3 !== 2) put(seasonSprite(treeArt(mapId, i, 3 + (i % 3), 0), season, p, mapId), t.x, t.y); });
+  const lm = await landmark(L);
+  if (lm) put(seasonSprite(lm, season, p, mapId), L.landmark.x, L.landmark.y, L.landmark.y + L.landmark.h);
+  const folk = drawVillager(document.createElement('canvas'), 'bunny');
+  const keeper = drawVillager(document.createElement('canvas'), 'badger');
+  [...L.slots.morning.slice(0, 5), ...L.slots.afternoon.slice(0, 5)].forEach((s) => items.push({ y: s.y, draw: () => x.drawImage(folk, s.x - 8, s.y - folk.height) }));
+  items.push({ y: L.shop.y, draw: () => x.drawImage(keeper, L.shop.x - 8, L.shop.y - keeper.height) });
+  items.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
+  weatherOver(x, L.W, L.H, season, mapId, p);
+  return c;
+}
+
+if (mode === 'village') {
+  const season = q.get('season') || 'winter'; const p = Number(q.get('p') ?? 0.5);
+  const c = await village(map, season, p);
+  const b = big(c); caption(b, `${map} - ${nameOf(season, p)}`); out.append(b);
+}
+
+if (mode === 'row') {
+  const row = document.createElement('div'); row.className = 'row'; out.append(row);
+  const orig = big(land(map)); caption(orig, `${map} as painted`); row.append(orig);
+  for (const [s, p] of YEAR) { const b = big(await village(map, s, p)); caption(b, nameOf(s, p)); row.append(b); }
+}
+
+if (mode === 'yard') {
+  let G = null;
+  try { G = await import('../../js/gardenart.js'); } catch (e) { const h = document.createElement('h2'); h.textContent = `the garden art isn't in this tree (${e.message})`; out.append(h); }
+  if (G) {
+    const yard = document.createElement('canvas');
+    const { pieces } = G.paintYard(yard, { layout: { fence: { art: 'fence-wood' } } });
+    const plants = [['seed-sunflower', 3], ['seed-tulip', 3], ['seed-carrot', 3], ['seed-tomato', 4], ['seed-daisy', 3], ['seed-pumpkin', 4]];
+    const decor = [['garden-birdbath', G.YARD.spots.water], ['garden-beehouse', G.YARD.spots.bees], ['garden-bench', G.YARD.spots.seat]];
+    const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(2,auto);gap:8px'; out.append(grid);
+    const scene = (season, p) => {
+      const W = G.YARD.W; const H = G.YARD.H;
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const x = c.getContext('2d');
+      x.drawImage(season ? seasonTint(yard, season, 'garden', p) : yard, 0, 0);
+      const items = [];
+      const sp = (a) => (season ? seasonSprite(a, season, p, 'garden') : a);
+      G.YARD.beds.forEach((b, i) => { const a = G.plantArt(...plants[i]); if (a) items.push({ y: b.foot.y, a: sp(a), x: b.foot.x, yy: b.foot.y }); });
+      G.YARD.trees.forEach((t, i) => { const a = G.plantArt(['seed-apple', 'seed-cherry'][i], 5, { fruit: 3 }); if (a) items.push({ y: t.y, a: sp(a), x: t.x, yy: t.y }); });
+      decor.forEach(([id, at]) => { const a = G.decorArt(id); if (a) items.push({ y: at.y, a: sp(a), x: at.x, yy: at.y }); });
+      for (const pc of pieces) { const a = sp(pc.canvas); items.push({ y: pc.foot, a, x: pc.x + (a.ax || 0), yy: pc.y + (a.ay || 0) }); }
+      items.sort((a, b) => a.y - b.y).forEach((it) => x.drawImage(it.a, Math.round(it.x - (it.a.ax || 0)), Math.round(it.yy - (it.a.ay || 0))));
+      if (season) weatherOver(x, W, H, season, 'garden', p);
+      return c;
+    };
+    const k = S;
+    const first = big(scene(null, 0), k); caption(first, 'garden yard as painted', k); grid.append(first);
+    for (const [s, p] of YEAR) { const b = big(scene(s, p), k); caption(b, `garden - ${nameOf(s, p)}`, k); grid.append(b); }
+  }
+}
+
+if (mode === 'sprites') {
+  // each map's trees and flowers, on a patch of its own tinted ground, through the year
+  const mapsHere = q.get('maps') ? q.get('maps').split(',') : ['bg-meadow', 'bg-castle', 'bg-sunset', 'bg-rainbow', 'bg-volcano', 'bg-rainforest', 'bg-ocean', 'bg-space', 'bg-galaxy'];
+  for (const m of mapsHere) {
+    const L = villageLayout(m);
+    const h = document.createElement('h2'); h.textContent = `${m}: as painted, then ${YEAR.map(([s, p]) => nameOf(s, p)).join(', ')}`; out.append(h);
+    const rows = [[null, 0.5], ...YEAR];
+    const cw = 54; const ch = 66; const cols = 9;
+    const c = document.createElement('canvas'); c.width = cw * cols; c.height = ch * rows.length;
+    const x = c.getContext('2d');
+    // a patch of open ground from the village
+    let gx = 60; let gy = 200;
+    for (let y = 60; y < L.H - 80; y += 6) { let ok = false; for (let xx = 30; xx < L.W - 90; xx += 6) { let fine = true; for (let a = 0; a < 60 && fine; a += 6) for (let bb = 0; bb < 60 && fine; bb += 6) if (L.blocked(xx + a, y + bb, 2) || L.onPath(xx + a, y + bb, 8) || L.covered(xx + a, y + bb) || L.inWater(xx + a, y + bb, 6)) fine = false; if (fine) { gx = xx; gy = y; ok = true; break; } } if (ok) break; }
+    rows.forEach(([s, p], j) => {
+      const g = s ? seasonTint(land(m), s, m, p) : land(m);
+      const pat = x.createPattern((() => { const t = document.createElement('canvas'); t.width = 60; t.height = 60; t.getContext('2d').drawImage(g, gx, gy, 60, 60, 0, 0, 60, 60); return t; })(), 'repeat');
+      x.fillStyle = pat; x.fillRect(0, j * ch, cw * cols, ch);
+      const arts = [0, 1, 2, 3, 4].map((spot) => treeArt(m, spot, 5, 0)).concat([0, 1, 2, 3].map((k) => flowerArt(m, k, 3, 0, 2, k)));
+      arts.forEach((a, i) => { const b = s ? seasonSprite(a, s, p, m) : a; x.drawImage(b, Math.round(i * cw + cw / 2 - b.ax), Math.round(j * ch + ch - 6 - b.ay)); });
+    });
+    const b = big(c); out.append(b);
+  }
+}
+
+if (mode === 'cost') {
+  const lines = [];
+  const ms = (fn, n = 1) => { const t0 = performance.now(); for (let i = 0; i < n; i += 1) fn(i); return (performance.now() - t0) / n; };
+  for (const m of VILLAGE_THEMES) {
+    const src = land(m);
+    const row = [];
+    for (const [s, p] of [['spring', 0.5], ['summer', 0.5], ['autumn', 0.8], ['winter', 0.5]]) {
+      const fresh = document.createElement('canvas'); fresh.width = src.width; fresh.height = src.height; fresh.getContext('2d').drawImage(src, 0, 0);
+      row.push(`${s} ${ms(() => seasonTint(fresh, s, m, p)).toFixed(0)}ms`);
+    }
+    seasonTint(src, 'winter', m, 0.5);
+    const again = ms(() => seasonTint(src, 'winter', m, 0.5), 5);
+    lines.push(`${m.padEnd(14)} ${src.width}x${src.height}  ${row.join('  ')}  (cached ${again.toFixed(3)}ms)`);
+  }
+  const trees = [0, 1, 2, 3, 4, 5].map((i) => treeArt('bg-meadow', i, 5, 0));
+  lines.push(`seasonSprite, a grown tree (~${trees[0].width}x${trees[0].height}): ${ms((i) => seasonSprite(trees[i % 6], ['spring', 'autumn', 'winter'][Math.floor(i / 6) % 3], 0.6, 'bg-meadow', { cache: false }), 36).toFixed(2)}ms each uncached`);
+  const wx = weather('winter', 'bg-meadow', 0.5); const ov = document.createElement('canvas'); ov.width = 448; ov.height = 556; const oc = ov.getContext('2d');
+  let st = stepParticles({}, 0, 448, 556, wx);
+  lines.push(`snow over a whole village (${st.layers[0].list.length} flakes): step+draw ${ms(() => { st = stepParticles(st, 1 / 30, 448, 556, wx); drawParticles(oc, st); }, 300).toFixed(3)}ms a frame`);
+  const wl = weather('autumn', 'bg-meadow', 0.8); let sl = stepParticles({}, 0, 448, 556, wl);
+  lines.push(`leaves (${sl.layers[0].list.length}): step+draw ${ms(() => { sl = stepParticles(sl, 1 / 30, 448, 556, wl); drawParticles(oc, sl); }, 300).toFixed(3)}ms a frame`);
+  const pre = document.createElement('pre'); pre.textContent = lines.join('\n'); out.append(pre);
+  console.log(`cost\n${lines.join('\n')}`);
+}
+document.body.dataset.ready = '1';
+</script></body></html>

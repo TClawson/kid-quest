@@ -35,6 +35,7 @@ import { startMusic, stopMusic, playShowAudio } from './music.js';
 import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
+import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
@@ -1111,6 +1112,7 @@ function villageView(kid, s, entry, mood) {
     music: { tier, left: tier ? 0 : daysToMusicHouse(prog) },
     garden: { thirsty: gardenThirsty(kid) },
     bloom: bloomData(gardenKids(), today()),
+    today: today(),
   });
 }
 
@@ -2102,6 +2104,7 @@ ${gameTestCard()}
       <p class="muted small">Open the recording studio right away to see how it works. This is a test desk: the kids' mixes and stickers are not touched.</p>
       <button class="btn" data-action="studio-test">Open the studio</button>
     </div>
+${seasonTestCard()}
     <div class="card">
       <h2>🎹 Piano listening test</h2>
       <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>
@@ -2856,6 +2859,28 @@ function gameTestCard() {
       </div>
     </div>`;
 }
+
+// Settings > Try a season: a parent sees the villages and yards in another season on this device only.
+const SEASON_ICONS = { spring: '🌸', summer: '☀️', autumn: '🍂', winter: '❄️' };
+function seasonTestCard() {
+  const real = seasonOf(today());
+  let tried = null;
+  try { tried = SEASONS.includes(localStorage.getItem('kidquest.season')) ? shownSeason(today()) : null; } catch { /* no storage */ }
+  const btn = (id, label) => `<button class="btn ${id === (tried || 'real') ? '' : 'ghost'}" data-action="try-season" data-season="${id}" aria-pressed="${id === (tried || 'real')}">${label}</button>`;
+  return `
+    <div class="card season-test">
+      <h2>🍂 Try a season</h2>
+      <p class="muted small">See the villages and the garden in another season. It is the real season (${real}) unless you pick one here. This changes this device only, so it does not change anything on the kids' other devices.</p>
+      <div class="row wrap">
+        ${btn('real', 'Real')}${SEASONS.map((x) => btn(x, `${SEASON_ICONS[x]} ${x[0].toUpperCase()}${x.slice(1)}`)).join('')}
+      </div>
+    </div>`;
+}
+actions['try-season'] = (el) => {
+  trySeason(el.dataset.season === 'real' ? null : el.dataset.season);
+  sounds.tap();
+  render();
+};
 
 actions['game-test'] = (el) => {
   const kind = el.dataset.kind;

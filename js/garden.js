@@ -12,6 +12,7 @@
 
 import * as A from './gardenart.js';
 import { makeGrid, findPath } from './village.js';
+import { seasonNow, tintLand, spriteFor, mountWeather } from './seasonlife.js';
 import { KINDS, seedById, sellPrice, SEEDS, decorById } from './gardenrules.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -91,8 +92,8 @@ function pic(art) {
   if (!c) return null;
   return { c, fx: art.fx ?? art.ax ?? c.width / 2, fy: art.fy ?? art.ay ?? c.height };
 }
-function paste(doc, art, className = 'h-piece') {
-  const p = pic(art);
+function paste(doc, art, className = 'h-piece', se = null) {
+  const p = pic(art && se && art.getContext ? spriteFor(art, se, 'garden') : art);
   if (!p) return null;
   const c = doc.createElement('canvas');
   c.width = p.c.width; c.height = p.c.height;
@@ -150,7 +151,8 @@ function mount(section, handlers) {
   const V = data.view;
   const plots = { beds: V.beds, trees: V.trees };
   const { canvas: yardCanvas, res: yardRes } = yard(doc, V.layout, data.color);
-  section.querySelector('.garden-yard').getContext('2d').drawImage(yardCanvas, 0, 0);
+  const se = seasonNow(data.today); // the parent's try-out counts, like in the villages
+  section.querySelector('.garden-yard').getContext('2d').drawImage(tintLand(yardCanvas, se, 'garden'), 0, 0);
   const decorObjs = Object.fromEntries(Object.entries(V.layout).map(([k, id]) => [k, id ? decorById(id) : null]));
 
   // ---- things standing in the garden, sorted with the buddy by their feet ----
@@ -162,7 +164,7 @@ function mount(section, handlers) {
   for (const pc of yardRes?.pieces || []) {
     const c = doc.createElement('canvas');
     c.width = pc.canvas.width; c.height = pc.canvas.height;
-    c.getContext('2d').drawImage(pc.canvas, 0, 0);
+    c.getContext('2d').drawImage(spriteFor(pc.canvas, se, 'garden'), 0, 0);
     c.className = 'h-piece';
     c.style.cssText = `left:${pc.x}px;top:${pc.y}px;width:${pc.w}px;height:${pc.h}px;z-index:${pc.foot}`;
     world.insertBefore(c, buddyEl);
@@ -172,19 +174,19 @@ function mount(section, handlers) {
     const sp = Y.spots[spot];
     // the pond is painted flat into the yard
     if (!id || !sp || decorById(id)?.art === 'pond') continue;
-    const p = paste(doc, A.decorArt(id));
+    const p = paste(doc, A.decorArt(id), 'h-piece', se);
     if (!p) continue;
     p.el.dataset.piece = spot;
     stand(p.el, sp.x, sp.y, sp.y, p.fx, p.fy);
   }
   // the watering can waits on its spot until the buddy picks it up
-  const waitingCan = V.layout.can && A.canArt ? paste(doc, A.canArt(V.layout.can, 0)) : null;
+  const waitingCan = V.layout.can && A.canArt ? paste(doc, A.canArt(V.layout.can, 0), 'h-piece', se) : null;
   if (waitingCan) { waitingCan.el.dataset.piece = 'can'; stand(waitingCan.el, Y.spots.can.x, Y.spots.can.y, Y.spots.can.y, waitingCan.fx, waitingCan.fy); }
   const plantEls = new Map(); // plot id -> { wrap, badge, x, y }
   const place = (list, where) => list.forEach((info, i) => {
     if (!info) return;
     const at = where === 'beds' ? Y.beds[i].foot : Y.trees[i];
-    const p = paste(doc, A.plantArt(info.seed.id, info.stage, { droopy: info.droopy, fruit: info.fruit }), 'g-art');
+    const p = paste(doc, A.plantArt(info.seed.id, info.stage, { droopy: info.droopy, fruit: info.fruit }), 'g-art', se);
     if (!p) return;
     const wrap = doc.createElement('div');
     wrap.className = `g-plant ${info.droopy ? 'droopy' : ''}`;
@@ -219,18 +221,41 @@ function mount(section, handlers) {
     el.style.transformOrigin = `${cs[0].fx}px ${cs[0].fy}px`;
     critters.push({ el, cs, fn, shown: 0 });
   };
+  const winter = se.season === 'winter';
   for (let i = 0; i < V.critters.butterflies; i += 1) {
     const idx = blooms.length ? blooms[i % blooms.length] : 0;
     const b = idx < V.beds.length ? Y.beds[idx] : null;
     const cx = b ? b.x + b.w / 2 : (Y.trees[idx - V.beds.length]?.x ?? 160);
     const cy = b ? b.y + b.h / 2 - 8 : (Y.trees[idx - V.beds.length]?.y ?? 80) - 24;
+    if (winter) {
+      // in winter the butterflies are away: a white hare, a cardinal and twinkling snowflakes visit instead
+      const gy = b ? b.y + b.h + 4 : cy + 26; // on the ground just in front of the plant
+      if (i % 3 === 0) {
+        spawn([0, 1], (f) => A.hareArt(f), (t) => {
+          // sits a while, then hops a little way and back
+          const u = (t * 0.25 + i * 0.37) % 1; const hop = u > 0.7 ? Math.sin(((u - 0.7) / 0.3) * Math.PI) : 0;
+          const side = Math.floor(t * 0.25 + i * 0.37) % 2 ? 1 : -1;
+          return { x: cx + side * 10 * Math.min(1, (u > 0.7 ? (u - 0.7) / 0.3 : 0)) - side * 5, y: gy - hop * 4, z: gy, frame: hop > 0.1 ? 1 : 0, dir: side };
+        });
+      } else if (i % 3 === 1) {
+        spawn([0, 1], (f) => A.cardinalArt(f), (t) => ({ x: cx + 8, y: gy - 1, z: gy, frame: Math.floor(t / 1.1 + i) % 3 === 0 ? 1 : 0, dir: Math.floor(t / 4 + i) % 2 ? 1 : -1 }));
+      } else {
+        for (let k = 0; k < 3; k += 1) {
+          spawn([0, 1, 2], (f) => A.sparkleArt(f), (t) => {
+            const u = t * 0.8 + k * 1.3 + i;
+            return { x: cx - 10 + k * 10 + Math.sin(u * 0.7) * 3, y: cy - 2 + Math.sin(u * 0.5 + k) * 6, z: 900, frame: [0, 1, 2, 1][Math.floor(t * 4 + k * 2) % 4] };
+          });
+        }
+      }
+      continue;
+    }
     const hue = [330, 45, 205][i % 3];
     spawn([0, 1, 2], (f) => A.butterflyArt(f, hue), (t) => {
       const u = t * 0.6 + i * 2.1;
       return { x: cx + Math.sin(u) * 22 + Math.sin(u * 2.3) * 5, y: cy + Math.sin(u * 1.4) * 9, z: 900, frame: [0, 1, 2, 1][Math.floor(t * 6 + i) % 4] };
     });
   }
-  if (V.critters.bees && Y.spots.bees) {
+  if (V.critters.bees && Y.spots.bees && !winter) { // bees stay in their house in winter
     const s = Y.spots.bees;
     for (let i = 0; i < V.critters.bees; i += 1) {
       spawn([0, 1], (f) => A.beeArt(f), (t) => {
@@ -250,6 +275,8 @@ function mount(section, handlers) {
     const p = paste(doc, A.shieldArt(shield, data.theme, doc), 'g-shield');
     if (p) { p.el.style.cssText += ';left:0;top:0;z-index:9999'; world.append(p.el); }
   }
+  // the season's weather above the yard (and the dome); under a dome the weather stays inside it
+  mountWeather(world, { season: se, mapId: shield ? 'garden-dome' : 'garden', W: Y.W, H: Y.H, z: 10000 });
 
   // ---- where the buddy can walk ----
   const L = {

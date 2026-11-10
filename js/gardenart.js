@@ -1706,6 +1706,49 @@ export function birdArt(frame = 0) {
   });
 }
 
+// ---------- winter visitors (in place of butterflies) ----------
+
+const HARE = [
+  ['.....ee..', '.....wE..', '....wwW..', '..wwwwwKk', '.wwwwwwwp', 'twwwwwww.', '.wwgwwg..', '..ff.ff..'],
+  ['......ee.', '......wE.', '.....wwW.', '..wwwwwwK', 'twwwwwwwk', '.wwwwwww.', 'ff.....ff', '.........'],
+];
+
+/** A cottontail rabbit (brown, so it shows on the snow, with a white tail), 2 frames: sitting, mid-hop. Facing right; anchor at its feet. */
+export function hareArt(frame = 0) {
+  const f = ((frame % 2) + 2) % 2;
+  return keep(`hare|${f}`, () => {
+    const b = new Buf(9, 8, 1);
+    grid((x, y, c) => b.set(x, y, c), 0, 0, HARE[f], { w: '#a88c74', W: '#c4a88c', g: '#7e6452', e: '#8a6e58', E: '#e8a8b4', K: '#2a1a2a', k: '#3b2235', p: '#e89aa8', t: '#f6f2ec', f: '#6e5444' });
+    return toCanvas(b, 4, 8);
+  });
+}
+
+/** A cardinal: the robin's shape in winter red. Same 3 frames as birdArt (standing, pecking, flying). */
+export function cardinalArt(frame = 0) {
+  const f = ((frame % 3) + 3) % 3;
+  return keep(`cardinal|${f}`, () => {
+    const b = new Buf(8, 8, 1);
+    grid((x, y, c) => b.set(x, y, c), 0, 0, BIRD[f], { b: '#c42a2a', B: '#e85050', R: '#d83a3a', e: '#2a1a2a', O: '#f0a030', t: '#8a1e22', l: '#6a3a2a' });
+    return toCanvas(b, 4, 8);
+  });
+}
+
+const GLINT = [
+  ['...w...', '.......', 'w..W..w', '.......', '...w...'],
+  ['.......', '..sws..', '.wWWWw.', '..sws..', '.......'],
+  ['...s...', '..sWs..', 'sWWWWWs', '..sWs..', '...s...'],
+];
+
+/** A snowflake sparkle that twinkles, 3 frames (small, mid, bright: play 0 1 2 1). */
+export function sparkleArt(frame = 0) {
+  const f = ((frame % 3) + 3) % 3;
+  return keep(`glint|${f}`, () => {
+    const b = new Buf(7, 5, 1);
+    grid((x, y, c) => b.set(x, y, c), 0, 0, GLINT[f], { W: '#ffffff', w: '#e4f2ff', s: '#a8d4ff' });
+    return toCanvas(b, 3, 2);
+  });
+}
+
 // ---------- shop thumbs ----------
 
 const PACKET = {

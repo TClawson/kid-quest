@@ -27,6 +27,8 @@ import { KAPOK, startKapok } from './kapokart.js';
 import { GOLDPOT, startGoldpot } from './goldpotart.js';
 import { STARWHALE, startStarwhale } from './starwhaleart.js';
 import { musicSign } from './musicart.js';
+import { seasonNow, tintLand, mountWeather } from './seasonlife.js';
+import { isNewSeason, seasonLine } from './seasonhints.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
 const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot }, starwhale: { size: STARWHALE, start: startStarwhale } };
@@ -267,6 +269,7 @@ export function villageHtml(v) {
     home: v.home || null,
     music: { tier: v.music?.tier || 0, left: v.music?.left || 0 },
     bloom: v.bloom || null, // the family's trees and flowers (villagebloom.js)
+    today: v.today || v.bloom?.today || '', // the season follows this day (seasons.js)
   };
   const folk = people.map((p) => {
     const a = activeQuest(p.tasks);
@@ -536,10 +539,15 @@ function spriteUrl(kind, happy) {
   return spriteCache.get(key);
 }
 
+// The painted land is kept for the next redraw; the season is part of the key, and the
+// season's tint is done here, once per paint (never per frame).
 let landCache = { key: '', canvas: null };
-function land(L, color, areas = []) {
-  const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}`;
-  if (landCache.key !== key) landCache = { key, canvas: paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas }) };
+function land(L, color, areas = [], se = null) {
+  const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}|${se ? `${se.season}${Math.round(se.progress * 20)}` : ''}`;
+  if (landCache.key !== key) {
+    const base = paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas });
+    landCache = { key, canvas: se ? tintLand(base, se, L.id) : base };
+  }
   return landCache.canvas;
 }
 
@@ -580,7 +588,8 @@ function mount(section, handlers) {
 
   // the land and the villagers' faces
   const canvas = section.querySelector('.village-land');
-  canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas), 0, 0);
+  const se = seasonNow(data.today);
+  canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas, se), 0, 0);
   const paintSprite = (el, kind, happy) => {
     const c = el.querySelector('.v-sprite');
     const src = spriteUrl(kind, happy);
@@ -738,6 +747,8 @@ function mount(section, handlers) {
     if (mode !== 'pending' && q.st !== 'pending') {
       const hint = bloomHint(data.bloom?.hint, `${data.bloom?.today}|${p.id}|${hintTaps += 1}`);
       if (hint) text += ` ${hint}`;
+      // in the first days of a season (or when a parent is trying one), a villager may say so
+      else if (isNewSeason(se.progress, se.tried)) { const line = seasonLine(se.season, `${data.today}|${p.id}|${hintTaps}`); if (line) text += ` ${line}`; }
     }
     open(card(villagerName(p.kind), text, quest, buttons), p.kind, doneAll(p) || mode === 'thanks', p.id);
     typeText(text);
@@ -1041,7 +1052,9 @@ function mount(section, handlers) {
     toMap: (e) => { const r = world.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; },
   });
   // the family's trees and flowers, and the critters they bring
-  mountBloom(section, L, data, canvas, { host: view, toMap: (e) => { const r = world.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; } });
+  mountBloom(section, L, data, canvas, se, { host: view, toMap: (e) => { const r = world.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; } });
+  // the season's weather, above everything in the world
+  mountWeather(world, { season: se, mapId: L.id, W, H, z: 9500 });
   place();
   requestAnimationFrame(tick);
 
