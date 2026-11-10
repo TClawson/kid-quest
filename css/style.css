@@ -167,6 +167,14 @@ label { color: var(--ink); }
 .modal[hidden] { display: none; }
 .game-test-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; margin: 10px 0 14px; }
 .game-test-pick label { display: grid; gap: 4px; font-size: 0.9em; }
+/* Settings › Save a test recording */
+.rec-test .rec-time { margin: 10px 0 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rec-test .rec-meter { height: 14px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.rec-test .rec-meter span { display: block; height: 100%; width: 0; background: var(--brand); transition: width 0.08s linear; }
+.rec-test .rec-warn { color: var(--danger); font-weight: 700; margin: 6px 0 0; }
+.rec-test .rec-saved { margin: 10px 0 8px; overflow-wrap: anywhere; }
+.rec-test .rec-note.bad { color: var(--danger); }
+.rec-test a.btn { text-decoration: none; }
 .game-pick { display: grid; gap: 10px; margin: 14px 0; }
 .game-pick .btn { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .game-pick .btn small { font-size: 0.75em; opacity: 0.85; }
@@ -400,6 +408,9 @@ label { color: var(--ink); }
 .ex-dots { display: flex; gap: 6px; }
 .ex-dot { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; font-size: 1rem; background: #fff; box-shadow: inset 0 0 0 3px #d0bfff; }
 .ex-dot.on { background: #d0bfff; box-shadow: inset 0 0 0 3px #7950f2; }
+.ex-dot.shield:not(.on), .ex-dot.star:not(.on) { opacity: .55; filter: grayscale(.6); }
+.ex-dot.shield.on { background: #c5f6fa; box-shadow: inset 0 0 0 3px #1098ad; }
+.ex-dot.star.on { background: #fff3bf; box-shadow: inset 0 0 0 3px #f08c00; }
 .moves { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; }
 .move { border: 0; border-radius: 8px; padding: 8px 10px; text-align: left; background: var(--card); box-shadow: 0 3px 0 var(--line); display: grid; gap: 2px; font: inherit; cursor: pointer; }
 .move b { font-size: 0.95rem; }

@@ -3,7 +3,7 @@ import {
   tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, storeOpen, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
-  isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
+  isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS, EXERCISE_KEEP_DAYS,
   defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
@@ -15,9 +15,11 @@ import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { liveHtml, live, liveStart, partyAll } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
-import { villageHtml, mountVillages, cameOut } from './village.js';
+import { villageHtml, mountVillages, cameOut, cameOutOfMusic } from './village.js';
 import { houseHtml, mountHouses, cameIn } from './house.js';
-import { houseChores, shelfLevel, isInside, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
+import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
+import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
+import { musicTier, daysToMusicHouse, studioOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
 import { applyGrants } from './grants.js';
 import { furnitureThumb } from './houseart.js';
@@ -25,6 +27,9 @@ import { leaderboard, weekOf } from './leaderboard.js';
 import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
+import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
+import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
+import { mountTestRec } from './testrec.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
@@ -32,15 +37,15 @@ import {
 import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
 import { GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
-import { SPOTS as FISH_SPOTS } from './fishing.js';
+import { SPOTS as FISH_SPOTS, boatThumb } from './fishing.js';
 import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
 import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, secretSize, SECRETS } from './treasure-art.js';
 import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
 import { state, setState, provide } from './ctx.js';
 import {
-  startTimer, stopTimer, leaveTimer, returnToTimer, restoreTimer, mmss, buddyCheer,
-  ears, startEars, stopEars, wakeEars, viewTimer,
+  startTimer, stopTimer, leaveTimer, returnToTimer, restoreTimer, timerOnScreen, mmss, buddyCheer,
+  ears, startEars, stopEars, wakeEars, viewTimer, viewWatch,
   listenTest, viewListen, startListenTest, stopListenTest, setLastListenMood, LISTEN_MODE_KEY, DANCE_LEAD, DANCE_LEAD_KEY,
 } from './timer-ui.js';
 import {
@@ -519,10 +524,11 @@ function setTask(kid, key, task, value) {
   save();
 }
 
-function markDone(kid, task, by, anchor) {
-  setTask(kid, today(), task, { status: 'done', at: Date.now(), by });
+// day: the day the chore belongs to (a practice timer's day, when a parent signs off after midnight)
+function markDone(kid, task, by, anchor, day = today()) {
+  setTask(kid, day, task, { status: 'done', at: Date.now(), by });
   sounds.task();
-  const { xp, coins, gems } = taskPay(state, kid, today(), task, today());
+  const { xp, coins, gems } = taskPay(state, kid, day, task, today());
   floatText([gems && `+${gems} 💎`, xp && `+${xp} XP`, coins && `+${coins} 🪙`].filter(Boolean).join(' · ') || 'Done!', anchor);
   ui.cheerUntil = Date.now() + 2600;
   ui.cheerKid = kid.id;
@@ -532,7 +538,7 @@ function markDone(kid, task, by, anchor) {
   setTimeout(() => { if (ui.view === 'kid' && Date.now() >= ui.cheerUntil) render(); }, 2700);
 }
 
-function askParentNowOrLater(kid, task, anchor) {
+function askParentNowOrLater(kid, task, anchor, day = today()) {
   openModal(`
     <div class="center">
       <div class="big-emoji">${esc(task.icon)}</div>
@@ -545,11 +551,11 @@ function askParentNowOrLater(kid, task, anchor) {
     </div>`);
   modalActions['pin-now'] = () => {
     closeModal();
-    pinPad({ title: 'Parent sign-off', subtitle: `${kid.name}: ${task.name}`, onSuccess: () => markDone(kid, task, 'parent', anchor) });
+    pinPad({ title: 'Parent sign-off', subtitle: `${kid.name}: ${task.name}`, onSuccess: () => markDone(kid, task, 'parent', anchor, day) });
   };
   modalActions['pin-later'] = () => {
     closeModal();
-    setTask(kid, today(), task, { status: 'pending', at: Date.now() });
+    setTask(kid, day, task, { status: 'pending', at: Date.now() });
     sounds.pending();
     toast('Saved! A parent will check it.');
     render();
@@ -1030,7 +1036,12 @@ function villageView(kid, s, entry, mood) {
     return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
   });
   // the buddy's house: where the day starts, and wherever the kid left the buddy after that
-  if (isInside(kid.id, today())) return houseView(kid, list, mood);
+  // (its house, the music house, or out in the village)
+  const place = placeOf(kid.id, today());
+  if (place === 'house') return houseView(kid, list, mood);
+  const prog = progressFor(kid);
+  const tier = musicTier(prog);
+  if (place === 'music' && tier) return musicView(kid, list, mood, tier);
   // chores linked to the house (bed, teeth, floor) are done in the house, not given out by
   // villagers; the house door shows what's still waiting in there
   const hc = houseChores(state, kid, today());
@@ -1058,8 +1069,52 @@ function villageView(kid, s, entry, mood) {
     home,
     planned,
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
+    music: { tier, left: tier ? 0 : daysToMusicHouse(prog) },
   });
 }
+
+// Which look of the music house each kid has seen on this device, so a new look is
+// greeted once (the first visit, and each better piano).
+const MUSIC_SEEN_KEY = 'kidquest.musicSeen';
+const musicHellos = new Map(); // kid id -> the look greeted while the app is open (the page keeps saying it the same way)
+function musicHello(kidId, tier) {
+  if (musicHellos.get(kidId) === tier) return tierInfo(tier).hello;
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem(MUSIC_SEEN_KEY) || '{}') || {}; } catch { seen = {}; }
+  if ((seen[kidId] || 0) >= tier) return '';
+  seen[kidId] = tier;
+  try { localStorage.setItem(MUSIC_SEEN_KEY, JSON.stringify(seen)); } catch { /* it just says hello again */ }
+  musicHellos.set(kidId, tier);
+  return tierInfo(tier).hello;
+}
+
+/** Inside the music house (musichouse.js): its look for the kid's best piano, and its stations. */
+function musicView(kid, list, mood, tier) {
+  return musicHouseHtml({
+    kidId: kid.id,
+    kidName: kid.name,
+    color: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
+    buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
+    tier,
+    studio: studioOpen(state, kid, today()),
+    hello: musicHello(kid.id, tier),
+    quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
+  });
+}
+
+const musicHandlers = {
+  onPiano: () => { ui.view = 'watch'; ui.watchSession = 0; ui.watchNote = ''; render(); },
+  onSheets: () => openSongbook(),
+  onStudio: () => openStudio(),
+  onExit: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setPlace(kid.id, today(), 'out');
+    cameOutOfMusic(kid.id, kidTheme(kid));
+    render();
+  },
+  sound: () => sounds.tap(),
+};
 /** Inside the buddy's house (house.js): today's bed, teeth and floor chores, the trophy shelf, the furniture. */
 function houseView(kid, list, mood) {
   const t = today();
@@ -1294,6 +1349,13 @@ const villageHandlers = {
     cameIn(kid.id);
     render();
   },
+  onMusic: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setPlace(kid.id, today(), 'music');
+    cameInMusic(kid.id);
+    render();
+  },
   sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
 };
 
@@ -1428,16 +1490,37 @@ function weekCoinsHtml(kid) {
         </div>`;
 }
 
+const weeksLabel = (n) => `${n} strong ${n === 1 ? 'week' : 'weeks'}`;
+
+/**
+ * This week's exercise days as boxes: the box that keeps the strong-week count
+ * safe shows a 🛡️ and the box that makes a strong week shows a ⭐, so kids see
+ * the rule (3 days keeps it, 4 days adds one) without reading it.
+ */
+function exWeekHtml(ex) {
+  if (!ex.goal) return `<div class="ex-week"><small>🛡️ Excused week: your ${esc(weeksLabel(ex.weeks))} wait for you</small></div>`;
+  const dots = Array.from({ length: ex.goal }, (_, i) => {
+    const on = i < ex.thisWeek;
+    const mark = i === ex.goal - 1 ? ['star', '⭐'] : i === ex.keep - 1 ? ['shield', '🛡️'] : null;
+    return `<span class="ex-dot ${on ? 'on' : ''} ${mark ? mark[0] : ''}">${on ? (mark ? mark[1] : '💪') : mark ? mark[1] : ''}</span>`;
+  }).join('');
+  const left = (n) => `${n} more ${n === 1 ? 'day' : 'days'}`;
+  let text;
+  if (ex.status === 'strong') text = `<b>⭐ Strong week!</b> You have ${esc(weeksLabel(ex.weeks))}`;
+  else if (!ex.weeks) text = `${left(ex.goal - ex.thisWeek)} for a ⭐ strong week`;
+  else if (ex.status === 'safe') text = `<b>🛡️ Your ${esc(weeksLabel(ex.weeks))} are safe.</b> ${left(ex.goal - ex.thisWeek)} adds a ⭐`;
+  else text = `${left(ex.keep - ex.thisWeek)} keeps your ${esc(weeksLabel(ex.weeks))} safe 🛡️ · ${left(ex.goal - ex.thisWeek)} adds a ⭐`;
+  return `<div class="ex-week"><div class="ex-dots" aria-label="${ex.thisWeek} exercise days this week: ${ex.keep} keeps your strong weeks, ${ex.goal} adds one">${dots}</div><small>${text}</small></div>`;
+}
+
 /** Bonus exercise: optional tiles that earn gems, and how the exercise week is going. */
 function exerciseSection(kid, tasks, entry) {
   if (!tasks.length) return '';
   const ex = exerciseInfo(kid);
-  const dots = Array.from({ length: ex.goal }, (_, i) => `<span class="ex-dot ${i < ex.thisWeek ? 'on' : ''}">${i < ex.thisWeek ? '💪' : ''}</span>`).join('');
-  const streak = ex.weeks ? `${ex.weeks}-week exercise streak 🔥` : 'Exercise 5 days this week to start a streak';
   return `
       <section class="exercise">
         <h2>💪 Bonus exercise <small class="muted">earns 💎 gems</small></h2>
-        <div class="ex-week"><div class="ex-dots" aria-label="${ex.thisWeek} of ${ex.goal} exercise days this week">${dots}</div><small>${ex.thisWeek >= ex.goal ? '<b>This week counts!</b> ' : `${ex.thisWeek} of ${ex.goal} days this week · `}${esc(streak)}</small></div>
+        ${exWeekHtml(ex)}
         <div class="tiles">${tasks.map((x) => taskTile(kid, x, entry?.tasks?.[x.id])).join('')}</div>
       </section>`;
 }
@@ -1463,7 +1546,8 @@ function viewWardrobe() {
         <div class="buddy-side">
           <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
           ${sportTab ? `<p class="gem-line">💎 <b>${prog.gems}</b> gems to spend</p>
-          <p class="muted">💪 Exercise streak: <b>${prog.ex.weeks} ${prog.ex.weeks === 1 ? 'week' : 'weeks'}</b> (best ${prog.ex.best}) · ${prog.ex.thisWeek} of ${prog.ex.goal} days this week</p>` : `<p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
+          <p class="muted">💪 <b>${esc(weeksLabel(prog.ex.weeks))}</b> (best ${prog.ex.best})</p>
+          ${exWeekHtml(prog.ex)}` : `<p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
           ${nextItem ? `<p class="muted">Next streak prize: <b>${esc(nextItem.name)}</b> at ${esc(needLabel(nextItem))}</p>` : ''}`}
         </div>
       </div>
@@ -1474,13 +1558,13 @@ function viewWardrobe() {
     const on = item.home ? isPlaced(kid, item) : kid.buddy.outfit[item.slot] === item.id;
     // the wand's picture is lit all the way, to show what it does
     const preview = { ...kid.buddy, wand: 1, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
-    const wearing = item.home ? (on ? 'In your house' : 'Tap to use') : item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
+    const wearing = item.home ? (on ? 'In your house' : 'Tap to use') : item.noHold ? 'At the lake' : item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
     const price = item.gems ? `<span class="price gems ${prog.gems >= item.gems ? 'can' : ''}">💎 ${item.gems}</span>`
       : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : '';
     return `<button class="item ${open ? '' : 'locked'} ${item.price || item.gems ? 'shop' : ''} ${item.species ? 'special' : ''} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
             ${item.species ? `<span class="special-tag">⭐ ${esc(speciesName(item.species))} only</span>` : ''}
             ${item.home ? `<span class="spot-tag">${spotById(item.spot).icon} ${esc(spotById(item.spot).name)}</span>` : ''}
-            <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
+            <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : item.noHold ? `<img class="home-thumb" src="${boatThumb()}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
             <small>${open ? wearing : price || `🔒 ${esc(needLabel(item))}`}</small>
             ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
@@ -1489,7 +1573,7 @@ function viewWardrobe() {
       </div>
       ${sportTab ? movesList(kid, prog) : ''}
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
-      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on ${prog.ex.goal} days in a week to keep your exercise streak going: 1, 3 and 6 weeks in a row unlock new moves for each piece of gear you own, and moves stay yours even if the streak ends. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing!</p>` : ''}
+      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish.</p>` : ''}
       ${ui.slot === 'home' ? '<p class="muted small">Every task you finish earns coins to spend on furniture. Furniture goes in your buddy\'s house, and every buddy you have can use it. Each spot holds one thing at a time: tap something you own to put it in, or tap it again to take it out. Walk your buddy in the front door of your house in the village to see it!</p>' : ''}
       ${sportTab || ui.slot === 'home' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
@@ -1505,7 +1589,7 @@ function movesList(kid, prog) {
       <div class="moves">${MOVES.filter((m) => m.kind === k.id).map((m) => {
     const open = have.has(m.id);
     const weeks = moveWeeks(m);
-    const need = k.id !== 'body' && !gear[k.id] ? `Get a ${k.name.toLowerCase()} and a ${weeks}-week streak` : `${weeks}-week exercise streak`;
+    const need = k.id !== 'body' && !gear[k.id] ? `Get a ${k.name.toLowerCase()} and ${weeksLabel(weeks)}` : weeksLabel(weeks);
     return `<button class="move ${open ? '' : 'locked'}" ${open ? `data-action="try-move" data-move="${m.id}"` : 'data-action="move-locked"'} data-need="${esc(need)}">
           <b>${open ? '' : '🔒 '}${esc(m.name)}</b><small>${open ? 'Tap to see it' : esc(need)}</small></button>`;
   }).join('')}</div>`).join('')}`;
@@ -1707,7 +1791,7 @@ function parentEditKid() {
     <h2>💪 Bonus exercise</h2>
     ${taskRows('exercise') || '<p class="muted small">None yet. Add a run, a bike ride, soccer practice or anything active.</p>'}
     <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise task</button>
-    <p class="muted small">Exercise tasks are optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week keeps the exercise streak going, which unlocks moves for the kid's buddy at 1, 3 and 6 weeks. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day, and a week with 5 or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
+    <p class="muted small">Exercise tasks are optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week (Monday to Sunday) makes a "strong week", and strong weeks unlock moves for the kid's buddy at 1, 3 and 6. A week with exactly ${EXERCISE_KEEP_DAYS} exercise days keeps the count without adding to it, and a week with fewer takes one strong week away. Moves already unlocked are never taken away. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day for each mark, and a week with ${EXERCISE_DAYS} or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
     <p class="muted small">🏠 House chores show in ${esc(kid.name)}'s buddy house in the village: an unmade bed until “Make bed” is done, the toothbrush out until the morning “Brush teeth” is done, and a messy floor until “Pick up bedroom floor” is done (messier after 2 days, very messy after 4). Pick which task is which with “House chore”, or add one ready-made. Each can be linked to one task at a time. Tasks that aren't linked don't change the house.</p>
     <p class="muted small">A task can repeat every other week (weeks run Monday to Sunday). To have two kids take turns, like cleaning the bathroom, set the task to every other week for one kid, then tap the other kid's name next to “Take turns with”: they get the same task on the opposite weeks. On a kid's off week the task isn't on their list at all, so it never counts against their streak or the day's treasure.</p>
     <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. ${allowance ? `${esc(kid.name)} earns up to ${allowance.coins} coins and ${allowance.xp} XP a week. It is split across the week's tasks by size: a big task is worth 3 small ones, a medium one 2. A kid with more tasks doesn't earn more, each task is just worth a little less, and a missed task loses its share. Exercise is extra: it earns gems and its own XP.` : 'Each task earns 10 coins and 10 XP (30 for a timer task) unless you type other amounts; leave a box empty to use the default.'} Changes count from today, so coins already earned stay earned. Every 100 XP is a level.</p>
@@ -1765,10 +1849,20 @@ function parentSettings() {
     </div>
 ${allowanceCard()}
 ${gameTestCard()}
+    <div class="card studio-test">
+      <h2>🎚️ Try the recording studio</h2>
+      <p class="muted small">Open the recording studio right away to see how it works. This is a test desk: the kids' mixes and stickers are not touched.</p>
+      <button class="btn" data-action="studio-test">Open the studio</button>
+    </div>
     <div class="card">
       <h2>🎹 Piano listening test</h2>
       <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>
       <button class="btn ghost" data-action="listen-open">Open the listening test</button>
+    </div>
+    <div class="card rec-test">
+      <h2>🎙️ Save a test recording</h2>
+      <p class="muted small">Record up to 2 minutes of piano through the tablet's microphone and save it as a sound file. Nothing is kept in the game.</p>
+      <div id="rec-test"></div>
     </div>
     <div class="card">
       <h2>Parent PIN</h2>
@@ -1871,10 +1965,10 @@ function buyGear(kid, item, prog) {
   const preview = { ...dressed(kid), outfit: { ...kid.buddy.outfit, sport: item.id } };
   openModal(`
     <div class="celebrate">
-      <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
+      ${item.noHold ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${boatThumb()}" alt=""></div>` : `<div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>`}
       <h1>Buy ${esc(item.name)}?</h1>
       <p>It costs <b>💎 ${item.gems}</b>. You'll have ${prog.gems - item.gems} gems left.</p>
-      <p class="muted small">Every buddy can use it. Keep exercising to unlock its moves.</p>
+      <p class="muted small">${item.noHold ? 'When you go fishing, you and your visitor row out into deep water, where the bigger fish swim. Every buddy can use it.' : 'Every buddy can use it. Keep exercising to unlock its moves.'}</p>
       <div class="stack">
         <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
         <button class="btn ghost" data-action="modal-close">Keep saving</button>
@@ -1906,7 +2000,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -1963,7 +2057,7 @@ function render() {
   const scrollY = window.scrollY;
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
-  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
+  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
   const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
   // load the sign-in code early, so a sign-in popup opens straight from the tap
@@ -1981,6 +2075,10 @@ function render() {
   paintQuestMaps($app);
   mountVillages($app, villageHandlers);
   mountHouses($app, houseHandlers);
+  mountMusicHouses($app, musicHandlers);
+  mountSongbook($app);
+  mountStudio($app);
+  mountTestRec($app);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
@@ -2012,10 +2110,11 @@ const actions = {
     setTimeout(() => celebrateIfDue(kidById(ui.kidId)), 300);
   },
   task: (el) => onTaskTap(el.dataset.id, el),
-  'timer-start': () => { wakeEars(); startTimer(); startEars(); },
+  'timer-start': () => { wakeEars(); startTimer(true); startEars(); },
   'timer-pause': () => { stopEars(); stopTimer(); },
   'timer-buddy': () => buddyCheer(),
   'timer-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
+  'watch-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
   parent: () => pinPad({ title: 'Parents only', subtitle: 'Type the parent PIN', onSuccess: () => { ui.view = 'parent'; ui.tab = pendingApprovals(state, today()).length ? 'approvals' : ui.tab; render(); } }),
   'listen-open': () => { ui.view = 'listen'; ui.listenKid = ui.listenKid || state.kids[0]?.id; render(); window.scrollTo(0, 0); },
   'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; render(); },
@@ -2076,6 +2175,7 @@ const actions = {
       toast(was ? (spotById(item.spot).basic ? `Back to the ${furnitureName(spotById(item.spot).basic)}` : `${item.name} put away`) : `${item.name} is in your house! 🏠`);
       return;
     }
+    if (item.noHold) { sounds.tap(); toast('Your boat is waiting at the lake! 🚣 Go fishing with a visiting buddy to row out.'); return; }
     const outfit = kid.buddy.outfit;
     if (outfit[item.slot] === item.id && item.slot !== 'background') delete outfit[item.slot];
     else { outfit[item.slot] = item.id; putAwayOther(kid, item.slot); }
@@ -2135,7 +2235,7 @@ const actions = {
     addOwned(kid, item);
     // furniture goes straight into its spot in the house; anything else, the buddy puts on
     if (item.home) kid.home = { ...(kid.home || {}), [item.spot]: item.id };
-    else {
+    else if (!item.noHold) {
       kid.buddy.outfit[item.slot] = item.id;
       putAwayOther(kid, item.slot);
     }
@@ -2412,6 +2512,8 @@ actions.visitor = (el) => {
 // ---------- playing with a visitor (see play-ui.js) ----------
 
 // the leaderboard's This week / All time tabs
+Object.assign(actions, songbookActions);
+Object.assign(actions, studioActions);
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
 
 actions['tank-pick'] = (el) => {
@@ -2466,6 +2568,7 @@ function gameTestCard() {
         <label>Visitor <select id="gt-vis">${opt(ui.gtVis || (kids[1] || kids[0]).id, who)}</select></label>
         <label>Visitor's gear <select id="gt-vis-gear">${opt(ui.gtVisGear || '1', tiers)}</select></label>
         <label>Fishing spot <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
+        <label>Fishing boat <select id="gt-boat">${opt(ui.gtBoat || '0', [['0', 'No boat'], ['1', 'In the boat']])}</select></label>
       </div>
       <div class="row wrap">
         ${['soccer', 'tag', 'hockey', 'football', 'fishing'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
@@ -2476,7 +2579,7 @@ function gameTestCard() {
 actions['game-test'] = (el) => {
   const kind = el.dataset.kind;
   const val = (id) => document.getElementById(id)?.value;
-  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map') });
+  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map'), gtBoat: val('gt-boat') });
   const kid = kidById(ui.gtKid) || state.kids[0];
   const other = kidById(ui.gtVis) || kid;
   const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind;
@@ -2487,7 +2590,7 @@ actions['game-test'] = (el) => {
   openPlay({
     kind,
     best: 0,
-    kid: { buddy: kid.buddy, name: kid.name, gear: gear(ui.gtKidGear), moves: moveIds(mover(kid)) },
+    kid: { buddy: kid.buddy, name: kid.name, gear: { ...gear(ui.gtKidGear), ...(kind === 'fishing' && ui.gtBoat === '1' ? { boat: 1 } : {}) }, moves: moveIds(mover(kid)) },
     visitor: { buddy: other.buddy, name: visName, gear: gear(ui.gtVisGear), moves: moveIds(mover(other)) },
     map: ui.gtMap || kidTheme(kid),
     day: today(),
@@ -2564,7 +2667,7 @@ actions['buddy-move'] = (el) => {
   sounds.tap();
   if (zone) { live(liveKey(kid)).giggle(); if (moveHintShown) return; moveHintShown = true; }
   const ex = exerciseInfo(kid);
-  toast(`Exercise ${ex.goal} days in one week to learn your first move! 💪`);
+  toast(`Exercise ${ex.goal || EXERCISE_DAYS} days in one week for a ⭐ strong week and your first move! 💪`);
 };
 
 // ---------- reminders and day rollover ----------
@@ -2574,7 +2677,7 @@ const fired = new Set();
 
 setInterval(() => {
   const t = today();
-  if (t !== lastDay) { lastDay = t; if (ui.view !== 'timer') render(); }
+  if (t !== lastDay) { lastDay = t; if (!timerOnScreen()) render(); }
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   for (const r of state.settings.reminders) {
@@ -2599,11 +2702,11 @@ setInterval(() => {
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   // The service worker serves the cached app first, so after a new version is deployed the
   // first open still shows the old one. When the new worker takes over, reload once to show it,
-  // unless a piano timer is on screen (then the next open picks it up).
+  // unless a piano timer or the recording studio is on screen (then the next open picks it up).
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading || ui.view === 'timer') return;
+    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio') return;
     reloading = true;
     window.location.reload();
   });

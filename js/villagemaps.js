@@ -551,6 +551,9 @@ export function villageLayout(theme) {
   const crossings = spec.crossings.map((c) => bridgeBox(c, water));
   const houses = spec.houses;
   const home = spec.home;
+  // the music hall: where the piano quest is given, and the door into the music house
+  const hall = houses.find((h) => h.music) || null;
+  const music = hall && { ...hall, door: { x: hall.x + hall.w / 2, y: hall.y + hall.h + 8 } };
   // the landmark is drawn at twice its art size, its box from the art (see app.js), unless the
   // spec gives its own size (the meadow's Great Oak, drawn for the village in oakart.js)
   const lm = spec.landmark;
@@ -576,6 +579,7 @@ export function villageLayout(theme) {
     pathStyle: spec.pathStyle,
     home,
     houses,
+    music,
     water,
     crossings,
     paths: spec.paths,

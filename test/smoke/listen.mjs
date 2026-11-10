@@ -239,6 +239,27 @@ try {
     if (shots) await page.screenshot({ path: `${shots}/timer-awake-phone.png` });
   });
 
+  // the music house's piano stopwatch naps the same way: asleep pauses it, playing wakes it.
+  // (A running stopwatch is picked up from this device's storage, as after Android closed the app.)
+  const openWatch = async (page) => {
+    await page.evaluate(() => localStorage.setItem('kidquest.practiceRun', JSON.stringify({ kidId: 'kid_sam', day: '2026-11-02', since: Date.now(), watch: true, chores: [], done: [], extra: 0, session: 0 })));
+    await page.reload();
+    await page.waitForSelector('.screen.watch [data-action="timer-pause"]', { timeout: 20000 });
+    await page.waitForSelector('.timer .timer-sprite[data-mood="waiting"], .timer .timer-sprite[data-mood="playing"]', { timeout: 60000 });
+  };
+  await withMic(quietThenPiano, { mode: 'google', open: openWatch, clock: true, viewport: { width: 390, height: 844 } }, async (page) => {
+    await page.clock.fastForward(61_000);
+    await page.clock.runFor(500);
+    await page.waitForSelector('.screen.watch [data-action="timer-start"]');
+    assert.match(await page.textContent('#ears-text'), /Asleep, so the stopwatch is paused/);
+    assert.ok(await page.locator('.timer .timer-sprite[data-mood="asleep"]').count(), 'the buddy sleeps');
+    const shown = await page.textContent('#watch-today');
+    await page.clock.fastForward(5_000);
+    assert.equal(await page.textContent('#watch-today'), shown, 'the stopwatch is paused');
+    await page.waitForSelector('.screen.watch [data-action="timer-pause"]', { timeout: 60000 });
+    await page.waitForFunction(() => /Stopwatch back on/.test(document.querySelector('.timer-bubble').textContent), null, { timeout: 2000 });
+  });
+
   // the parent setting: in the task editor, only for timer tasks
   await withMic(new Float32Array(RATE), { open: async (page) => {
     await page.click('[data-action="parent"]');

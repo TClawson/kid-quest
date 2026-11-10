@@ -39,6 +39,7 @@ for (const theme of VILLAGE_THEMES) {
     reach('the shopkeeper', standSpot(grid, L.shop.x, L.shop.y, from.x));
     reach('the chest', standSpot(grid, L.chest.x, L.chest.y, from.x));
     reach('the landmark', L.landmark.stand);
+    reach('the music house door', L.music.door);
     Object.entries(spots).forEach(([id, sp]) => reach(`visitor ${id}`, sp.role === 'fish' ? { x: sp.x - sp.face * 22, y: sp.y + 2 } : standSpot(grid, sp.x, sp.y, from.x)));
     reach('the play patch', { x: L.green.right.x + L.green.right.w / 2, y: L.green.right.y + L.green.right.h + 12 });
   });

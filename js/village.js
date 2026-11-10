@@ -25,6 +25,7 @@ import { STONE, startStone } from './stoneart.js';
 import { KAPOK, startKapok } from './kapokart.js';
 import { GOLDPOT, startGoldpot } from './goldpotart.js';
 import { STARWHALE, startStarwhale } from './starwhaleart.js';
+import { musicSign } from './musicart.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
 const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot }, starwhale: { size: STARWHALE, start: startStarwhale } };
@@ -204,6 +205,20 @@ function visitorsMarkup(visit, L) {
   return `<div class="map-visitors v-visitors" data-host="${esc(visit.host)}" aria-label="Visiting buddies">${areas}${people}</div>`;
 }
 
+// The music hall's door: once the kid has a piano it opens into the music house (its sign
+// shows which look it has); before that a padlock hangs on it.
+let signCache = new Map();
+function musicDoor(L, music) {
+  const h = L.music;
+  if (!h) return '';
+  const tier = music.tier || 0;
+  if (!signCache.has(tier) && typeof document !== 'undefined') signCache.set(tier, musicSign(document, tier));
+  const sign = signCache.get(tier);
+  const label = tier ? 'Go into the music house' : 'The music house (locked)';
+  const art = sign ? `<span class="v-music-sign f${sign.frames}" style="width:${sign.w}px;height:${sign.h}px;background-image:url(${sign.url});background-size:${sign.w * sign.frames}px ${sign.h}px;left:${tier ? h.w / 2 + 9 : h.w / 2 - 5}px;top:${tier ? h.h - 10 : h.h - 3}px"></span>` : '';
+  return `<button class="v-music ${tier ? 'open' : 'locked'}" style="left:${h.x}px;top:${h.y - 12}px;width:${h.w}px;height:${h.h + 12}px;z-index:${h.y + h.h - 1}" aria-label="${label}">${art}</button>`;
+}
+
 /**
  * The village for a kid. v: {
  *   theme: the kid's Places background (which map's village),
@@ -215,6 +230,8 @@ function visitorsMarkup(visit, L) {
  *   landmark: { html, name, w, h } or null: a finished treasure map's landmark,
  *   home: { left, icon, task, step, now } or null: chores still waiting inside the kid's house (bed,
  *     teeth, floor), which villagers don't give out; now: the plan's next step is one of them,
+ *   music: { tier, left }: the music house's look (0 while it is locked) and piano days still
+ *     to go before it opens,
  * }
  */
 export function villageHtml(v) {
@@ -231,6 +248,7 @@ export function villageHtml(v) {
     planned: Boolean(v.planned), chest: { ready: v.chest.ready, opened: v.chest.opened }, shop,
     areas: greenAreas(v.visit, L), spots: visitorSpots(v.visit, L), landmark: lm,
     home: v.home || null,
+    music: { tier: v.music?.tier || 0, left: v.music?.left || 0 },
   };
   const folk = people.map((p) => {
     const a = activeQuest(p.tasks);
@@ -261,6 +279,7 @@ export function villageHtml(v) {
           <canvas class="v-life" width="${L.W}" height="${L.H}" style="width:${L.W}px;height:${L.H}px" aria-hidden="true"></canvas>
           <div class="v-label home-label" style="left:${L.home.x + L.home.w / 2}px;top:${L.home.y + 10}px">${esc(v.kidName)}'s house</div>
           <button class="v-home${home ? ' has-quests' : ''}${home?.now ? ' now' : ''}" style="left:${L.home.x}px;top:${L.home.y - 12}px;width:${L.home.w}px;height:${L.home.h + 12}px;z-index:${L.home.y + L.home.h - 2}" aria-label="Go into ${esc(v.kidName)}'s house${home ? ` (${home.left} to do inside)` : ''}"><span class="v-home-door" style="left:${L.home.w / 2}px">🚪</span>${homeBubble}</button>
+          ${musicDoor(L, data.music)}
           ${am ? `<div class="v-label period" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
           ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
           ${folk}${keeper}
@@ -483,6 +502,14 @@ export function cameOut(kidId, theme) {
   memory.set(key, { ...(memory.get(key) || { seen: {} }), x: L.start.x, y: L.start.y + 4, face: 1, cam: null });
 }
 
+/** The buddy just came out of the music house: it stands outside the music hall's door. */
+export function cameOutOfMusic(kidId, theme) {
+  const L = villageLayout(theme);
+  if (!L.music) return;
+  const key = `${kidId}|${L.id}`;
+  memory.set(key, { ...(memory.get(key) || { seen: {} }), x: L.music.door.x, y: L.music.door.y + 4, face: 1, cam: null, path: [], goal: null });
+}
+
 function spriteUrl(kind, happy) {
   const key = `${kind}:${happy ? 1 : 0}`;
   if (!spriteCache.has(key)) spriteCache.set(key, drawVillager(document.createElement('canvas'), kind, happy));
@@ -502,6 +529,7 @@ function land(L, color, areas = []) {
  *   onChest(el): the buddy reached the treasure,
  *   onShop(): the kid wants to go into the buddy shop,
  *   onHome(): the buddy went in the door of the kid's house,
+ *   onMusic(): the buddy went in the door of the music house,
  *   onVisitor(el), onLandmark(el, layer), fishCatch(rod),
  *   sound(name): a little sound ('tap', 'talk'),
  * }
@@ -700,6 +728,13 @@ function mount(section, handlers) {
     open(card(villagerName('badger'), text, '', buttons), 'badger', s.open, 'shop');
     typeText(text);
   };
+  // the music hall is locked until the first piano: the frog who looks after it says how far off it is
+  const sayMusic = () => {
+    const n = data.music.left;
+    const text = `Ribbit! This is the music house, ${data.name}. It opens when you earn your first piano with a 2-week piano streak.${n ? ` Just ${n} more piano ${n === 1 ? 'day' : 'days'} in a row!` : ''} Keep practicing!`;
+    open(card(villagerName('frog'), text, '', '<button class="btn" data-v="bye">OK!</button>'), 'frog', false, 'music');
+    typeText(text);
+  };
   dialog.addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]');
     if (!b) return;
@@ -733,6 +768,13 @@ function mount(section, handlers) {
       me.face = 1;
       buddyEl.classList.add('going-in');
       setTimeout(() => handlers.onHome?.(), 380);
+    } else if (goal.music) {
+      if (data.music.tier) {
+        // in through the music hall's door (musichouse.js takes it from here)
+        me.face = 1;
+        buddyEl.classList.add('going-in');
+        setTimeout(() => handlers.onMusic?.(), 380);
+      } else sayMusic();
     } else if (goal.visitor) {
       me.face = goal.x >= me.x ? 1 : -1;
       visitorTap(goal.visitor);
@@ -870,6 +912,7 @@ function mount(section, handlers) {
     if (who) { handlers.sound?.('tap'); goTalk(personById(who.dataset.vid)); return; }
     if (e.target.closest('.v-chest')) { goChest(); return; }
     if (e.target.closest('.v-home')) { handlers.sound?.('tap'); walkTo(L.start.x, L.start.y, { home: true }); return; }
+    if (e.target.closest('.v-music') && L.music) { handlers.sound?.('tap'); walkTo(L.music.door.x, L.music.door.y, { music: true }); return; }
     if (!dialog.hidden) { closeDialog(); return; }
     const r = view.getBoundingClientRect();
     const x = (e.clientX - r.left) / S + cam.x;

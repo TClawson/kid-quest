@@ -1,7 +1,7 @@
 // Background music for the quest map: one original 16-bar chiptune loop per map theme,
 // synthesized live with Web Audio (pulse waves, a triangle bass and noise drums, like old
 // consoles). No audio files. A small look-ahead scheduler keeps the timing steady.
-import { SONGS, SHOW_SONGS } from './songs.js';
+import { SONGS, SHOW_SONGS, barChords } from './songs.js';
 
 const VOLUME = 0.07;
 const SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -24,19 +24,41 @@ function chordTones(name) {
   return [root, root + third, root + fifth];
 }
 
-/** Compile a song once: bars of note tokens, chords to pitch classes. */
+/** A bar's chords ('F', or 'F E' for two that share the bar) as the chord's tones at every step. */
+export function stepChords(entry, beat) {
+  const parts = barChords(entry, beat).map((c) => chordTones(c.name));
+  return Array.from({ length: beat }, (_, i) => parts[Math.floor((i * parts.length) / beat)]);
+}
+
+/** Compile a song once: bars of note tokens, and the chord's pitch classes at every step. */
 const compiled = new Map();
 function compile(id) {
   if (compiled.has(id)) return compiled.get(id);
   const s = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] || SHOW_SONGS['bg-meadow'] : SONGS[id] || SONGS['bg-meadow'];
+  const beat = s.beat || 8;
   const song = {
     ...s,
-    beat: s.beat || 8,
+    beat,
     lead: s.lead.map((bar) => bar.split(' ')),
-    chords: s.chords.map(chordTones),
+    chords: s.chords.map((entry) => stepChords(entry, beat)),
   };
   compiled.set(id, song);
   return song;
+}
+
+/**
+ * A song as its sheet music has it: with its closing bar (songs.js: ending) after the loop,
+ * if it has one. loop is how many bars go round in the game.
+ */
+function compilePiece(id) {
+  const song = compile(id);
+  if (!song.ending) return song;
+  return {
+    ...song,
+    loop: song.lead.length,
+    lead: [...song.lead, song.ending.lead.split(' ')],
+    chords: [...song.chords, stepChords(song.ending.chord, song.beat)],
+  };
 }
 
 // ---------- sound sources ----------
@@ -86,7 +108,8 @@ function voice(r, wave, f, t, dur, vol, env = 'hold', dest = r.out) {
   if (env === 'pluck') {
     // quick ring-out, like a steel drum or a bell
     g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(vol * 0.25, t + Math.min(dur, 0.35));
+    // (a short note rings down over most of its length, then fades: never a jump to silence)
+    g.gain.exponentialRampToValueAtTime(vol * 0.25, t + Math.min(dur * 0.8, 0.35));
     g.gain.linearRampToValueAtTime(0.0001, t + dur);
   } else {
     g.gain.setValueAtTime(vol, t);
@@ -137,42 +160,60 @@ function holdLength(bar, i) {
 
 /**
  * Schedule one step (an eighth note) of a song at time t.
- * Song fields (see songs.js): beat (steps a bar), lead, chords, leadWave, leadVol, leadEnv,
+ * Song fields (see songs.js): beat (steps a bar), lead, chords (compiled: the chord's tones at
+ * every step of every bar), loop (bars that go round, before a closing bar), leadWave, leadVol, leadEnv,
  * arp { wave, from, octave, order, vol }, bass (one [chordToneIndex, octave] or null per step),
  * drums (patterns of k kick, s snare, h hat, o open hat, t tom; split evenly over the 16 bars), swing.
+ * only: just one part ('lead', 'arp', 'bass' or 'drums'), for the recording studio.
  */
-function scheduleStep(r, song, s, t) {
+function scheduleStep(r, song, s, t, only = null) {
   const { beat } = song;
-  const bars = song.lead.length;
-  const barIndex = Math.floor(s / beat) % bars;
+  const bars = song.loop || song.lead.length; // the bars that go round
+  const barIndex = Math.floor(s / beat) % song.lead.length;
   const i = s % beat;
   const step = r.seconds;
   // swing pushes every second eighth a little later
   const at = t + (i % 2 ? (song.swing || 0) * step : 0);
   const bar = song.lead[barIndex];
-  const tones = song.chords[barIndex];
+  const tones = song.chords[barIndex][i];
 
   // lead (pulse 1)
   const n = bar[i];
-  if (n !== '-' && n !== '.') {
+  if ((!only || only === 'lead') && n !== '-' && n !== '.') {
     voice(r, song.leadWave || 'square', hz(midi(n)), at, holdLength(bar, i) * step * 0.95, song.leadVol ?? 0.32, song.leadEnv, r.lead);
+  }
+
+  // the closing bar the sheet music adds after the loop: the band lands on one held chord
+  if (barIndex >= bars) {
+    if (i === 0) {
+      voice(r, 'triangle', hz(tones[0] + 36), at, step * beat * 0.9, 0.55);
+      tones.forEach((tone, k) => voice(r, song.arp?.wave || 'square', hz(tone + 60), at + k * 0.03, step * beat * 0.8, (song.arp?.vol ?? 0.07) * 0.8));
+      drum(r, at, 'k', song.drumVol ?? 1);
+      drum(r, at, 'o', song.drumVol ?? 1);
+    }
+    return;
   }
 
   // arpeggio (pulse 2), two notes per step
   const arp = song.arp;
-  if (arp && barIndex >= (arp.from || 0)) {
-    const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 1, 2];
+  if (arp && (!only || only === 'arp') && barIndex >= (arp.from || 0)) {
+    // four notes to a beat either way, so the pattern keeps the song's beat (three would turn
+    // around every dotted eighth and sound like a rhythm of its own)
+    const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 2, 1, 2];
+    // (a swung eighth is long or short, and its two notes share it evenly)
+    const half = (step * (1 + (i % 2 ? -1 : 1) * (song.swing || 0))) / 2;
     for (let k = 0; k < 2; k += 1) {
       const tone = tones[order[(i * 2 + k) % order.length]];
-      voice(r, arp.wave || 'square', hz(tone + ((arp.octave ?? 4) + 1) * 12), at + k * (step / 2), (step / 2) * 0.8, arp.vol ?? 0.07, arp.env);
+      voice(r, arp.wave || 'square', hz(tone + ((arp.octave ?? 4) + 1) * 12), at + k * half, half * 0.8, arp.vol ?? 0.07, arp.env);
     }
   }
 
   // bass (triangle)
   const b = song.bass[i];
-  if (b) voice(r, 'triangle', hz(tones[b[0]] + (b[1] + 1) * 12), at, step * (b[2] || 0.9), 0.55);
+  if (b && (!only || only === 'bass')) voice(r, 'triangle', hz(tones[b[0]] + (b[1] + 1) * 12), at, step * (b[2] || 0.9), 0.55);
 
   // drums
+  if (only && only !== 'drums') return;
   const sets = song.drums;
   const set = sets[Math.min(sets.length - 1, Math.floor((barIndex * sets.length) / bars))];
   const fill = song.fill && barIndex === bars - 1 ? song.fill : null;
@@ -261,6 +302,175 @@ export async function renderSong(theme, loops = 1, sampleRate = 44100) {
   const r = rig(off, master, song, step);
   for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s % (song.lead.length * song.beat), 0.05 + s * step);
   return off.startRendering();
+}
+
+// ---------- the recording studio (see studio.js) ----------
+
+/** The parts of a song the studio can use on their own: the tune, the arpeggio, the bass, the drums. */
+export function songParts(id) {
+  const song = compile(id);
+  return ['lead', ...(song.arp ? ['arp'] : []), ...(song.bass.some(Boolean) ? ['bass'] : []), ...(song.drums.some((set) => set.some((line) => /[^.]/.test(line))) ? ['drums'] : [])];
+}
+
+/**
+ * One part of a song, once through, as an AudioBuffer at the studio's speed (bpm). The
+ * arpeggio plays from the first bar (in the game it waits a few bars). Peaks at about `peak`.
+ */
+export async function renderPart(id, part, bpm, sampleRate = 44100, peak = 0.5) {
+  const base = compile(id);
+  const song = part === 'arp' && base.arp ? { ...base, arp: { ...base.arp, from: 0 } } : base;
+  const step = 60 / bpm / 2;
+  const steps = song.lead.length * song.beat;
+  const off = new OfflineAudioContext(1, Math.ceil((steps * step + (song.echo && part === 'lead' ? 1.5 : 0.3)) * sampleRate), sampleRate);
+  const r = rig(off, off.destination, song, step);
+  for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s, s * step, part);
+  const buf = await off.startRendering();
+  const data = buf.getChannelData(0);
+  let top = 0;
+  for (let i = 0; i < data.length; i += 1) top = Math.max(top, Math.abs(data[i]));
+  if (top > 0) for (let i = 0; i < data.length; i += 1) data[i] *= peak / top;
+  return buf;
+}
+
+// ---------- the sheet music stand (see songbook.js) ----------
+
+/**
+ * Play one piece from the songbook once: a map song ('bg-meadow') or a show's tune
+ * ('show:bg-meadow'), at tempo (1 is the game's speed, 0.7 slower to follow along).
+ * Returns { step (seconds an eighth), beat (steps a bar), steps, at() (steps played so far,
+ * fractional; negative before the first note), done(), stop() }, or null without sound.
+ */
+export function playPiece(id, { tempo = 1 } = {}) {
+  const a = context();
+  if (!a) return null;
+  const song = compilePiece(id);
+  const step = 60 / song.bpm / 2 / tempo;
+  const steps = song.lead.length * song.beat;
+  const master = a.createGain();
+  master.gain.value = VOLUME * 1.6 * (song.gain || 1);
+  master.connect(a.destination);
+  const r = rig(a, master, song, step);
+  const t0 = a.currentTime + 0.15;
+  let next = 0;
+  let timer = 0;
+  const schedule = () => {
+    while (next < steps && t0 + next * step < a.currentTime + 0.3) {
+      scheduleStep(r, song, next, t0 + next * step);
+      next += 1;
+    }
+    if (next >= steps) clearInterval(timer);
+  };
+  schedule();
+  timer = setInterval(schedule, 100);
+  let stopped = false;
+  return {
+    step,
+    beat: song.beat,
+    steps,
+    // steps heard so far (the speaker plays a little after the clock, more on Bluetooth)
+    at: () => (a.currentTime - (a.outputLatency || a.baseLatency || 0) - t0) / step,
+    // done once the last note (and its echo, on the dreamy songs) has faded
+    done: () => stopped || a.currentTime > t0 + steps * step + (song.echo ? 1.5 : 0.4),
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      const t = a.currentTime;
+      master.gain.cancelScheduledValues(t);
+      master.gain.setValueAtTime(master.gain.value, t);
+      master.gain.linearRampToValueAtTime(0.0001, t + 0.15);
+      setTimeout(() => master.disconnect(), 400);
+    },
+  };
+}
+
+/**
+ * Where a spot in the music (in eighths) falls when the song swings: every second eighth comes
+ * `swing` of an eighth late (as scheduleStep plays it), and what lies between moves with it.
+ */
+export function swingAt(x, swing = 0) {
+  const pair = Math.floor(x / 2) * 2;
+  const r = x - pair;
+  return pair + (r < 1 ? r * (1 + swing) : 1 + swing + (r - 1) * (1 - swing));
+}
+
+/**
+ * Play a piano version from the songbook (arrange.js): notes [{ midi, start, len, hand }] in
+ * eighths, with a soft piano-like voice, bpm at tempo; steps a bar; swing as in the song.
+ * Returns the same handle as playPiece, or null without sound.
+ */
+export function playNotes(notes, { bpm, beat, tempo = 1, swing = 0 }) {
+  const a = context();
+  if (!a) return null;
+  const step = 60 / bpm / 2 / tempo;
+  // a swung song plays its piano versions swung, like the game does
+  if (swing) notes = notes.map((n) => ({ ...n, start: swingAt(n.start, swing), len: swingAt(n.start + n.len, swing) - swingAt(n.start, swing) }));
+  const steps = Math.ceil(Math.max(0, ...notes.map((n) => n.start + n.len)) / beat) * beat;
+  const master = a.createGain();
+  master.gain.value = 0.55;
+  const squash = a.createDynamicsCompressor(); // many notes at once stay below clipping
+  master.connect(squash).connect(a.destination);
+  const t0 = a.currentTime + 0.15;
+  const list = [...notes].sort((x, y) => x.start - y.start);
+  let next = 0;
+  let timer = 0;
+  const schedule = () => {
+    while (next < list.length && t0 + list[next].start * step < a.currentTime + 0.3) {
+      const n = list[next];
+      pianoNote(a, master, n.midi, t0 + n.start * step, n.len * step, n.hand === 'lh' ? 0.11 : 0.14);
+      next += 1;
+    }
+    if (next >= list.length) clearInterval(timer);
+  };
+  schedule();
+  timer = setInterval(schedule, 100);
+  let stopped = false;
+  return {
+    step,
+    beat,
+    steps,
+    at: () => (a.currentTime - (a.outputLatency || a.baseLatency || 0) - t0) / step,
+    done: () => stopped || a.currentTime > t0 + steps * step + 0.8,
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      const t = a.currentTime;
+      master.gain.cancelScheduledValues(t);
+      master.gain.setValueAtTime(master.gain.value, t);
+      master.gain.linearRampToValueAtTime(0.0001, t + 0.15);
+      setTimeout(() => master.disconnect(), 400);
+    },
+  };
+}
+
+/** One piano-ish note: a soft triangle with a touch of its octave, struck and dying away. */
+function pianoNote(a, out, midi, t, dur, vel) {
+  const f = 440 * 2 ** ((midi - 69) / 12);
+  const g = a.createGain();
+  const tone = a.createBiquadFilter();
+  tone.type = 'lowpass';
+  tone.frequency.value = Math.min(6000, f * 5);
+  const o1 = a.createOscillator();
+  o1.type = 'triangle';
+  o1.frequency.value = f;
+  const o2 = a.createOscillator();
+  o2.frequency.value = f * 2;
+  const g2 = a.createGain();
+  g2.gain.value = 0.2;
+  o1.connect(tone);
+  o2.connect(g2).connect(tone);
+  tone.connect(g).connect(out);
+  const end = t + Math.max(0.08, dur);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vel, t + 0.006);
+  g.gain.setTargetAtTime(vel * 0.15, t + 0.006, 0.5); // the strike dies away while held
+  g.gain.setTargetAtTime(0, end, 0.06); // and stops when the key comes up
+  o1.start(t);
+  o2.start(t);
+  o1.stop(end + 0.5);
+  o2.stop(end + 0.5);
+  o1.onended = () => g.disconnect();
 }
 
 // ---------- the secret shows (see mapshow.js) ----------

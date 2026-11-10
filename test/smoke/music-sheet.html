@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>body{background:#2a1e2a;margin:0;padding:8px;font:12px sans-serif;color:#fff} canvas{image-rendering:pixelated;display:block} .row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start} .cell{text-align:center} .room{position:relative}</style></head>
+<body><div id="out"></div>
+<script type="module">
+// A sheet of the music house art (musicart.js), for previews: ?tier=1|2|3|all&t=seconds&scale=3&blocks=1
+import { paintMusicRoom, MROOM } from '../../js/musicart.js';
+import { pixelBuffer } from '../../js/pixelkit.js';
+const q = new URLSearchParams(location.search);
+const S = Number(q.get('scale') || 3);
+const t = Number(q.get('t') || 1.3);
+const out = document.getElementById('out');
+const tiers = q.get('tier') === 'all' || !q.get('tier') ? [1, 2, 3] : [Number(q.get('tier'))];
+for (const tier of tiers) {
+  const holder = document.createElement('div'); holder.className = 'room';
+  holder.style.width = `${MROOM.W * S}px`; holder.style.height = `${MROOM.H * S}px`;
+  const c = document.createElement('canvas');
+  const res = paintMusicRoom(c, tier, { color: '#e03131' });
+  c.style.width = `${MROOM.W * S}px`; holder.append(c);
+  const lc = document.createElement('canvas'); lc.width = MROOM.W; lc.height = MROOM.H;
+  const lb = pixelBuffer(MROOM.W, MROOM.H); res.life(lb.px, t); lb.put(lc.getContext('2d'));
+  lc.style.cssText = `position:absolute;left:0;top:0;width:${MROOM.W * S}px`; holder.append(lc);
+  for (const p of res.pieces) {
+    if (p.anim) { const b = pixelBuffer(p.w, p.h); b.data.set(p.base); p.anim((x, y, col) => b.px(x + p.pad, y + p.pad, col), t); b.put(p.canvas.getContext('2d')); }
+    p.canvas.style.cssText = `position:absolute;left:${p.x * S}px;top:${p.y * S}px;width:${p.w * S}px`; holder.append(p.canvas);
+  }
+  if (q.get('blocks')) {
+    for (const [x, y, w, h] of res.blocks) { const d = document.createElement('div'); d.style.cssText = `position:absolute;left:${x * S}px;top:${y * S}px;width:${w * S}px;height:${h * S}px;outline:1px solid red`; holder.append(d); }
+    for (const [k, [x, y, w, h]] of Object.entries(res.hot)) { const d = document.createElement('div'); d.style.cssText = `position:absolute;left:${x * S}px;top:${y * S}px;width:${w * S}px;height:${h * S}px;outline:2px dashed yellow;color:yellow`; d.textContent = k; holder.append(d); }
+  }
+  const cell = document.createElement('div'); cell.className = 'cell'; cell.append(holder, `tier ${tier}`); out.append(cell);
+}
+document.body.dataset.ready = '1';
+</script>
+</body></html>
