@@ -580,6 +580,7 @@ span.dot.other { background: #f76707; }
 .play-left { display: block; font-size: 0.8rem; font-weight: 400; opacity: 0.9; }
 .play-close { pointer-events: auto; }
 .btn.store-locked { opacity: 0.7; font-size: 0.9em; }
+.store-why { display: block; text-align: center; margin-top: -4px; }
 
 /* habits: month count, habit stars, the kid's plan, last week's look-back, the family party */
 .month-line { margin: 10px 0 0; }

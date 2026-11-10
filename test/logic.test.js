@@ -442,7 +442,7 @@ test('buddy store opens when today\'s chores are done and approved, excused days
   const { storeOpen } = await import('../js/logic.js');
   const { state, kid } = setup();
   const tasks = tasksForDay(state, kid, MONDAY, MONDAY);
-  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: tasks.length, waiting: 0 });
+  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: tasks.length, waiting: 0, evening: 0, missed: [] });
   // optional exercise doesn't need doing
   kid.tasks.push({ id: 'run', name: 'Run', icon: '🏃', period: 'exercise', days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0 });
   // an off-week chore isn't scheduled, so it doesn't block
@@ -454,11 +454,53 @@ test('buddy store opens when today\'s chores are done and approved, excused days
   assert.equal(storeOpen(state, kid, MONDAY).open, true);
   // waiting for a parent keeps it shut
   entry.tasks[tasks[3].id] = { status: 'pending' };
-  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: 0, waiting: 1 });
+  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: 0, waiting: 1, evening: 0, missed: [] });
   delete entry.tasks[tasks[0].id];
-  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: 1, waiting: 1 });
+  assert.deepEqual(storeOpen(state, kid, MONDAY), { open: false, left: 1, waiting: 1, evening: 0, missed: [] });
   entry.excused = true;
   assert.equal(storeOpen(state, kid, MONDAY).open, true);
+});
+
+test('evening chores don\'t keep the store shut, unless one was missed the day before', async () => {
+  const { storeOpen, storeLockText } = await import('../js/logic.js');
+  const { state, kid } = setup();
+  const tue = addDays(MONDAY, 1);
+  kid.startDate = MONDAY;
+  kid.tasks.push({ id: 'shower', name: 'Shower', icon: '🚿', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0, evening: true });
+  // Monday: day chores done, shower not yet. The store opens anyway.
+  finishDay(state, kid, MONDAY, MONDAY);
+  const mon = entryFor(state, kid.id, MONDAY);
+  delete mon.tasks.shower;
+  snapshotToday(state, kid, MONDAY);
+  let lock = storeOpen(state, kid, MONDAY);
+  assert.equal(lock.open, true);
+  assert.equal(lock.evening, 1);
+  // Tuesday after a missed shower: the store waits for every chore, shower included
+  finishDay(state, kid, tue, tue);
+  const tueEntry = entryFor(state, kid.id, tue);
+  delete tueEntry.tasks.shower;
+  lock = storeOpen(state, kid, tue);
+  assert.deepEqual(lock, { open: false, left: 1, waiting: 0, evening: 0, missed: ['Shower'] });
+  assert.match(storeLockText(lock), /Shower was missed last night/);
+  tueEntry.tasks.shower = { status: 'done' };
+  assert.equal(storeOpen(state, kid, tue).open, true);
+  delete tueEntry.tasks.shower;
+  // a shower waiting for a parent counts as done, and so does an excused Monday
+  mon.tasks.shower = { status: 'pending' };
+  assert.equal(storeOpen(state, kid, tue).open, true);
+  delete mon.tasks.shower;
+  mon.excused = true;
+  assert.equal(storeOpen(state, kid, tue).open, true);
+  // a day before the kid started has nothing missed
+  kid.startDate = tue;
+  mon.excused = false;
+  assert.equal(storeOpen(state, kid, tue).open, true);
+  // with day chores left, the lock says evening chores don't count
+  kid.startDate = MONDAY;
+  mon.tasks.shower = { status: 'done' };
+  const first = Object.keys(tueEntry.tasks)[0];
+  delete tueEntry.tasks[first];
+  assert.match(storeLockText(storeOpen(state, kid, tue)), /1 to go, not counting evening chores/);
 });
 
 test('a missed day with no freeze loses a quarter of the streak (rounded up); the next full day earns a welcome-back bonus', async () => {
