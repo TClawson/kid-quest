@@ -74,6 +74,7 @@ const SHELL = [
   'js/studiokit.js',
   'js/remix.js',
   'js/listener.js',
+  'js/listener-worker.js',
   'js/notomatic.js',
   'js/arrange.js',
   'js/arrangements.js',
