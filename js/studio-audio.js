@@ -9,8 +9,6 @@
 // and the clicks are taken back out of it, by learning from the count-in what a click sounds
 // like in this room and subtracting that on every beat.
 
-import { clickDelay } from './studiorules.js';
-
 export const SILENT = 0.015;     // a take whose loudest sample is under this heard nothing
 export const TAKE_PEAK = 0.7;    // a take is made this loud at its loudest
 export const MAX_GAIN = 10;      // but never turned up more than this
@@ -216,6 +214,44 @@ function alike(a, b) {
 }
 
 /**
+ * How late the microphone hears the speaker: `clicks` are the times clicks were played and
+ * `heard` the times something loud started in the recording, which was searched up to
+ * `until` (all in seconds on the same clock). Every pair of a click and a later sound is a
+ * guess at the delay. A guess is judged by the clicks it should have caught before `until`:
+ * the one that explains the most clicks wins (a sound within `near` seconds of where the
+ * click should arrive), then the one that leaves the fewest unexplained, then the smallest.
+ * So a delay longer than the gap between two clicks is still told right: a guess one gap
+ * too short expects a sound after the first click where there was none. At least `need`
+ * clicks must be explained (by default three, and all but one of those it should have
+ * caught). Returns seconds (0 to `most`), or null when it can't tell.
+ */
+export function echoDelay(clicks, heard, { until = Infinity, most = 0.6, near = 0.008, need = 0 } = {}) {
+  let best = null;
+  for (const c of clicks) {
+    for (const h of heard) {
+      const d = h - c;
+      if (d < 0 || d > most) continue;
+      let n = 0;
+      let due = 0;
+      let sum = 0;
+      for (const k of clicks) {
+        if (k + d > until - near) continue; // it would arrive after the search ended
+        due += 1;
+        let off = Infinity;
+        for (const x of heard) if (Math.abs(x - k - d) < Math.abs(off)) off = x - k - d;
+        if (Math.abs(off) <= near) { n += 1; sum += d + off; }
+      }
+      if (n < (need || Math.max(3, due - 1))) continue;
+      const guess = { n, missed: due - n, delay: sum / n };
+      const better = !best || guess.n > best.n || (guess.n === best.n && (guess.missed < best.missed
+        || (guess.missed === best.missed && guess.delay < best.delay - near)));
+      if (better) best = guess;
+    }
+  }
+  return best ? Math.max(0, best.delay) : null;
+}
+
+/**
  * How late the microphone heard the count-in: the clicks were played at the frames
  * `countIn`, and the recording up to the frame `until` (where the take begins) is searched
  * for them. Seconds, or null when the clicks can't be told (headphones, a noisy room).
@@ -226,7 +262,7 @@ export function countInDelay({ first, samples }, rate, countIn, until) {
   const b = Math.min(samples.length, until - first);
   if (b - a < rate * 0.2) return null;
   const heard = findOnsets(samples.subarray(a, b), rate).map((t) => (first + a) / rate + t);
-  return clickDelay(countIn.map((f) => f / rate), heard);
+  return echoDelay(countIn.map((f) => f / rate), heard, { until: (first + b) / rate });
 }
 
 /**
@@ -267,39 +303,38 @@ function clickTemplate({ first, samples }, rate, starts, hz, pre, post) {
 }
 
 /**
- * Take a click out of the recording (in place) wherever one arrived (`starts`, frames), by
- * subtracting what the count-in showed a click to be. First each click says how well it
- * fits what was learned (1: just like the count-in's). With four clicks or more, the middle
- * answer decides for all of them, since a piano note on one beat can't fool the middle: a
- * good fit and all are taken out, a poor one (the tablet was moved) and none are. With
- * fewer, a click is only taken out where that leaves less of the click's note than before.
- * Returns how many were taken out.
+ * Take the clicks out of the recording (in place). `clicks` are in the order they were
+ * played: [{ start (the frame it arrived), tpl (what the count-in showed that click to be) }].
+ * Each click first says how much of what was learned is really there (its fit: 1 is just
+ * like the count-in, 0 is nothing like it). That much is subtracted, held close to what the
+ * clicks around it say (the middle of seven), because a piano note on the beat can fool one
+ * click but not its neighbours, and never more than twice its own fit, which is the most
+ * that still leaves the recording quieter than before. So a microphone that turns itself
+ * down, a lost bit of sound or a moved tablet can't make a click louder: at worst the
+ * click stays. Returns how many clicks had something taken out.
  */
-function subtractClicks({ first, samples }, rate, starts, tpl, hz, pre) {
+function takeClicksOut({ first, samples }, rate, clicks, pre) {
   const p = Math.round(pre * rate);
   const least = p + Math.round(0.02 * rate);
-  const spots = starts.map((s) => s - p - first).filter((a) => a >= 0 && samples.length - a >= least);
-  const tt = energy(tpl);
-  const fits = spots.filter((a) => a + tpl.length <= samples.length).map((a) => {
+  const spots = [];
+  for (const c of clicks) {
+    const a = c.start - p - first;
+    const n = Math.min(c.tpl.length, samples.length - a);
+    if (a < 0 || n < least) continue;
     let d = 0;
-    for (let i = 0; i < tpl.length; i += 1) d += samples[a + i] * tpl[i];
-    return d / tt;
-  }).sort((x, y) => x - y);
-  const many = fits.length >= 4;
-  const mid = fits[fits.length >> 1];
-  if (many && !(mid >= 0.3 && mid <= 1.3)) return 0;
-  // when the clicks agree closely, they also say how loud the take's clicks are next to the
-  // count-in's (a tablet that turns its microphone down while the piano plays)
-  const spread = many ? fits[Math.floor(fits.length * 0.75)] - fits[Math.floor(fits.length * 0.25)] : 1;
-  const scale = spread < 0.15 ? mid : 1;
-  let done = 0;
-  for (const a of spots) {
-    const n = Math.min(tpl.length, samples.length - a);
-    const before = samples.subarray(a, a + n);
-    const after = new Float32Array(n);
-    for (let i = 0; i < n; i += 1) after[i] = before[i] - scale * tpl[i];
-    if (many || bandEnergy(after, rate, hz) < bandEnergy(before, rate, hz)) { samples.set(after, a); done += 1; }
+    let tt = 0;
+    for (let i = 0; i < n; i += 1) { d += samples[a + i] * c.tpl[i]; tt += c.tpl[i] * c.tpl[i]; }
+    spots.push({ a, n, tpl: c.tpl, fit: tt > 0 ? d / tt : 0 });
   }
+  let done = 0;
+  spots.forEach((s, k) => {
+    const around = spots.slice(Math.max(0, k - 3), k + 4).map((x) => x.fit).sort((x, y) => x - y);
+    const usual = Math.max(0, Math.min(1.3, around[around.length >> 1]));
+    const scale = Math.min(Math.max(s.fit, usual - 0.25), usual + 0.25, 2 * Math.max(0, s.fit));
+    if (!(scale > 0.02)) return;
+    for (let i = 0; i < s.n; i += 1) samples[s.a + i] -= scale * s.tpl[i];
+    done += 1;
+  });
   return done;
 }
 
@@ -309,26 +344,43 @@ function subtractClicks({ first, samples }, rate, starts, tpl, hz, pre) {
  *   countIn: [{ frame, hz }]  the count-in clicks before the take,
  *   clicks:  [{ frame, hz }]  the clicks during the take (equally loud),
  *   from, to: the take's first frame and the frame after its last,
- *   guess: how late the microphone is (seconds) when the count-in can't tell.
+ *   guess: how late the microphone is (seconds) when the count-in can't tell,
+ *   phones: the kid wears headphones (the microphone doesn't hear the clicks).
  * Returns { samples, delay (seconds, the one used), measured (it came from this recording's
- * count-in), cleaned (how many clicks were taken out) }.
+ * count-in), cleaned (how many clicks had something taken out), played (whether anything
+ * but the clicks is in the take: false means the kid played nothing) }.
  */
-export function makeTake(recording, { rate, countIn, clicks, from, to, guess, pre = 0.01, post = 0.15 }) {
+export function makeTake(recording, { rate, countIn, clicks, from, to, guess, phones = false, pre = 0.01, post = 0.15 }) {
   const heard = countInDelay(recording, rate, countIn.map((c) => c.frame), from);
   const measured = heard != null;
   const delay = measured ? heard : guess;
   const d = Math.round(delay * rate);
+  const during = clicks.filter((c) => c.frame < to);
   let rec = recording;
   let cleaned = 0;
+  let known = false; // every click in the take was learned from the count-in
+  let clickPeak = 0;
   if (measured) {
     rec = { first: recording.first, samples: Float32Array.from(recording.samples) };
-    for (const hz of new Set(clicks.map((c) => c.hz))) {
-      const tpl = clickTemplate(recording, rate, countIn.filter((c) => c.hz === hz).map((c) => c.frame + d), hz, pre, post);
-      const starts = clicks.filter((c) => c.hz === hz && c.frame < to).map((c) => c.frame + d);
-      if (tpl) cleaned += subtractClicks(rec, rate, starts, tpl, hz, pre);
+    const learned = new Map();
+    for (const hz of new Set(during.map((c) => c.hz))) {
+      learned.set(hz, clickTemplate(recording, rate, countIn.filter((c) => c.hz === hz).map((c) => c.frame + d), hz, pre, post));
     }
+    const list = during.filter((c) => learned.get(c.hz)).map((c) => ({ start: c.frame + d, tpl: learned.get(c.hz) }));
+    cleaned = takeClicksOut(rec, rate, list, pre);
+    known = during.length > 0 && list.length === during.length;
+    for (const tpl of learned.values()) if (tpl) clickPeak = Math.max(clickPeak, peakOf(tpl));
   }
-  return { samples: cutFrames(rec, from + d, to + d), delay, measured, cleaned };
+  const samples = cutFrames(rec, from + d, to + d);
+  // Was anything played? With headphones there are no clicks in the take, so any sound
+  // counts. Otherwise sound away from the clicks counts, and on a click (a short note
+  // right on the beat) only when the click was taken out and what is left is still as
+  // loud as half a click.
+  const times = during.map((c) => (c.frame - from) / rate);
+  let played = peakAway(samples, rate, times) >= SILENT;
+  if (!played && phones && !measured) played = peakOf(samples) >= SILENT;
+  if (!played && known) played = peakOf(samples) >= Math.max(SILENT, 0.5 * clickPeak);
+  return { samples, delay, measured, cleaned, played };
 }
 
 /**

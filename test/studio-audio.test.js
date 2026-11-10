@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SILENT, CLICK, clicksHeard, peakOf, normalise, findOnsets, joinBlocks, alignTake, guessDelay, sliceSchedule, pct, beatAt, waveLine,
-  clickWave, countInDelay, makeTake, peakAway, phonesDelay, softClip, clickPlan,
+  clickWave, countInDelay, echoDelay, makeTake, peakAway, phonesDelay, softClip, clickPlan,
 } from '../js/studio-audio.js';
 import { clickDelay, schedule, addPart, newMix } from '../js/studiorules.js';
 
@@ -150,9 +150,9 @@ function room(late, seed = 3) {
  * then `beats` beats of take. Returns the plan (frames), the recording with the clicks as
  * the microphone hears them, and the same recording without them (what the take should be).
  */
-function session({ late = 0.118, beats = 8, clicksHeardByMic = true, piano = 0, talkOver = false, moved = false, hiss = 0.001 } = {}) {
+function session({ late = 0.118, beats = 8, clicksHeardByMic = true, piano = 0, talkOver = false, moved = false, hiss = 0.001, bpm = 100 } = {}) {
   const first = 480000;
-  const beat = Math.round(0.6 * RATE);
+  const beat = Math.round((60 / bpm) * RATE);
   const t0 = first + Math.round(0.4 * RATE);
   const from = t0 + 4 * beat;
   const to = from + beats * beat;
@@ -255,13 +255,93 @@ test('the metronome clicks are taken out of a quiet take', () => {
 });
 
 test('the clicks are taken out under a piano too, and the piano is left as it was', () => {
-  for (const piano of [0.05, 0.3]) {
+  // under a soft piano nearly all of the click goes; under a loud one (which hides the click
+  // anyway) most of it does, since each click is judged with the piano on top of it
+  for (const [piano, most] of [[0.05, -20], [0.3, -6]]) {
     const s = session({ piano, beats: 16 });
     const got = taken(s);
     const left = dbOver(minus(got.lined, s.want), minus(s.dirty, s.want));
-    assert.ok(left < -10, `piano ${piano}: clicks left ${left.toFixed(1)} dB`);
+    assert.ok(left < most, `piano ${piano}: clicks left ${left.toFixed(1)} dB`);
     assert.ok(dbOver(minus(got.lined, s.want), s.want) < -20, 'the piano is nearly untouched');
+    assert.equal(got.played, true);
   }
+});
+
+/** Each beat of a take: how loud what is left of the click is, next to the click left in (dB). */
+function perClick(s, lined) {
+  const beat = Math.round(0.6 * RATE);
+  const out = [];
+  for (let a = 0; a + beat <= s.want.length; a += beat) {
+    const w = Math.round(0.2 * RATE);
+    out.push(dbOver(minus(lined.subarray(a, a + w), s.want.subarray(a, a + w)), minus(s.dirty.subarray(a, a + w), s.want.subarray(a, a + w))));
+  }
+  return out;
+}
+
+test('a microphone that turns itself down, or loses a bit of sound, never makes a click louder', () => {
+  // the microphone drops to a third of its loudness two beats into the take
+  const s = session({ beats: 16, piano: 0.05 });
+  const cut = s.plan.from - s.recording.first + Math.round(0.118 * RATE) + 2 * Math.round(0.6 * RATE) - 2000;
+  const duck = (x, from) => { for (let i = from; i < x.length; i += 1) x[i] *= 0.33; };
+  duck(s.recording.samples, cut);
+  duck(s.want, cut - (s.plan.from - s.recording.first + Math.round(0.118 * RATE)));
+  duck(s.dirty, cut - (s.plan.from - s.recording.first + Math.round(0.118 * RATE)));
+  const got = taken(s);
+  const each = perClick(s, got.lined);
+  assert.ok(Math.max(...each) < 0.5, `no click is louder than before: ${each.map((d) => d.toFixed(0))}`);
+  assert.ok(dbOver(minus(got.lined, s.want), minus(s.dirty, s.want)) < -10, 'and most of the clicks still go');
+
+  // 10 ms of the recording is lost (silence) right on a click
+  const lost = session({ beats: 8 });
+  const at = lost.plan.from - lost.recording.first + Math.round(0.118 * RATE) + 3 * Math.round(0.6 * RATE);
+  lost.recording.samples.fill(0, at, at + 480);
+  lost.want.fill(0, 3 * Math.round(0.6 * RATE), 3 * Math.round(0.6 * RATE) + 480);
+  lost.dirty.fill(0, 3 * Math.round(0.6 * RATE), 3 * Math.round(0.6 * RATE) + 480);
+  const each2 = perClick(lost, taken(lost).lined);
+  assert.ok(Math.max(...each2) < 0.5, `no click is louder than before: ${each2.map((d) => d.toFixed(0))}`);
+});
+
+test('the delay is told right even when it is longer than a beat', () => {
+  const clicks = [10, 10.353, 10.706, 11.059]; // 170 beats a minute
+  const echoes = (d) => clicks.map((c) => c + d);
+  for (const d of [0.05, 0.2, 0.34]) assert.ok(Math.abs(echoDelay(clicks, echoes(d), { until: 11.412 }) - d) < 1e-6, `delay ${d}`);
+  // longer than a beat: the last echo comes after the search ends, the other three decide
+  for (const d of [0.36, 0.42]) assert.ok(Math.abs(echoDelay(clicks, echoes(d).filter((h) => h < 11.412), { until: 11.412 }) - d) < 1e-6, `delay ${d}`);
+  // a cough among the echoes doesn't matter, and one missed echo is allowed
+  assert.ok(Math.abs(echoDelay(clicks, [...echoes(0.12), 10.9].sort(), { until: 11.412 }) - 0.12) < 1e-6);
+  assert.ok(Math.abs(echoDelay(clicks, echoes(0.12).slice(0, 3), { until: 11.412 }) - 0.12) < 1e-6);
+  assert.equal(echoDelay(clicks, echoes(0.12).slice(0, 2), { until: 11.412 }), null, 'two echoes are too few');
+  assert.equal(echoDelay(clicks, [10.1, 10.6, 10.83, 11.3], { until: 11.412 }), null, 'sounds that are not echoes');
+  assert.equal(echoDelay(clicks, []), null);
+  // the timing check: 8 clicks half a second apart, heard 550 ms late
+  const eight = Array.from({ length: 8 }, (_, i) => 1 + i * 0.5);
+  assert.ok(Math.abs(echoDelay(eight, eight.map((c) => c + 0.55), { need: 6 }) - 0.55) < 1e-6);
+  // and in a whole take at a fast speed with a slow tablet
+  for (const late of [0.36, 0.42]) {
+    const s = session({ late, bpm: 170 });
+    const got = makeTake(s.recording, s.plan);
+    assert.ok(got.measured && Math.abs(got.delay - late) < 0.004, `late ${late}: ${got.delay}`);
+  }
+});
+
+test('a short note right on the beat still counts as playing', () => {
+  // nothing but 80 ms notes exactly on the clicks, about as loud as the clicks
+  const s = session({ beats: 8 });
+  const beat = Math.round(0.6 * RATE);
+  const start = s.plan.from - s.recording.first + Math.round(0.118 * RATE);
+  for (let k = 0; k < 8; k += 1) {
+    for (let i = 0; i < 0.08 * RATE; i += 1) {
+      s.recording.samples[start + k * beat + i] += 0.1 * Math.sin((2 * Math.PI * 523.25 * i) / RATE) * Math.min(1, i / 200) * Math.exp(-i / (RATE * 0.03));
+    }
+  }
+  assert.equal(makeTake(s.recording, s.plan).played, true);
+  assert.equal(makeTake(session({ beats: 8 }).recording, session({ beats: 8 }).plan).played, false, 'the clicks alone are not playing');
+  // with headphones the microphone hears no clicks, so any sound is playing
+  const phones = session({ clicksHeardByMic: false });
+  const at = phones.plan.from - phones.recording.first + Math.round(0.09 * RATE) + 100;
+  for (let i = 0; i < 0.05 * RATE; i += 1) phones.recording.samples[at + i] += 0.1 * Math.sin((2 * Math.PI * 440 * i) / RATE);
+  assert.equal(makeTake(phones.recording, { ...phones.plan, phones: true }).played, true);
+  assert.equal(makeTake(phones.recording, phones.plan).played, false, 'without the headphones switch, sound on a click is taken for the click');
 });
 
 test('nothing is taken out when the count-in can\'t be trusted', () => {
