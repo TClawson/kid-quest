@@ -6,7 +6,7 @@
 // to whole beats. Pure logic, no DOM and no sound: studio.js draws and plays it.
 
 import { SONGS, SHOW_SONGS } from './songs.js';
-import { keyInfo } from './sheetmusic.js';
+import { keyInfo, songbookFor } from './sheetmusic.js';
 
 export const TRACKS = 4;
 export const MAX_SECONDS = 30;
@@ -243,6 +243,15 @@ export function setBpm(mix, bpm) {
 
 /** The take ids a mix uses. */
 export const takesIn = (mix) => [...new Set(allClips(mix).filter((c) => c.kind === 'take').map((c) => c.take))];
+
+/**
+ * The songs whose parts a desk may use: the ones open in the songbook for this piano (`tier`,
+ * 0-3) and these found treasure maps (a Set of map ids), whether bought or not. The best
+ * piano opens every song, the shows' too (the parent's test desk uses it).
+ */
+export function shelfSongs(tier, maps = new Set()) {
+  return songbookFor(tier, maps).filter((p) => p.open && sourceOf(p.id));
+}
 
 /** Whether a part's key goes with the mix's (the same key signature: C major with A minor). */
 export function keyFits(mixKey, key) {

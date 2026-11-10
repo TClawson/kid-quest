@@ -1818,6 +1818,11 @@ function parentSettings() {
     </div>
 ${allowanceCard()}
 ${gameTestCard()}
+    <div class="card studio-test">
+      <h2>🎚️ Try the recording studio</h2>
+      <p class="muted small">Open the recording studio right away to see how it works. This is a test desk: the kids' mixes and stickers are not touched.</p>
+      <button class="btn" data-action="studio-test">Open the studio</button>
+    </div>
     <div class="card">
       <h2>🎹 Piano listening test</h2>
       <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>

@@ -4,7 +4,8 @@
 // microphone. Clips can be moved, copied, trimmed and thrown away, by tapping or dragging.
 // The mix on the desk is kept as a draft, and a kid can keep a few mixes (studio-store.js,
 // on this tablet only). The rules live in studiorules.js, the sound arithmetic in
-// studio-audio.js. It opens once today's chores are done.
+// studio-audio.js. It opens once today's chores are done. A parent can also open a test
+// desk from Settings (behind the PIN): every song, open any time, with mixes of its own.
 //
 // app.js redraws the whole page whenever a view's HTML changes, so viewStudio() returns a
 // small shell that only depends on the kid, and mountStudio() draws everything inside it
@@ -12,13 +13,13 @@
 // Shared things come from ctx.js; app.js adds studioActions to its actions.
 
 import { ui, state, esc, kidById, render, progressFor, toast, viewKid, today, confirmModal } from './ctx.js';
-import { studioOpen, musicTier } from './musicrules.js';
-import { songbookFor, keyLabel } from './sheetmusic.js';
+import { studioOpen, musicTier, MUSIC_TIERS } from './musicrules.js';
+import { keyLabel } from './sheetmusic.js';
 import { treasureFound } from './treasure.js';
 import { songParts, renderPart } from './music.js';
 import {
   TRACKS, MIX_SLOTS, PART_NAMES, BPM_RANGE, newMix, sourceOf, maxBars, mixBeats, mixSeconds, addPart, addTake, moveClip,
-  trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges,
+  trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges, shelfSongs,
 } from './studiorules.js';
 import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes } from './studio-store.js';
 import {
@@ -90,11 +91,43 @@ function keep(key, value) {
   try { globalThis.localStorage?.setItem(key, String(value)); } catch { /* lasts while the app is open */ }
 }
 
+// ---------- who is at the desk ----------
+
+/** The parent's test desk (Settings): its mixes and takes are kept under this id, never a kid's. */
+export const TEST_DESK = 'parent-test';
+const TEST_COLOR = '#868e96';
+
+/**
+ * Who sits at desk `id` (a kid's id or TEST_DESK): { title, color, open, songs(), back, backLabel }.
+ * A kid's desk has their songbook's songs, opens once today's chores are done and goes back to
+ * their map. The test desk has every song, opens any time and goes back to Settings. Stickers
+ * are worked out from the mix on the desk and kept nowhere else, so no desk changes a kid.
+ * Null when there is no such kid.
+ */
+function deskOf(id) {
+  if (id === TEST_DESK) {
+    return {
+      title: 'Test desk', color: TEST_COLOR, open: true, songs: () => shelfSongs(MUSIC_TIERS.length),
+      back: { view: 'parent', tab: 'settings' }, backLabel: 'Back to Settings',
+    };
+  }
+  const kid = kidById(id);
+  if (!kid) return null;
+  return {
+    title: `${kid.name}'s mixing desk`, color: kid.color, open: studioOpen(state, kid, today()).open,
+    songs: () => shelfSongs(musicTier(progressFor(kid)), treasureFound(state.log, kid.id).maps),
+    back: { view: 'kid' }, backLabel: 'Back to the music house',
+  };
+}
+
+/** Whose desk the studio shows: the test desk when a parent opened it from Settings, else the kid's. */
+const deskId = () => (ui.studioTest ? TEST_DESK : ui.kidId);
+
 // ---------- what the studio remembers while the app is open ----------
 
 const S = {
   on: false,          // the studio is on screen
-  kid: null,          // whose desk this is
+  kid: null,          // whose desk this is: a kid's id or TEST_DESK
   loading: false,
   mix: newMix(),
   slots: [],          // the kid's saved mixes (or null)
@@ -149,17 +182,18 @@ const wait = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
 // ---------- the screen ----------
 
-/** The studio screen: a small shell; mountStudio fills it. Locked until today's chores are done. */
+/** The studio screen: a small shell; mountStudio fills it. A kid's is locked until today's chores are done. */
 export function viewStudio() {
-  const kid = kidById(ui.kidId);
-  if (!kid || !studioOpen(state, kid, today()).open) { ui.view = 'kid'; return viewKid(); }
+  const id = deskId();
+  const desk = deskOf(id);
+  if (!desk?.open) { ui.studioTest = false; ui.view = 'kid'; return viewKid(); }
   return `
-    <div class="screen studio-screen" style="--kid:${esc(kid.color)}">
+    <div class="screen studio-screen" style="--kid:${esc(desk.color)}">
       <header class="kid-head">
-        <button class="btn ghost round" data-action="studio-back" aria-label="Back to the music house">←</button>
-        <div class="kid-title"><b>🎚️ Recording studio</b><small>${esc(kid.name)}'s mixing desk</small></div>
+        <button class="btn ghost round" data-action="studio-back" aria-label="${esc(desk.backLabel)}">←</button>
+        <div class="kid-title"><b>🎚️ Recording studio</b><small>${esc(desk.title)}</small></div>
       </header>
-      <div id="studio" class="studio" data-kid="${esc(kid.id)}"><p class="muted">Getting your studio ready…</p></div>
+      <div id="studio" class="studio" data-kid="${esc(id)}"><p class="muted">Getting your studio ready…</p></div>
     </div>`;
 }
 
@@ -294,14 +328,6 @@ function forgetTakes() {
     A.buffers.delete(`take|${id}`);
     for (const k of [...S.waves.keys()]) if (k.startsWith(`${id}|`)) S.waves.delete(k);
   }
-}
-
-/** The songs whose parts this kid may use: the ones open in their songbook. */
-function shelfSongs() {
-  const kid = kidById(S.kid);
-  if (!kid) return [];
-  const book = songbookFor(musicTier(progressFor(kid)), treasureFound(state.log, kid.id).maps);
-  return book.filter((p) => p.open && sourceOf(p.id));
 }
 
 /**
@@ -528,7 +554,7 @@ function stickersHtml() {
 
 function shelfHtml() {
   const mix = S.mix;
-  const songs = shelfSongs();
+  const songs = deskOf(S.kid)?.songs() || [];
   const cards = songs.map((p) => {
     const src = sourceOf(p.id);
     let parts = [];
@@ -1560,7 +1586,14 @@ function newDesk() {
 // ---------- taps ----------
 
 export const studioActions = {
-  'studio-back': () => { leave(); ui.view = 'kid'; render(); },
+  'studio-back': () => {
+    const back = deskOf(deskId())?.back || { view: 'kid' };
+    leave();
+    Object.assign(ui, back, { studioTest: false });
+    render();
+  },
+  // Settings › Try the recording studio: only from the parent's screen, which is behind the PIN
+  'studio-test': () => { if (ui.view === 'parent') openStudio({ test: true }); },
   'st-play': () => {
     if (A.play || S.busy === 'play') stopPlay();
     else if (!A.rec) startPlay(0);
@@ -1641,8 +1674,9 @@ export function studioRec() {
   return r?.kind === 'take' ? { rate: A.ac.sampleRate, from: r.from, countIn: r.countIn, clicks: r.clicks } : null;
 }
 
-/** The music house's studio desk: open the studio. */
-export function openStudio() {
+/** Open the studio: a kid's desk (the music house), or with `test` the parent's test desk. */
+export function openStudio({ test = false } = {}) {
+  ui.studioTest = test;
   ui.view = 'studio';
   render();
   window.scrollTo(0, 0);

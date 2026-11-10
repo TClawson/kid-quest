@@ -4,7 +4,9 @@ import { SONGS, SHOW_SONGS } from '../js/songs.js';
 import {
   TRACKS, MAX_SECONDS, newMix, sourceOf, maxBars, mixBeats, mixSeconds, addPart, addTake, moveClip, trimClip, copyClip,
   removeClip, setBars, setBpm, isFree, freeSpot, roomAt, bestSpot, findClip, takesIn, keyFits, schedule, badges, cleanMix,
+  shelfSongs,
 } from '../js/studiorules.js';
+import { MUSIC_TIERS } from '../js/musicrules.js';
 
 const must = (r) => { assert.equal(r.error, null, r.error || ''); return r; };
 
@@ -340,4 +342,16 @@ test('a write that fails is never told as kept, and a failed read is just nothin
   } finally {
     delete globalThis.indexedDB;
   }
+});
+
+test('the shelf has the songs open for a piano and found maps; the best piano has every song', () => {
+  const maps = Object.keys(SONGS);
+  const shows = Object.keys(SHOW_SONGS).map((k) => `show:${k}`);
+  const ids = (list) => list.map((p) => p.id).sort();
+  assert.deepEqual(shelfSongs(0), [], 'no piano: no songs');
+  assert.deepEqual(ids(shelfSongs(1)), [...maps].sort(), 'the little keyboard: the map songs');
+  const found = Object.keys(SHOW_SONGS)[0];
+  assert.deepEqual(ids(shelfSongs(1, new Set([found]))), [...maps, `show:${found}`].sort(), 'and a show whose treasure map is found');
+  assert.deepEqual(ids(shelfSongs(MUSIC_TIERS.length)), [...maps, ...shows].sort(), 'the best piano (the test desk): every song, the shows too');
+  assert.ok(shelfSongs(MUSIC_TIERS.length).every((p) => sourceOf(p.id)), 'each one has parts');
 });

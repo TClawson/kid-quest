@@ -7,7 +7,9 @@
 // still there after a reload; mixes are saved, opened and deleted (a deleted mix never takes
 // the desk's recording with it); the timing check answers in plain words; a shorter loop
 // never throws music away; Undo steps back; a thrown-away recording is swept from the tablet
-// once it is old enough; no sideways scrolling on a tablet or a phone. Saves screenshots.
+// once it is old enough; no sideways scrolling on a tablet or a phone; a parent's test desk
+// from Settings (no piano or chores needed, behind the PIN) leaves every kid as they were.
+// Saves screenshots.
 // Run: node test/smoke/studio.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import { chromium } from 'playwright';
@@ -15,7 +17,8 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
-import { sourceOf } from '../../js/studiorules.js';
+import { sourceOf, newMix, addPart, addTake, shelfSongs } from '../../js/studiorules.js';
+import { MUSIC_TIERS } from '../../js/musicrules.js';
 import { CLICK } from '../../js/studio-audio.js';
 
 const out = (process.argv[2] || 'previews/studio').replace(/\/$/, '');
@@ -50,8 +53,16 @@ async function wait(page, ms) {
   }
 }
 
-/** A new tablet with Ava's family on it, in her music house. */
-async function start(viewport, done) {
+/** Ava on her first day: no piano yet, and today's chores not done. */
+function firstDay() {
+  const s = emptyState();
+  s.settings.pinHash = fallbackHash('kidquest:1234');
+  s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: day, seenUnlocks: [], seenMoves: [], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } });
+  return s;
+}
+
+/** A new tablet with Ava's family on it (`s`), in her music house. */
+async function start(viewport, done, s = family(done)) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2 });
   await ctx.grantPermissions(['microphone']);
   // count the sounds started and stopped
@@ -88,7 +99,7 @@ async function start(viewport, done) {
   page.on('console', (m) => { if (m.type() === 'error' && !/favicon|ERR_|net::/.test(m.text())) errors.push(m.text()); });
   await page.clock.install({ time: new Date(`${day}T16:00:00`) });
   await page.goto(site.url);
-  await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [family(done), { kid_ava: { day, inside: false, place: 'music' } }]);
+  await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [s, { kid_ava: { day, inside: false, place: 'music' } }]);
   return { ctx, page };
 }
 
@@ -145,6 +156,36 @@ const ageTakes = (page) => page.evaluate(() => new Promise((resolve) => {
     tx.oncomplete = () => { req.result.close(); resolve(); };
   };
 }));
+/** Everything the studio keeps on the tablet: { mixes: { key: row as JSON }, takes: [{ id, kid, at }] }. */
+const studioRows = (page) => page.evaluate(() => new Promise((resolve) => {
+  const req = indexedDB.open('kidquest-studio', 1);
+  req.onsuccess = () => {
+    const out = { mixes: {}, takes: [] };
+    const tx = req.result.transaction(['mixes', 'takes'], 'readonly');
+    tx.objectStore('mixes').openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { out.mixes[c.key] = JSON.stringify(c.value); c.continue(); } };
+    tx.objectStore('takes').openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { out.takes.push({ id: c.key, kid: c.value.kid, at: c.value.at }); c.continue(); } };
+    tx.oncomplete = () => { req.result.close(); resolve(out); };
+  };
+}));
+/** Put mixes ([key, row]) and takes ([{ id, kid, at }]) on the tablet, as studio-store.js keeps them. */
+const seedStudio = (page, mixes, takes) => page.evaluate(([mixes, takes]) => new Promise((resolve) => {
+  const req = indexedDB.open('kidquest-studio', 1);
+  req.onupgradeneeded = () => { req.result.createObjectStore('mixes'); req.result.createObjectStore('takes').createIndex('kid', 'kid'); };
+  req.onsuccess = () => {
+    const tx = req.result.transaction(['mixes', 'takes'], 'readwrite');
+    for (const [k, row] of mixes) tx.objectStore('mixes').put(row, k);
+    for (const t of takes) tx.objectStore('takes').put({ ...t, rate: 48000, lead: 0, pcm: new Int16Array(48000).fill(1000) }, t.id);
+    tx.oncomplete = () => { req.result.close(); resolve(); };
+  };
+}), [mixes, takes]);
+/** From the start screen into the parent's Settings, with the PIN. */
+async function toSettings(page) {
+  await page.click('[data-action="parent"]');
+  for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
+  await page.waitForSelector('.tabs');
+  await page.click('[data-action="tab"][data-tab="settings"]');
+  await page.waitForSelector('[data-action="studio-test"]');
+}
 const noSideScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${b}`);
 
@@ -660,6 +701,125 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await page.waitForSelector('#studio .st-bar');
   assert.equal(await clips(page, 1).count(), 1, 'the take was kept');
   assert.ok(await page.locator('[data-action="st-undo"]').evaluate((b) => b.classList.contains('off')), 'Undo doesn\'t reach into the last visit');
+  await ctx.close();
+}
+
+// 8. a parent's test desk from Settings: Ava has no piano and today's chores aren't done
+{
+  const { ctx, page } = await start(TABLET, false, firstDay());
+  // Ava already has a draft and a saved mix, a take they use and an old one no mix uses
+  const avaMix = addTake(addPart(newMix(), 0, 'bg-meadow', 'lead').mix, 1, 'take-ava-1', 4, 0).mix;
+  const old = Date.now() - 60 * 60 * 1000;
+  await seedStudio(page, [['kid_ava|draft', { kid: 'kid_ava', slot: 'draft', mix: avaMix, at: old }], ['kid_ava|0', { kid: 'kid_ava', slot: 0, mix: { ...avaMix, name: 'Mix 1' }, at: old }]],
+    [{ id: 'take-ava-1', kid: 'kid_ava', at: old }, { id: 'take-ava-old', kid: 'kid_ava', at: old }]);
+  await page.reload();
+  const before = await studioRows(page);
+  const avaRows = (rows) => ({ mixes: Object.entries(rows.mixes).filter(([k]) => k.startsWith('kid_ava|')), takes: rows.takes.filter((t) => t.kid === 'kid_ava') });
+  const testTakes = (rows) => rows.takes.filter((t) => t.kid === 'parent-test');
+  /** The kids and the log, as saved on the tablet and as the app holds them. */
+  const kidsNow = () => page.evaluate(async () => {
+    const c = await import('./js/ctx.js');
+    const saved = JSON.parse(localStorage.getItem('kidquest.v1'));
+    return JSON.stringify([saved.kids, saved.log, c.state.kids, c.state.log]);
+  });
+
+  // the test desk can't be reached without the PIN: the same tap from a kid's screen does nothing
+  await page.evaluate(() => { const b = document.createElement('button'); b.id = 'sneak'; b.dataset.action = 'studio-test'; document.body.append(b); });
+  await page.click('#sneak');
+  await page.clock.runFor(500);
+  assert.equal(await page.locator('.studio-screen').count(), 0, 'no test desk without the PIN');
+
+  await toSettings(page);
+  const card = page.locator('.card.studio-test');
+  assert.equal(await card.locator('h2').textContent(), '🎚️ Try the recording studio');
+  assert.equal(await card.locator('p').textContent(), 'Open the recording studio right away to see how it works. This is a test desk: the kids\' mixes and stickers are not touched.');
+  assert.equal(await page.locator('.card.game-test + .card.studio-test').count(), 1, 'right after Try the games');
+  await card.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: `${out}/settings-card.png` });
+  const kidsBefore = await kidsNow();
+
+  // the test desk: every song, a neutral colour, its own title
+  await card.locator('[data-action="studio-test"]').click();
+  await page.waitForSelector('#studio .st-bar');
+  assert.equal(await page.locator('.studio-screen .kid-title small').textContent(), 'Test desk');
+  assert.equal(await page.locator('.studio-screen').evaluate((el) => el.style.getPropertyValue('--kid')), '#868e96', 'a neutral colour');
+  assert.equal(await page.locator('#studio').getAttribute('data-kid'), 'parent-test');
+  const all = shelfSongs(MUSIC_TIERS.length);
+  assert.equal(await page.locator('.st-song').count(), all.length, `every song (${all.length})`);
+  assert.ok(all.some((p) => p.kind === 'show') && await page.locator('.st-song[data-song^="show:"]').count(), 'the shows\' songs too');
+  assert.equal(await page.locator('#studio .st-clip').count(), 0, 'not Ava\'s draft');
+
+  // a part, a take, a mix saved in a slot
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="lead"]');
+  await tapLane(page, 1, 0, 32);
+  await page.click('[data-action="st-rec"]');
+  await wait(page, (60 / sourceOf('bg-meadow').bpm) * 4 * 1000 + 2500);
+  await page.click('[data-action="st-rec"]');
+  for (let i = 0; i < 60 && !(await clips(page, 1).count()); i += 1) await wait(page, 50);
+  const note = await page.locator('.st-note').count() ? await page.locator('.st-note').textContent() : '';
+  assert.equal(note, '', `no complaint (${note})`);
+  assert.equal(await clips(page, 1).count(), 1, 'a take on track 2');
+  assert.equal(await page.locator('.st-sticker[data-sticker="take"]').count(), 1, 'stickers show on the desk');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: `${out}/test-desk.png` });
+  await page.click('[data-action="st-panel"][data-panel="mixes"]');
+  assert.equal(await page.locator('.st-slot.empty').count(), 3, 'three empty slots, not Ava\'s');
+  await page.click('[data-action="st-slot-save"][data-slot="0"]');
+  await wait(page, 300);
+  assert.match(await page.locator('.st-slots li').first().textContent(), /Mix 1/);
+
+  // Back goes to Settings, and nothing of Ava's changed
+  await page.click('[data-action="studio-back"]');
+  await wait(page, 1000);
+  assert.equal(await page.locator('.tabs [data-tab="settings"].on').count(), 1, 'back on Settings');
+  assert.equal(await page.locator('.studio-screen').count(), 0);
+  assert.deepEqual(await page.evaluate(async () => (await import('./js/studio.js')).studioSound()), { playing: false, recording: false, sounds: 0 }, 'the studio is quiet');
+  assert.equal(await kidsNow(), kidsBefore, 'no kid, coins, XP or log changed');
+  const after = await studioRows(page);
+  assert.deepEqual(avaRows(after), avaRows(before), 'Ava\'s mixes and takes are as they were (her old take not swept either)');
+  assert.ok(after.mixes['parent-test|draft'] && after.mixes['parent-test|0'], 'the test desk keeps its own draft and mix');
+  assert.equal(testTakes(after).length, 1, 'and its own take');
+
+  // the test desk's mix is there on reopening
+  await page.click('[data-action="studio-test"]');
+  await page.waitForSelector('#studio .st-lane');
+  await wait(page, 500);
+  assert.equal(await page.locator('#studio .st-clip').count(), 2, 'the tune and the take are back');
+  assert.equal(await clips(page, 1).first().locator('.st-wave').count(), 1, 'with the take\'s sound');
+  // (the panel stays as it was left, as it does for a kid in the same visit)
+  if (!(await page.locator('.st-mixes').count())) await page.click('[data-action="st-panel"][data-panel="mixes"]');
+  assert.match(await page.locator('.st-slots li').first().textContent(), /Mix 1/, 'and the saved mix');
+
+  // a reload in the test desk lands on the start screen
+  await wait(page, 800);
+  await page.reload();
+  await page.clock.runFor(1000);
+  assert.equal(await page.locator('.studio-screen').count(), 0, 'not in the test desk after a reload');
+  assert.equal(await page.locator('[data-action="open-kid"][data-id="kid_ava"]').count(), 1, 'the usual start screen');
+
+  // a take the test desk threw away is swept, as for a kid (and Ava's old take still isn't)
+  await toSettings(page);
+  await page.click('[data-action="studio-test"]');
+  await page.waitForSelector('#studio .st-bar');
+  await page.click('[data-action="st-panel"][data-panel="mixes"]');
+  await page.click('[data-action="st-slot-del"][data-slot="0"]');
+  await page.click('#modal [data-action="modal-yes"]');
+  await wait(page, 300);
+  await page.click('[data-action="st-new"]');
+  await wait(page, 300);
+  if (await page.locator('#modal:not([hidden])').count()) await page.click('#modal [data-action="modal-yes"]');
+  await wait(page, 300);
+  assert.equal(await page.locator('#studio .st-clip').count(), 0, 'a clean test desk');
+  await ageTakes(page);
+  await page.click('[data-action="studio-back"]');
+  await wait(page, 1000);
+  const swept = await studioRows(page);
+  assert.equal(testTakes(swept).length, 0, 'the test desk\'s take is swept');
+  assert.deepEqual(avaRows(swept).takes.map((t) => t.id).sort(), ['take-ava-1', 'take-ava-old'], 'Ava\'s takes are left alone');
+  assert.equal(await kidsNow(), kidsBefore, 'and still no kid changed');
+  // the kids' studio is still shut for Ava (no piano, chores not done)
+  await page.evaluate(async () => { const c = await import('./js/ctx.js'); c.ui.kidId = 'kid_ava'; c.ui.view = 'studio'; c.render(); });
+  assert.equal(await page.locator('.studio-screen').count(), 0, 'Ava still needs a piano and her chores');
   await ctx.close();
 }
 
