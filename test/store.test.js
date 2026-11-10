@@ -167,3 +167,17 @@ test('planWrites: merge new documents, update changed fields, patch pending crea
 function emptyStateForPlan() {
   return migrate({ kids: [{ id: 'k1', name: 'Ava', tasks: [], spent: 0 }], log: {} });
 }
+
+test('a kid\'s daily summary (for the family village) survives migrate and split, and syncs a day at a time', () => {
+  const state = sampleState();
+  state.kids[0].daily = { '2026-11-10': [4, 5], '2026-11-11': [5, 5] };
+  const again = migrate(structuredClone(state));
+  assert.deepEqual(again.kids[0].daily, state.kids[0].daily);
+  const docs = splitState(again);
+  assert.deepEqual(docs.kids[state.kids[0].id].daily, state.kids[0].daily);
+  assert.deepEqual(joinState(docs).kids[0].daily, state.kids[0].daily);
+  const next = structuredClone(docs);
+  next.kids[state.kids[0].id].daily['2026-11-12'] = [3, 5];
+  const fields = diffFields(docs.kids[state.kids[0].id], next.kids[state.kids[0].id]);
+  assert.deepEqual(fields, [[['daily', '2026-11-12'], [3, 5]]]);
+});

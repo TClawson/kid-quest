@@ -598,6 +598,8 @@ span.dot.other { background: #f76707; }
 .family-banner { display: grid; gap: 6px; margin: 10px 0; padding: 8px 12px; border-radius: 12px; background: #e7f5ff; color: #1c3d5a; font-weight: 700; font-size: 0.95rem; cursor: default; }
 .family-banner.happy { background: #fff0f6; color: #8a1d4a; cursor: pointer; }
 .family-banner .bar { height: 10px; }
+.garden-line { margin: 6px 0; padding: 6px 12px; border-radius: 12px; background: #ebfbee; color: #1b5e20; font-weight: 700; font-size: 0.9rem; }
+.garden-line.wilted { background: #fff4e6; color: #8a4b00; }
 .family-banner .bar span { background: #4dabf7; }
 .plan h1, .lookback h1 { font-size: 1.6rem; margin: 0 0 6px; }
 .plan h3 { margin: 14px 0 6px; }
