@@ -119,14 +119,38 @@ test('playing on the clicks is told from playing that takes no notice of them', 
   // anywhere at all
   const anywhere = Array.from({ length: 40 }, (_, i) => i * 1.37 + r.u());
   assert.equal(clickGrid(anywhere), null);
-  // even eighths that all fall between the clicks' eighths are on the beat too, on its off-beat sixteenths
-  assert.equal(clickGrid(on([0, 1], 40, 0.05).map((x) => x + 0.5)).grid, 0.5);
+  // Even eighths that all fall between the clicks' eighths are eighths played a steady sixteenth
+  // late (a kid who waits to hear each click), not a tune made of off-beat sixteenths.
+  const waits = clickGrid(on([0, 1], 40, 0.05).map((x) => x + 0.4));
+  assert.equal(waits.grid, 1);
+  assert.ok(Math.abs(waits.off - 0.4) < 0.05, `off ${waits.off}`);
+  const ahead = clickGrid(on([0, 1], 40, 0.05).map((x) => x - 0.4));
+  assert.equal(ahead.grid, 1);
+  assert.ok(Math.abs(ahead.off + 0.4) < 0.05, `off ${ahead.off}`);
+  // right in the middle it could be either: late is the likelier
+  assert.ok(Math.abs(clickGrid(on([0, 1], 40, 0.03).map((x) => x + 0.5)).off - 0.5) < 0.05);
+  // (sixteenths with a quick pair now and then still use the eighths, so they stay sixteenths)
+  const quick = Array.from({ length: 40 }, (_, i) => 8 * Math.floor(i / 10) + [0, 1, 2, 2.5, 3, 4, 5, 6, 6.5, 7][i % 10] + r.gauss() * 0.03);
+  assert.equal(clickGrid(quick).grid, 0.5);
   // a different speed from the clicks drifts across them: not on the beat
   assert.equal(clickGrid(Array.from({ length: 40 }, (_, i) => i * 1.06 + r.gauss() * 0.05)), null);
   // one strike can't be judged; none is nothing
   assert.deepEqual(clickGrid([3.1]), { grid: 1, swing: 0, off: 0 });
   assert.equal(clickGrid([]), null);
   assert.ok(gridFit([0.1, 1.1, 2.1, 3.1], [0, 1]).err < 1e-9);
+});
+
+test('a kid who is a steady tenth of a second behind the clicks gets the tune on its own steps', () => {
+  const steps = [0, 2, 4, 5, 6, 8, 10, 12, 14, 16, 17, 18, 20, 22, 24, 26];
+  for (const [bpm, late] of [[90, 0.12], [120, 0.1], [120, 0.12], [120, -0.11], [150, 0.1]]) {
+    const r = rng(9);
+    const beat = 60 / bpm;
+    const heard = steps.map((st, i) => { const on = 0.06 + (st / 2) * beat + late + r.gauss() * 0.008; return { midi: [60, 62, 64, 65, 67, 65, 64, 62][i % 8], on, off: on + 0.3, vel: 0.6 }; });
+    const got = readings(heard, { bpm, meter: 4, lead: 0.06, beats: 16 });
+    assert.equal(got.onBeat, true, `${bpm} bpm, ${late} s`);
+    assert.deepEqual(got.tidy[0].notes.map((n) => n.at), steps, `${bpm} bpm, ${late} s`);
+    assert.equal(got.tidy[0].follows, true);
+  }
 });
 
 test('playing at its own speed is set even from its own gaps', () => {
@@ -324,6 +348,13 @@ test('chords and the band part, by hand', () => {
   assert.deepEqual(at(8), [41]);
   assert.equal(at(24).length, 4);
   assert.ok(band.filter((x) => x.at >= 24).every((x) => x.len > 7));
+  // under a low tune the held chord reaches down to the bass note: no key is struck twice at once
+  for (const root of [9, 10, 11, 7]) {
+    const low = bandPart([{ at: 0, len: 8, name: 'I', root, third: 4 }, { at: 8, len: 8, name: 'I', root, third: 4 }], { bar: 8, under: 60 });
+    const last = low.filter((x) => x.at === 8).map((x) => x.midi);
+    assert.equal(new Set(last).size, last.length, `root ${root}: ${last}`);
+    assert.ok(last.length >= 3);
+  }
   // a waltz: bass, chord, chord
   const waltz = bandPart(chordsFor(notes.map((x) => ({ ...x, at: (x.at / 8) * 6, len: 6 })), 'C', { bar: 6, from: 0, to: 24, split: 64 }), { bar: 6, under: 69 });
   assert.deepEqual([0, 2, 4].map((s) => waltz.filter((x) => x.at === s).length), [1, 3, 3]);

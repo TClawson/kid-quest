@@ -97,6 +97,34 @@ test('the same key struck again is two notes', () => {
   assert.deepEqual(keysOf(listen(piano(notes, 48000, 2.4), 48000)), [60, 60, 60, 62, 62]);
 });
 
+test('a key struck again while it still rings is a new note; a held key under other notes is not', () => {
+  // (the key comes up for a moment and the string is still sounding when the hammer comes down again)
+  const rate = 24000;
+  const tune = [67, 67, 69, 67, 72, 71].map((midi, i) => ({ midi, on: 0.3 + i * 0.25, len: 0.2 }));
+  assert.deepEqual(keysOf(listen(piano(tune, rate, 2.6), rate)), [67, 67, 69, 67, 72, 71]);
+  const held = [{ midi: 48, on: 0.3, len: 3 }, ...[60, 64, 67, 72, 67, 64].map((midi, i) => ({ midi, on: 0.3 + i * 0.4, len: 0.35 }))];
+  const heard = listen(piano(held, rate, 3.6), rate);
+  assert.equal(heard.filter((n) => n.midi === 48).length, 1);
+  assert.equal(heard.length, 7);
+});
+
+test('an octave above: the piano\'s usual ghost goes, a real octave among single notes stays', () => {
+  const rate = 24000;
+  const tune = [60, 62, 64, 65, 67, 65, 64, 62, 60, 64, 67, 64];
+  const note = (midi, i, vel = 0.5) => ({ midi, on: 0.3 + i * 0.4, len: 0.35, vel });
+  // every strike brings a soft note an octave up with it (what a bright piano's overtones look like): only the tune is heard
+  const bright = tune.flatMap((midi, i) => [note(midi, i), note(midi + 12, i, 0.22)]);
+  assert.deepEqual(keysOf(listen(piano(bright, rate, 5.6), rate)), tune);
+  // one such octave in a tune of single notes is out of the usual: it was played
+  const once = tune.flatMap((midi, i) => (i === 5 ? [note(midi, i), note(midi + 12, i, 0.22)] : [note(midi, i)]));
+  const heard = listen(piano(once, rate, 5.6), rate);
+  assert.equal(heard.length, 13);
+  assert.ok(heard.some((n) => n.midi === 77 && Math.abs(n.on - 2.3) < 0.03));
+  // and a low octave under a chord (an overtone of its own in the picture) is a note
+  const low = [[41, 53, 57, 60], [36, 48, 52, 55]].flatMap((c, i) => c.map((midi) => ({ midi, on: 0.3 + i, len: 0.9 })));
+  assert.deepEqual(keysOf(listen(piano(low, rate, 2.6), rate)).sort((a, b) => a - b), [36, 41, 48, 52, 53, 55, 57, 60]);
+});
+
 test('silence, hiss and a recording too short to look at give no notes', () => {
   assert.deepEqual(listen(new Float32Array(48000), 48000), []);
   assert.deepEqual(listen(new Float32Array(100), 48000), []);

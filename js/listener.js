@@ -42,10 +42,15 @@ export const SETTINGS = {
   offFrac: 0.25, // a note ends when it falls to this fraction of its peak
   susFrom: 4, susTo: 9, // looks after the strike where the note's own loudness is read
   ghost: 3, // an overtone: a note this many times softer than a note struck with it, an overtone's distance below
+  ghostLeak: 2, ghostMost: 0.35, // ... for the octave: softer than this many times what the octave key usually rises by in this recording (counted up to ghostMost of the lower note)
+  ghostOwn: 2.5, // a note an octave or more under another: an overtone of its own stands this far out of the picture, or it was not struck
   knock: 0.6, knockBelow: 58, // a key's knock: a low note that fades to under this at once (see pickNotes)
   cluster: 1, // of two neighbouring keys struck in one instant, the one this many times softer goes
   clickNear: 0.07, // seconds: a note this near a known click must keep sounding after it (see pickNotes)
   clickStay: 0.4, // ... at this fraction of its first loudness, 100 to 140 ms on
+  again: 0.2, // a key struck again while it still rings: it gets louder by at least this share of how loud it was (0: no such rule)
+  againLeast: 0.3, // ... and by this much of alpha's loudness
+  againBy: 0.25, againFresh: 0.7, // ... and this share of its overtones jump by this much at the strike, the lowest one too (see freshOf)
   sounding: 0.15, // a look counts as sounding when its loudest key is at least this much of the take's loudest
   tone: 5.5, // a note's overtones stand this many times out of the picture around them, or it is noise and not a string (see toneOf)
   toneMost: 0.2, // when fewer than this share of the would-be notes sound like a string, the take is mostly noise: then only notes twice as clear stay
@@ -405,6 +410,68 @@ export function toneOf(spec, key, t, S = SETTINGS) {
 }
 
 /**
+ * The clearest of a note's overtones that no note struck with it shares: how far it stands out
+ * of the picture near it (as toneOf). null when every overtone is shared, or too low to see.
+ */
+function ownLine(spec, keys, n, others, S) {
+  const { V, T, K, df } = spec;
+  const from = Math.min(T - 1, n.t + S.susFrom); const to = Math.min(T - 1, n.t + S.susTo);
+  const at = (b) => { let s = 0; for (let u = from; u <= to; u += 1) s += V[u * K + b]; return s; };
+  const hzOf = (key, k) => k * key.f0 * Math.sqrt(1 + stretchOf(key.midi) * k * k);
+  const theirs = [];
+  for (const o of others) for (let j = 1; j <= 12; j += 1) theirs.push(hzOf(keys[o.p], j));
+  const near = [];
+  let best = null;
+  for (let k = 1; k <= 10; k += 1) {
+    const hz = hzOf(keys[n.p], k);
+    const c = Math.round(hz / df);
+    if (hz < S.highpass + 5 || c < 2) continue;
+    if (c + 2 >= K) break;
+    if (theirs.some((f) => Math.abs(1200 * Math.log2(f / hz)) < 40)) continue;
+    const peak = Math.max(at(c - 1), at(c), at(c + 1));
+    near.length = 0;
+    for (let b = Math.max(1, c - S.toneWide); b <= Math.min(K - 1, c + S.toneWide); b += 1) near.push(at(b));
+    near.sort((x, y) => x - y);
+    const stands = peak / (near[Math.floor(0.2 * (near.length - 1))] + 1e-9);
+    if (best === null || stands > best) best = stands;
+  }
+  return best;
+}
+
+/**
+ * A hammer on a string that still rings: the key's own loudness barely rises (the string was
+ * loud already), but every one of its overtones jumps at once, the high ones most (they had
+ * faded). Another key struck at that moment makes only some of them jump, the ones it shares.
+ * Returns { share (of the overtones that can be seen, how many jump by S.againBy), first
+ * (whether the lowest of them does), seen }.
+ */
+export function freshOf(spec, key, t, S = SETTINGS) {
+  const { V, T, K, df } = spec;
+  const B = stretchOf(key.midi);
+  const mean = (b, from, to) => { let s = 0; let n = 0; for (let u = Math.max(0, from); u <= Math.min(T - 1, to); u += 1) { s += V[u * K + b - 1] + V[u * K + b] + V[u * K + b + 1]; n += 1; } return n ? s / n : 0; };
+  const near = [];
+  let seen = 0; let fresh = 0; let first = null;
+  for (let k = 1; k <= 8; k += 1) {
+    const c = Math.round((k * key.f0 * Math.sqrt(1 + B * k * k)) / df);
+    if (c + 2 >= K || c < 2) break;
+    const after = mean(c, t + 4, t + 7);
+    // only overtones that stand out of the picture after the strike tell anything
+    near.length = 0;
+    for (let b = Math.max(2, c - S.toneWide); b <= Math.min(K - 2, c + S.toneWide); b += 1) near.push(mean(b, t + 4, t + 7));
+    near.sort((x, y) => x - y);
+    if (after < 2.5 * near[Math.floor(0.2 * (near.length - 1))]) continue;
+    seen += 1;
+    // (before the hammer comes down again the damper touches the string: the line dips for a moment, and the jump is from there)
+    let low = mean(c, t - 8, t - 5);
+    for (let u = t - 4; u <= t + 1; u += 1) low = Math.min(low, mean(c, u, u));
+    const jumps = after >= (1 + S.againBy) * low;
+    if (jumps) fresh += 1;
+    if (first === null) first = jumps;
+  }
+  return { share: seen ? fresh / seen : 0, first: first === true, seen };
+}
+
+/**
  * Notes from the loudness of each key over time: [{ midi, on, off, vel }], in seconds.
  * `clickTimes` (seconds, sorted) are when known clicks sound in the recording.
  */
@@ -429,9 +496,10 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
   for (let p = 0; p < nK; p += 1) {
     const h = row(p);
     let last = -1e9;
+    let lastPeak = 0;
     for (let t = D; t < T - D; t += 1) {
       const rise = h[t + D] - h[t - D];
-      if (rise < S.jump * floor) continue;
+      if (rise < (S.again > 0 ? Math.min(S.jump, S.againLeast) : S.jump) * floor) continue;
       // the steepest point of this jump
       const prev = h[t + D - 1] - h[Math.max(0, t - D - 1)];
       const next = t + D + 1 < T ? h[t + D + 1] - h[t - D + 1] : -1;
@@ -439,8 +507,17 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
       if (t - last < gap) continue;
       // how loud the key is once the strike is over, against how loud it was before it
       const before = med(h, t - S.susTo, t - S.susFrom);
-      const strength = med(h, t + S.susFrom, t + S.susTo) - before;
-      if (strength < floor || strength < S.rho * before) continue;
+      const after = med(h, t + S.susFrom, t + S.susTo);
+      const strength = after - before;
+      if (strength < floor || rise < S.jump * floor || strength < S.rho * before) {
+        // not a jump from quiet: it can still be a key struck again while it rings
+        // (it rings when a note of this key was found before and has not died away: loudness
+        // that only leaked in from another key's overtones is not ringing)
+        if (!(S.again > 0) || after < floor || strength < S.againLeast * floor || strength < S.again * before) continue;
+        if (!(lastPeak > 0 && before >= S.offFrac * lastPeak)) continue;
+        const f = freshOf(spec, keys[p], t, S);
+        if (!f.first || f.seen < Math.min(2, keys[p].nPart) || f.share < S.againFresh) continue;
+      }
       // in a recording of a room with no piano in it, the "loud notes" are only the hiss falling on a key
       if (strength < S.clear * mean(other, t + S.susFrom, t + S.susTo)) continue;
       // a room with no piano in it is full of would-be notes too: loud next to the rest, but no string
@@ -450,16 +527,53 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
       let peak = 0; for (let u = t; u <= Math.min(T - 1, t + 10); u += 1) if (h[u] > peak) peak = h[u];
       notes.push({ p, t, peak, strength, midi: keys[p].midi, tone });
       last = t;
+      lastPeak = peak;
     }
   }
   // In a take with no piano in it now and then some noise looks like a string by luck. So when
   // nearly all the would-be notes were noise, the few left over must be very clear to stay.
   if (S.tone > 0 && notes.length < S.toneMost * seen) notes = notes.filter((n) => n.tone >= 2 * S.tone);
   let kept = notes;
-  // an overtone of a louder note struck in the same moment is not a note
+  // An overtone of a louder note struck in the same moment is not a note. For the octave the
+  // recording itself says how much to expect: each time a key is struck its octave key rises
+  // a little too (more on a bright piano, and more the harder the key is hit), so an octave
+  // note counts only when it is clearly more than this piano's usual. (Playing in octaves all
+  // the way through reads as the usual, so there the upper note of a soft pair goes.)
   if (S.ghost > 0) {
     const above = [12, 19, 24, 28, 31, 34, 36];
-    kept = notes.filter((n) => !notes.some((m) => m !== n && Math.abs(m.t - n.t) <= 4 && above.includes(n.midi - m.midi) && n.strength * S.ghost < m.strength));
+    const middle = (v) => { v.sort((x, y) => x - y); return v.length ? v[v.length >> 1] : 0; };
+    const leak = new Map(); // a found note -> how much its octave key rose with it, next to its own strength
+    const leakOf = (m) => {
+      if (!leak.has(m)) {
+        const h = m.p + 12 < nK ? row(m.p + 12) : null;
+        leak.set(m, h ? Math.max(0, med(h, m.t + S.susFrom, m.t + S.susTo) - med(h, m.t - S.susTo, m.t - S.susFrom)) / m.strength : 0);
+      }
+      return leak.get(m);
+    };
+    const usual = (m) => {
+      const same = notes.filter((x) => x !== m && x.p === m.p).map(leakOf);
+      const near = notes.filter((x) => x !== m && Math.abs(x.p - m.p) <= 2).map(leakOf);
+      return Math.max(middle(same), middle(near));
+    };
+    kept = notes.filter((n) => !notes.some((m) => {
+      const d = n.midi - m.midi;
+      if (m === n || Math.abs(m.t - n.t) > 4 || !above.includes(d)) return false;
+      const most = d === 12 && S.ghostLeak > 0 ? Math.max(1 / S.ghost, S.ghostLeak * Math.min(S.ghostMost, usual(m))) : 1 / S.ghost;
+      return n.strength < most * m.strength;
+    }));
+  }
+  // The other way round: struck notes can add up to look like a key an octave or more below
+  // them (their overtones are all its overtones too). A real low string has overtones of its
+  // own that none of the others share; when those are not in the picture, it was not struck.
+  if (S.ghostOwn > 0) {
+    const below = [12, 19, 24];
+    const all = kept;
+    kept = all.filter((n) => {
+      const others = all.filter((m) => m !== n && Math.abs(m.t - n.t) <= 4);
+      if (!others.some((m) => below.includes(m.midi - n.midi))) return true;
+      const best = ownLine(spec, keys, n, others, S);
+      return best === null || best >= S.ghostOwn;
+    });
   }
   // A key's knock travels through a tablet standing on the piano and sounds like several low
   // notes that die at once. A low note that has lost much of its loudness 120 ms after the
@@ -503,7 +617,7 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
       for (let u = peakAt; u <= stop; u += 1) if (h[u] < S.offFrac * n.peak) { end = u; break; }
       const on = n.t * dt;
       const vel = Math.max(0.05, Math.min(1, 0.6 + (20 * Math.log10(n.peak / ref)) / 24));
-      out.push({ midi: n.midi, on, off: Math.max(on + 0.05, end * dt), vel });
+      out.push(S.more ? { midi: n.midi, on, off: Math.max(on + 0.05, end * dt), vel, t: n.t, strength: n.strength, tone: n.tone } : { midi: n.midi, on, off: Math.max(on + 0.05, end * dt), vel });
     });
   }
   out.sort((a, b) => a.on - b.on || a.midi - b.midi);

@@ -116,7 +116,15 @@ export function clickGrid(xs, swing = 0, most = 0.3) {
   // sixteenths only when the playing is clearly that exact (any playing is "near" a fine grid)
   // (a fit that only works with the grid pushed as far off as it may go is no fit)
   const edge = (f) => Math.abs(f.off) >= most - 1e-9;
-  if (fine.err <= 0.1 && fine.err < 0.6 * eighths.err && !edge(fine)) return { grid: 0.5, swing: 0, off: fine.off };
+  if (fine.err <= 0.1 && fine.err < 0.6 * eighths.err && !edge(fine)) {
+    // Sixteenths have notes on the eighths too. When nearly every strike sits on the fine
+    // grid's in-between spots, these are eighths played a steady sixteenth off the clicks: a
+    // kid who waits for each click before playing, or a take lined up a little wrong. Late
+    // is the likelier of the two, so it wins when the playing sits right in the middle.
+    const between = xs.filter((x) => mod(Math.round((x - fine.off) * 2), 2) === 1).length;
+    if (between > 0.85 * xs.length) return { grid: 1, swing: 0, off: fine.off <= 0.05 ? fine.off + 0.5 : fine.off - 0.5 };
+    return { grid: 0.5, swing: 0, off: fine.off };
+  }
   // Playing that takes no notice of the clicks is off by 0.29 of a step, a kid on the clicks
   // by half of that or less. With many strikes the line can be drawn close to 0.29; with few,
   // chance alone can look tidy, so it is drawn lower.
@@ -333,7 +341,8 @@ export function bandPart(chords, { bar = 8, under = 72 } = {}) {
     centre = Math.max(48, Math.min(under - 9, (tones[0] + tones[2]) / 2));
     const lastOne = i === chords.length - 1;
     if (lastOne) {
-      out.push({ at: c.at, len: c.len * 0.95, midi: bass }, ...tones.map((midi) => ({ at: c.at, len: c.len * 0.95, midi })));
+      // (under a low tune the chord can reach down to the bass note itself: it is played once)
+      out.push({ at: c.at, len: c.len * 0.95, midi: bass }, ...tones.filter((midi) => midi !== bass).map((midi) => ({ at: c.at, len: c.len * 0.95, midi })));
       return;
     }
     for (let s = 0; s < c.len - 1e-6; s += 2) {
