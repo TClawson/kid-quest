@@ -1,6 +1,6 @@
 import {
   DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
-  tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, rewardsToGive, markRewardGiven, storeOpen, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
+  tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, rewardsToGive, markRewardGiven, storeOpen, storeLockText, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS, EXERCISE_KEEP_DAYS,
@@ -1068,7 +1068,7 @@ function villageView(kid, s, entry, mood) {
     visit: villageVisit(kid, s),
     // drawn twice as big, with fine pixels like the rest of the village
     landmark: lm ? { html: secretSvg(theme, 1, { smooth: 2 }), name: lm.name, w: size.w * 2, h: size.h * 2 } : null,
-    shop: { open: store.open, left: store.left || 0 },
+    shop: { open: store.open, left: store.left || 0, evening: store.evening, missed: store.missed },
     kidId: kid.id,
     kidName: kid.name,
     kidColor: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
@@ -1403,9 +1403,7 @@ function viewKid() {
           </div>
           ${late ? `<button class="btn late-chest" data-action="chest" data-day="${late.key}">${chestSvg(late.tier.id, false, 2)} A chest from ${late.key === addDays(t, -1) ? 'yesterday' : 'earlier'} is waiting! Open it</button>` : ''}
           <button class="btn ghost" data-action="trophies">🏆 Trophies &amp; treasure maps</button>
-          ${storeOpen(state, kid, t).open
-            ? `<button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>`
-            : `<button class="btn ghost store-locked" data-action="wardrobe">🔒 Buddy store opens when today's chores are done</button>`}
+          ${storeButton(kid, storeOpen(state, kid, t), newCount)}
         </div>
       </div>
       ${exerciseSection(kid, exTasks, entry)}
@@ -1522,6 +1520,19 @@ function exWeekHtml(ex) {
 }
 
 /** Bonus exercise: optional tiles that earn gems, and how the exercise week is going. */
+/** The kid page's store button, with a line saying why it's shut (or that evening chores can wait). */
+function storeButton(kid, lock, newCount) {
+  if (lock.open) {
+    return `<button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>`;
+  }
+  const label = lock.missed.length ? "🔒 Buddy store opens when all of today's chores are done"
+    : lock.evening ? "🔒 Buddy store opens when today's day chores are done"
+      : "🔒 Buddy store opens when today's chores are done";
+  const note = lock.missed.length ? `<small class="muted store-why">${esc(lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were')} missed last night, so today evening chores count too.</small>`
+    : lock.evening ? '<small class="muted store-why">Evening chores don\'t count.</small>' : '';
+  return `<button class="btn ghost store-locked" data-action="wardrobe">${label}</button>${note}`;
+}
+
 function exerciseSection(kid, tasks, entry) {
   if (!tasks.length) return '';
   const ex = exerciseInfo(kid);
@@ -1788,9 +1799,11 @@ function parentEditKid() {
           <option value="" ${t.house ? '' : 'selected'}>None</option>
           ${HOUSE_CHORES.map((c) => `<option value="${c.id}" ${t.house === c.id ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('')}
         </select></label>`}
+        ${isExercise(t) ? '' : `<label class="row"><input type="checkbox" data-field="evening" ${t.evening ? 'checked' : ''}> Evening chore</label>`}
         ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>
         <label class="row"><input type="checkbox" data-field="listen" ${t.listen ? 'checked' : ''}> Listen to the piano</label>` : ''}
       </div>
+      ${t.evening && !isExercise(t) ? '<small class="muted task-hint">Evening chores don\'t keep the buddy store shut, so the store can open after the day chores. If one is missed, the next day the store waits for every chore, evening ones too.</small>' : ''}
       ${t.minutes > 0 && t.listen ? '<small class="muted task-hint">While the timer runs, the buddy listens and dances to the playing. With no piano for 30 seconds it gets bored; after a minute it falls asleep and the timer pauses until the piano starts again. It uses the microphone only on the timer screen, and nothing is recorded. Try it in Settings › Piano listening test.</small>' : ''}
       ${isExercise(t) ? `<div class="row wrap reward-edit">
         <label>Earns 💎 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="gems" value="${Number.isFinite(t.gems) ? t.gems : ''}" placeholder="${DEFAULT_GEMS}" class="num" aria-label="Gems earned"> gems</label>
@@ -2197,7 +2210,7 @@ const actions = {
   'kid-species': (el) => { changeSpecies(kidById(ui.editKidId), el.dataset.val); save(); render(); },
   wardrobe: () => {
     const lock = storeOpen(state, kidById(ui.kidId), today());
-    if (!lock.open) { sounds.error(); toast(lock.left ? `🔒 Finish today's chores first (${lock.left} to go)` : `🔒 Opens when a parent approves your chores (${lock.waiting} waiting)`); return; }
+    if (!lock.open) { sounds.error(); toast(`🔒 ${storeLockText(lock)}`); return; }
     ui.view = 'wardrobe'; render(); window.scrollTo(0, 0);
   },
   'wardrobe-back': () => { ui.view = 'kid'; render(); },
@@ -2441,7 +2454,7 @@ document.addEventListener('change', (e) => {
     if (v === null) delete task[el.dataset.field];
     else task[el.dataset.field] = v;
     save();
-    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes' || el.dataset.field === 'listen' || isReward) render();
+    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes' || el.dataset.field === 'listen' || el.dataset.field === 'evening' || isReward) render();
     return;
   }
   if (el.dataset.kidallow) {

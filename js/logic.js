@@ -374,15 +374,63 @@ export function dayStatus(state, kid, key, today) {
   };
 }
 
+/** Evening chores (a shower after dinner) happen too late to hold the store shut. */
+export function isEvening(task) {
+  return Boolean(task?.evening) && !isExercise(task);
+}
+
+/**
+ * Yesterday's evening chores the kid didn't do. Waiting for a parent counts as
+ * done (the kid did their part; a parent may approve it in the morning), and an
+ * excused day or a day before the kid started has nothing missed.
+ */
+export function missedEvening(state, kid, today) {
+  const y = addDays(today, -1);
+  if (kid.startDate && y < kid.startDate) return [];
+  const entry = entryFor(state, kid.id, y);
+  if (entry?.excused) return [];
+  return questTasks(tasksForDay(state, kid, y, today))
+    .filter((t) => isEvening(t) && !['done', 'pending'].includes(entry?.tasks?.[t.id]?.status));
+}
+
 /**
  * The buddy store (dress-up and shop) opens once every one of today's chores is
  * done and approved: a task still waiting for a parent keeps it shut. Off-week
  * tasks aren't scheduled, exercise is optional, and an excused day opens the
  * store straight away.
+ * Evening chores don't count, so a kid whose shower is after dinner can still
+ * shop after their day chores. But if an evening chore was missed yesterday,
+ * today the store waits for every chore, evening ones included.
+ * - evening: how many of today's evening chores were left out
+ * - missed: names of yesterday's missed evening chores (non-empty means strict)
  */
 export function storeOpen(state, kid, today) {
   const s = dayStatus(state, kid, today, today);
-  return { open: s.excused || s.done >= s.total, left: Math.max(0, s.total - s.done - s.pending), waiting: s.pending };
+  const missed = missedEvening(state, kid, today).map((t) => t.name);
+  const need = missed.length ? s.tasks : s.tasks.filter((t) => !isEvening(t));
+  const entry = entryFor(state, kid.id, today);
+  let done = 0;
+  let waiting = 0;
+  for (const t of need) {
+    const st = entry?.tasks?.[t.id]?.status;
+    if (st === 'done') done += 1;
+    else if (st === 'pending') waiting += 1;
+  }
+  return {
+    open: s.excused || done >= need.length,
+    left: Math.max(0, need.length - done - waiting),
+    waiting,
+    evening: s.tasks.length - need.length,
+    missed,
+  };
+}
+
+/** One line telling the kid why the store is shut (or that evening chores don't hold it). */
+export function storeLockText(lock) {
+  if (lock.open) return '';
+  const why = lock.missed.length ? `${lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were'} missed last night, so today the store waits for every chore, evening ones too. ` : '';
+  const what = lock.left ? `Finish today's chores first (${lock.left} to go${lock.evening ? ', not counting evening chores' : ''})` : `Opens when a parent approves your chores (${lock.waiting} waiting)`;
+  return why + what;
 }
 
 // Results that are slow to work out (they replay a kid's whole history) can be

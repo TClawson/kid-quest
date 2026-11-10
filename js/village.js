@@ -722,8 +722,10 @@ function mount(section, handlers) {
   const sayShop = () => {
     const s = data.shop;
     const text = s.open
-      ? `Welcome, ${data.name}! All your quests are done, so the shop is open. Want to dress up your buddy?`
-      : `Hi ${data.name}! My shop opens when all of today's quests are done and a grown-up has checked them.${s.left ? ` ${s.left} to go!` : ''} See you then!`;
+      ? `Welcome, ${data.name}! ${s.evening ? 'Your day quests are done (evening ones can wait till tonight)' : 'All your quests are done'}, so the shop is open. Want to dress up your buddy?`
+      : s.missed?.length
+        ? `Hi ${data.name}! ${s.missed.length === 1 ? `${s.missed[0]} was` : 'Some evening quests were'} missed last night, so today my shop waits for every quest, evening ones too.${s.left ? ` ${s.left} to go!` : ''} See you then!`
+        : `Hi ${data.name}! My shop opens when ${s.evening ? "today's day quests" : "all of today's quests"} are done and a grown-up has checked them.${s.evening ? ' Evening quests can wait.' : ''}${s.left ? ` ${s.left} to go!` : ''} See you then!`;
     const buttons = s.open ? '<button class="btn" data-v="shop">👕 Go shopping</button><button class="btn ghost" data-v="bye">Bye!</button>' : '<button class="btn" data-v="bye">OK!</button>';
     open(card(villagerName('badger'), text, '', buttons), 'badger', s.open, 'shop');
     typeText(text);
