@@ -12,6 +12,7 @@
 export const SILENT = 0.015;     // a take whose loudest sample is under this heard nothing
 export const TAKE_PEAK = 0.7;    // a take is made this loud at its loudest
 export const MAX_GAIN = 10;      // but never turned up more than this
+export const MOST_DELAY = 0.6;   // the latest the microphone can hear the speaker (seconds)
 
 /**
  * The studio's metronome click. Its two notes sit between the piano's keys (a quarter tone
@@ -225,7 +226,7 @@ function alike(a, b) {
  * clicks must be explained (by default three, and all but one of those it should have
  * caught). Returns seconds (0 to `most`), or null when it can't tell.
  */
-export function echoDelay(clicks, heard, { until = Infinity, most = 0.6, near = 0.008, need = 0 } = {}) {
+export function echoDelay(clicks, heard, { until = Infinity, most = MOST_DELAY, near = 0.008, need = 0 } = {}) {
   let best = null;
   for (const c of clicks) {
     for (const h of heard) {
@@ -423,7 +424,34 @@ export function peakAway(samples, rate, times, pad = 0.17, lead = 0.012) {
  * now (`outNow`). All in seconds.
  */
 export function phonesDelay(measured, outThen, outNow) {
-  return Math.max(0, Math.min(0.6, measured - (outThen || 0) + (outNow || 0)));
+  return Math.max(0, Math.min(MOST_DELAY, measured - (outThen || 0) + (outNow || 0)));
+}
+
+/** A delay kept on the tablet, if it can be used (the same limits the timing check has), or null. */
+export function usableDelay(d) {
+  return Number.isFinite(d) && d >= 0 && d <= MOST_DELAY ? d : null;
+}
+
+/**
+ * Where a take ends when Stop is pressed: what the kid heard when the finger landed
+ * (`heard`, on the take's clock) less the finger's own delay, never past the take's room
+ * (`end`). Null when that leaves less than a quarter of a beat after the take's beat (`at`):
+ * the kid stopped before playing anything.
+ */
+export function stopPoint(heard, at, end, beat, touch = 0.08) {
+  const stop = Math.min(end, heard - touch);
+  return stop - at < beat / 4 ? null : stop;
+}
+
+/**
+ * The first time round when play starts at `from` (seconds into the loop): the plan cut
+ * there, except a take whose lead (sound kept from before its beat) begins at most `early`
+ * seconds before `from`: it starts whole, with its lead. Play starts a moment ahead, so there
+ * is time for it.
+ */
+export function firstPass(plan, from, early = 0.075) {
+  const whole = (e) => e.kind === 'take' && e.offset === 0 && e.at < from && from - e.at <= early;
+  return [...plan.filter(whole), ...sliceSchedule(plan.filter((e) => !whole(e)), from)];
 }
 
 /** How late the microphone hears the speaker when no timing check has been done: a guess. */

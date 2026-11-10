@@ -23,7 +23,7 @@ import {
 import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes } from './studio-store.js';
 import {
   CLICK, normalise, findOnsets, joinBlocks, guessDelay, sliceSchedule, pct, beatAt, waveLine, echoDelay, countInDelay,
-  clickWave, clickPlan, makeTake, fadeEnds, phonesDelay, softClip,
+  clickWave, clickPlan, makeTake, fadeEnds, phonesDelay, softClip, usableDelay, stopPoint, firstPass, MOST_DELAY,
 } from './studio-audio.js';
 
 // ---------- words ----------
@@ -52,6 +52,14 @@ const SAY = {
   waitCheck: 'Wait for the timing check to finish.',
   waitSave: 'Wait a moment. I\'m keeping your recording.',
   nothingToUndo: 'There is nothing to undo.',
+  nothingToRedo: 'There is nothing to redo.',
+  undone: 'Took that back.',
+  undoneTake: 'Took your take away. Tap Redo to bring it back.',
+  redone: 'Put it back.',
+  redoneTake: 'Your take is back.',
+  draftFailed: 'I couldn\'t save your mix. This tablet may be full.',
+  takeNotKept: 'Your take is on your desk, but I couldn\'t keep it on this tablet. This tablet may be full.',
+  cantOpen: 'I couldn\'t open your mixes just now.',
 };
 
 /** "1 beat", "16 beats". */
@@ -68,6 +76,7 @@ const MOST_WAVES = 200; // little pictures of takes kept ready
 const MOST_UNDO = 20;   // mixes Undo can step back through
 const LEAD = 0.06;      // seconds kept from before a take's beat, so an early note keeps its start
 const TOUCH_LAG = 0.08; // how long a finger takes to press Stop after the kid means to
+const UNDO_REST = 600;  // ms after a take is kept when Undo and Redo don't listen (a second tap on Stop)
 
 /** A number kept on this tablet (localStorage), or null. */
 function readNumber(key) {
@@ -99,6 +108,9 @@ const S = {
   pop: '',            // a sticker just earned
   busy: '',           // 'play', 'mic' or 'check' while getting ready, 'save' while a take is kept
   undo: [],           // the mixes before the last changes of this visit, the newest last
+  redo: [],           // the mixes Undo stepped back from, the newest last
+  broken: false,      // the kid's mixes couldn't be read: the desk waits for Try again
+  saveWarned: false,  // the kid was told this visit that the draft couldn't be saved
   hearing: '',        // the part being heard on the shelf ('song|part')
   phones: readNumber(PHONES_KEY) === 1,
   takes: new Map(),   // take id -> { rate, samples, lead }, or null when it is gone
@@ -119,6 +131,7 @@ const A = {
   finishing: null,     // a recording that stopped and is being kept
   bus: null,           // the volume knob for this run of play, faded down when it stops
   down: null,          // when a finger landed on Record or Stop: { at (audio clock), t }
+  keptAt: -1e9,        // when the last take was kept (performance.now())
 };
 
 // the screen stays on while recording, checking the timing or playing
@@ -174,9 +187,12 @@ function leave() {
   S.on = false;
   stopAll();
   const kid = S.kid;
-  S.undo = []; // Undo is for one visit
+  S.undo = []; // Undo and Redo are for one visit
+  S.redo = [];
   const keep = takeIds(S.mix);
-  flushSave().then(() => (kid ? sweepTakes(kid, { keep }) : 0)).catch(() => {});
+  // nothing is swept when the kid's mixes couldn't be read this visit
+  if (!S.broken) flushSave().then(() => (kid ? sweepTakes(kid, { keep }) : 0)).catch(() => {});
+  S.saveWarned = false;
   // the parts and takes are big; they are made again quickly when the studio opens
   A.parts.clear();
   A.buffers.clear();
@@ -192,7 +208,7 @@ function leave() {
 function stopAll() {
   if (A.finishing) A.finishing.hurry = true;
   const r = A.rec;
-  if (r?.kind === 'take' && A.ac.currentTime - outLag() > r.at + 0.05) finishRecording({ hurry: true });
+  if (r?.kind === 'take' && A.ac.currentTime - outLag() > r.at) finishRecording({ hurry: true });
   else if (r) cancelRecording();
   if (S.busy !== 'save') S.busy = '';
   stopPlay();
@@ -217,23 +233,27 @@ function updateWake() {
   }
 }
 
-/** Throw away this kid's takes that no mix uses (the desk's and Undo's are kept too). */
+/** Throw away this kid's takes that no mix uses (the desk's, Undo's and Redo's are kept too). */
 function sweep(kid = S.kid) {
-  if (kid) sweepTakes(kid, { keep: [S.mix, ...S.undo].flatMap(takeIds) }).catch(() => {});
+  if (kid && !S.broken) sweepTakes(kid, { keep: [S.mix, ...S.undo, ...S.redo].flatMap(takeIds) }).catch(() => {});
 }
 
 /** A new kid at the desk: their draft and saved mixes. */
 async function openDesk(kid) {
   stopAll();
   flushSave();
-  Object.assign(S, { kid, loading: true, mix: newMix(), slots: [], clean: '', sel: null, panel: '', note: '', badges: [], pop: '', undo: [], spot: { track: 0, beat: 0, picked: false } });
+  Object.assign(S, { kid, loading: true, broken: false, mix: newMix(), slots: [], clean: '', sel: null, panel: '', note: '', badges: [], pop: '', undo: [], redo: [], saveWarned: false, spot: { track: 0, beat: 0, picked: false } });
   S.takes.clear();
   S.waves.clear();
   paint();
-  let got = { draft: null, slots: [] };
-  try { got = await loadMixes(kid); } catch { /* nothing kept yet */ }
-  if (S.kid !== kid) return;
+  // read strictly: an empty desk after a failed read would be saved over the kid's real draft
+  let got = null;
+  for (let tries = 0; tries < 2 && !got; tries += 1) {
+    try { got = await loadMixes(kid, true); } catch { got = null; }
+    if (S.kid !== kid) return;
+  }
   S.loading = false;
+  if (!got) { S.broken = true; paint(); return; } // no saving and no sweeping until Try again works
   S.mix = got.draft || newMix();
   S.slots = Array.from({ length: MIX_SLOTS }, (_, i) => got.slots[i] || null);
   const same = S.slots.find((m) => m && fingerprint(m) === fingerprint(S.mix));
@@ -265,9 +285,9 @@ async function loadTakes(mix) {
 /** The takes a mix uses, by id. */
 const takeIds = (mix) => mix.tracks.flat().filter((c) => c.kind === 'take').map((c) => c.take);
 
-/** Forget the sound of takes that neither the desk's mix, a saved mix nor Undo uses. */
+/** Forget the sound of takes that neither the desk's mix, a saved mix, Undo nor Redo uses. */
 function forgetTakes() {
-  const used = new Set([S.mix, ...S.slots, ...S.undo].filter(Boolean).flatMap(takeIds));
+  const used = new Set([S.mix, ...S.slots, ...S.undo, ...S.redo].filter(Boolean).flatMap(takeIds));
   for (const id of [...S.takes.keys()]) {
     if (used.has(id)) continue;
     S.takes.delete(id);
@@ -309,6 +329,10 @@ function paint() {
   if (!el) return;
   if (drag) { drag.repaint = true; return; }
   if (S.loading) { el.innerHTML = '<p class="muted st-wait">Getting your studio ready…</p>'; return; }
+  if (S.broken) {
+    el.innerHTML = `<div class="st-note bad st-broken" role="alert"><span>${esc(SAY.cantOpen)}</span><button class="btn small-btn" data-action="st-retry">Try again</button></div>`;
+    return;
+  }
   el.innerHTML = `${transportHtml()}${S.note ? noteHtml() : ''}${S.panel === 'mixes' ? mixesHtml() : ''}${S.panel === 'help' ? helpHtml() : ''}
     ${timelineHtml()}${toolsHtml()}${stickersHtml()}${shelfHtml()}`;
   S.pop = '';
@@ -318,17 +342,49 @@ function paint() {
 }
 
 /**
- * A narrow picked clip gets its edge handles outside it (where the track has room), so a
- * finger can still grab its middle to move it.
+ * Where the picked clip's edge handles go. Each is 40 px wide to a finger: inside a wide clip,
+ * and outside a narrow one where the track is free (never over another clip). A narrow clip
+ * always keeps a strip of its middle to drag, so a handle with no room outside gets smaller.
  */
 function placeEdges() {
   const clip = document.querySelector('#studio .st-clip.sel');
   if (!clip) return;
-  const lane = clip.parentElement.getBoundingClientRect();
+  const lane = clip.parentElement;
+  const L = lane.getBoundingClientRect();
   const r = clip.getBoundingClientRect();
-  const narrow = r.width < 120;
-  clip.classList.toggle('out-left', narrow && r.left - lane.left >= 42);
-  clip.classList.toggle('out-right', narrow && lane.right - r.right >= 42);
+  let leftEnd = L.left + lane.clientLeft;
+  let rightEnd = L.left + lane.clientLeft + lane.clientWidth;
+  for (const other of lane.querySelectorAll('.st-clip')) {
+    if (other === clip) continue;
+    const o = other.getBoundingClientRect();
+    if (o.right <= r.left + 1) leftEnd = Math.max(leftEnd, o.right);
+    if (o.left >= r.right - 1) rightEnd = Math.min(rightEnd, o.left);
+  }
+  const w = r.width;
+  const want = 40;
+  const narrow = w < 3 * want;
+  const out = { left: narrow ? Math.max(0, Math.min(want, r.left - leftEnd)) : 0, right: narrow ? Math.max(0, Math.min(want, rightEnd - r.right)) : 0 };
+  const inner = { left: want - out.left, right: want - out.right };
+  // the middle that stays free to drag: at least 24 px, or the whole clip when it is tiny
+  const spare = Math.max(0, w - Math.min(w, Math.max(24, w - 2 * want)));
+  if (inner.left + inner.right > spare) {
+    const k = spare / (inner.left + inner.right);
+    inner.left *= k;
+    inner.right *= k;
+  }
+  for (const side of ['left', 'right']) {
+    const edge = clip.querySelector(`.st-edge.${side}`);
+    if (!edge) continue;
+    const size = out[side] + inner[side];
+    edge.hidden = size < 8;
+    edge.style.width = `${size}px`;
+    edge.style[side] = `${-2 - out[side]}px`;
+    // the bar you see (16 px) sits on the clip's edge: outside it when there is room
+    const bar = Math.min(16, size);
+    const barOut = Math.min(out[side], bar);
+    edge.style.setProperty('--bar', `${side === 'left' ? out[side] - barOut : inner[side] - (bar - barOut)}px`);
+    edge.style.setProperty('--barw', `${bar}px`);
+  }
 }
 globalThis.addEventListener?.('resize', placeEdges);
 
@@ -344,9 +400,12 @@ function transportHtml() {
   return `
     <div class="st-bar">
       <div class="st-main">
-        <button class="btn st-play ${playing ? 'playing' : ''}" data-action="st-play" ${rec || held ? 'disabled' : ''}>${playing ? '■ Stop' : '▶ Play'}</button>
-        <button class="btn st-rec ${rec ? 'recording' : ''}" data-action="st-rec" ${held ? 'disabled' : ''}><span class="st-rec-label">${recLabel}</span></button>
+        <button class="btn st-play ${playing ? 'playing' : ''}" data-action="st-play" ${rec || held ? 'disabled' : ''}>${steady(playing ? '■ Stop' : '▶ Play', '▶ Play', '■ Stop')}</button>
+        <button class="btn st-rec ${rec ? 'recording' : ''}" data-action="st-rec" ${held ? 'disabled' : ''}>${steady(recLabel, '■ Stop recording', 'Getting ready…', 'st-rec-label')}</button>
+      </div>
+      <div class="st-undos">
         <button class="btn ghost st-undo ${S.undo.length ? '' : 'off'}" data-action="st-undo" ${S.undo.length ? '' : 'aria-disabled="true"'}>↩ Undo</button>
+        <button class="btn ghost st-redo ${S.redo.length ? '' : 'off'}" data-action="st-redo" ${S.redo.length ? '' : 'aria-disabled="true"'}>↪ Redo</button>
       </div>
       <div class="st-step" role="group" aria-label="Loop length">
         <button class="btn ghost round ${mix.bars <= 2 ? 'off' : ''}" data-action="st-bars" data-d="-1" aria-label="Fewer bars">−</button>
@@ -364,6 +423,14 @@ function transportHtml() {
         <button class="btn ghost ${S.panel === 'help' ? 'on' : ''}" data-action="st-panel" data-panel="help" aria-pressed="${S.panel === 'help'}" aria-label="Help">❓</button>
       </div>
     </div>`;
+}
+
+/**
+ * A button's words that never change its width: the longest words it can show (a and b) sit
+ * invisibly in the same place, so the buttons after it don't slide under a finger.
+ */
+function steady(text, a, b, cls = '') {
+  return `<span class="st-steady" data-a="${esc(a)}" data-b="${esc(b)}"><span class="${cls}">${esc(text)}</span></span>`;
 }
 
 function noteHtml() {
@@ -536,10 +603,11 @@ function say(text, kind = '') {
 // ---------- changing the mix ----------
 
 /**
- * The desk gets a new mix: Undo remembers the one before, stickers, the draft saved, and the
- * music carries on from the same place. `said` is a toast to show (with a new sticker's).
+ * The desk gets a new mix: Undo remembers the one before (`undo`), stickers, the draft saved,
+ * and the music carries on from the same place. `back` is a step of Undo or Redo: no sticker
+ * news. `quiet`: the caller tells the kid about a new sticker itself. Returns the new sticker.
  */
-function commit(mix, { select, said = '', undo = true } = {}) {
+function commit(mix, { select, undo = true, back = false, quiet = false } = {}) {
   const had = new Set(S.badges.map((b) => b.id));
   if (undo) rememberUndo();
   S.mix = mix;
@@ -547,29 +615,51 @@ function commit(mix, { select, said = '', undo = true } = {}) {
   if (S.sel != null && !findClip(mix, S.sel)) S.sel = null;
   if (S.spot.beat >= mixBeats(mix)) S.spot = { track: S.spot.track, beat: 0, picked: false };
   S.badges = badges(mix);
-  const fresh = undo && S.badges.find((b) => !had.has(b.id));
+  const fresh = back ? null : S.badges.find((b) => !had.has(b.id)) || null;
   S.pop = fresh?.id || '';
-  if (fresh) setTimeout(() => toast(`${said ? `${said} ` : ''}🏅 New sticker: ${fresh.name}! ${fresh.why}`), 50);
-  else if (said) toast(said);
+  if (fresh && !quiet) setTimeout(() => toast(stickerNews(fresh)), 50);
   autosave();
   forgetTakes();
   if (A.play || S.busy === 'play') restartPlay();
   paint();
+  return fresh;
 }
 
-/** Undo can go back to the desk's mix as it is now. */
+const stickerNews = (b) => `🏅 New sticker: ${b.name}! ${b.why}`;
+
+/** Undo can go back to the desk's mix as it is now. A new change ends what Redo could bring back. */
 function rememberUndo() {
+  S.redo = [];
   if (S.undo[S.undo.length - 1] === S.mix) return;
   S.undo.push(S.mix);
   if (S.undo.length > MOST_UNDO) S.undo.shift();
 }
 
-/** Step back to the mix before the last change. */
+/** Takes in mix a that aren't in mix b. */
+const takesGone = (a, b) => { const kept = new Set(takeIds(b)); return takeIds(a).some((id) => !kept.has(id)); };
+
+/** Step back to the mix before the last change (Redo brings it back). */
 function undo() {
   const before = S.undo.pop();
   if (!before) { toast(SAY.nothingToUndo); return; }
-  commit(before, { undo: false });
+  const now = S.mix;
+  S.redo.push(now);
+  if (S.redo.length > MOST_UNDO) S.redo.shift();
+  commit(before, { undo: false, back: true });
   loadTakes(before);
+  toast(takesGone(now, before) ? SAY.undoneTake : SAY.undone);
+}
+
+/** Bring back what Undo took back. */
+function redo() {
+  const next = S.redo.pop();
+  if (!next) { toast(SAY.nothingToRedo); return; }
+  const now = S.mix;
+  S.undo.push(now);
+  if (S.undo.length > MOST_UNDO) S.undo.shift();
+  commit(next, { undo: false, back: true });
+  loadTakes(next);
+  toast(takesGone(next, now) ? SAY.redoneTake : SAY.redone);
 }
 
 /** Keep the desk's mix as the draft, a moment after the last change. */
@@ -579,12 +669,20 @@ function autosave() {
   saveTimer = setTimeout(flushSave, 500);
 }
 
-/** Save the draft now, if it is waiting. */
-function flushSave() {
+/**
+ * Save the draft now, if it is waiting. Resolves true when it is kept (or nothing waited),
+ * false when it couldn't be: then the kid hears about it once a visit, unless `quiet` (the
+ * caller says so itself).
+ */
+function flushSave(quiet = false) {
   clearTimeout(saveTimer);
   const p = pending;
   pending = null;
-  return p ? saveMix(p.kid, 'draft', p.mix).catch(() => {}) : Promise.resolve();
+  if (!p || S.broken) return Promise.resolve(true);
+  return saveMix(p.kid, 'draft', p.mix).then(() => true, () => {
+    if (!quiet && !S.saveWarned) { S.saveWarned = true; toast(SAY.draftFailed); }
+    return false;
+  });
 }
 
 /** Whether the desk is busy (recording, keeping a take, the timing check), so edits wait. */
@@ -955,9 +1053,9 @@ function playTick() {
   if (!onScreen()) { leaveIfGone(); return; }
   while (p.origin + p.k * p.loop < A.ac.currentTime + 0.3) {
     const base = p.origin + p.k * p.loop;
-    // after the first time round, a take on the loop's first beat starts its lead at the
-    // very end of the loop before
-    for (const e of sliceSchedule(p.plan, p.k === 0 ? p.first : -Infinity)) {
+    // a take's lead (its sound from before the beat) starts early: on the first time round
+    // when there is time, and later at the very end of the loop before
+    for (const e of p.k === 0 ? firstPass(p.plan, p.first) : sliceSchedule(p.plan, -Infinity)) {
       const b = p.bufs.get(e.id);
       if (b) startSource(b, base + e.at, e.offset, e.dur, { sharp: e.kind === 'part' && e.offset === 0 });
     }
@@ -1135,8 +1233,8 @@ async function listen(ac, token) {
  * headphones the speaker's lateness then is swapped for the headphones' now.
  */
 function roundTrip(phones = S.phones) {
-  const d = readNumber(DELAY_KEY);
-  if (d == null || d < 0 || d > 0.5) return guessDelay(A.ac?.outputLatency, A.ac?.baseLatency);
+  const d = usableDelay(readNumber(DELAY_KEY));
+  if (d == null) return guessDelay(A.ac?.outputLatency, A.ac?.baseLatency);
   return phones ? phonesDelay(d, readNumber(OUT_KEY) ?? 0, outLag()) : d;
 }
 
@@ -1235,8 +1333,8 @@ async function finishRecording({ down = null, byItself = false, hurry = false } 
   if (!byItself) {
     // what the kid heard when the finger landed, less the finger's own delay
     const heard = Math.min(down ?? ac.currentTime, ac.currentTime) - outLag();
-    if (heard <= r.at + 0.05) { cancelRecording(); say(SAY.stoppedEarly); return; }
-    stopAt = Math.min(r.end, Math.max(heard - TOUCH_LAG, r.at + r.beatSec));
+    stopAt = stopPoint(heard, r.at, r.end, r.beatSec, TOUCH_LAG);
+    if (stopAt == null) { cancelRecording(); if (!hurry) say(SAY.stoppedEarly); return; }
   }
   let to = Math.round(stopAt * rate);
   stopSources();
@@ -1274,8 +1372,12 @@ async function finishRecording({ down = null, byItself = false, hurry = false } 
     const res = addTake(S.mix, r.track, id, beats, r.beat, { lead: LEAD });
     if (res.error) { say(res.error); return; }
     S.spot = { ...S.spot, picked: false };
-    commit(res.mix, { select: res.id, said: S.on ? `Nice playing! Your take is on track ${r.track + 1}.` : '' });
-    await flushSave();
+    // after the kid left, no Undo step: Undo is for one visit
+    const sticker = commit(res.mix, { select: res.id, undo: S.on, quiet: true });
+    A.keptAt = performance.now();
+    const kept = await flushSave(true);
+    if (!kept) say(SAY.takeNotKept, 'bad');
+    else if (S.on) toast(`Nice playing! Your take is on track ${r.track + 1}.${sticker ? ` ${stickerNews(sticker)}` : ''}`);
   } catch {
     say(SAY.keepFailed, 'bad');
   } finally {
@@ -1329,7 +1431,7 @@ async function timingCheck() {
   const joined = joinBlocks(cap.blocks);
   const heard = findOnsets(joined.samples, ac.sampleRate).map((t) => joined.first / ac.sampleRate + t);
   // most clicks must be heard at the same delay (a beep that isn't ours only matches some)
-  const delay = echoDelay(clicks, heard, { need: clicks.length - 2 });
+  const delay = echoDelay(clicks, heard, { need: clicks.length - 2, most: MOST_DELAY });
   if (delay == null) { say(SAY.checkFail, 'bad'); return; }
   keepDelay(delay);
   say(SAY.checkOk, 'good');
@@ -1373,7 +1475,7 @@ function saveSlot(i) {
     const mix = { ...S.mix, name };
     S.mix = mix;
     pending = { kid, mix };
-    await flushSave();
+    await flushSave(true); // the slot save below says so if the tablet is full
     try { await saveMix(kid, i, mix); } catch { toast(SAY.saveFailed); return; }
     if (S.kid !== kid) return;
     S.slots[i] = mix;
@@ -1469,7 +1571,10 @@ export const studioActions = {
     if (A.rec?.kind === 'take') finishRecording({ down });
     else startRecording();
   },
-  'st-undo': () => { if (!busyNow()) undo(); },
+  // a second tap on Stop, after the take is kept, must not take it away
+  'st-undo': () => { if (performance.now() - A.keptAt > UNDO_REST && !busyNow()) undo(); },
+  'st-redo': () => { if (performance.now() - A.keptAt > UNDO_REST && !busyNow()) redo(); },
+  'st-retry': () => { if (S.kid) openDesk(S.kid); },
   'st-bars': (el) => {
     if (busyNow()) return;
     const d = Number(el.dataset.d);

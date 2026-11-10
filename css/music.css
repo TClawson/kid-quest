@@ -91,7 +91,12 @@
 
 /* the transport: play, record, loop length, speed, headphones, my mixes, help */
 .st-bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 10px; background: #3b2a4f; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); color: #fff; }
-.st-main, .st-more { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-main, .st-more, .st-undos { display: flex; gap: 8px; flex-wrap: wrap; }
+/* a button's words sit over its longest words, kept invisible, so it never changes width */
+.st-steady { display: inline-grid; justify-items: center; }
+.st-steady > span, .st-steady::before, .st-steady::after { grid-area: 1 / 1; white-space: nowrap; }
+.st-steady::before { content: attr(data-a); visibility: hidden; }
+.st-steady::after { content: attr(data-b); visibility: hidden; }
 .st-more { margin-left: auto; }
 .st-play { min-width: 104px; background: #2f9e44; }
 .st-play.playing { background: #e8590c; }
@@ -149,14 +154,12 @@
 .st-edge::before { content: ''; position: absolute; top: 0; bottom: 0; width: 16px; box-sizing: border-box; border: 2px solid var(--px-ink); border-radius: 4px;
   background: linear-gradient(90deg, transparent 3px, #fff 3px 5px, transparent 5px 7px, #fff 7px 9px, transparent 9px) center / 100% 40% no-repeat, var(--kid, var(--brand)); }
 .st-edge.left { left: -2px; }
-.st-edge.left::before { left: 0; }
+.st-edge.left::before { left: var(--bar, 0); }
 .st-edge.right { right: -2px; }
-.st-edge.right::before { right: 0; }
-/* a narrow clip: the handles sit outside it, so its middle can still be dragged */
-.st-clip.out-left .st-edge.left { left: -42px; }
-.st-clip.out-left .st-edge.left::before { left: auto; right: 0; }
-.st-clip.out-right .st-edge.right { right: -42px; }
-.st-clip.out-right .st-edge.right::before { right: auto; left: 0; }
+.st-edge.right::before { left: var(--bar, calc(100% - 16px)); }
+.st-edge::before { width: var(--barw, 16px); }
+.st-edge[hidden] { display: none; }
+/* studio.js placeEdges sizes and places the handles: outside a narrow clip where the track is free */
 .st-spot { position: absolute; top: 2px; bottom: 2px; min-width: 8px; border: 3px dashed var(--kid, var(--brand)); border-radius: 4px; background: color-mix(in srgb, var(--kid, #5b4bdb) 18%, transparent); pointer-events: none; }
 .st-spot.auto { border-style: dotted; opacity: 0.7; }
 .st-ghost { position: absolute; top: 3px; bottom: 3px; border: 3px dashed #2b8a3e; border-radius: 4px; background: rgba(64, 192, 87, 0.3); pointer-events: none; z-index: 4; }
@@ -221,7 +224,8 @@
   .st-bar { gap: 8px; padding: 8px; }
   .st-main { width: 100%; }
   .st-main .btn { flex: 1; min-width: 0; padding: 8px 6px; white-space: nowrap; }
-  .st-main .st-undo { flex: 0 1 auto; }
+  .st-undos { width: 100%; flex-wrap: nowrap; }
+  .st-undos .btn { flex: 1; min-width: 0; padding: 6px; min-height: 40px; }
   .st-more { margin-left: 0; width: 100%; flex-wrap: nowrap; gap: 6px; }
   .st-more .btn { flex: 1 1 auto; min-width: 0; padding: 8px 6px; font-size: 0.9rem; white-space: nowrap; }
   .st-more [data-panel="help"] { flex: 0 0 48px; }

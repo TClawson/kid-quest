@@ -56,6 +56,25 @@ async function start(viewport, done) {
   await ctx.grantPermissions(['microphone']);
   // count the sounds started and stopped
   await ctx.addInitScript(() => {
+    // window.kqMic: '' Chrome's fake microphone, 'silent' one that hears nothing, 'loop' one
+    // that hears exactly what the tablet plays
+    window.kqMic = '';
+    const AC = window.AudioContext;
+    window.AudioContext = function (...a) { const ac = new AC(...a); window.kqAC = ac; return ac; };
+    window.AudioContext.prototype = AC.prototype;
+    const connect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function (dest, ...rest) {
+      const out = connect.call(this, dest, ...rest);
+      if (window.kqMic === 'loop' && dest === this.context.destination && window.kqLoop) connect.call(this, window.kqLoop);
+      return out;
+    };
+    const md = navigator.mediaDevices;
+    const gum = md.getUserMedia.bind(md);
+    md.getUserMedia = (c) => {
+      if (!window.kqMic || !window.kqAC) return gum(c);
+      window.kqLoop = window.kqAC.createMediaStreamDestination();
+      return Promise.resolve(window.kqLoop.stream);
+    };
     window.kqStarts = 0;
     window.kqStops = 0;
     const P = AudioBufferSourceNode.prototype;
@@ -324,13 +343,20 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
 
   // the timing check answers in plain words
   await page.click('[data-action="st-panel"][data-panel="help"]');
+  // Chrome's fake microphone beeps on its own, sometimes in step with the clicks and sometimes
+  // not, so the check gets a microphone that is sure: silent, then one that hears the tablet
+  await page.evaluate(() => { window.kqMic = 'silent'; localStorage.removeItem('kidquest.studio.delay'); });
   await page.click('[data-action="st-check"]');
   await wait(page, 7000);
-  // Chrome's fake microphone beeps in step with the check's clicks (every half second), so
-  // the check always finds them, and keeps a delay
-  assert.equal(await page.locator('.st-note span').textContent(), 'All set! Your recordings will line up.');
+  assert.equal(await page.locator('.st-note span').textContent(), 'I couldn\'t hear the clicks. Turn the volume up, unplug headphones and try again.', 'nothing heard');
+  assert.equal(await page.evaluate(() => localStorage.getItem('kidquest.studio.delay')), null, 'and no delay kept');
+  await page.evaluate(() => { window.kqMic = 'loop'; });
+  await page.click('[data-action="st-check"]');
+  await wait(page, 7000);
+  assert.equal(await page.locator('.st-note span').textContent(), 'All set! Your recordings will line up.', 'its own clicks heard');
   const kept = await page.evaluate(() => Number(localStorage.getItem('kidquest.studio.delay')));
-  assert.ok(kept >= 0 && kept <= 0.6, `a delay is kept (${kept})`);
+  assert.ok(kept >= 0 && kept < 0.1, `a short delay is kept (${kept})`);
+  await page.evaluate(() => { window.kqMic = ''; });
   await page.screenshot({ path: `${out}/6-help-tablet.png`, fullPage: true });
   assert.ok(await noSideScroll(page), 'no sideways scrolling on the tablet');
 
@@ -468,16 +494,49 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   assert.ok(await undoBtn.evaluate((b) => b.classList.contains('off')), 'nothing more to undo');
   await undoBtn.click({ force: true });
   assert.equal(await toastText(page), 'There is nothing to undo.');
-  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="lead"]');
+  // Redo brings back what Undo took back, step by step
+  const redoBtn = page.locator('[data-action="st-redo"]');
+  await redoBtn.click();
+  assert.equal(await page.locator('#studio .st-clip').count(), 1, 'Redo: the tune is back');
+  assert.equal(await toastText(page), 'Put it back.');
+  await redoBtn.click();
+  assert.equal(await page.locator('#studio .st-clip').count(), 2, 'Redo again: the bass too');
+  // a new change: there is nothing more to redo
+  await clips(page, 1).first().click();
+  await page.click('[data-action="st-delete"]');
+  assert.equal(await page.locator('#studio .st-clip').count(), 1);
+  assert.ok(await redoBtn.evaluate((b) => b.classList.contains('off')), 'a new change ends Redo');
   await tapLane(page, 0, 0, beats);
   await page.screenshot({ path: `${out}/9-undo-tablet.png` });
 
-  // record on track 2, keep it, then throw it away
+  // record on track 2, keep it, then throw it away. Record keeps one width whatever it says,
+  // so Undo never slides under the finger that pressed Stop
+  const recBtn = page.locator('[data-action="st-rec"]');
+  const sizes = [];
+  const measure = async () => sizes.push([await recBtn.textContent(), Math.round((await recBtn.boundingBox()).width), Math.round((await undoBtn.boundingBox()).x)]);
   await tapLane(page, 1, 0, beats);
-  await page.click('[data-action="st-rec"]');
+  await measure();
+  await recBtn.click();
+  await wait(page, 300);
+  await measure();
   await wait(page, (60 / sourceOf('bg-meadow').bpm) * 4 * 1000 + 2500);
-  await page.click('[data-action="st-rec"]');
-  await wait(page, 1500);
+  await measure();
+  await recBtn.click();
+  await measure();
+  // the take is kept: a second tap on Undo straight away does nothing
+  for (let i = 0; i < 60 && !(await clips(page, 1).count()); i += 1) await wait(page, 50);
+  await measure();
+  assert.deepEqual(sizes.map((x) => x[0]), ['● Record', 'Get ready… 4', '■ Stop recording', 'Saving…', '● Record'].slice(0, sizes.length).map((t, i) => (i === 1 ? sizes[1][0] : t)));
+  assert.equal(new Set(sizes.map((x) => x[1])).size, 1, `Record keeps its width: ${JSON.stringify(sizes)}`);
+  assert.equal(new Set(sizes.map((x) => x[2])).size, 1, 'and Undo stays where it was');
+  await undoBtn.click();
+  assert.equal(await clips(page, 1).count(), 1, 'a tap on Undo right after the take is kept is ignored');
+  await wait(page, 700);
+  await undoBtn.click();
+  assert.equal(await clips(page, 1).count(), 0, 'later, Undo takes the take away');
+  assert.equal(await toastText(page), 'Took your take away. Tap Redo to bring it back.');
+  await redoBtn.click();
+  assert.equal(await toastText(page), 'Your take is back.');
   assert.equal(await clips(page, 1).count(), 1, 'a take on track 2');
   assert.equal((await takeRows(page)).length, 1, 'kept on the tablet');
   await page.screenshot({ path: `${out}/10-take-picked-tablet.png` });
@@ -497,7 +556,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await ctx.close();
 }
 
-// 6. phone: the transport bar with Undo, and a picked clip with its handles
+// 6. phone: the transport bar with Undo and Redo, and a picked clip with its handles
 {
   const { ctx, page } = await start({ width: 390, height: 844 }, true);
   await walkIn(page);
@@ -512,6 +571,95 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await page.screenshot({ path: `${out}/11-phone-undo.png` });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${out}/12-phone-bar.png` });
+  // Record and Play keep their widths on a phone too
+  const w = async (sel) => Math.round((await page.locator(sel).boundingBox()).width);
+  const before = [await w('[data-action="st-rec"]'), await w('[data-action="st-play"]')];
+  await page.evaluate(() => { document.querySelector('.st-rec-label').textContent = '■ Stop recording'; document.querySelector('.st-play .st-steady > span').textContent = '■ Stop'; });
+  assert.deepEqual([await w('[data-action="st-rec"]'), await w('[data-action="st-play"]')], before, 'the same width whatever they say');
+  await ctx.close();
+}
+
+// 7. when the tablet lets the studio down: the kid is told, and nothing is lost
+{
+  // (a) the draft can't be written (a full tablet)
+  const { ctx, page } = await start(TABLET, true);
+  await ctx.addInitScript(() => {
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...a) {
+      const r = put.apply(this, a);
+      if (this.name === 'mixes' && String(a[1]).endsWith('|draft')) this.transaction.abort();
+      return r;
+    };
+  });
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-bar');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="lead"]');
+  await wait(page, 800);
+  assert.equal(await toastText(page), 'I couldn\'t save your mix. This tablet may be full.', 'the kid is told the mix isn\'t kept');
+  await tapLane(page, 1, 0, 32);
+  await page.click('[data-action="st-rec"]');
+  await wait(page, (60 / sourceOf('bg-meadow').bpm) * 4 * 1000 + 2000);
+  await page.click('[data-action="st-rec"]');
+  await wait(page, 1500);
+  assert.equal(await page.locator('.st-note span').textContent(), 'Your take is on your desk, but I couldn\'t keep it on this tablet. This tablet may be full.', 'no "Nice playing!" when it isn\'t kept');
+  await ctx.close();
+}
+{
+  // (b) the kid's mixes can't be read: no empty desk saved over the real one
+  const { ctx, page } = await start(TABLET, true);
+  await ctx.addInitScript(() => {
+    const get = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function (...a) {
+      const r = get.apply(this, a);
+      const left = Number(localStorage.getItem('kqFailReads') || 0);
+      if (this.name === 'mixes' && left > 0 && String(a[0]).endsWith('|draft')) { localStorage.setItem('kqFailReads', String(left - 1)); this.transaction.abort(); }
+      return r;
+    };
+  });
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-bar');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="lead"]');
+  await wait(page, 800);
+  const draftClips = () => page.evaluate(() => new Promise((resolve) => {
+    const req = indexedDB.open('kidquest-studio', 1);
+    req.onsuccess = () => { const g = req.result.transaction('mixes', 'readonly').objectStore('mixes').get('kid_ava|draft'); g.onsuccess = () => { req.result.close(); resolve(g.result?.mix.tracks.flat().length ?? -1); }; };
+  }));
+  assert.equal(await draftClips(), 1);
+  // one failed read: read again, and the desk opens as it was
+  await page.evaluate(() => localStorage.setItem('kqFailReads', '1'));
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-bar');
+  assert.equal(await page.locator('#studio .st-clip').count(), 1, 'a second read opens the desk');
+  // two: a plain message and Try again, and the draft is left alone
+  await page.evaluate(() => localStorage.setItem('kqFailReads', '2'));
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-broken');
+  assert.equal(await page.locator('#studio .st-broken span').textContent(), 'I couldn\'t open your mixes just now.');
+  assert.equal(await page.locator('#studio .st-bar').count(), 0, 'no empty desk to change');
+  await page.click('[data-action="studio-back"]');
+  await wait(page, 800);
+  assert.equal(await draftClips(), 1, 'the draft is not saved over');
+  await page.evaluate(async () => (await import('./js/studio.js')).openStudio());
+  await page.click('[data-action="st-retry"]');
+  await page.waitForSelector('#studio .st-bar');
+  assert.equal(await page.locator('#studio .st-clip').count(), 1, 'Try again opens the desk');
+  await ctx.close();
+}
+{
+  // (c) a take kept after the kid left: on the next visit there is nothing to undo
+  const { ctx, page } = await start(TABLET, true);
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-bar');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="lead"]');
+  await tapLane(page, 1, 0, 32);
+  await page.click('[data-action="st-rec"]');
+  await wait(page, (60 / sourceOf('bg-meadow').bpm) * 4 * 1000 + 1500);
+  await page.click('[data-action="studio-back"]');
+  await wait(page, 1500);
+  await page.evaluate(async () => (await import('./js/studio.js')).openStudio());
+  await page.waitForSelector('#studio .st-bar');
+  assert.equal(await clips(page, 1).count(), 1, 'the take was kept');
+  assert.ok(await page.locator('[data-action="st-undo"]').evaluate((b) => b.classList.contains('off')), 'Undo doesn\'t reach into the last visit');
   await ctx.close();
 }
 

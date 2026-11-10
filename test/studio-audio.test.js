@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SILENT, CLICK, fadeEnds, peakOf, normalise, findOnsets, joinBlocks, alignTake, guessDelay, sliceSchedule, pct, beatAt, waveLine,
+  SILENT, CLICK, fadeEnds, peakOf, MOST_DELAY, usableDelay, stopPoint, firstPass, normalise, findOnsets, joinBlocks, alignTake, guessDelay, sliceSchedule, pct, beatAt, waveLine,
   clickWave, countInDelay, echoDelay, makeTake, peakAway, phonesDelay, softClip, clickPlan,
 } from '../js/studio-audio.js';
 import { schedule, addPart, addTake, newMix } from '../js/studiorules.js';
@@ -460,4 +460,48 @@ test('the recording\'s clicks sit on whole frames, with the high note on each ba
   assert.ok(Math.abs(three.from - (t0 + 3 * step)) <= 0.5);
   // nothing to record: no take clicks, but still a count-in
   assert.equal(clickPlan(t0, RATE, 0.5, 4, 0).clicks.length, 0);
+});
+
+test('a delay the timing check keeps is a delay the studio uses: the same limit', () => {
+  const clicks = Array.from({ length: 8 }, (_, i) => 1 + i * 0.5);
+  const late = MOST_DELAY - 0.01;
+  const found = echoDelay(clicks, clicks.map((c) => c + late), { need: clicks.length - 2 });
+  assert.ok(Math.abs(found - late) < 1e-9, `the check finds ${found}`);
+  assert.equal(usableDelay(found), found, 'and the studio uses it');
+  assert.equal(usableDelay(0), 0);
+  for (const bad of [MOST_DELAY + 0.01, -0.01, NaN, null, undefined]) assert.equal(usableDelay(bad), null, String(bad));
+});
+
+test('Stop: the take ends where the kid heard the finger land, less its own delay', () => {
+  const beat = 0.5;
+  // at = 10 (the take's beat), end = 18 (its room)
+  assert.equal(stopPoint(13, 10, 18, beat, 0.08), 12.92);
+  assert.equal(stopPoint(30, 10, 18, beat, 0.08), 18, 'never past the room');
+  // within the first beat: cut at the tap all the same, not stretched to a whole beat
+  assert.ok(Math.abs(stopPoint(10.3, 10, 18, beat, 0.08) - 10.22) < 1e-9);
+  // less than a quarter of a beat: stopped before playing anything
+  assert.equal(stopPoint(10.2, 10, 18, beat, 0.08), null);
+  assert.equal(stopPoint(9.5, 10, 18, beat, 0.08), null);
+});
+
+test('the first time round keeps the lead of a take that starts just before play does', () => {
+  let mix = { ...newMix(), bpm: 120 };
+  mix = addTake(mix, 0, 'a', 8, 0, { lead: 0.06 }).mix;
+  mix = addTake(mix, 1, 'b', 4, 4, { lead: 0.06 }).mix;
+  mix = addPart(mix, 2, 'bg-meadow', 'bass', 0).mix;
+  const plan = schedule(mix);
+  const from0 = firstPass(plan, 0);
+  const a = from0.find((e) => e.take === 'a');
+  assert.ok(Math.abs(a.at + 0.06) < 1e-9 && a.offset === 0, 'take a starts with its lead');
+  assert.equal(from0.find((e) => e.kind === 'part').at, 0, 'a part is not started early');
+  assert.equal(from0.length, 3);
+  // from beat 5 (2 s): take b's lead starts at 1.94 s; take a is cut there as usual
+  const from2 = firstPass(plan, 2);
+  const b = from2.find((e) => e.take === 'b');
+  assert.ok(Math.abs(b.at - 1.94) < 1e-9 && b.offset === 0);
+  const cut = from2.find((e) => e.take === 'a');
+  assert.ok(Math.abs(cut.at - 2) < 1e-9 && Math.abs(cut.offset - 2.06) < 1e-9);
+  // started in the middle of a take's lead window but well after it: just cut
+  const late = firstPass(plan, 2.2).find((e) => e.take === 'b');
+  assert.ok(Math.abs(late.at - 2.2) < 1e-9);
 });
