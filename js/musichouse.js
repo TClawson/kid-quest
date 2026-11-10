@@ -76,9 +76,8 @@ function room(doc, data) {
   return roomCache;
 }
 
-// what the stations say while they're still being built (each gets its own screen soon)
+// what a station says while it's still being built (it gets its own screen soon)
 const SOON = {
-  studio: (n) => `Your recording studio is almost ready, ${n}! Soon you'll record your piano and mix it with music from the game.`,
   lab: () => 'Beep boop! The Note-o-Matic will turn your piano playing into other instruments. It\'s nearly finished!',
 };
 

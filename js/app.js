@@ -28,6 +28,8 @@ import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from 
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
 import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
+import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
+import { mountTestRec } from './testrec.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
@@ -1095,6 +1097,7 @@ function musicView(kid, list, mood, tier) {
 const musicHandlers = {
   onPiano: () => { ui.view = 'watch'; ui.watchSession = 0; ui.watchNote = ''; render(); },
   onSheets: () => openSongbook(),
+  onStudio: () => openStudio(),
   onExit: () => {
     const kid = kidById(ui.kidId);
     if (!kid) return;
@@ -1816,10 +1819,20 @@ function parentSettings() {
     </div>
 ${allowanceCard()}
 ${gameTestCard()}
+    <div class="card studio-test">
+      <h2>🎚️ Try the recording studio</h2>
+      <p class="muted small">Open the recording studio right away to see how it works. This is a test desk: the kids' mixes and stickers are not touched.</p>
+      <button class="btn" data-action="studio-test">Open the studio</button>
+    </div>
     <div class="card">
       <h2>🎹 Piano listening test</h2>
       <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>
       <button class="btn ghost" data-action="listen-open">Open the listening test</button>
+    </div>
+    <div class="card rec-test">
+      <h2>🎙️ Save a test recording</h2>
+      <p class="muted small">Record up to 2 minutes of piano through the tablet's microphone and save it as a sound file. Nothing is kept in the game.</p>
+      <div id="rec-test"></div>
     </div>
     <div class="card">
       <h2>Parent PIN</h2>
@@ -1957,7 +1970,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -2014,7 +2027,7 @@ function render() {
   const scrollY = window.scrollY;
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
-  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook';
+  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
   const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
   // load the sign-in code early, so a sign-in popup opens straight from the tap
@@ -2034,6 +2047,8 @@ function render() {
   mountHouses($app, houseHandlers);
   mountMusicHouses($app, musicHandlers);
   mountSongbook($app);
+  mountStudio($app);
+  mountTestRec($app);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
@@ -2467,6 +2482,7 @@ actions.visitor = (el) => {
 
 // the leaderboard's This week / All time tabs
 Object.assign(actions, songbookActions);
+Object.assign(actions, studioActions);
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
 
 actions['tank-pick'] = (el) => {
@@ -2654,11 +2670,11 @@ setInterval(() => {
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   // The service worker serves the cached app first, so after a new version is deployed the
   // first open still shows the old one. When the new worker takes over, reload once to show it,
-  // unless a piano timer is on screen (then the next open picks it up).
+  // unless a piano timer or the recording studio is on screen (then the next open picks it up).
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch') return;
+    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio') return;
     reloading = true;
     window.location.reload();
   });

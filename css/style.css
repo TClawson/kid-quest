@@ -167,6 +167,14 @@ label { color: var(--ink); }
 .modal[hidden] { display: none; }
 .game-test-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; margin: 10px 0 14px; }
 .game-test-pick label { display: grid; gap: 4px; font-size: 0.9em; }
+/* Settings › Save a test recording */
+.rec-test .rec-time { margin: 10px 0 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rec-test .rec-meter { height: 14px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.rec-test .rec-meter span { display: block; height: 100%; width: 0; background: var(--brand); transition: width 0.08s linear; }
+.rec-test .rec-warn { color: var(--danger); font-weight: 700; margin: 6px 0 0; }
+.rec-test .rec-saved { margin: 10px 0 8px; overflow-wrap: anywhere; }
+.rec-test .rec-note.bad { color: var(--danger); }
+.rec-test a.btn { text-decoration: none; }
 .game-pick { display: grid; gap: 10px; margin: 14px 0; }
 .game-pick .btn { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .game-pick .btn small { font-size: 0.75em; opacity: 0.85; }

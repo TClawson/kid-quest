@@ -1,7 +1,8 @@
 // The sheet music stand's songbook (js/songbook.js) in the real app: the little keyboard opens
 // every map song (a secret show's tune only with the upright piano or once its treasure map
-// is finished, its name hidden till then); every open song is engraved bar for bar (abcjs) with no warnings, in
-// every hand setting; Listen plays it with the bar being played lit up, and a redraw while it
+// is finished, its name hidden till then); an open song is bought with 20 coins before its music
+// shows (once for every level, it stays bought after a reload, too few coins says how many more);
+// every bought song is engraved bar for bar (abcjs) with no warnings, in every hand setting; Listen plays it with the bar being played lit up, and a redraw while it
 // plays leaves the page and its scroll alone; phones get 2 bars a line. Saves screenshots too. Run: node test/smoke/songbook.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import { chromium } from 'playwright';
@@ -9,7 +10,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
-import { SONGBOOK, songById, songbookFor } from '../../js/sheetmusic.js';
+import { SONGBOOK, songById, songbookFor, songItemId } from '../../js/sheetmusic.js';
 import { SHOW_SONGS } from '../../js/songs.js';
 import { hasLevel } from '../../js/arrange.js';
 
@@ -19,14 +20,15 @@ const day = '2026-11-11'; // a Wednesday
 
 /**
  * Ava with weeks of every chore (piano too) done before today (3 weeks earns the little
- * keyboard), and the treasure maps (background ids) she has finished.
+ * keyboard, and 1320 coins), the treasure maps (background ids) she has finished, the songs
+ * she has already bought (piece ids) and the coins she has already spent.
  */
-function family(weeks, found = []) {
+function family(weeks, found = [], { songs = [], spent = 0 } = {}) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.questView = 'village';
   const days = weeks * 7;
-  const ava = { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: addDays(day, -days), seenUnlocks: ['music-keyboard', 'music-upright', 'music-rock'], seenMoves: [], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } };
+  const ava = { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: addDays(day, -days), seenUnlocks: ['music-keyboard', 'music-upright', 'music-rock'], seenMoves: [], owned: songs.map(songItemId), spent, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } };
   s.kids.push(ava);
   for (let i = 1; i <= days; i += 1) s.log[addDays(day, -i)] = { kid_ava: { tasks: Object.fromEntries(ava.tasks.map((t) => [t.id, { status: 'done', by: 'parent' }])) } };
   // four map pieces from the daily chest finish a treasure map
@@ -38,14 +40,14 @@ const site = await serve('.');
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 const errors = [];
 
-async function openSongbook(viewport, weeks, found) {
+async function openSongbook(viewport, weeks, found, opts) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/favicon|ERR_|net::/.test(m.text())) errors.push(m.text()); });
   await page.clock.install({ time: new Date(`${day}T16:00:00`) });
   await page.goto(site.url);
-  await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [family(weeks, found), { kid_ava: { day, inside: false, place: 'music' } }]);
+  await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [family(weeks, found, opts), { kid_ava: { day, inside: false, place: 'music' } }]);
   await page.reload();
   await page.click('[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
@@ -60,6 +62,9 @@ async function openSongbook(viewport, weeks, found) {
   await page.waitForSelector('.songbook');
   return { ctx, page };
 }
+
+const ALL = SONGBOOK.map((p) => p.id);
+const coinChip = async (page) => Number((await page.locator('.songbook .chip.coin').textContent()).replace(/\D/g, ''));
 
 /** Wait (real time: the sound's clock) until the piece being played lights up bar n or later. */
 async function litBar(page, n, ms = 8000) {
@@ -88,14 +93,27 @@ async function litBar(page, n, ms = 8000) {
   assert.ok(open.includes('show:bg-galaxy') && open.includes('show:bg-meadow') && open.includes('bg-meadow'));
   assert.equal(await page.locator('.song-card.locked').count(), 7);
   assert.equal(await page.locator('.song-tier').count(), 2, 'two sections: map songs and show tunes');
+  // nothing bought yet: every open song shows its price, none opens
+  assert.equal(await page.locator('.song-card.buy').count(), 11, 'every open song is for sale');
+  assert.equal(await page.locator('[data-action="song-open"]').count(), 0, 'nothing to open before buying');
+  assert.match(await page.locator('.song-card.buy').first().textContent(), /🪙 20/);
+  assert.match(await page.locator('.song-intro').textContent(), /Each song costs 🪙 20/);
+  assert.equal(await coinChip(page), 1320);
   assert.match(await page.locator('.song-card.locked').first().textContent(), /Opens with the upright piano, or finish the \w[\w ]* treasure map/);
   // the other shows' tunes are secret: no names, and what opens them
   const list = await page.locator('.songbook').textContent();
   assert.equal((list.match(/Secret song/g) || []).length, 7);
   for (const [map, song] of Object.entries(SHOW_SONGS)) if (!found.includes(map)) assert.ok(!list.includes(song.name), `${song.name} stays secret`);
   await page.screenshot({ path: `${out}/1-songbook-tablet.png`, fullPage: true });
-  for (const id of open) {
-    await page.click(`[data-action="song-open"][data-id="${id}"]`);
+  for (const [n, id] of open.entries()) {
+    // buy it (the shop's kind of question first), and it opens straight to its music
+    await page.click(`[data-action="song-buy"][data-id="${id}"]`);
+    const ask = await page.locator('#modal:not([hidden])').textContent();
+    assert.ok(ask.includes(`Buy ${songById(id).name}?`), `${id}: asks first`);
+    assert.ok(ask.includes(`It costs 🪙 20. You'll have ${1320 - 20 * n - 20} coins left.`), `${id}: the coins left`);
+    assert.match(ask, /easy, medium and hard music, for every buddy/);
+    await page.click('#modal [data-action="song-buy-confirm"]');
+    await page.waitForSelector(`#sheet[data-id="${id}"]`);
     for (const hands of ['melody', 'roots', 'chords']) {
       await page.click(`[data-action="song-hands"][data-val="${hands}"]`);
       await page.waitForSelector('#sheet.engraved svg');
@@ -118,6 +136,12 @@ async function litBar(page, n, ms = 8000) {
     if (hasLevel(id, 'medium')) await page.click('[data-action="song-level"][data-val="easy"]');
     await page.click('[data-action="song-back"]');
   }
+  assert.equal(await coinChip(page), 1320 - 20 * open.length, '20 coins a song, once');
+  assert.equal(await page.locator('.song-card.buy').count(), 0);
+  assert.equal(await page.locator('[data-action="song-open"]').count(), open.length, 'every bought song opens');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids[0]);
+  assert.equal(saved.spent, 20 * open.length);
+  assert.deepEqual(saved.owned.slice().sort(), open.map(songItemId).sort(), 'kept with the kid, not one buddy');
   // a secret piece can't be opened by a stale id either
   await page.evaluate(async () => { const c = await import('./js/ctx.js'); c.ui.songId = 'show:bg-ocean'; c.render(); });
   assert.equal(await page.locator('#sheet').count(), 0, 'a secret song shows the list');
@@ -164,9 +188,9 @@ async function litBar(page, n, ms = 8000) {
   await ctx.close();
 }
 
-// 1b. tablet, the upright piano and no treasure maps: all 18 open, no secret songs
+// 1b. tablet, the upright piano and no treasure maps, every song bought: all 18 open, no secret songs
 {
-  const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 5, []);
+  const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 5, [], { songs: ALL });
   assert.equal(await page.locator('.song-card:not(.locked)').count(), 18);
   assert.equal(await page.locator('.song-card.locked').count(), 0);
   const list = await page.locator('.songbook').textContent();
@@ -208,7 +232,7 @@ async function litBar(page, n, ms = 8000) {
 // 2. phone, the rock star piano and every treasure map: every song open, two bars a line; a
 // redraw while a piece plays (family sync does that) leaves the music and the scroll alone
 {
-  const { ctx, page } = await openSongbook({ width: 412, height: 915 }, 7, Object.keys(SHOW_SONGS));
+  const { ctx, page } = await openSongbook({ width: 412, height: 915 }, 7, Object.keys(SHOW_SONGS), { songs: ALL });
   assert.equal(await page.locator('.song-card:not(.locked)').count(), 18);
   await page.screenshot({ path: `${out}/4-songbook-phone.png`, fullPage: true });
   const id = 'bg-meadow';
@@ -263,6 +287,84 @@ async function litBar(page, n, ms = 8000) {
   assert.equal(await page.evaluate(() => window.scrollY), 0, 'a piece opens at the top');
   await page.click('[data-action="song-back"]');
   assert.equal(await page.evaluate(() => window.scrollY), 900, 'and back at the same place in the list');
+  await ctx.close();
+}
+
+// 3. buying, up close: the little keyboard, one song bought already and 25 coins left (3 weeks
+// earn 1320). A bought song, songs for sale and locked show songs side by side, on a tablet and
+// a phone; too few coins says how many more; a song not bought can't be opened any other way;
+// and what was bought is still bought after a reload.
+async function backToSongbook(page) {
+  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await page.clock.runFor(1500);
+  for (let i = 0; i < 6 && await page.locator('#modal:not([hidden])').count(); i += 1) {
+    await page.locator('#modal [data-action="modal-close"]').first().click();
+    await page.clock.runFor(400);
+  }
+  await page.evaluate(() => document.querySelector('.music-house .v-dialog [data-m="bye"]')?.click());
+  await page.evaluate(() => document.querySelector('.m-station[data-spot="sheets"]').click());
+  await page.clock.runFor(6000);
+  await page.waitForSelector('.songbook');
+}
+const toastText = (page) => page.locator('.toast').last().textContent();
+for (const [name, viewport] of [['tablet', { width: 1024, height: 768 }], ['phone', { width: 390, height: 844 }]]) {
+  const { ctx, page } = await openSongbook(viewport, 3, [], { songs: ['bg-meadow'], spent: 1320 - 25 });
+  assert.equal(await page.locator('[data-action="song-open"]').count(), 1, 'the one bought song opens');
+  assert.equal(await page.locator('.song-card.buy').count(), 8, 'the other map songs are for sale');
+  assert.equal(await page.locator('.song-card.locked').count(), 9, 'the show songs stay locked');
+  assert.equal(await page.locator('.song-card.buy .song-price.can').count(), 8, '25 coins: they can be bought');
+  assert.equal(await coinChip(page), 25);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: no sideways scrolling`);
+  // nothing in a card is cut off: everything sits inside its card
+  const clipped = await page.$$eval('.song-card', (cards) => cards.filter((c) => {
+    const b = c.getBoundingClientRect();
+    return [...c.children].some((e) => { const r = e.getBoundingClientRect(); return r.right > b.right + 1 || r.bottom > b.bottom + 1; });
+  }).map((c) => c.textContent.trim()));
+  assert.deepEqual(clipped, [], `${name}: nothing sticks out of a card`);
+  await page.screenshot({ path: `${out}/7-buy-list-${name}.png`, fullPage: true });
+  // a song not bought can't be opened by a remembered id, by Listen or by a stray open
+  await page.evaluate(async () => { const c = await import('./js/ctx.js'); c.ui.songId = 'bg-space'; c.render(); });
+  assert.equal(await page.locator('#sheet').count(), 0, 'a song not bought shows the list');
+  assert.equal(await page.evaluate(async () => (await import('./js/ctx.js')).ui.songId), null);
+  await page.evaluate(async () => { const c = await import('./js/ctx.js'); c.ui.songId = 'bg-space'; c.actions['song-play'](); c.actions['song-open']({ dataset: { id: 'bg-space' } }); });
+  assert.equal(await page.locator('#sheet').count(), 0, 'nor by Listen or a stray open');
+  if (name === 'phone') { await ctx.close(); continue; }
+  // Keep saving: nothing bought
+  const id = await page.locator('.song-card.buy').first().getAttribute('data-id');
+  await page.click(`[data-action="song-buy"][data-id="${id}"]`);
+  await page.click('#modal [data-action="modal-close"]');
+  assert.equal(await coinChip(page), 25, 'keep saving: nothing spent');
+  // buy it: 5 coins left, and its music opens
+  await page.click(`[data-action="song-buy"][data-id="${id}"]`);
+  assert.match(await page.locator('#modal').textContent(), /You'll have 5 coins left\./);
+  await page.click('#modal [data-action="song-buy-confirm"]');
+  await page.waitForSelector(`#sheet[data-id="${id}"]`);
+  assert.equal(await toastText(page), `${songById(id).name} is yours!`);
+  for (const level of ['medium', 'hard'].filter((l) => hasLevel(id, l))) {
+    await page.click(`[data-action="song-level"][data-val="${level}"]`);
+    await page.waitForSelector(`#sheet.engraved[data-level="${level}"] svg`);
+  }
+  if (hasLevel(id, 'medium')) await page.click('[data-action="song-level"][data-val="easy"]');
+  await page.click('[data-action="song-back"]');
+  assert.equal(await coinChip(page), 5);
+  // too few coins: how many more, and no question
+  const next = await page.locator('.song-card.buy').first().getAttribute('data-id');
+  assert.equal(await page.locator('.song-card.buy .song-price.can').count(), 0, '5 coins: nothing looks buyable');
+  await page.click(`[data-action="song-buy"][data-id="${next}"]`);
+  assert.equal(await page.locator('#modal:not([hidden])').count(), 0, 'no question');
+  assert.match(await toastText(page), /^15 more coins to go!/);
+  assert.equal(await coinChip(page), 5);
+  // a stale question, or a song bought already, never charges again
+  await page.evaluate(async (i) => { const c = await import('./js/ctx.js'); c.actions['song-buy-confirm']({ dataset: { id: i } }); c.actions['song-buy-confirm']({ dataset: { id: 'bg-meadow' } }); }, next);
+  const kidNow = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids[0]);
+  assert.equal(kidNow.spent, 1320 - 5, 'only the one purchase was charged');
+  assert.deepEqual(kidNow.owned.slice().sort(), [songItemId('bg-meadow'), songItemId(id)].sort());
+  // after a reload, both bought songs are still bought
+  await page.reload();
+  await backToSongbook(page);
+  assert.deepEqual((await page.$$eval('[data-action="song-open"]', (els) => els.map((e) => e.dataset.id))).sort(), ['bg-meadow', id].sort(), 'still bought after a reload');
+  await page.click(`[data-action="song-open"][data-id="${id}"]`);
+  await page.waitForSelector(`#sheet.engraved[data-id="${id}"] svg`);
   await ctx.close();
 }
 

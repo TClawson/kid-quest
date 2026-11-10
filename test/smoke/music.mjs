@@ -182,8 +182,10 @@ for (const [weeks, tier] of [[5, 2], [7, 3]]) {
   await tap(page, '.music-house .v-dialog [data-m="bye"]');
   await tap(page, '.m-station[data-spot="studio"]');
   await page.clock.runFor(6000);
-  assert.match(await page.locator('.music-house .v-dialog .v-text').textContent(), /recording studio is almost ready/);
-  await tap(page, '.music-house .v-dialog [data-m="bye"]');
+  // (test/smoke/studio.mjs tries the studio out)
+  assert.equal(await page.locator('.studio-screen').count(), 1, 'the studio opens');
+  await page.click('[data-action="studio-back"]');
+  await page.clock.runFor(1500);
   await tap(page, '.m-station[data-spot="piano"]');
   await page.clock.runFor(6000);
   assert.equal((await page.locator('#watch-goal').textContent()).trim(), 'Goal done ✓');
