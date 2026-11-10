@@ -299,6 +299,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   const started = await page.evaluate(() => window.kqStarts);
   assert.ok(started >= 4, `sounds started (${started})`);
   const head = () => page.evaluate(() => { const h = document.querySelector('#studio .st-head'); return h && !h.hidden ? parseFloat(h.style.left) : -1; });
+  // the playhead shows once the first frame after the start has drawn (later on a slow runner)
+  for (let i = 0; i < 40 && (await head()) < 0; i++) await wait(page, 50);
   const h1 = await head();
   await wait(page, 600);
   const h2 = await head();

@@ -234,5 +234,9 @@
 .v-home { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; }
 .v-home-door { position: absolute; bottom: 4px; transform: translateX(-50%); font-size: 7px; line-height: 1; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .v-home:hover .v-home-door, .v-home:focus-visible .v-home-door { opacity: 0.9; }
+/* chores waiting inside the house (bed, teeth, floor): a quest bubble over the roof */
+.v-home-bubble { bottom: 30px; animation: v-float 1.2s ease-in-out infinite; pointer-events: none; } /* just over the door */
+.v-home.now .v-home-bubble { background: #fff3bf; outline: 1px solid #fcc419; }
+.v-home.now .v-step { background: #e67700; }
 .v-buddy.going-in { animation: v-go-in 0.4s steps(4, end) forwards; }
 @keyframes v-go-in { to { transform: translate(-50%, -110%); opacity: 0; } }
