@@ -10,7 +10,7 @@ import { clipSound, clipEvents, backingKey, shiftKey, sameSig } from '../js/remi
 import {
   newMix, addPart, addTake, addBacking, takeToNotes, findClip, setVoice, shiftClip, moveIntoKey, clipFits, clipKey, copyClip,
   trimClip, moveClip, setBpm, setBars, removeClip, schedule, badges, cleanMix, takesIn, remixed, clipSwing, backingSwing, ownVoice, notesVoice,
-  readingVoice, validKey, newNid, mixBeats, NOTES_VOICE, MOST_NOTES,
+  readingVoice, validKey, newNid, mixBeats, NOTES_VOICE, MOST_NOTES, keptHeard, readingOptions, mostNotesBeats,
 } from '../js/studiorules.js';
 
 const must = (r) => { assert.equal(r.error, null, r.error || ''); return r; };
@@ -69,7 +69,7 @@ test('a mix with a key keeps it; no key and odd keys are not stored', () => {
   assert.equal('follows' in findClip(r.mix, r.ids[0]).clip, false, 'follows only when true');
 });
 
-test('a trimmed take: the notes keep its place, and where in it the clip starts while that is inside', () => {
+test('a trimmed take: the notes start on its beat, from their own start, as long as the room there', () => {
   let { mix, id } = withTake({ beats: 12, at: 2 });
   mix = must(trimClip(mix, id, { start: 4 })).mix; // from 2
   mix = must(trimClip(mix, id, { len: 6 })).mix;
@@ -78,8 +78,7 @@ test('a trimmed take: the notes keep its place, and where in it the clip starts 
   mix = must(addBacking(mix, 0, 'beat-rock', 'sunny', 10)).mix;
   let r = must(takeToNotes(mix, id, [tune(12)], 'C'));
   let c = findClip(r.mix, r.ids[0]).clip;
-  assert.deepEqual([c.start, c.from, c.total, c.len], [4, 2, 12, 6], 'from kept; as long as the room to the next clip');
-  // the tidied tune is shorter than where the take was trimmed: it starts from its beginning
+  assert.deepEqual([c.start, c.from, c.total, c.len], [4, 0, 12, 6], 'from its first note; as long as the room to the next clip');
   r = must(takeToNotes(mix, id, [tune(2)], 'C'));
   c = findClip(r.mix, r.ids[0]).clip;
   assert.deepEqual([c.start, c.from, c.total, c.len], [4, 0, 2, 2]);
@@ -88,6 +87,39 @@ test('a trimmed take: the notes keep its place, and where in it the clip starts 
   r = must(takeToNotes(mix, id, [tune(10)], 'C'));
   c = findClip(r.mix, r.ids[0]).clip;
   assert.deepEqual([c.start, c.from, c.total, c.len], [0, 0, 10, 10]);
+  // the band too starts from its own start
+  ({ mix, id } = withTake({ beats: 12, at: 2 }));
+  mix = must(trimClip(mix, id, { start: 4 })).mix;
+  r = must(takeToNotes(mix, id, [tune(8), bandPart(8)], 'C'));
+  c = findClip(r.mix, r.ids[1]).clip;
+  assert.deepEqual([c.start, c.from, c.total, c.len], [4, 0, 8, 8]);
+});
+
+test('the readings of a trimmed take are made from the stretch the kid kept', () => {
+  // 120 a minute (0.5 s a beat), 0.06 s of lead; a note on every beat of 12, C D E F G A B C D E F G
+  const midis = [60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79];
+  const heard = midis.map((midi, i) => ({ midi, on: 0.06 + i * 0.5 + 0.01, off: 0.06 + i * 0.5 + 0.4, vel: 0.6 }));
+  let { mix, id } = withTake({ beats: 12, mix: { ...newMix(), bpm: 120 } });
+  let c = findClip(mix, id).clip;
+  assert.equal(keptHeard(heard, c, 120).length, 12, 'untrimmed: all of it');
+  assert.deepEqual(keptHeard(heard, c, 120)[0], heard[0], 'and as it was');
+  mix = must(trimClip(mix, id, { start: 4 })).mix; // beats 4 to 11 kept
+  mix = must(trimClip(mix, id, { len: 5 })).mix; // beats 4 to 8
+  c = findClip(mix, id).clip;
+  const kept = keptHeard(heard, c, 120);
+  assert.deepEqual(kept.map((n) => n.midi), [67, 69, 71, 72, 74]);
+  assert.ok(Math.abs(kept[0].on - (0.06 + 0.01)) < 1e-9, 'timed from the kept beat, the lead still before it');
+  assert.ok(Math.abs(kept[0].off - (0.06 + 0.4)) < 1e-9);
+  // a note a touch early for the first kept beat is kept; one just before the end is not
+  const early = keptHeard([{ midi: 60, on: 0.06 + 2 - 0.05, off: 2.5 }, { midi: 62, on: 0.06 + 4.5 - 0.01, off: 5 }], c, 120);
+  assert.deepEqual(early.map((n) => n.midi), [60]);
+  // a note held past the end ends there
+  assert.ok(Math.abs(keptHeard([{ midi: 60, on: 0.06 + 4, off: 9 }], c, 120)[0].off - (0.06 + 2.5)) < 1e-9, 'the kept stretch is 2.5 s');
+  const opts = readingOptions({ ...mix, meter: 4 }, c);
+  assert.deepEqual(opts, { bpm: 120, meter: 4, lead: 0.06, beats: 5, swing: 0, barAt: 0 });
+  // the bar's beat is where the clip is now
+  const moved = must(moveClip(mix, id, 0, 6)).mix;
+  assert.equal(readingOptions(moved, findClip(moved, id).clip).barAt, 2);
 });
 
 test('the band version: the tune in the take\'s place, the band on the track with the most room', () => {
@@ -378,6 +410,20 @@ test('bad notes clips in storage are tidied or dropped, and never stop the studi
   assert.equal(one({ ...good, shift: -1000 })[0].shift, -24);
   assert.equal(one({ ...good, notes: [{ at: 0, len: 1, midi: 90 }], shift: 24 })[0].shift, undefined, 'too high: back by octaves');
   assert.equal(one({ ...good, shift: 'up' })[0].shift, undefined);
+  // never longer than a loop can be (84 beats): a stored clip can't ask for a huge render
+  assert.equal(mostNotesBeats(4), 84);
+  assert.equal(mostNotesBeats(3), 84);
+  let big = one({ ...good, total: 20000, notes: [{ at: 0, len: 1e12, midi: 60 }, { at: 167.5, len: 4, midi: 62 }, { at: 168, len: 1, midi: 64 }, { at: 39000, len: 1, midi: 65 }] })[0];
+  assert.deepEqual([big.total, big.from, big.len], [84, 0, 8]);
+  assert.deepEqual(big.notes, [{ at: 0, len: 168, midi: 60 }, { at: 167.5, len: 4, midi: 62 }], 'notes past it dropped, lengths capped');
+  big = one({ ...good, start: 0, len: 4, from: 82, total: 1000 })[0];
+  assert.deepEqual([big.total, big.from, big.len], [84, 82, 2], 'cut to what is left of it');
+  assert.deepEqual(one({ ...good, len: 4, from: 999996, total: 1000000 }), [], 'starting past it: nothing to keep');
+  // takeToNotes keeps to it as well
+  const huge = must(takeToNotes(withTake().mix, withTake().id, [tune(5000, { notes: [{ at: 0, len: 9999, midi: 60 }, { at: 9000, len: 1, midi: 62 }] })], 'C'));
+  const h = findClip(huge.mix, huge.ids[0]).clip;
+  assert.deepEqual([h.total, h.notes], [84, [{ at: 0, len: 168, midi: 60 }]]);
+  assert.equal(takeToNotes(withTake().mix, withTake().id, [tune(5000, { notes: [{ at: 9000, len: 1, midi: 62 }] })], 'C').error, 'There were no notes to use.');
   // the place: like every clip
   assert.deepEqual(one({ ...good, total: 4 }), [], 'shorter than it is long');
   assert.deepEqual(one({ ...good, start: 1.5 }), []);

@@ -423,15 +423,44 @@ export function newNid() {
   return `n${Date.now().toString(36)}${nids.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** A part of a reading's notes, as a clip keeps them: { at, len, midi } only. */
-const keptNotes = (notes) => notes.map((n) => ({ at: n.at, len: n.len, midi: n.midi }));
+/**
+ * The most beats a clip of the kid's notes can last: as many as the longest loop of `meter`
+ * holds at all (30 seconds at the fastest speed). Nothing stored can ask for a longer render.
+ */
+export const mostNotesBeats = (meter = 4) => maxBars(BPM_RANGE[1], meter) * meter;
+
+/** A part of a reading's notes, as a clip keeps them: { at, len, midi } only, none past `steps`. */
+const keptNotes = (notes, steps) => notes.filter((n) => n.at < steps).map((n) => ({ at: n.at, len: Math.min(n.len, steps), midi: n.midi }));
+
+/**
+ * What was heard in the stretch of a take the kid kept (clip c, trimmed or not): the notes
+ * (listener.js [{ midi, on, off, vel }], seconds from the take's first sample) struck from a
+ * moment before the clip's first beat to just before its end, timed from that beat as a take
+ * of its own would be (its `lead` still before it), and ended at the clip's end. So the
+ * readings of a trimmed take are made from what the kid kept, not what was trimmed off.
+ */
+export function keptHeard(heard, c, bpm) {
+  const beat = 60 / bpm;
+  const lead = c.lead || 0;
+  const a = (c.from || 0) * beat;
+  const b = ((c.from || 0) + c.len) * beat;
+  return heard
+    .filter((n) => Number.isFinite(n?.on) && n.on - lead >= a - 0.06 && n.on - lead < b - 0.02)
+    .map((n) => ({ ...n, on: n.on - a, off: Math.min(Number.isFinite(n.off) ? n.off : n.on + 0.2, lead + b) - a }));
+}
+
+/** What notomatic.js readings needs to know of a take's clip in a mix (with keptHeard's notes). */
+export function readingOptions(mix, c) {
+  return { bpm: mix.bpm, meter: mix.meter, lead: c.lead || 0, beats: c.len, swing: backingSwing(mix), barAt: ((c.start % mix.meter) + mix.meter) % mix.meter };
+}
 
 /**
  * Turn the take `id` into notes: `reading` is one reading's parts (notomatic.js readings:
- * [{ role, notes, beats, follows }]), `key` the key the playing is in (or null). The tune
- * (part 0) takes the take's place on its track, at the same beat and from the same place in
- * it while that is still inside the notes; a band part goes on the track with the most room
- * at that beat, lined up with the tune. A reading with a band part is the band version, and
+ * [{ role, notes, beats, follows }], made from the stretch of the take the kid kept: its notes
+ * count from the clip's beat), `key` the key the playing is in (or null). The tune (part 0)
+ * takes the take's place on its track, from the take's beat, from its first note (`from` 0),
+ * as long as its notes or the room there; a band part goes on the track with the most room
+ * at that beat, lined up with the tune the same way. A reading with a band part is the band version, and
  * its parts start in that reading's voices (READING_VOICES). A mix with no key yet takes the
  * playing's. The take's sound stays in the store while Undo can bring it back (see takesIn).
  * Returns { mix, error, ids } (the new clips' ids, the tune's first).
@@ -441,7 +470,8 @@ export function takeToNotes(mix, id, reading, key = null) {
   const found = findClip(mix, id);
   if (!found || found.clip.kind !== 'take') return fail('That recording is gone.');
   const parts = Array.isArray(reading) ? reading : [];
-  if (!parts.length || parts.some((p) => !Array.isArray(p?.notes) || !p.notes.length)) return fail('There were no notes to use.');
+  const most = mostNotesBeats(mix.meter);
+  if (!parts.length || parts.some((p) => !Array.isArray(p?.notes) || !keptNotes(p.notes, 2 * most).length)) return fail('There were no notes to use.');
   const take = found.clip;
   const band = parts.length > 1;
   const readingId = band ? 'band' : null;
@@ -449,9 +479,10 @@ export function takeToNotes(mix, id, reading, key = null) {
   const next = clone(mix);
   next.tracks[found.track] = next.tracks[found.track].filter((c) => c.id !== id);
   const start = take.start;
-  const make = (part, role, from, len) => {
-    const total = Math.max(1, Math.ceil(part.beats - 1e-6));
-    const clip = { id: next.next, kind: 'notes', nid: newNid(), role, notes: keptNotes(part.notes), start, len, from, total };
+  const beatsOf = (part) => Math.max(1, Math.min(most, Math.ceil((Number(part.beats) || 1) - 1e-6)));
+  const make = (part, role, len) => {
+    const total = beatsOf(part);
+    const clip = { id: next.next, kind: 'notes', nid: newNid(), role, notes: keptNotes(part.notes, 2 * total), start, len, from: 0, total };
     next.next += 1;
     if (goodKey) clip.key = goodKey;
     if (part.follows === true) clip.follows = true;
@@ -461,9 +492,7 @@ export function takeToNotes(mix, id, reading, key = null) {
   };
   // the tune, in the take's place
   const tune = parts[0];
-  const tuneTotal = Math.max(1, Math.ceil(tune.beats - 1e-6));
-  const from = take.from < tuneTotal ? take.from : 0;
-  const tuneClip = make(tune, 'tune', from, Math.max(1, Math.min(tuneTotal - from, roomAt(next, found.track, start))));
+  const tuneClip = make(tune, 'tune', Math.max(1, Math.min(beatsOf(tune), roomAt(next, found.track, start))));
   const placed = [[found.track, tuneClip]];
   // the band, on another track: the one with the most room at that beat
   for (const part of parts.slice(1)) {
@@ -474,10 +503,7 @@ export function takeToNotes(mix, id, reading, key = null) {
       if (room >= 1 && (!best || room > best.room)) best = { track: t, room };
     }
     if (!best) return fail('The band needs an empty spot on another track. Make some room and try again.');
-    const total = Math.max(1, Math.ceil(part.beats - 1e-6));
-    // lined up with the tune: from the same place in the music when the band reaches it
-    const bandFrom = from < total ? from : 0;
-    const clip = make(part, 'band', bandFrom, Math.min(total - bandFrom, best.room));
+    const clip = make(part, 'band', Math.min(beatsOf(part), best.room));
     placed.push([best.track, clip]);
     next.tracks[best.track].push(clip); // (so the next band part finds this track taken)
   }
@@ -732,8 +758,12 @@ export const MOST_NOTES = 2000;
  * A clip of the kid's notes read back from storage, tidied (see cleanMix), or null when it
  * can't be used: its name, role and notes checked, the notes that can't be played dropped.
  */
-function cleanNotesClip(c, base) {
+function cleanNotesClip(c, raw, meter) {
   if (typeof c.nid !== 'string' || !c.nid || c.nid.length > 40) return null;
+  // never longer than a loop can be: a stored clip can't ask for a huge render
+  const total = Math.min(raw.total, mostNotesBeats(meter));
+  if (raw.from >= total) return null;
+  const base = { ...raw, total, len: Math.min(raw.len, total - raw.from) };
   if (c.role !== 'tune' && c.role !== 'band') return null;
   if (!Array.isArray(c.notes)) return null;
   const end = 2 * base.total;
@@ -783,7 +813,7 @@ export function cleanMix(raw) {
       if (part || pattern || mine) {
         let clip;
         if (mine) {
-          clip = cleanNotesClip(c, { id: next, start, len, from, total });
+          clip = cleanNotesClip(c, { id: next, start, len, from, total }, mix.meter);
           if (!clip) continue;
         } else {
           // never longer than the part or the backing track itself
