@@ -105,7 +105,57 @@ for (const [sizeName, viewport] of Object.entries(SIZES)) {
   await ctx.close();
 }
 
-// the garden (the backyard) lives on another branch: its season check goes with it
+// the backyard garden through the try-out: winter and autumn, and an ocean dome in winter
+const GOUT = '/mnt/project-files/kid-quest-previews/seasons/app/';
+fs.mkdirSync(GOUT, { recursive: true });
+const GCASES = [{ theme: 'bg-meadow', season: 'winter' }, { theme: 'bg-meadow', season: 'autumn' }, { theme: 'bg-ocean', season: 'winter' }];
+for (const c of GCASES) {
+  const label = `garden-${c.theme === 'bg-meadow' ? '' : 'ocean-'}${c.season}`.replace('--', '-');
+  for (const [sizeName, viewport] of Object.entries(SIZES)) {
+    const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2 });
+    await ctx.addInitScript((season) => { try { localStorage.setItem('kidquest.season', season); } catch { /* none */ } }, c.season);
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => { failed += 1; console.log('ERR', label, e.message); });
+    await page.clock.install({ time: new Date(`${today}T07:30:00`) });
+    await page.goto(site.url);
+    const st = family(c.theme);
+    const [t0, t1, t2] = st.kids[0].tasks = defaultTasks();
+    const plot = (n, seed, task, ago) => ({ id: `p${n}`, seed, task: task.id, planted: addDays(today, -ago) });
+    st.kids[0].owned = ['garden-birdbath', 'garden-beehouse', 'garden-bench'];
+    st.kids[0].gardenDecor = { water: 'garden-birdbath', bees: 'garden-beehouse', seat: 'garden-bench' };
+    st.kids[0].garden = { beds: [plot(1, 'seed-sunflower', t1, 10), plot(2, 'seed-tulip', t0, 4), plot(3, 'seed-carrot', t2, 9), plot(4, 'seed-tomato', t0, 12), null, plot(5, 'seed-daisy', t1, 9)], trees: [plot(6, 'seed-apple', t0, 70), null], kept: [], seeds: {}, n: 6 };
+    st.log = {};
+    for (let i = 1; i <= 75; i += 1) st.log[addDays(today, -i)] = { kid_ava: { tasks: Object.fromEntries([t0, t1].map((t) => [t.id, { status: 'done', by: 'self' }])) } };
+    await page.evaluate(([s, d]) => {
+      localStorage.setItem('kidquest.v1', JSON.stringify(s));
+      localStorage.setItem('kidquest.house', JSON.stringify({ kid_ava: { day: d, inside: false, place: 'garden' } }));
+    }, [st, today]);
+    await page.reload();
+    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await page.clock.runFor(1500);
+    while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
+    await page.clock.runFor(3000);
+    const info = await page.evaluate(`(() => {
+      const alpha = ${alpha};
+      const w = document.querySelector('.village-world .season-weather');
+      return { garden: Boolean(document.querySelector('.garden-yard')), has: Boolean(w), kind: w?.dataset.kind || '', drawn: w ? alpha(w) : 0, frames: Number(w?.dataset.frames || 0), pe: w ? getComputedStyle(w).pointerEvents : '' };
+    })()`);
+    // sparkles twinkle, so look over a second or so
+    for (let k = 0; k < 6 && !info.drawn; k += 1) {
+      await page.clock.runFor(200);
+      info.drawn = await page.evaluate(`(() => { const w = document.querySelector('.village-world .season-weather'); return w ? (${alpha})(w) : 0; })()`);
+    }
+    console.log(label, sizeName, JSON.stringify(info));
+    check(info.garden, `${label} ${sizeName}: the garden is open`);
+    check(info.has && info.drawn > 0, `${label} ${sizeName}: the garden has weather`);
+    check(info.pe === 'none', `${label} ${sizeName}: garden weather lets taps through`);
+    if (c.theme === 'bg-ocean') check(info.kind === 'sparkle', `${label} ${sizeName}: the dome gets the dome weather`);
+    await page.locator('.garden-yard').scrollIntoViewIfNeeded();
+    await page.clock.runFor(500);
+    await page.locator('.village-view').screenshot({ path: `${GOUT}${label}-${sizeName}.png`, fullPage: false });
+    await ctx.close();
+  }
+}
 
 
 await browser.close(); site.close();

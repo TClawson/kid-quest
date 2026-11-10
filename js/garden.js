@@ -12,6 +12,7 @@
 
 import * as A from './gardenart.js';
 import { makeGrid, findPath } from './village.js';
+import { seasonNow, tintLand, spriteFor, mountWeather } from './seasonlife.js';
 import { KINDS, seedById, sellPrice, SEEDS, decorById } from './gardenrules.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -91,8 +92,8 @@ function pic(art) {
   if (!c) return null;
   return { c, fx: art.fx ?? art.ax ?? c.width / 2, fy: art.fy ?? art.ay ?? c.height };
 }
-function paste(doc, art, className = 'h-piece') {
-  const p = pic(art);
+function paste(doc, art, className = 'h-piece', se = null) {
+  const p = pic(art && se && art.getContext ? spriteFor(art, se, 'garden') : art);
   if (!p) return null;
   const c = doc.createElement('canvas');
   c.width = p.c.width; c.height = p.c.height;
@@ -150,7 +151,8 @@ function mount(section, handlers) {
   const V = data.view;
   const plots = { beds: V.beds, trees: V.trees };
   const { canvas: yardCanvas, res: yardRes } = yard(doc, V.layout, data.color);
-  section.querySelector('.garden-yard').getContext('2d').drawImage(yardCanvas, 0, 0);
+  const se = seasonNow(data.today); // the parent's try-out counts, like in the villages
+  section.querySelector('.garden-yard').getContext('2d').drawImage(tintLand(yardCanvas, se, 'garden'), 0, 0);
   const decorObjs = Object.fromEntries(Object.entries(V.layout).map(([k, id]) => [k, id ? decorById(id) : null]));
 
   // ---- things standing in the garden, sorted with the buddy by their feet ----
@@ -162,7 +164,7 @@ function mount(section, handlers) {
   for (const pc of yardRes?.pieces || []) {
     const c = doc.createElement('canvas');
     c.width = pc.canvas.width; c.height = pc.canvas.height;
-    c.getContext('2d').drawImage(pc.canvas, 0, 0);
+    c.getContext('2d').drawImage(spriteFor(pc.canvas, se, 'garden'), 0, 0);
     c.className = 'h-piece';
     c.style.cssText = `left:${pc.x}px;top:${pc.y}px;width:${pc.w}px;height:${pc.h}px;z-index:${pc.foot}`;
     world.insertBefore(c, buddyEl);
@@ -172,19 +174,19 @@ function mount(section, handlers) {
     const sp = Y.spots[spot];
     // the pond is painted flat into the yard
     if (!id || !sp || decorById(id)?.art === 'pond') continue;
-    const p = paste(doc, A.decorArt(id));
+    const p = paste(doc, A.decorArt(id), 'h-piece', se);
     if (!p) continue;
     p.el.dataset.piece = spot;
     stand(p.el, sp.x, sp.y, sp.y, p.fx, p.fy);
   }
   // the watering can waits on its spot until the buddy picks it up
-  const waitingCan = V.layout.can && A.canArt ? paste(doc, A.canArt(V.layout.can, 0)) : null;
+  const waitingCan = V.layout.can && A.canArt ? paste(doc, A.canArt(V.layout.can, 0), 'h-piece', se) : null;
   if (waitingCan) { waitingCan.el.dataset.piece = 'can'; stand(waitingCan.el, Y.spots.can.x, Y.spots.can.y, Y.spots.can.y, waitingCan.fx, waitingCan.fy); }
   const plantEls = new Map(); // plot id -> { wrap, badge, x, y }
   const place = (list, where) => list.forEach((info, i) => {
     if (!info) return;
     const at = where === 'beds' ? Y.beds[i].foot : Y.trees[i];
-    const p = paste(doc, A.plantArt(info.seed.id, info.stage, { droopy: info.droopy, fruit: info.fruit }), 'g-art');
+    const p = paste(doc, A.plantArt(info.seed.id, info.stage, { droopy: info.droopy, fruit: info.fruit }), 'g-art', se);
     if (!p) return;
     const wrap = doc.createElement('div');
     wrap.className = `g-plant ${info.droopy ? 'droopy' : ''}`;
@@ -250,6 +252,8 @@ function mount(section, handlers) {
     const p = paste(doc, A.shieldArt(shield, data.theme, doc), 'g-shield');
     if (p) { p.el.style.cssText += ';left:0;top:0;z-index:9999'; world.append(p.el); }
   }
+  // the season's weather above the yard (and the dome); under a dome the weather stays inside it
+  mountWeather(world, { season: se, mapId: shield ? 'garden-dome' : 'garden', W: Y.W, H: Y.H, z: 10000 });
 
   // ---- where the buddy can walk ----
   const L = {

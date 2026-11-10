@@ -2864,7 +2864,7 @@ function seasonTestCard() {
   return `
     <div class="card season-test">
       <h2>🍂 Try a season</h2>
-      <p class="muted small">See the villages in another season. It is the real season (${real}) unless you pick one here. This changes this device only, so it does not change anything on the kids' other devices.</p>
+      <p class="muted small">See the villages and the garden in another season. It is the real season (${real}) unless you pick one here. This changes this device only, so it does not change anything on the kids' other devices.</p>
       <div class="row wrap">
         ${btn('real', 'Real')}${SEASONS.map((x) => btn(x, `${SEASON_ICONS[x]} ${x[0].toUpperCase()}${x.slice(1)}`)).join('')}
       </div>
