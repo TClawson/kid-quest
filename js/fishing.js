@@ -62,9 +62,18 @@ export const RODS_RARE = 0.75;
  * Each better rod (the kid's) zooms the view out this much, so the kid sees and casts
  * farther across a bigger lake (Taylor, 2026-11-10). Things look smaller, as when you step back.
  */
-export const ROD_ZOOM = [1, 1.2, 1.4];
+export const ROD_ZOOM = [1, 1.4, 1.8];
 /** The fishing boat (100 gems) rows out this far, as a share of the lake you see from the shore. */
-export const BOAT_OUT = 0.55;
+export const BOAT_OUT = 0.8;
+/**
+ * Deep water grows trophy fish (Taylor, 2026-11-10: the boat should make the biggest fish
+ * bigger). Past TROPHY_FROM (about where a super rod's view ends from the shore), a fish can
+ * grow past its kind's usual biggest, up to TROPHY_MAX times as big far out: longer, more
+ * inches, more points, a longer fight. How picky it is and how it bites stay as for the biggest.
+ */
+export const TROPHY_FROM = 1.2;
+export const TROPHY_MAX = 1.6;
+export const maxSizeAt = (out) => 1 + (TROPHY_MAX - 1) * clamp((out - TROPHY_FROM) / 1.4, 0, 1);
 /**
  * Fish farther from the shore tend to be bigger (Taylor, 2026-11-10). out: distance from the
  * shore, where 1 is the far edge of what a regular rod sees. A fish's size (0-1) is r ** sizePower(out):
@@ -766,7 +775,8 @@ export class Fishing {
     const sp = this.spot;
     const base = kind === 'special' ? SPECIES[sp.special.as] : SPECIES[kind];
     const { look, name } = lookFor(this.map, kind);
-    const size = this.r() ** sizePower(this.outAt(home)); // big ones are rarer, more so near the shore
+    const out = this.outAt(home);
+    const size = this.r() ** sizePower(out) * maxSizeAt(out); // big ones are rarer, more so near the shore; trophies out deep
     const len = base.len[0] + (base.len[1] - base.len[0]) * size;
     const f = {
       kind, likeKey: kind === 'special' ? sp.special.id : kind, name,
@@ -774,6 +784,7 @@ export class Fishing {
       pic: fishPic(look, len, this.Z), x, y, vx: 0, vy: 0, dir: x < this.W / 2 ? 1 : -1, speed: base.speed * (0.8 + this.r() * 0.4),
       move, state: 'swim', born: this.t, life: 10 + this.r() * 20, homeY: y, wob: this.r() * 10, mood: 0, checkAt: 0, pull: base.pull,
     };
+    f.pick = Math.min(1, size); // how picky it is and how it bites: as for its kind's biggest at most
     f.pw = f.pic.width / this.Z; f.ph = f.pic.height / this.Z; // size in game pixels
     this.fish.push(f);
     return f;
@@ -943,7 +954,7 @@ export class Fishing {
       if (f.line !== L || f.state !== 'interest') continue;
       if (Math.hypot(f.x - L.x, f.y - L.y) > 12 + f.len / 2) continue;
       // one roll per twitch: a bite, or it bolts and startles the fish around it
-      if (this.r() < strikeChance(f.size, L === this.lines.vis ? this.visTier : this.rodTier)) this.hook(L, f);
+      if (this.r() < strikeChance(f.pick, L === this.lines.vis ? this.visTier : this.rodTier)) this.hook(L, f);
       else { this.spook(f, 'Spooked!'); this.startle(f); }
       break;
     }
@@ -1031,11 +1042,11 @@ export class Fishing {
       if (f.state === 'swim' && d < SPECIES[f.kind === 'special' ? this.spot.special.as : f.kind].reach && this.t >= f.checkAt && !(f.waryUntil > this.t)) {
         f.checkAt = this.t + 0.5;
         if (like < 0) { const sc = f.school; for (const o of this.fish) if (o.school === sc && o.move === 'school') this.spook(o); if (sc) sc.gone = true; this.pop('Eek! A spoon!', f.x, f.y - 6, '#ff8787'); continue; }
-        if (like >= pickiness(f.size) && this.r() < like * 0.3 * (1 - 0.5 * f.size)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
+        if (like >= pickiness(f.pick) && this.r() < like * 0.3 * (1 - 0.5 * f.pick)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
       } else if (f.state === 'interest') {
         if (this.t - f.since > 8) { f.state = 'swim'; f.line = null; continue; }
         // sometimes they just take it
-        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.size) * biteScale(f.size) * dt) { this.hook(L, f); return; }
+        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.pick) * biteScale(f.pick) * dt) { this.hook(L, f); return; }
       }
     }
   }
@@ -1052,7 +1063,7 @@ export class Fishing {
     const S = this.surface;
     const running = this.t >= f.runAt && this.t < f.runAt + 1.2;
     if (this.t > f.runAt + 1.2) f.runAt = this.t + 1.5 + this.r() * 3;
-    const pull = f.pull * (0.5 + f.size) * (running ? 1.8 : 1) * Math.min(1, 0.4 + f.stamina);
+    const pull = f.pull * (0.5 + Math.min(1.2, f.size)) * (running ? 1.8 : 1) * Math.min(1, 0.4 + f.stamina);
     if (holding) {
       const strong = 1 - 0.12 * ((L === this.lines.vis ? this.visTier : this.rodTier) - 1);
       L.tension += (pull * 0.9 * strong - 0.15) * dt;
