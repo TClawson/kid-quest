@@ -206,7 +206,7 @@ test('exercise tasks are bonus: they never block the day and earn gems, not coin
   assert.equal(totalGems(state, kid, '2026-11-02'), 10);
 });
 
-test('strong weeks: 4 exercise days add a week, 3 keep the count, fewer start it over', () => {
+test('strong weeks: 4 exercise days add a week, 3 keep the count, fewer take one away', () => {
   const state = emptyState();
   const kid = exerciseKid('2026-10-05'); // a Monday
   state.kids.push(kid);
@@ -238,33 +238,38 @@ test('strong weeks: 4 exercise days add a week, 3 keep the count, fewer start it
   info = exerciseStreakInfo(state, kid, '2026-11-08');
   assert.equal(info.weeks, 4);
   assert.equal(info.best, 4);
-  // a week with 2 days starts the count over, the best stays
+  // a week with 2 days takes one strong week away, the best stays
   exDays('2026-11-09', 2);
   info = exerciseStreakInfo(state, kid, '2026-11-17');
-  assert.equal(info.weeks, 0);
+  assert.equal(info.weeks, 3);
   assert.equal(info.best, 4);
   // an excused day lowers both marks: 3 exercise days + 1 sick day is a strong week
   exDays('2026-11-16', 3);
   state.log['2026-11-20'] = { kid_ex: { tasks: {}, excused: true } };
   info = exerciseStreakInfo(state, kid, '2026-11-22');
-  assert.equal(info.weeks, 1);
+  assert.equal(info.weeks, 4);
   assert.equal(info.goal, 3);
   assert.equal(info.keep, 2);
   // 2 exercise days + 1 sick day keeps the count
   exDays('2026-11-23', 2);
   state.log['2026-11-27'] = { kid_ex: { tasks: {}, excused: true } };
   info = exerciseStreakInfo(state, kid, '2026-12-01');
-  assert.equal(info.weeks, 1);
+  assert.equal(info.weeks, 4);
   // a week with 4+ excused days is skipped, even when excused later
   for (let i = 0; i < 7; i += 1) state.log[addDays('2026-11-30', i)] = { kid_ex: { tasks: {}, excused: true } };
   exDays('2026-12-07', 4);
   info = exerciseStreakInfo(state, kid, '2026-12-13');
-  assert.equal(info.weeks, 2);
+  assert.equal(info.weeks, 5);
   // excusing past days later fixes an old week that fell short (2 exercise days + 2 sick days)
   for (const key of ['2026-11-11', '2026-11-12']) state.log[key] = { kid_ex: { tasks: {}, excused: true } };
   info = exerciseStreakInfo(state, kid, '2026-12-13');
   assert.equal(info.weeks, 7); // 4, the fixed week, the sick-day week, a safe week and a skipped week (both hold), then one more
   assert.equal(info.best, 7);
+  // the count never goes below 0
+  const fresh = exerciseKid('2026-10-05');
+  fresh.id = 'kid_new';
+  state.kids.push(fresh);
+  assert.equal(exerciseStreakInfo(state, fresh, '2026-10-20').weeks, 0);
 });
 
 // ---------- weekly allowance and parent bonus ----------

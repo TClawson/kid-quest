@@ -716,15 +716,16 @@ export function exercisedOn(state, kid, key, today) {
 }
 
 /**
- * Strong weeks (the exercise streak) counts weeks (Monday to Sunday) in a row
- * with exercise on at least 4 days: a strong week adds one. A week with exactly
- * 3 days keeps the count safe without adding to it, and fewer starts it over.
+ * Strong weeks (the exercise streak) counts weeks (Monday to Sunday) with
+ * exercise on at least 4 days: a strong week adds one. A week with exactly 3
+ * days keeps the count safe without adding to it, and a week with fewer takes
+ * one away (never below 0), so one slow week never wipes out a good habit.
  * A day a parent excuses (sick, travel) counts neither for nor against it: each
  * excused day lowers both of that week's marks by one, and a week with 4 or
  * more excused days is skipped, keeping the count without adding to it.
  * Excusing works on past days too, since everything is worked out again from
  * the history. This week adds as soon as its goal is reached, and it can't
- * break the count until it is over. best is the longest run ever: moves it
+ * lower the count until it is over. best is the longest run ever: moves it
  * unlocked are never taken away. goal and keep are this week's marks.
  */
 export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
@@ -749,7 +750,7 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
     } else if (days >= need) weeks += 1;
     else if (days >= need - 1) {
       // one day short: the count is safe but doesn't grow
-    } else if (wk !== thisWeek) weeks = 0;
+    } else if (wk !== thisWeek) weeks = Math.max(0, weeks - 1);
     best = Math.max(best, weeks);
   }
   const goalNow = Math.max(0, need);
@@ -767,7 +768,7 @@ export const OLD_GAMES_PER_DAY = 8;
 export const SATURDAY_GAMES = 2;
 export const freeGamesOn = (key) => (dayOfWeek(key) === 6 ? SATURDAY_GAMES : 0);
 
-/** Games a kid may play with visitors in a day: 4, plus 2 for each of the current strong weeks in a row (up to 3). */
+/** Games a kid may play with visitors in a day: 4, plus 2 for each current strong week (up to 3). */
 export function gamesPerDay(exerciseWeeks = 0) {
   return GAMES_PER_DAY + 2 * Math.min(3, Math.max(0, Math.floor(exerciseWeeks)));
 }
