@@ -26,6 +26,8 @@
 // that the page scales up (draw); words go on a second, sharp canvas (drawHud).
 import { buildRig, render, Brain, CALM } from './rig.js';
 import { ballCells, SPRITE_Y } from './avatar.js';
+import { clamp } from './pixelkit.js';
+import { addPop } from './meter.js';
 
 /**
  * Which game a visitor plays, from the gear they own ({ kind: best tier }): one of
@@ -120,7 +122,7 @@ export function rng(seed) {
   let s = (seed >>> 0) || 1;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
-export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export { clamp };
 const lerp = (a, b, k) => a + (b - a) * k;
 
 export function canvas(w, h) {
@@ -141,10 +143,11 @@ export function cellsCanvas(cells) {
   return c;
 }
 
-/** A buddy's outfit for a game: held gear put down (the game draws the ball), running shoes on for tag. */
+/** A buddy's outfit for a game: held gear and the wand put down (the game draws the ball), running shoes on for tag. */
 export function playLook(buddy, gear, kind) {
   const outfit = { ...(buddy?.outfit || {}) };
   delete outfit.sport;
+  delete outfit.hand; // the wand is put down to play
   const version = (tier) => ['regular', 'good', 'super'][Math.max(0, Math.min(2, tier - 1))];
   if (kind === 'tag' && gear?.shoes) outfit.sport = `sport-shoes-${version(gear.shoes)}`;
   // hockey: everyone holds a stick (a borrowed regular one if they have none)
@@ -275,10 +278,7 @@ export class Play {
 
   get bounds() { const c = this.camX || 0; return { x0: c + 12, x1: c + this.W - 12, y0: this.top + 22, y1: this.H - 4 }; }
 
-  pop(text, x, y, color = '#ffffff', big = false) {
-    this.pops.push({ text, x, y, at: this.t, color, big });
-    if (this.pops.length > 8) this.pops.shift();
-  }
+  pop(text, x, y, color, big) { addPop(this, text, x, y, color, big); }
 
   nearest(x, y) {
     const d = (p) => Math.hypot(p.x - x, (p.y - 10) - y);

@@ -1,0 +1,238 @@
+/* ---------- the walkable village (js/village.js) ----------
+   Everything inside .village-world is in village pixels and is scaled up 3x (2x on
+   phones) by village.js, so sprites, labels and the buddy share one pixel grid. */
+
+.village { margin: 8px 0 12px; }
+.village-view {
+  position: relative; overflow: hidden; height: min(66vh, 680px); min-height: 360px;
+  border: 4px solid var(--px-ink); border-radius: 8px; background: #2f7d32;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer;
+}
+@media (max-width: 600px) { .village-view { height: min(62vh, 560px); } }
+.village-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.village-land, .v-sprite, .village .v-portrait canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+.village-land { position: absolute; left: 0; top: 0; }
+
+/* labels on the land: small wooden signs, in village pixels */
+.v-label {
+  position: absolute; transform: translate(-50%, 0); white-space: nowrap; pointer-events: none;
+  font: 700 7px/1 var(--px-font); letter-spacing: 0.02em; color: #fff8e7;
+  background: #6e3d1a; border: 1px solid var(--px-ink); padding: 1.5px 3px 1px; border-radius: 1px;
+  box-shadow: 0 1px 0 var(--px-ink);
+}
+.v-label.home-label { background: #fff8e7; color: var(--px-ink); top: 0; }
+.v-label.period { background: rgba(42, 24, 56, 0.72); border-color: transparent; box-shadow: none; }
+
+/* villagers: feet at (left, top) */
+.villager {
+  position: absolute; width: 16px; height: 22px; padding: 0; border: 0; background: none;
+  transform: translate(-50%, -100%); cursor: pointer; display: block;
+}
+.villager .v-sprite { position: absolute; left: 0; bottom: 0; width: 16px; height: auto; }
+.villager::after { content: ''; position: absolute; left: 2px; right: 2px; bottom: -1px; height: 2px; background: rgba(27, 20, 48, 0.22); border-radius: 50%; z-index: -1; }
+.villager .v-sprite { animation: v-idle 1.6s steps(2, end) infinite; transform-origin: 50% 100%; }
+.villager:nth-of-type(2n) .v-sprite { animation-delay: -0.8s; }
+@keyframes v-idle { 50% { transform: translateY(-0.5px) scaleY(1.03); } }
+.villager.st-done .v-sprite { animation: v-happy 0.9s steps(2, end) infinite; }
+@keyframes v-happy { 50% { transform: translateY(-1px); } }
+.villager.chatting .v-sprite, .villager.cheer .v-sprite { animation: v-hop 0.3s steps(2, end) 3; }
+@keyframes v-hop { 50% { transform: translateY(-3px); } }
+
+/* the floating picture of the chore over a villager's head */
+.v-bubble {
+  position: absolute; left: 50%; bottom: calc(100% + 1px); transform: translateX(-50%);
+  width: 15px; height: 13px; display: grid; place-items: center;
+  background: #fff8e7; border: 1px solid var(--px-ink); border-radius: 2px; box-shadow: 0 1px 0 var(--px-ink);
+}
+.v-bubble::after { content: ''; position: absolute; left: 50%; top: 100%; margin-left: -2px; border: 2px solid transparent; border-top-color: var(--px-ink); }
+.v-icon { font-size: 9px; line-height: 1; }
+.villager.st-todo .v-bubble, .villager.st-current .v-bubble { animation: v-float 1.2s ease-in-out infinite; }
+.villager.st-current .v-bubble { background: #fff3bf; outline: 1px solid #fcc419; }
+@keyframes v-float { 50% { transform: translate(-50%, -2px); } }
+.villager.st-done .v-bubble { background: #d3f9d8; }
+.villager.st-done .v-icon { opacity: 0.45; filter: grayscale(0.6); }
+.villager.st-pending .v-bubble { background: #e7f5ff; }
+.v-badge { position: absolute; right: -4px; top: -4px; width: 7px; height: 7px; border-radius: 50%; display: grid; place-items: center; font: 700 5px/1 var(--px-text); color: #fff; background: #2f9e44; border: 1px solid var(--px-ink); }
+.v-badge.wait { background: #fff; font-size: 4.5px; }
+/* hearts float up from a happy villager */
+.villager.st-done .v-hearts::before, .villager.st-done .v-hearts::after { content: '♥'; position: absolute; left: 1px; top: 4px; font: 6px/1 var(--px-text); color: #ff6b9a; opacity: 0; animation: v-heart 3s ease-out infinite; }
+.villager.st-done .v-hearts::after { left: 10px; animation-delay: 1.5s; }
+.villager.cheer .v-hearts::before, .villager.cheer .v-hearts::after { animation-duration: 0.9s; }
+@keyframes v-heart { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+
+/* the treasure chest on the south plaza */
+.v-chest { position: absolute; transform: translate(-50%, -100%); padding: 0; border: 0; background: none; cursor: pointer; }
+.v-chest svg { display: block; width: 20px; height: 13px; }
+.v-chest.ready svg { animation: v-hop 0.5s steps(2, end) infinite; filter: drop-shadow(0 0 2px #ffe066); }
+
+/* the buddy: feet at (left, top) */
+.v-buddy { position: absolute; width: 24px; height: 24px; transform: translate(-50%, -96%); pointer-events: none; }
+.v-buddy .v-flip, .v-buddy .buddy, .v-buddy canvas { width: 24px; height: 24px; display: block; }
+.v-buddy .buddy { background: none; border: 0; border-radius: 0; overflow: visible; }
+.v-buddy canvas { image-rendering: pixelated; }
+.v-buddy::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; background: rgba(27, 20, 48, 0.22); border-radius: 50%; z-index: -1; }
+.v-buddy.walking .buddy { animation: v-walk 0.28s steps(2, end) infinite; }
+@keyframes v-walk { 50% { transform: translateY(-1.5px); } }
+.v-target { position: absolute; width: 8px; height: 4px; margin: -2px 0 0 -4px; border: 1px solid #fff8e7; border-radius: 50%; pointer-events: none; opacity: 0.85; }
+.v-target.pop { animation: v-target 0.5s ease-out; }
+@keyframes v-target { from { transform: scale(2); opacity: 0; } }
+
+/* arrows on the edges, pointing to villagers off screen who still have a quest */
+.v-arrows { position: absolute; inset: 0; pointer-events: none; }
+.v-arrow {
+  position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; padding: 0; pointer-events: auto;
+  display: grid; place-items: center; border-radius: 50%; border: 3px solid var(--px-ink);
+  background: #fff8e7; box-shadow: 0 3px 0 var(--px-ink); cursor: pointer; animation: v-pulse 1.1s ease-in-out infinite;
+}
+.v-arrow-icon { font-size: 22px; line-height: 1; }
+.v-arrow-tip { position: absolute; inset: -12px; pointer-events: none; }
+.v-arrow-tip::after { content: ''; position: absolute; right: -2px; top: 50%; margin-top: -8px; border: 8px solid transparent; border-left: 10px solid var(--px-ink); }
+/* the next quest's arrow is gold */
+.v-arrow.now { background: #fff3bf; border-color: #e67700; box-shadow: 0 3px 0 #e67700; }
+.v-arrow.now .v-arrow-tip::after { border-left-color: #e67700; }
+@keyframes v-pulse { 50% { transform: scale(1.08); } }
+
+/* the talk box along the bottom, like an old adventure game */
+.v-dialog {
+  position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 12px; align-items: flex-start;
+  background: #fff8e7; border: 4px solid var(--px-ink); border-radius: 6px; padding: 10px 12px;
+  box-shadow: inset 0 0 0 3px #f3e6c4, 0 4px 0 var(--px-ink); cursor: default; animation: v-pop 0.18s steps(3, end);
+}
+.v-dialog[hidden] { display: none; }
+@keyframes v-pop { from { transform: translateY(16px); opacity: 0; } }
+.v-portrait { flex: none; width: 64px; height: 76px; display: grid; place-items: end center; background: #7bd66b; border: 3px solid var(--px-ink); border-radius: 4px; padding-bottom: 4px; }
+.v-portrait canvas { width: 48px; height: auto; }
+.v-talk { flex: 1; min-width: 0; }
+.v-name { display: block; font: 700 1.15rem/1.1 var(--px-font); color: #7048e8; }
+.v-text { margin: 4px 0 8px; font: 1.05rem/1.35 var(--px-text); color: var(--px-ink); min-height: 2.6em; }
+.v-quest { display: flex; gap: 10px; align-items: center; padding: 6px 10px; margin-bottom: 8px; background: #fff3bf; border: 2px dashed #e67700; border-radius: 4px; }
+.v-quest-icon { font-size: 1.8rem; line-height: 1; }
+.v-quest b { display: block; font: 700 1.2rem/1.1 var(--px-font); }
+.v-quest small { display: block; color: var(--muted); }
+.v-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.v-buttons .btn { min-height: 44px; padding: 6px 14px; }
+@media (max-width: 600px) {
+  .v-dialog { left: 6px; right: 6px; bottom: 6px; padding: 8px; gap: 8px; }
+  .v-portrait { width: 48px; height: 58px; }
+  .v-portrait canvas { width: 32px; }
+  .v-text { font-size: 0.95rem; }
+}
+
+/* the kid's own plan: step numbers on the bubbles, and the plan sentence in the quest card */
+.v-step { position: absolute; left: -4px; top: -4px; width: 7px; height: 7px; border-radius: 50%; display: grid; place-items: center; font: 700 5px/1 var(--px-text); color: #fff; background: #7048e8; border: 1px solid var(--px-ink); }
+.villager.st-current .v-step { background: #e67700; }
+.v-quest .v-plan { color: #7048e8; font-style: italic; margin-top: 2px; }
+
+/* ---------- visitors on the village green (in village pixels) ---------- */
+.village .v-visitors { position: absolute; inset: 0; height: auto; z-index: auto; }
+.v-visitor { position: absolute; width: 24px; height: 24px; transform: translate(-50%, -96%); cursor: pointer; }
+.v-visitor::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; background: rgba(27, 20, 48, 0.22); border-radius: 50%; z-index: -1; }
+.v-vbuddy, .v-vbuddy canvas, .v-vbuddy svg { width: 24px; height: 24px; display: block; image-rendering: pixelated; }
+.v-vbuddy { position: relative; }
+.v-vbuddy svg { position: absolute; inset: 0; }
+.v-visitor .visitor-name { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 1px; font: 700 5px/1.3 var(--px-font); padding: 0 2px; border-width: 1px; border-radius: 1px; white-space: nowrap; pointer-events: none; }
+.v-visitor .visitor-bubble {
+  top: auto; bottom: 100%; margin: 0 0 3px; max-width: 70px; font: 700 5px/1.25 var(--px-text); padding: 1.5px 2.5px;
+  border-width: 1px; border-radius: 2px; box-shadow: 1px 1px 0 var(--px-ink); transform: translateX(-50%) scale(0.6); transform-origin: 50% 100%;
+}
+.v-visitor .visitor-bubble::before { top: auto; bottom: -3px; margin-left: -2px; border: 2px solid transparent; border-top-color: var(--px-ink); border-bottom: 0; }
+.v-visitor.talking .visitor-bubble { opacity: 1; transform: translateX(-50%) scale(1); }
+.v-visitor.talking .cheer-btn { pointer-events: auto; }
+.v-visitor .cheer-btn { display: block; margin: 1.5px auto 0; font: 700 5px/1 var(--px-font); padding: 1.5px 3px; border: 1px solid var(--px-ink); border-radius: 2px; background: #ffd43b; color: var(--px-ink); }
+.v-visitor.news .visitor-bubble, .v-visitor.cheering .visitor-bubble { background: #fff3bf; }
+.v-visitor.doing-move { z-index: 900 !important; }
+/* fishing: a line to a bobber, and now and then a catch */
+.v-line { position: absolute; height: 0.5px; background: #f8f9fa; transform-origin: 0 50%; pointer-events: none; }
+.v-bobber { position: absolute; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: #e03131; box-shadow: inset 0 -1.5px 0 #fff; animation: v-bob 1.6s ease-in-out infinite; }
+@keyframes v-bob { 50% { transform: translateY(0.8px); } }
+.v-visitor.reeling .v-bobber { animation: v-bob 0.25s steps(2, end) infinite; }
+.v-catch { position: absolute; top: 4px; width: 18px; pointer-events: none; opacity: 0; }
+.v-catch svg { width: 100%; height: auto; display: block; }
+.v-visitor.reeling .v-catch { animation: v-catch 2.4s ease-out 0.5s both; }
+@keyframes v-catch { 0% { opacity: 0; transform: translateY(14px); } 20% { opacity: 1; transform: translateY(-4px); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+
+/* play patches: the ball goes back and forth between two players, or up and down for one */
+.v-area { position: absolute; pointer-events: none; }
+.v-area.tap { pointer-events: auto; cursor: pointer; }
+.v-ball { position: absolute; left: 12px; top: 50%; width: 8px; height: 8px; margin: -6px 0 0 -4px; animation: v-pass 2.2s ease-in-out infinite alternate; }
+.v-ball svg { width: 8px; height: 8px; display: block; }
+@keyframes v-pass { from { left: 14px; } to { left: calc(100% - 14px); } }
+.v-area-football .v-ball { animation-name: v-throw; }
+@keyframes v-throw { 0% { left: 14px; transform: translateY(0); } 50% { transform: translateY(-14px); } 100% { left: calc(100% - 14px); transform: translateY(0); } }
+.v-area.solo .v-ball { left: var(--solo-x); animation: v-juggle 0.9s ease-in-out infinite; }
+.v-area.solo.from-left .v-ball { margin-left: 6px; } .v-area.solo.from-right .v-ball { margin-left: -14px; }
+@keyframes v-juggle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+
+/* a finished treasure map's landmark */
+.v-landmark { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; z-index: 470; }
+.v-landmark svg { display: block; width: 100%; height: auto; }
+.v-landmark canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+.v-landmark.art-oak .v-lm-bubble { bottom: auto; top: 46px; } /* the Great Oak talks from under its crown, just above its face */
+.v-landmark.art-wreck .v-lm-bubble { bottom: auto; top: 0; left: 78%; } /* the wreck talks from the open sky behind its sail */
+.v-landmark.art-galleon .v-lm-bubble { bottom: auto; top: 0; left: 42%; } /* the octopus talks from the open water over its head */
+.v-landmark.art-cave .v-lm-bubble { bottom: auto; top: 0; left: 24%; } /* the moon worm talks from over the crystals beside its head (in view on a phone too) */
+.v-landmark.art-gate .v-lm-bubble { bottom: auto; top: 0; left: 18%; } /* the baby dragon talks from the open sky over the left tower */
+.v-landmark.art-stone .v-lm-bubble { bottom: auto; top: 4px; left: 50%; } /* the stone face talks from over its mossy head */
+.v-landmark.art-kapok .v-lm-bubble { bottom: auto; top: 2px; left: 18%; } /* the kapok talks from over the left of its crown, clear of the rain cloud */
+.v-landmark.art-goldpot .v-lm-bubble { bottom: auto; top: 2px; left: 26%; } /* the pot of gold talks from the clear sky over its rainbow, clear of the coins (in view on a phone too) */
+.v-landmark.art-starwhale .v-lm-bubble { bottom: auto; top: 0; left: 30%; } /* the star whale talks from the sky over its tail, clear of the observatory and the star fountain */
+.v-lm-bubble { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); width: max-content; max-width: 80px; font: 700 5px/1.25 var(--px-text); background: #fff8e7; color: var(--px-ink); border: 1px solid var(--px-ink); border-radius: 2px; padding: 1.5px 2.5px; }
+.v-show { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
+.v-show canvas.map-land { display: none; }
+
+/* little things flitting about: butterflies (a seagull, bubbles, embers... on other maps) */
+.v-critter { position: absolute; width: 3px; height: 2px; pointer-events: none; z-index: 600; --c: #ff8fab; background: var(--c); box-shadow: 3px 0 0 var(--c), 1.5px 1px 0 var(--px-ink); animation: v-flit 14s linear infinite, v-flap 0.3s steps(2, end) infinite; }
+.v-critter.b2 { --c: #fcc419; animation-name: v-flit2, v-flap; animation-duration: 19s, 0.25s; animation-delay: -6s, 0s; }
+@keyframes v-flap { 50% { transform: scaleX(0.4); } }
+@keyframes v-flit {
+  0% { left: 120px; top: 100px; } 20% { left: 190px; top: 70px; } 40% { left: 300px; top: 110px; }
+  60% { left: 260px; top: 200px; } 80% { left: 150px; top: 180px; } 100% { left: 120px; top: 100px; }
+}
+@keyframes v-flit2 {
+  0% { left: 100px; top: 380px; } 25% { left: 180px; top: 420px; } 50% { left: 320px; top: 400px; }
+  75% { left: 280px; top: 480px; } 100% { left: 100px; top: 380px; }
+}
+.theme-bg-sunset .v-critter { --c: #f8f9fa; height: 1px; box-shadow: 3px 0 0 var(--c), 1.5px 1px 0 #495057; }
+.theme-bg-rainforest .v-critter { --c: #3bc9db; }
+.theme-bg-rainforest .v-critter.b2 { --c: #ff922b; }
+.theme-bg-rainbow .v-critter { --c: #ffffff; }
+.theme-bg-rainbow .v-critter.b2 { --c: #b197fc; }
+.theme-bg-castle .v-critter.b2 { --c: #b197fc; }
+/* bubbles under the sea, embers on the volcano, blinking lights on the moon and in the galaxy: they rise or twinkle */
+.theme-bg-ocean .v-critter, .theme-bg-volcano .v-critter { width: 3px; height: 3px; border-radius: 50%; box-shadow: none; background: transparent; border: 1px solid #d0ebff; animation: v-rise 7s linear infinite; left: 120px; }
+.theme-bg-ocean .v-critter.b2, .theme-bg-volcano .v-critter.b2 { left: 330px; animation-duration: 9s; animation-delay: -4s; }
+.theme-bg-volcano .v-critter { border: 0; background: #ff922b; width: 2px; height: 2px; }
+.theme-bg-volcano .v-critter.b2 { background: #ffd43b; }
+@keyframes v-rise { 0% { top: 520px; transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 50% { transform: translateX(6px); } 100% { top: 60px; transform: translateX(-4px); opacity: 0; } }
+.theme-bg-space .v-critter, .theme-bg-galaxy .v-critter { --c: #ffd43b; width: 2px; height: 2px; box-shadow: 0 0 3px 1px var(--c); animation: v-flit 30s linear infinite, v-blink 1s steps(2, end) infinite; }
+.theme-bg-space .v-critter.b2, .theme-bg-galaxy .v-critter.b2 { --c: #74c0fc; animation: v-flit2 40s linear infinite, v-blink 0.8s steps(2, end) infinite; }
+@keyframes v-blink { 50% { opacity: 0.2; } }
+
+/* the shopkeeper and a villager with more than one quest */
+.v-badge.more { width: auto; min-width: 7px; padding: 0 1px; border-radius: 3px; background: #f08c00; font-size: 4.5px; }
+.villager.keeper .v-bubble { background: #fff3bf; }
+
+/* the family party: everyone in the village hops */
+.village.party .villager .v-sprite, .village.party .v-visitor .v-vbuddy { animation: v-hop 0.4s steps(2, end) infinite; }
+.village.party .village-view { animation: v-glow 1s steps(2, end) infinite; }
+@keyframes v-glow { 50% { box-shadow: inset 0 0 0 4px #ffd43b; } }
+/* the map's moving things, over the land and under the people */
+.v-life { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; }
+/* fishbowl helmets (ocean and moon villages): over the head and any hat, moving with it */
+.v-bowl { position: absolute; pointer-events: none; background-size: 100% 100%; image-rendering: pixelated; image-rendering: crisp-edges; z-index: 2; }
+.v-flip { position: relative; }
+.v-buddy.walking .v-bowl { animation: v-walk 0.28s steps(2, end) infinite; }
+.villager .v-bowl { animation: v-idle 1.6s steps(2, end) infinite; transform-origin: 50% 100%; }
+.villager:nth-of-type(2n) .v-bowl { animation-delay: -0.8s; }
+.villager.st-done .v-bowl { animation: v-happy 0.9s steps(2, end) infinite; }
+.villager.chatting .v-bowl, .villager.cheer .v-bowl { animation: v-hop 0.3s steps(2, end) 3; }
+.village.party .villager .v-bowl { animation: v-hop 0.4s steps(2, end) infinite; }
+/* a scared buddy, running from a crab */
+.v-buddy.scared::before { content: '!'; position: absolute; left: 50%; top: -4px; transform: translateX(-50%); font: 700 13px/1 var(--px-font); color: #ffe066; text-shadow: 1px 0 var(--px-ink), -1px 0 var(--px-ink), 0 1px var(--px-ink), 0 -1px var(--px-ink); animation: v-hop 0.3s steps(2, end) infinite; }
+
+/* the kid's house: tap it and the buddy walks in the door (js/house.js is inside) */
+.v-home { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; }
+.v-home-door { position: absolute; bottom: 4px; transform: translateX(-50%); font-size: 7px; line-height: 1; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.v-home:hover .v-home-door, .v-home:focus-visible .v-home-door { opacity: 0.9; }
+.v-buddy.going-in { animation: v-go-in 0.4s steps(4, end) forwards; }
+@keyframes v-go-in { to { transform: translate(-50%, -110%); opacity: 0; } }

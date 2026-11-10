@@ -3,8 +3,16 @@
 // Everything comes out as an SVG string, so it works in the app and in tests.
 
 import { LANDMARKS } from './landmarks.js';
+import { upscale, thinOutline } from './upscale.js';
 
 const OUT = '#2a1838';
+
+/** Lighten (k > 0) or darken (k < 0) a #rrggbb color. */
+function tint(hex, k) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255]; const t = k > 0 ? [255, 255, 255] : [27, 20, 48]; const a = Math.abs(k);
+  return `#${c.map((v, i) => Math.round(v + (t[i] - v) * a).toString(16).padStart(2, '0')).join('')}`;
+}
 
 /** Wrap a grid's shape in an outline ring of K (like sprite() in maplife.js). */
 export function outlined(rows) {
@@ -46,6 +54,44 @@ class Pix {
       }
     });
     return this;
+  }
+  /** The picture smoothed up n times (Scale2x / Scale3x, see upscale.js): bigger, but with pixels the same size. */
+  smooth(n) {
+    const codes = new Map([[OUT, 'K']]);
+    const chars = 'ABCDEFGHIJLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&*+-:;<=>?@^_~';
+    const rows = [];
+    for (let y = 0; y < this.h; y += 1) {
+      let row = '';
+      for (let x = 0; x < this.w; x += 1) {
+        const c = this.cells.get(`${x},${y}`);
+        if (!c) { row += '.'; continue; }
+        if (!codes.has(c)) codes.set(c, chars[codes.size - 1] || '?');
+        row += codes.get(c);
+      }
+      rows.push(row);
+    }
+    const back = new Map([...codes].map(([c, ch]) => [ch, c]));
+    let g = rows;
+    if (n === 4) g = upscale(upscale(rows, 2), 2); else if (n === 2 || n === 3) g = upscale(rows, n);
+    g = thinOutline(g, n - 1);
+    const out = new Pix(this.w * n, this.h * n);
+    g.forEach((row, y) => { for (let x = 0; x < row.length; x += 1) if (row[x] !== '.') out.cells.set(`${x},${y}`, back.get(row[x])); });
+    // fine detail, like the village's own drawings: lit top-left edges, shaded bottom-right
+    // edges and a little texture, one fine pixel at a time
+    const at = (x, y) => g[y]?.[x] || '.';
+    const solid = (x, y) => { const c = at(x, y); return c !== '.' && c !== 'K'; };
+    g.forEach((row, y) => {
+      for (let x = 0; x < row.length; x += 1) {
+        if (!solid(x, y)) continue;
+        const c = back.get(row[x]);
+        let k = 0;
+        if (!solid(x, y - 1) || !solid(x - 1, y)) k = 0.22;
+        else if (!solid(x, y + 1) || !solid(x + 1, y)) k = -0.18;
+        else { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; const t = h - Math.floor(h); k = t < 0.12 ? -0.08 : t > 0.9 ? 0.07 : 0; }
+        if (k) out.cells.set(`${x},${y}`, tint(c, k));
+      }
+    });
+    return out;
   }
   rects() {
     let out = '';
@@ -583,7 +629,7 @@ export const SECRETS = {
 };
 
 /** The hidden spot's SVG: three frames stacked, CSS shows one at a time (see .map-secret). */
-export function secretSvg(themeId, scale = 4) {
+export function secretSvg(themeId, scale = 4, { smooth = 1 } = {}) {
   const s = SECRETS[themeId];
   if (!s) return '';
   // the big landmark if there is one (landmarks.js), else the small spot above
@@ -591,9 +637,17 @@ export function secretSvg(themeId, scale = 4) {
   const w = art.w + 2;
   const h = art.h + 2;
   const frames = [0, 1, 2].map((i) => {
-    const p = new Pix(w, h);
+    let p = new Pix(w, h);
     for (const [x, y, rows, pal, outline = true] of art.frames(i)) p.put(x + 1, y + 1, rows, pal, outline);
+    // smooth > 1: drawn bigger with fine pixels (the village), not blown up
+    if (smooth > 1) p = p.smooth(smooth);
     return `<g class="f${i}">${p.rects()}</g>`;
   }).join('');
-  return svgOf(w, h, scale, 'secret-svg', frames);
+  return svgOf(w * smooth, h * smooth, scale, 'secret-svg', frames);
+}
+
+/** A landmark's size in art pixels (with its outline), for laying it out. */
+export function secretSize(themeId) {
+  const art = LANDMARKS[themeId] || SECRETS[themeId];
+  return art ? { w: art.w + 2, h: art.h + 2 } : null;
 }

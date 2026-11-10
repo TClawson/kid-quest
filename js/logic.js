@@ -48,9 +48,10 @@ export function defaultTasks() {
     ...extra,
   });
   return [
-    t('Brush teeth', '🪥', 'morning', ALL_DAYS),
-    t('Make bed', '🛏️', 'morning', ALL_DAYS),
-    t('Clear bedroom floor', '🧸', 'morning', ALL_DAYS),
+    // linked to the buddy's house (houserules.js): the toothbrush, the bed and the floor
+    t('Brush teeth', '🪥', 'morning', ALL_DAYS, { house: 'teeth' }),
+    t('Make bed', '🛏️', 'morning', ALL_DAYS, { house: 'bed' }),
+    t('Clear bedroom floor', '🧸', 'morning', ALL_DAYS, { house: 'floor' }),
     t('Piano practice', '🎹', 'afternoon', WEEKDAYS, { verify: 'parent', minutes: 30 }),
     t('Chore of the week', '🧽', 'afternoon', [1, 2, 3, 4], { verify: 'parent' }),
     t('Chore of the week: deep clean', '✨', 'afternoon', [5], { verify: 'parent' }),
@@ -407,7 +408,7 @@ export const COMEBACK_BONUS = 15;
  * - A complete day adds 1 to the streak. Every 7 complete days in a row earn a freeze (max 2).
  * - An excused day keeps the streak as it is.
  * - A missed past day uses a freeze if one is available. Otherwise the streak is
- *   cut in half (not back to 0): research on streaks finds that losing all of it
+ *   loses a quarter, rounded up (so at least 1 day, never back to 0): research on streaks finds that losing all of it
  *   makes kids give up, while a smaller setback keeps them going.
  * - Today never breaks the streak; it only adds once it is complete.
  * - inARow counts real days in a row (a freeze or an excused day keeps it, a
@@ -448,7 +449,7 @@ export function streakInfo(state, kid, today) {
         frozen.push(key);
         missed = true;
       } else {
-        streak = Math.floor(streak / 2);
+        streak -= Math.ceil(streak / 4);
         inARow = 0;
         run = 0;
         missed = true;
@@ -695,7 +696,7 @@ export const PIANO_DAYS_PER_FREEZE = 10;
  * The piano streak counts piano days done in a row (parent-approved, like the main streak).
  * Days without piano don't break it, an excused day keeps it, and today only adds once done.
  * Every 10 piano days in a row earn one piano freeze (only one is kept), which covers a
- * missed piano day. A miss with no freeze cuts the streak in half.
+ * missed piano day. A miss with no freeze loses a quarter of the streak, rounded up.
  */
 export function pianoStreakInfo(state, kid, today) {
   let streak = 0;
@@ -717,7 +718,7 @@ export function pianoStreakInfo(state, kid, today) {
       freezes = 0;
       run = 0;
     } else {
-      streak = Math.floor(streak / 2);
+      streak -= Math.ceil(streak / 4);
       run = 0;
     }
     best = Math.max(best, streak);
@@ -725,10 +726,12 @@ export function pianoStreakInfo(state, kid, today) {
   return { streak, best, freezes, perWeek: pianoDaysPerWeek(kid) };
 }
 
-// ---------- exercise streak ----------
+// ---------- strong weeks (the exercise streak) ----------
 
-/** Exercise days a week needs to count toward the exercise streak. */
-export const EXERCISE_DAYS = 5;
+/** Exercise days that make a week a strong week, adding one to the count. */
+export const EXERCISE_DAYS = 4;
+/** Exercise days that keep the count safe without adding to it (one less than a strong week). */
+export const EXERCISE_KEEP_DAYS = EXERCISE_DAYS - 1;
 
 /** Monday of the week a day is in. */
 export function weekStart(key) {
@@ -743,14 +746,17 @@ export function exercisedOn(state, kid, key, today) {
 }
 
 /**
- * The exercise streak counts weeks (Monday to Sunday) in a row with exercise on
- * at least 5 days. A day a parent excuses (sick, travel) counts neither for nor
- * against it: each excused day lowers that week's goal by one, and a week with
- * 5 or more excused days is skipped, keeping the streak without adding to it.
+ * Strong weeks (the exercise streak) counts weeks (Monday to Sunday) with
+ * exercise on at least 4 days: a strong week adds one. A week with exactly 3
+ * days keeps the count safe without adding to it, and a week with fewer takes
+ * one away (never below 0), so one slow week never wipes out a good habit.
+ * A day a parent excuses (sick, travel) counts neither for nor against it: each
+ * excused day lowers both of that week's marks by one, and a week with 4 or
+ * more excused days is skipped, keeping the count without adding to it.
  * Excusing works on past days too, since everything is worked out again from
  * the history. This week adds as soon as its goal is reached, and it can't
- * break the streak until it is over. best is the longest run ever: moves it
- * unlocked are never taken away.
+ * lower the count until it is over. best is the longest run ever: moves it
+ * unlocked are never taken away. goal and keep are this week's marks.
  */
 export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
   const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
@@ -770,12 +776,17 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
     }
     need = goal - excused;
     if (need <= 0) {
-      // excused nearly all week: the streak waits
+      // excused nearly all week: the count waits
     } else if (days >= need) weeks += 1;
-    else if (wk !== thisWeek) weeks = 0;
+    else if (days >= need - 1) {
+      // one day short: the count is safe but doesn't grow
+    } else if (wk !== thisWeek) weeks = Math.max(0, weeks - 1);
     best = Math.max(best, weeks);
   }
-  return { weeks, best, thisWeek: days, goal: Math.max(0, need), today: exercisedOn(state, kid, today, today) };
+  const goalNow = Math.max(0, need);
+  const keep = Math.max(0, goalNow - 1);
+  const status = days >= goalNow ? 'strong' : days >= keep ? 'safe' : 'short';
+  return { weeks, best, thisWeek: days, goal: goalNow, keep, status, today: exercisedOn(state, kid, today, today) };
 }
 
 // ---------- games with visiting buddies ----------
@@ -783,7 +794,11 @@ export const GAMES_PER_DAY = 4;
 /** The daily games before 2026-11-06 (PR #55), when play logs had no cap yet. */
 export const OLD_GAMES_PER_DAY = 8;
 
-/** Games a kid may play with visitors in a day: 4, plus 2 for each week of the current exercise streak (up to 3). */
+/** Free extra games every Saturday, kept and used just like treasure chest games. */
+export const SATURDAY_GAMES = 2;
+export const freeGamesOn = (key) => (dayOfWeek(key) === 6 ? SATURDAY_GAMES : 0);
+
+/** Games a kid may play with visitors in a day: 4, plus 2 for each current strong week (up to 3). */
 export function gamesPerDay(exerciseWeeks = 0) {
   return GAMES_PER_DAY + 2 * Math.min(3, Math.max(0, Math.floor(exerciseWeeks)));
 }
@@ -831,6 +846,27 @@ export function logGame(kid, today, cap) {
   if (log?.day === today) return { ...log, n: (log.n || 0) + 1, cap };
   const prev = log?.day ? { day: log.day, n: log.n || 0, ...(Number.isFinite(log.cap) ? { cap: log.cap } : {}) } : undefined;
   return { day: today, n: 1, cap, ...(prev ? { prev } : {}) };
+}
+
+// ---------- borrowing a visitor's gear ----------
+// A visitor with a ball, stick or rod that the kid doesn't own lends it for a
+// couple of games a day, so the kid can try it. kid.lendLog is { day, counts: { gear: games } }.
+
+export const LEND_GAMES = 2;
+
+/** Borrowed games left today with a kind of gear (soccer, hockey, football, rod). */
+export function lendLeft(kid, today, gear) {
+  const log = kid?.lendLog;
+  const used = log?.day === today ? log.counts?.[gear] || 0 : 0;
+  return Math.max(0, LEND_GAMES - used);
+}
+
+/** kid.lendLog after one more borrowed game today. */
+export function logLend(kid, today, gear) {
+  const log = kid?.lendLog;
+  const counts = log?.day === today ? { ...log.counts } : {};
+  counts[gear] = (counts[gear] || 0) + 1;
+  return { day: today, counts };
 }
 
 // ---------- the kid's own plan ----------

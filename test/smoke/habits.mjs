@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { ITEMS } from '../../js/items.js';
 import { emptyState, defaultTasks, dateKey, addDays, fallbackHash, tasksForDay, questTasks, weekStart } from '../../js/logic.js';
+import { seenSaturday } from '../helpers/seed.mjs';
 
 const shots = process.env.SHOTS_DIR;
 if (shots) mkdirSync(shots, { recursive: true });
@@ -54,7 +55,7 @@ function family({ avaToday = 0, benToday = 0 } = {}) {
 
 async function open(page, s) {
   await page.goto(site.url);
-  await page.evaluate((x) => localStorage.setItem('kidquest.v1', JSON.stringify(x)), s);
+  await page.evaluate((x) => localStorage.setItem('kidquest.v1', JSON.stringify(x)), seenSaturday(s));
   await page.reload();
 }
 const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
@@ -91,7 +92,9 @@ try {
     // 2. then last week, next to four weeks before
     await page.waitForSelector('.modal-card .lookback');
     const look = await page.textContent('.modal-card .lookback');
-    assert.match(look, /Make bed\s*7 of 7/);
+    // on a Monday, the missed yesterday was the last day of last week
+    const bedLastWeek = weekStart(addDays(today, -1)) < weekStart(today) ? 6 : 7;
+    assert.match(look, new RegExp(`Make bed\\s*${bedLastWeek} of 7`));
     assert.match(look, /4 weeks ago: [0-6] of 7/);
     await shot(page, `lookback-${tag}.png`);
 
@@ -132,6 +135,14 @@ try {
     const habits = await page.textContent('.habits');
     assert.match(habits, /Mastered habit/);
     assert.match(habits, /Make bed/);
+    assert.match(await page.textContent('.streak-line'), /Streak \d+ days?.*Best \d+ days?/);
+    await page.locator('.streak-line').scrollIntoViewIfNeeded();
+    await shot(page, `streak-line-${tag}.png`);
+    // the week boxes keep their size and sit above the month line (a stray .dot rule once squashed them)
+    const dotBox = await page.locator('.week .dot span').first().boundingBox();
+    const monthBox = await page.locator('.month-line').boundingBox();
+    assert.ok(dotBox.width > 30, `week box is ${dotBox.width}px wide`);
+    assert.ok(dotBox.y + dotBox.height <= monthBox.y, 'week boxes overlap the month line');
     assert.match(await page.textContent('.month-line'), /This month: \d+ of \d+ days done/);
     await page.locator('.habits').scrollIntoViewIfNeeded();
     await shot(page, `habits-${tag}.png`);
@@ -154,7 +165,10 @@ try {
     assert.ok(coinsAfter >= coinsBefore + 15, `${coinsBefore} -> ${coinsAfter}`);
 
     // 5. the family party: Ben is done and Ava has one left (over 85%), so opening the map starts it
-    const party = family({ avaToday: -1, benToday: 99 });
+    // (weekends have fewer chores: when one left would drop below 85%, Ava finishes too)
+    const probe = family();
+    const n = (k) => questTasks(tasksForDay(probe, probe.kids[k], today, today)).length;
+    const party = family({ avaToday: (n(0) - 1 + n(1)) / (n(0) + n(1)) >= 0.85 ? -1 : 99, benToday: 99 });
     party.kids[0].seenMastered = party.kids[0].tasks.map((t) => t.id);
     party.kids[0].lookbackSeen = s2.kids[0].lookbackSeen;
     await open(page, party);
@@ -204,7 +218,10 @@ try {
     const dir = join(shots, 'video');
     const ctx = await browser.newContext({ viewport: { width: 600, height: 900 }, recordVideo: { dir, size: { width: 600, height: 900 } } });
     const page = await ctx.newPage();
-    const party = family({ avaToday: -1, benToday: 99 });
+    // (weekends have fewer chores: when one left would drop below 85%, Ava finishes too)
+    const probe = family();
+    const n = (k) => questTasks(tasksForDay(probe, probe.kids[k], today, today)).length;
+    const party = family({ avaToday: (n(0) - 1 + n(1)) / (n(0) + n(1)) >= 0.85 ? -1 : 99, benToday: 99 });
     party.kids[0].seenMastered = party.kids[0].tasks.map((t) => t.id);
     party.kids[0].lookbackSeen = weekStart(today);
     await open(page, party);

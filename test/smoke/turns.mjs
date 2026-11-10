@@ -44,7 +44,8 @@ try {
   assert.equal(a.everyOtherWeek, weekParity(today));
   assert.equal(b.everyOtherWeek, 1 - weekParity(today));
   assert.deepEqual(b.days, [6]);
-  const sat = addDays(today, (6 - new Date().getDay() + 7) % 7);
+  // the Saturday in this Mon-Sun week (turns follow the week's parity, so on a Sunday it is yesterday)
+  const sat = addDays(today, 5 - ((new Date().getDay() + 6) % 7));
   const has = (i, key) => tasksForDay(after, after.kids[i], key, key).some((t) => t.name === 'Clean the bathroom');
   assert.ok(has(0, sat) && !has(1, sat), 'Ava this Saturday');
   assert.ok(!has(0, addDays(sat, 7)) && has(1, addDays(sat, 7)), 'Ben next Saturday');

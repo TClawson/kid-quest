@@ -6,6 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { seenSaturday } from '../helpers/seed.mjs';
 
 const shots = process.env.SHOTS;
 if (shots) mkdirSync(shots, { recursive: true });
@@ -65,7 +66,7 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
-    await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), seed());
+    await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), seenSaturday(seed()));
     await page.reload();
     // Android's "text size" setting makes every font bigger; FONT_SCALE=1.3 tries that
     if (process.env.FONT_SCALE) await page.addStyleTag({ content: `html { font-size: ${process.env.FONT_SCALE * 100}%; }` });
@@ -83,10 +84,23 @@ try {
     await go('[data-action="open-kid"][data-id="kid_ava"]');
     await page.waitForSelector('.quest-map');
     await check('kid-map');
-    await go('[data-action="quest-mode"][data-mode="list"]');
-    await check('kid-list');
-    const piano = await page.$('[data-action="task"]:has-text("Piano")');
-    if (piano) { await piano.click(); await page.waitForSelector('.timer'); await check('timer'); await go('[data-action="timer-back"]'); }
+    await go('[data-action="quest-mode"][data-mode="village"]');
+    await page.waitForSelector('.village .villager');
+    await check('kid-village');
+    // the piano's villager: walk over, then start the timer from what they say
+    // (weekdays only: the default piano task has no Saturday or Sunday). The piano's villager
+    // can be off screen, where a real click can't reach it, so the tap is sent to it directly.
+    const piano = await page.$('.villager[aria-label*="Piano"]');
+    if (piano) {
+      await piano.dispatchEvent('click');
+      await page.waitForSelector('.v-dialog:not([hidden]) [data-v="do"]', { timeout: 15000 });
+      await check('kid-village-talk');
+      await page.click('.v-dialog [data-v="do"]');
+      await page.waitForSelector('.timer');
+      await check('timer');
+      await go('[data-action="timer-back"]');
+    }
+    await go('[data-action="quest-mode"][data-mode="map"]');
     await go('[data-action="home"]');
     // Annabelle still has chores, so her buddy store is locked; Ben's day is excused, so his is open
     await go('[data-action="open-kid"][data-id="kid_ben"]');

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, fallbackHash } from '../../js/logic.js';
+import { seenSaturday } from '../helpers/seed.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -23,7 +24,7 @@ try {
   saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: ava, startDate: dateKey(), owned: [], spent: 0 });
   saved.kids.push({ id: 'kid_ben', name: 'Ben', color: '#4dabf7', tasks: ben, startDate: dateKey(), owned: [], spent: 0 });
   await page.goto(site.url);
-  await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
+  await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), seenSaturday(saved));
   await page.reload();
   const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
 
@@ -37,7 +38,7 @@ try {
 
   // From here on, test a family whose allowance already runs today.
   s.settings.allowance.since = dateKey();
-  await page.evaluate((x) => localStorage.setItem('kidquest.v1', JSON.stringify(x)), s);
+  await page.evaluate((x) => localStorage.setItem('kidquest.v1', JSON.stringify(x)), seenSaturday(s));
   await page.reload();
 
   // Ava brushes her teeth: a small task's share of 300.

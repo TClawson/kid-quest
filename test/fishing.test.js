@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BAIT, BAITS, baitToday, pointsFor, POINTS, pickiness, strikeChance, SPOTS, SPECIES, GAME_SECONDS, SNAG } from '../js/fishing.js';
+import { BAIT, BAITS, baitToday, pointsFor, POINTS, pickiness, strikeChance, SPOTS, SPECIES, GAME_SECONDS, SNAG, ROD_ZOOM, sizePower, BOAT_OUT, maxSizeAt } from '../js/fishing.js';
 
 test('bait: jigs and spoons for bass and pike, worms for catfish and bluegill', () => {
   const like = (b, k) => BAIT[b].like[k];
@@ -54,4 +54,34 @@ test('every regular map has its own fishing spot and rare fish', () => {
   assert.ok(leans.size >= 3);
   assert.equal(GAME_SECONDS, 90);
   assert.deepEqual(SNAG, { weed: 0.1, log: 0.5 });
+});
+
+test('every map but Forest Lake has its own fish and bait names; they keep how they work', async () => {
+  const { lookFor, baitNames, BAITS: B } = await import('../js/fishing.js');
+  const kinds = Object.keys(SPECIES);
+  for (const map of Object.keys(SPOTS)) {
+    const names = kinds.map((k) => lookFor(map, k).name);
+    assert.equal(new Set(names).size, kinds.length, `${map}: five different fish`);
+    if (map !== 'bg-meadow') assert.ok(names.every((n, i) => n !== SPECIES[kinds[i]].name), `${map}: its own fish`);
+    for (const k of [...kinds, 'special']) { const { look } = lookFor(map, k); assert.ok(look.depth > 0 && look.back && look.side && look.belly && look.fin, `${map} ${k} has a look`); }
+    const bn = baitNames(map);
+    assert.deepEqual(Object.keys(bn), B);
+    assert.ok(Object.values(bn).every((n) => n.length <= 10), `${map}: bait names fit the chips`);
+  }
+  assert.equal(lookFor('bg-ocean', 'catfish').name, 'Nurse shark');
+  assert.equal(lookFor('bg-rainbow', 'special').name, 'Unicorn fish');
+});
+
+test('better rods see farther, and fish farther out are bigger', () => {
+  // Taylor, 2026-11-10: zoom out with each rod; the boat goes farther out; farther = bigger fish
+  assert.deepEqual(ROD_ZOOM, [1, 1.4, 1.8]); // Taylor, 2026-11-10: 1.4x and 1.8x
+  assert.ok(BOAT_OUT > 0.3 && BOAT_OUT < 1);
+  const avg = (out) => 1 / (sizePower(out) + 1); // mean of r ** p for r in 0-1
+  assert.ok(avg(0) < avg(0.5) && avg(0.5) < avg(1) && avg(1) < avg(2));
+  assert.ok(Math.abs(avg(0.55) - 1 / 2.6) < 0.03, 'a regular rod from the shore: about as big as before');
+  assert.ok(avg(2) > 0.5, 'way out with the boat, most fish are big ones');
+  // deep water grows trophies past a kind's usual biggest, only out past a regular rod's view
+  assert.equal(maxSizeAt(0), 1); assert.equal(maxSizeAt(1), 1);
+  assert.ok(maxSizeAt(2) > 1.3 && maxSizeAt(3) === maxSizeAt(10));
+  assert.ok(strikeChance(1, 3) > 0.25, 'the biggest still bite with a super rod');
 });

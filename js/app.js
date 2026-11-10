@@ -3,42 +3,57 @@ import {
   tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, rewardsToGive, markRewardGiven, storeOpen, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
   defaultReward, parseReward, MAX_REWARD,
   pendingApprovals, fallbackHash, pianoStreakInfo,
-  isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS,
+  isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS, EXERCISE_KEEP_DAYS,
   defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
-  gamesLeft,
-  carriedGames,
-  earlyGames,
-  logGame,
-  gamesPerDay,
-  GAMES_PER_DAY,
-  OLD_GAMES_PER_DAY,
-  withMemo, monthDays, habitInfo, MASTERED_PAY, COMEBACK_BONUS, CUES, cueFor, planOrder, planSentence,
-  todaySummary, familyDay, FAMILY_GOAL, weekLookback, isPianoTask, milestoneFor, milestoneFresh,
+  withMemo, monthDays, habitInfo, MASTERED_PAY, CUES, cueFor, planOrder, planSentence,
+  todaySummary, familyDay, FAMILY_GOAL, milestoneFor, milestoneFresh,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
-import { liveHtml, live, liveStart, feel, partyAll } from './live.js';
+import { liveHtml, live, liveStart, partyAll } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
+import { villageHtml, mountVillages, cameOut, cameOutOfMusic } from './village.js';
+import { houseHtml, mountHouses, cameIn } from './house.js';
+import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
+import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
+import { musicTier, daysToMusicHouse, studioOpen, tierInfo } from './musicrules.js';
+import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
+import { applyGrants } from './grants.js';
+import { furnitureThumb } from './houseart.js';
+import { leaderboard, weekOf } from './leaderboard.js';
+import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
+import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
+import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
+import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
+import { mountTestRec } from './testrec.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, newUnlocks, LEGACY_LEVEL, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
+  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
-import { pickVisitors, visitorLines, planVisits, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
-import { gameFor, GAME_NAMES } from './play.js';
+import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
+import { GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
-import { SPOTS as FISH_SPOTS } from './fishing.js';
-import { runSeconds, CHEERS, pickCheer, effortCheers } from './practice.js';
-import { startListening, buddyState, TUNING } from './listen.js';
-import { createBeatFollower } from './beat.js';
-import { loadRecognizer } from './hear.js';
+import { SPOTS as FISH_SPOTS, boatThumb } from './fishing.js';
 import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
-import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, SECRETS } from './treasure-art.js';
+import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, secretSize, SECRETS } from './treasure-art.js';
 import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
+import { state, setState, provide } from './ctx.js';
+import {
+  startTimer, stopTimer, leaveTimer, returnToTimer, restoreTimer, timerOnScreen, mmss, buddyCheer,
+  ears, startEars, stopEars, wakeEars, viewTimer, viewWatch,
+  listenTest, viewListen, startListenTest, stopListenTest, setLastListenMood, LISTEN_MODE_KEY, DANCE_LEAD, DANCE_LEAD_KEY,
+} from './timer-ui.js';
+import {
+  pendingRemote, setPendingRemote, loadCloud, onCloudStatus, startCloud, applyRemote,
+  familyCard, familyCreate, familyJoin, familyJoinGo, familyInvite, showCode, familyLeave,
+} from './sync-ui.js';
+import { showUnlocks, celebrateIfDue } from './celebrate.js';
+import { moveIds, gamesLeftFor, playableFor, visitPlan, gamesWith, pickGame, playWith } from './play-ui.js';
 
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#da77f2', '#f783ac'];
 
@@ -71,13 +86,20 @@ const store = cloudCfg
 
 function save() {
   try {
-    store.save(state);
+    const { changed, removed } = store.save(state);
+    // A family update held back while a dialog was open is now older than this
+    // device's own data. Applying it when the dialog closes would undo what was
+    // just saved (a kid buys something, then right away buys something else on
+    // top of the old data, and the first purchase is lost). The write we just
+    // sent comes back as a fresh update that holds both, so drop the old one.
+    // Device settings never go to the family, so they send nothing back.
+    if ([...changed, ...removed].some((p) => p !== 'device')) setPendingRemote(null);
   } catch {
     toast('Could not save. Is storage full?');
   }
 }
 
-let state = store.load();
+setState(store.load());
 if (cloudCfg && !localStorage.getItem(CLOUD_CACHE_KEY)) {
   // first start after joining on a device with nothing to bring: keep this
   // device's own sound and map settings, wait for the family's data
@@ -104,6 +126,10 @@ const $modal = document.getElementById('modal');
 const today = () => dateKey();
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kidById = (id) => state.kids.find((k) => k.id === id);
+// The kid as they are now. A family update replaces state (and every kid
+// object), so anything that runs later (a timeout, a game callback) must look
+// the kid up again, or its changes land on an old copy and never save.
+const currentKid = (kid) => kidById(kid.id) || kid;
 
 function progressFor(kid) {
   const t = today();
@@ -111,13 +137,6 @@ function progressFor(kid) {
   const xp = totalXp(state, kid, t);
   const lv = levelFor(xp);
   const piano = pianoStreakInfo(state, kid, t);
-  if (!Array.isArray(kid.owned)) {
-    // first run with the shop: keep anything the kid had already reached by level, for free
-    kid.owned = ITEMS.filter((i) => i.price && LEGACY_LEVEL(i) <= lv.level).map((i) => i.id);
-    kid.spent = 0;
-    moveWornToBuddy(kid);
-    save();
-  }
   const coins = Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0));
   const gems = Math.max(0, totalGems(state, kid, t) - (kid.gemsSpent || 0));
   const ex = exerciseInfo(kid);
@@ -130,13 +149,11 @@ function progressFor(kid) {
  * this buddy can do when it visits.
  */
 function exerciseInfo(kid) {
-  const ex = exerciseStreakInfo(state, kid, today());
-  if ((kid.exBest || 0) < ex.best) { kid.exBest = ex.best; save(); }
-  return ex;
+  return exerciseStreakInfo(state, kid, today());
 }
 
 /** Everything a buddy needs to do its moves: its look, the kid's gear, and how far the exercise streak got. */
-const mover = (kid) => ({ buddy: kid.buddy, owned: kid.owned || [], exBest: Math.max(kid.exBest || 0, exerciseInfo(kid).best) });
+const mover = (kid) => ({ buddy: dressed(kid), owned: kid.owned || [], exBest: Math.max(kid.exBest || 0, exerciseInfo(kid).best) });
 
 function missedYesterday(kid, info) {
   const t = today();
@@ -178,18 +195,26 @@ function feelFor(kid, mood = moodFor(kid)) {
 const liveKey = (kid) => `kid:${kid.id}`;
 
 /**
+ * A kid's buddy as it is drawn right now: with the magic wand's glow (buddy.wand)
+ * from how much of today's chores are done. The glow is never saved.
+ */
+const dressed = (kid, buddy = kid.buddy) => ({ ...buddy, wand: wandPower(todaySummary(state, kid, today())) });
+/** A visiting buddy, with its wand glowing from that kid's day (their shared summary of today). */
+const dressedVisitor = (v, buddy = v.buddy) => ({ ...buddy, wand: wandPower(v.today?.day === today() ? v.today : null) });
+
+/**
  * A kid's buddy. size: css class for sizing. opts.live: drawn live by rig.js
  * (it moves, feels and reacts to taps); otherwise the still picture from avatar.js.
  * opts.feel: feelings to use instead of feelFor; opts.idle: gets bored when left alone.
  */
 function buddyHtml(kid, mood, size = 'lg', opts = {}) {
   if (opts.live) {
-    const html = liveHtml(liveKey(kid), kid.buddy, { background: opts.background !== false, feel: opts.feel || feelFor(kid, mood), idle: opts.idle, label: `${kid.name}'s buddy` });
+    const html = liveHtml(liveKey(kid), dressed(kid), { background: opts.background !== false, feel: opts.feel || feelFor(kid, mood), idle: opts.idle, label: `${kid.name}'s buddy` });
     return `<div class="buddy buddy-${size} live">${html}</div>`;
   }
-  return `<div class="buddy buddy-${size} mood-${mood}">${buddySvg(kid.buddy, mood, opts)}</div>`;
+  return `<div class="buddy buddy-${size} mood-${mood}">${buddySvg(dressed(kid), mood, opts)}</div>`;
 }
-const buddyChip = (kid) => `<span class="avatar xs buddy-chip">${buddySvg(kid.buddy, 'happy', { background: false })}</span>`;
+const buddyChip = (kid) => `<span class="avatar xs buddy-chip">${buddySvg(dressed(kid), 'happy', { background: false })}</span>`;
 const taskById = (kid, key, id) => tasksForDay(state, kid, key, today()).find((t) => t.id === id) || kid.tasks.find((t) => t.id === id);
 
 function friendlyDate(key) {
@@ -267,7 +292,7 @@ function closeModal() {
   const cb = modalOnClose;
   modalOnClose = null;
   cb?.();
-  if (pendingRemote && $modal.hidden) { const next = pendingRemote; pendingRemote = null; applyRemote(next); }
+  if (pendingRemote && $modal.hidden) { const next = pendingRemote; setPendingRemote(null); applyRemote(next); }
 }
 
 $modal.addEventListener('click', (e) => {
@@ -356,109 +381,7 @@ function confirmModal({ title, text, yes = 'Yes', no = 'Cancel', danger = false,
 }
 let modalYes = null;
 
-// ---------- celebrations ----------
-
-function celebrate({ kid, emoji, title, text, sound, big = false, onClose = null }) {
-  sound();
-  confetti(big ? 260 : 140, big ? 4000 : 2600);
-  openModal(`
-    <div class="celebrate ${big ? 'big' : ''}">
-      ${kid ? buddyHtml(kid, big ? 'proud' : 'excited', 'xl') : `<div class="celebrate-emoji">${emoji}</div>`}
-      ${big ? `<div class="celebrate-emoji small">${emoji}</div>` : ''}
-      <h1>${esc(title)}</h1>
-      <p>${esc(text)}</p>
-      <button class="btn huge" data-action="modal-close">Awesome!</button>
-    </div>`, onClose);
-}
-
-/** Show any newly unlocked wardrobe items. Returns true if something was shown. */
-function showUnlocks(kid) {
-  if (!$modal.hidden) return false;
-  if (showMastered(kid)) return true;
-  if (showLookback(kid)) return true;
-  if (showNewMoves(kid)) return true;
-  const ids = newUnlocks(kid, progressFor(kid));
-  if (!ids.length) return false;
-  kid.seenUnlocks = [...(kid.seenUnlocks || []), ...ids];
-  kid.newItems = [...(kid.newItems || []), ...ids];
-  save();
-  const items = ids.map(itemById);
-  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, [items[0].slot]: items[0].id } };
-  sounds.day();
-  confetti(120, 2400);
-  openModal(`
-    <div class="celebrate">
-      <div class="buddy buddy-xl mood-excited">${buddySvg(preview, 'excited')}</div>
-      <h1>New stuff unlocked!</h1>
-      <p>${items.map((i) => `<b>${esc(i.name)}</b>`).join(', ')}</p>
-      <div class="stack">
-        ${storeOpen(state, kid, today()).open
-          ? `<button class="btn huge" data-action="unlock-try" data-slot="${items[0].slot}">Try it on!</button>
-        <button class="btn ghost" data-action="modal-close">Later</button>`
-          : `<p class="muted">Try it on once today's chores are done.</p>
-        <button class="btn huge" data-action="modal-close">OK</button>`}
-      </div>
-    </div>`);
-  return true;
-}
-
-/** The key a habit star is remembered by once celebrated: the task id for the first, then id#2, id#3… */
-const starKey = (h, n) => (n === 1 ? h.task.id : `${h.task.id}#${n}`);
-
-/** A habit star the kid just earned (see habitInfo): celebrated once each. */
-function showMastered(kid) {
-  const seen = new Set(kid.seenMastered || []);
-  const fresh = [...habitInfo(state, kid, today()).values()].filter((h) => h.stars.some((_, i) => !seen.has(starKey(h, i + 1))));
-  if (!fresh.length) return false;
-  kid.seenMastered = [...seen, ...fresh.flatMap((h) => h.stars.map((_, i) => starKey(h, i + 1)))];
-  const again = fresh.every((h) => h.stars.length > 1);
-  save();
-  sounds.week();
-  confetti(200, 3200);
-  openModal(`
-    <div class="celebrate">
-      ${buddyHtml(kid, 'proud', 'xl')}
-      <div class="celebrate-emoji small">⭐</div>
-      <h1>${again ? 'Another habit star!' : 'Habit mastered!'}</h1>
-      <p>${fresh.map((h) => `${esc(h.task.icon)} <b>${esc(h.task.name)}</b> ${'⭐'.repeat(Math.min(5, h.stars.length))}`).join(', ')}</p>
-      <p>${again ? 'You kept it up for another two months. It really is part of who you are!' : `You did ${fresh.length > 1 ? 'these' : 'it'} on almost every day for two months. That's not a chore anymore, it's part of who you are!`}</p>
-      <p class="muted small">Stars stay for good, and every 60 days you keep it up earns another. Your weekly coins stay the same: from Monday more of them come from the habits you're still building.</p>
-      <button class="btn huge" data-action="modal-close">Awesome!</button>
-    </div>`, () => setTimeout(() => showUnlocks(kid), 250));
-  return true;
-}
-
-/** Once a week: how last week went, task by task, next to four weeks before. Then plan the new week. */
-function showLookback(kid) {
-  const t = today();
-  const monday = weekStart(t);
-  if (kid.lookbackSeen === monday) return false;
-  const lb = weekLookback(state, kid, t);
-  // only once there is a real week to look back on (a kid who used the app last week)
-  if (lb.days < 4 || !lb.tasks.some((r) => r.done > 0)) return false;
-  kid.lookbackSeen = monday;
-  save();
-  const rows = planOrder(kid, lb.tasks.map((r) => r.task)).map((task) => lb.tasks.find((r) => r.task.id === task.id)).map((r) => {
-    const b = r.before;
-    const better = b && r.done / r.of > b.done / b.of;
-    return `<div class="look-row ${better ? 'better' : ''}"><span>${esc(r.task.icon)} ${esc(r.task.name)}</span><b>${r.done} of ${r.of}</b>${b ? `<small>${better ? '⬆ ' : ''}4 weeks ago: ${b.done} of ${b.of}</small>` : ''}</div>`;
-  }).join('');
-  const ups = lb.tasks.filter((r) => r.before && r.done / r.of > r.before.done / r.before.of);
-  const lead = ups.length
-    ? `You got better at ${ups.length === 1 ? esc(ups[0].task.name.toLowerCase()) : `${ups.length} things`} since a month ago. Your practice is working!`
-    : `You finished every task on ${lb.daysDone} of ${lb.days} days.`;
-  openModal(`
-    <div class="lookback">
-      <h1>📅 Last week</h1>
-      <p>${lead}</p>
-      <div class="look-rows">${rows}</div>
-      <div class="stack">
-        <button class="btn huge" data-action="plan" data-kid="${kid.id}">📝 Plan this week</button>
-        <button class="btn ghost" data-action="modal-close">Later</button>
-      </div>
-    </div>`);
-  return true;
-}
+// ---------- celebrations (see celebrate.js) ----------
 
 // ---------- the kid's plan: order and cues ----------
 
@@ -502,88 +425,6 @@ function openPlan(kid) {
   ui.planKid = kid.id;
   ui.planDraft = { order: planOrder(kid, questTasks(kid.tasks)).map((x) => x.id), cues: { ...(kid.plan?.cues || {}) } };
   planModal(kid);
-}
-
-/** Moves the kid's buddy just learned from the exercise streak (or from new gear). Shows the first one in action. */
-function showNewMoves(kid) {
-  const who = mover(kid);
-  const seen = new Set(kid.seenMoves || []);
-  const fresh = unlockedMoves(who.owned, who.exBest).filter((m) => !seen.has(m.move.id));
-  if (!fresh.length) return false;
-  kid.seenMoves = [...seen, ...fresh.map((m) => m.move.id)];
-  save();
-  const first = fresh[0];
-  sounds.week();
-  confetti(140, 2600);
-  openModal(`
-    <div class="celebrate">
-      <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" data-move="${first.move.id}" aria-label="See the move again">${buddyHtml(kid, 'excited', 'xl')}</button>
-      <h1>New move${fresh.length > 1 ? 's' : ''}!</h1>
-      <p>${fresh.map((m) => `<b>${esc(m.move.name)}</b>`).join(', ')}</p>
-      <p class="muted small">Best exercise streak: ${who.exBest} ${who.exBest === 1 ? 'week' : 'weeks'} 💪 Tap your buddy anytime to see a move.</p>
-      <button class="btn huge" data-action="modal-close">Awesome!</button>
-    </div>`, () => setTimeout(() => showUnlocks(kid), 250));
-  setTimeout(() => { const el = $modal.querySelector('.buddy-tap'); if (el) doMove(el, who, first.move.id); }, 500);
-  return true;
-}
-
-function celebrateIfDue(kid) {
-  const t = today();
-  const info = streakInfo(state, kid, t);
-  const after = () => setTimeout(() => showUnlocks(kid), 250);
-  const seen = state.celebrations[kid.id];
-  // the weekly reward shows once a week, as soon as it is earned: on Friday, or
-  // later in the weekend if a parent approves a day's chores late
-  const reward = state.settings.weeklyReward?.trim() ? weeklyRewardInfo(state, kid, t) : null;
-  const rewardNew = Boolean(reward?.earned && seen?.reward !== reward.monday);
-  const dayNew = info.todayComplete && seen?.day !== t;
-  if (!rewardNew && !dayNew) return showUnlocks(kid);
-  const next = { ...(seen || {}) };
-  if (info.todayComplete) { next.day = t; next.streak = info.streak; }
-  if (rewardNew) next.reward = reward.monday;
-  state.celebrations[kid.id] = next;
-  save();
-  if (rewardNew) {
-    celebrate({
-      kid,
-      onClose: after,
-      emoji: '🏆',
-      title: 'WEEKLY REWARD!',
-      text: `You did every chore Monday to Friday! Your reward: ${state.settings.weeklyReward}. Show a parent!${dayNew ? ' Then tap your treasure chest!' : ''}`,
-      sound: sounds.week,
-      big: true,
-    });
-  } else if (info.inARow > 0 && info.inARow % 7 === 0) {
-    const weeks = info.inARow / 7;
-    celebrate({
-      kid,
-      onClose: after,
-      emoji: '🔥',
-      title: weeks === 1 ? 'A WHOLE WEEK!' : `${weeks} WEEKS IN A ROW!`,
-      text: `${info.inARow} days in a row!${info.freezes ? ' You have a streak freeze ❄️ saved up.' : ''} Tap your treasure chest!`,
-      sound: sounds.week,
-      big: true,
-    });
-  } else if (info.comebacks.includes(t)) {
-    celebrate({
-      kid,
-      onClose: after,
-      emoji: '💪',
-      title: 'Welcome back!',
-      text: `You bounced back after a missed day. That's how habits are built! +${COMEBACK_BONUS} 🪙 bonus. Your streak is ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 Tap the treasure chest to open it!`,
-      sound: sounds.day,
-    });
-  } else {
-    celebrate({
-      kid,
-      onClose: after,
-      emoji: '🌟',
-      title: 'Quest complete!',
-      text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 ${effortNote(kid)} Tap the treasure chest to open it!`,
-      sound: sounds.day,
-    });
-  }
-  return true;
 }
 
 // ---------- the treasure chest (see treasure.js) ----------
@@ -691,20 +532,21 @@ function setTask(kid, key, task, value) {
   save();
 }
 
-function markDone(kid, task, by, anchor) {
-  setTask(kid, today(), task, { status: 'done', at: Date.now(), by });
+// day: the day the chore belongs to (a practice timer's day, when a parent signs off after midnight)
+function markDone(kid, task, by, anchor, day = today()) {
+  setTask(kid, day, task, { status: 'done', at: Date.now(), by });
   sounds.task();
-  const { xp, coins, gems } = taskPay(state, kid, today(), task, today());
+  const { xp, coins, gems } = taskPay(state, kid, day, task, today());
   floatText([gems && `+${gems} 💎`, xp && `+${xp} XP`, coins && `+${coins} 🪙`].filter(Boolean).join(' · ') || 'Done!', anchor);
   ui.cheerUntil = Date.now() + 2600;
   ui.cheerKid = kid.id;
   live(liveKey(kid)).cheer();
   render();
-  setTimeout(() => celebrateIfDue(kid), 700);
+  setTimeout(() => celebrateIfDue(currentKid(kid)), 700);
   setTimeout(() => { if (ui.view === 'kid' && Date.now() >= ui.cheerUntil) render(); }, 2700);
 }
 
-function askParentNowOrLater(kid, task, anchor) {
+function askParentNowOrLater(kid, task, anchor, day = today()) {
   openModal(`
     <div class="center">
       <div class="big-emoji">${esc(task.icon)}</div>
@@ -717,11 +559,11 @@ function askParentNowOrLater(kid, task, anchor) {
     </div>`);
   modalActions['pin-now'] = () => {
     closeModal();
-    pinPad({ title: 'Parent sign-off', subtitle: `${kid.name}: ${task.name}`, onSuccess: () => markDone(kid, task, 'parent', anchor) });
+    pinPad({ title: 'Parent sign-off', subtitle: `${kid.name}: ${task.name}`, onSuccess: () => markDone(kid, task, 'parent', anchor, day) });
   };
   modalActions['pin-later'] = () => {
     closeModal();
-    setTask(kid, today(), task, { status: 'pending', at: Date.now() });
+    setTask(kid, day, task, { status: 'pending', at: Date.now() });
     sounds.pending();
     toast('Saved! A parent will check it.');
     render();
@@ -753,165 +595,7 @@ function onTaskTap(id, anchor) {
   else askParentNowOrLater(kid, task, anchor);
 }
 
-// ---------- practice timer ----------
-
-// The timer counts from clock times (see practice.js). While it runs, the run is
-// also kept in this device's storage, so if Android closes the app in the
-// background, opening it again picks the timer back up.
-const RUN_KEY = 'kidquest.practiceRun';
-const timer = { running: false, interval: null, wakeLock: null, run: null };
-
-function keepRun() {
-  try {
-    if (timer.run) localStorage.setItem(RUN_KEY, JSON.stringify(timer.run));
-    else localStorage.removeItem(RUN_KEY);
-  } catch { /* the timer still works while the app stays open */ }
-}
-
-async function grabWakeLock() {
-  try {
-    timer.wakeLock = await navigator.wakeLock?.request('screen');
-  } catch {
-    timer.wakeLock = null;
-  }
-}
-
-function runTask() {
-  const kid = kidById(timer.run?.kidId);
-  const task = kid && taskById(kid, timer.run.day, timer.run.taskId);
-  return kid && task && task.minutes > 0 ? { kid, task } : null;
-}
-
-function startTimer() {
-  const kid = kidById(ui.kidId);
-  const task = kid && taskById(kid, today(), ui.taskId);
-  if (!task) return;
-  const done = entryFor(state, kid.id, today())?.tasks?.[task.id]?.seconds || 0;
-  timer.run = { kidId: kid.id, taskId: task.id, day: today(), since: Date.now(), base: done };
-  keepRun();
-  resumeTimer();
-}
-
-function resumeTimer() {
-  timer.running = true;
-  grabWakeLock();
-  clearInterval(timer.interval);
-  timer.interval = setInterval(tickTimer, 1000);
-  render();
-}
-
-function stopTimer(rerender = true) {
-  if (timer.run) syncTimer();
-  timer.running = false;
-  timer.run = null;
-  keepRun();
-  clearInterval(timer.interval);
-  timer.interval = null;
-  timer.wakeLock?.release?.().catch(() => {});
-  timer.wakeLock = null;
-  if (rerender && ui.view === 'timer') render();
-}
-
-// Bring the saved seconds up to the clock. Returns true when the timer is done.
-function syncTimer() {
-  const run = timer.run;
-  const found = runTask();
-  if (!found) return false;
-  const { kid, task } = found;
-  const total = task.minutes * 60;
-  const now = Date.now();
-  const entry = entryFor(state, kid.id, run.day, true);
-  const cur = { status: 'inprogress', ...(entry.tasks[task.id] || {}) };
-  const sec = Math.max(cur.seconds || 0, runSeconds(run, now, total));
-  let changed = sec !== cur.seconds || !entry.tasks[task.id];
-  if (run.awayFrom != null) {
-    // count how much of the timer ran in another app, so a parent can see it
-    const away = Math.max(0, sec - run.awayFrom);
-    if (away) { cur.away = (cur.away || 0) + away; changed = true; }
-    run.awayFrom = null;
-    keepRun();
-  }
-  if (!changed) return sec >= total;
-  cur.seconds = sec;
-  entry.tasks[task.id] = cur;
-  save();
-  return sec >= total;
-}
-
-function tickTimer() {
-  if (document.visibilityState !== 'visible' || !timer.run) return;
-  const found = runTask();
-  if (!found) return stopTimer();
-  const { kid, task } = found;
-  const finished = syncTimer();
-  if (timer.run.day !== today()) {
-    // midnight passed: yesterday's time stays with yesterday
-    stopEars();
-    stopTimer(false);
-    if (ui.view === 'timer') { ui.view = 'kid'; render(); }
-    return;
-  }
-  const total = task.minutes * 60;
-  const sec = entryFor(state, kid.id, timer.run.day)?.tasks?.[task.id]?.seconds || 0;
-  const $t = document.getElementById('timer-left');
-  const $ring = document.getElementById('timer-ring');
-  if ($t) $t.textContent = mmss(total - sec);
-  if ($ring) $ring.style.setProperty('--p', sec / total);
-  if (finished) finishTimer(kid, task);
-}
-
-function finishTimer(kid, task) {
-  stopEars();
-  stopTimer(false);
-  sounds.day();
-  confetti(80, 1800);
-  ui.view = 'kid';
-  ui.kidId = kid.id;
-  render();
-  if (task.verify === 'self') markDone(kid, task, 'self');
-  else askParentNowOrLater(kid, task);
-}
-
-// Leaving the app: a task set to keep counting in other apps carries on (and
-// remembers where it was, to show the parent the time spent away); any other
-// timer pauses.
-function leaveTimer() {
-  if (!timer.running) return;
-  const found = runTask();
-  if (!found?.task.background) { stopTimer(); return; }
-  syncTimer();
-  timer.run.awayFrom = entryFor(state, found.kid.id, timer.run.day)?.tasks?.[found.task.id]?.seconds || 0;
-  keepRun();
-}
-
-function returnToTimer() {
-  if (!timer.running) return;
-  grabWakeLock();
-  tickTimer();
-}
-
-// The app was closed while a timer ran: pick it up again.
-function restoreTimer() {
-  let run = null;
-  try { run = JSON.parse(localStorage.getItem(RUN_KEY) || 'null'); } catch { run = null; }
-  if (!run?.kidId || !run.taskId || !run.day || !run.since) return;
-  timer.run = run;
-  const found = runTask();
-  if (!found || ui.view === 'setup') { timer.run = null; keepRun(); return; }
-  if (run.day !== today()) { stopTimer(false); return; }
-  if (syncTimer()) {
-    // the time ran out while the app was closed
-    setTimeout(() => finishTimer(found.kid, found.task), 300);
-    return;
-  }
-  ui.view = 'timer';
-  ui.kidId = run.kidId;
-  ui.taskId = run.taskId;
-  timer.running = true;
-  grabWakeLock();
-  timer.interval = setInterval(tickTimer, 1000);
-}
-
+// The practice timer and piano listening live in timer-ui.js.
 document.addEventListener('visibilitychange', () => {
   // the microphone is only used while this screen is showing
   if (document.visibilityState !== 'visible') {
@@ -924,233 +608,6 @@ document.addEventListener('visibilitychange', () => {
   }
   if (document.visibilityState === 'visible') { returnToTimer(); render(); startEars(); }
 });
-
-// The buddy on the timer page says a cheer when tapped.
-let lastCheer = -1;
-let cheerTimeout = 0;
-let cheerTaps = 0;
-let lastEffort = '';
-
-/** What a kid has really done lately, for praise that names the effort (see effortCheers). */
-function effortFacts(kid) {
-  const t = today();
-  const piano = pianoStreakInfo(state, kid, t);
-  const week = weekStart(t);
-  let pianoWeek = 0;
-  let minutesWeek = 0;
-  for (let key = week; key <= t; key = addDays(key, 1)) {
-    const entry = entryFor(state, kid.id, key);
-    for (const task of tasksForDay(state, kid, key, t).filter(isPianoTask)) {
-      const st = entry?.tasks?.[task.id];
-      if (st?.status === 'done' || st?.status === 'pending') pianoWeek += 1;
-      minutesWeek += Math.floor((st?.seconds || 0) / 60);
-    }
-  }
-  const habit = [...habitInfo(state, kid, t).values()].find((h) => isPianoTask(h.task));
-  return { name: kid.name, pianoStreak: piano.streak, pianoWeek, minutesWeek, pianoHabit: habit ? { done: habit.done, goal: habit.goal, mastered: Boolean(habit.mastered) } : null, month: monthDays(state, kid, t) };
-}
-
-/** One true sentence about the kid's effort, for the end-of-day celebration. */
-function effortNote(kid) {
-  const t = today();
-  const m = monthDays(state, kid, t);
-  const near = [...habitInfo(state, kid, t).values()].filter((h) => !h.mastered).sort((a, b) => b.done / b.goal - a.done / a.goal)[0];
-  if (near && near.done / near.goal >= 0.5) return `${near.task.name}: ${near.done} of ${near.goal} toward a habit star ⭐`;
-  if (m.days >= 5) return `That's ${m.done} of ${m.days} days done this month.`;
-  return '';
-}
-
-function buddyCheer() {
-  const kid = kidById(ui.kidId);
-  const $b = document.querySelector('.timer-buddy');
-  const $say = $b?.querySelector('.timer-bubble');
-  if (!kid || !$say) return;
-  if (!['head', 'silly'].includes($b.querySelector('canvas.live-buddy')?.dataset.zone)) live(liveKey(kid)).giggle();
-  // every other tap names something the kid has really done (effort praise), the rest are plain cheers
-  const facts = effortCheers(effortFacts(kid)).filter((line) => line !== lastEffort);
-  if (facts.length && (cheerTaps += 1) % 2 === 0) {
-    lastEffort = facts[Math.floor(Math.random() * facts.length)];
-    $say.textContent = lastEffort;
-  } else {
-    lastCheer = pickCheer(lastCheer);
-    $say.textContent = CHEERS[lastCheer](kid.name);
-  }
-  $b.classList.remove('hop');
-  void $b.offsetWidth; // restart the hop
-  $b.classList.add('talking', 'hop');
-  $b.querySelector('.timer-sprite')?.addEventListener('animationend', () => $b.classList.remove('hop'), { once: true });
-  sounds.tap();
-  clearTimeout(cheerTimeout);
-  cheerTimeout = setTimeout(() => $b.classList.remove('talking'), 4000);
-}
-
-const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-
-// ---------- listening during practice ----------
-// A timer task with "Listen to the piano" on listens while its timer runs and the
-// timer page is on screen (listen.js; Google's recognizer decides what is piano).
-// The buddy dances on the kid's beat (beat.js), or hops on notes when there is no
-// beat. With no piano for 30 s it gets bored; after 60 s it falls asleep and the
-// timer pauses, and playing again wakes it and the timer carries on. Without
-// Google's recognizer (offline the first time) the buddy still dances, but it
-// can't tell piano from talking, so it never falls asleep. Nothing is recorded.
-const ears = { run: null, beat: null, side: 1, token: 0, loading: false, error: '', google: false, from: 0, mood: '', asleep: false, asleepAt: 0, woke: -Infinity, lastUi: 0 };
-const EARS_NAP = 10 * 60_000;   // asleep this long: stop listening and let the screen turn off
-
-/** The timer page's task, when it listens. */
-function earsTask() {
-  if (ui.view !== 'timer') return null;
-  const kid = kidById(ui.kidId);
-  const task = kid && taskById(kid, today(), ui.taskId);
-  return task?.listen && task.minutes > 0 ? { kid, task } : null;
-}
-
-async function startEars() {
-  if (ears.run || ears.loading || !earsTask() || !(timer.running || ears.asleep)) return;
-  const token = ++ears.token;
-  ears.error = '';
-  ears.loading = true;
-  updateEarsUi();
-  try {
-    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
-    const recognizer = await loadRecognizer().catch(() => null);
-    if (token !== ears.token || !earsTask() || !timer.running) return;
-    const run = await startListening(onEarsFrame, { mode: 'google', recognizer });
-    if (token !== ears.token || !earsTask() || !timer.running) { run.stop(); return; }
-    Object.assign(ears, { run, beat: createBeatFollower(), google: run.listener.mode !== 'builtin', from: performance.now(), mood: '', asleep: false, woke: -Infinity });
-  } catch (e) {
-    if (token === ears.token) ears.error = e?.name === 'NotAllowedError' ? 'blocked' : e?.name === 'NotFoundError' || e?.name === 'NoMic' ? 'nomic' : 'other';
-  } finally {
-    if (token === ears.token) ears.loading = false;
-    updateEarsUi();
-  }
-}
-
-function stopEars() {
-  ears.token++;
-  ears.run?.stop();
-  Object.assign(ears, { run: null, beat: null, loading: false, asleep: false, mood: '' });
-}
-
-/** The timer page's live buddy. */
-function earsBuddy() {
-  const kid = earsTask()?.kid;
-  return kid ? live(liveKey(kid)) : null;
-}
-
-/** The kid tapped Start or Keep going: the quiet clock starts again. */
-function wakeEars() {
-  ears.asleep = false;
-  ears.from = performance.now();
-}
-
-function onEarsFrame(listener, events, now) {
-  if (ears.run?.listener !== listener) return;
-  if (!earsTask() || (!timer.running && !ears.asleep)) { stopEars(); updateEarsUi(); return; }
-  const $b = document.querySelector('.timer .timer-buddy');
-  const beat = ears.beat;
-  const builtin = listener.mode === 'builtin';
-  const piano = pianoNow(listener, now);
-  const dancing = piano && beat.following(now);
-  for (const ev of events) {
-    if (ev.type === 'onset') {
-      beat.note(ev.at, ev);
-      if (!builtin && !dancing && piano && !ears.asleep) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
-    } else if (ev.type === 'piano' && builtin && !dancing) { buddyStep($b, 'hop'); earsBuddy()?.hop(); }
-  }
-  const lead = danceLead();
-  for (const b of beat.beats(now, listener.state.loud, lead)) {
-    if (!piano || ears.asleep) continue;
-    atBeat(b, lead, now, () => {
-      if (ears.run?.listener !== listener) return;
-      danceBeat(ears, document.querySelector('.timer .timer-buddy'), null, beat.period);
-      earsBuddy()?.beat(beat.period);
-    });
-  }
-
-  if (!ears.run.running) {
-    // Chrome keeps the sound off until the screen is tapped (after the app reopened)
-    ears.from = now;
-  } else if (ears.asleep) {
-    if (piano) {
-      // playing again wakes the buddy, and the timer carries on
-      Object.assign(ears, { asleep: false, woke: now, from: now, mood: 'playing' });
-      earsBuddy()?.surprise();
-      startTimer();
-      updateEarsUi(now);
-      return;
-    }
-    if (now - ears.asleepAt > EARS_NAP) { stopEars(); timer.wakeLock?.release?.().catch(() => {}); timer.wakeLock = null; render(); return; }
-  }
-  // seconds with no piano, counted from when listening (or the timer) last started
-  const since = Math.min(listener.since(now), (now - ears.from) / 1000);
-  ears.mood = ears.asleep ? 'asleep'
-    : ears.google ? buddyState(since, listener.state.lastPiano != null)
-      : piano ? 'playing' : 'waiting';
-  if (ears.mood === 'asleep' && !ears.asleep && timer.running) {
-    // a minute with no piano: the buddy falls asleep and the timer pauses (still
-    // listening, with the screen on, so playing wakes it)
-    ears.asleep = true;
-    ears.asleepAt = now;
-    stopTimer(false);
-    grabWakeLock();
-    render();
-    updateEarsUi(now);
-    return;
-  }
-  if (now - ears.lastUi > 100) { ears.lastUi = now; updateEarsUi(now); }
-}
-
-/**
- * How the timer page's buddy feels: listening for the piano, swaying to playing
- * with no steady beat, dancing (and humming) on the kid's beat, bored, asleep.
- */
-function timerFeel(mood, dancing = false) {
-  if (mood === 'playing') return dancing ? { valence: 0.95, arousal: 0.9, dance: 1, sing: 0.6, notes: true } : { valence: 0.85, arousal: 0.6, listen: 1 };
-  if (mood === 'waiting') return { valence: 0.5, arousal: 0.5, curious: 0.35 };
-  if (mood === 'bored') return { valence: -0.3, arousal: 0.2, sleep: 0.3 };
-  if (mood === 'asleep') return { valence: 0.1, arousal: 0.1, sleep: 1 };
-  return timer.running ? { valence: 0.75, arousal: 0.6 } : { valence: 0.6, arousal: 0.5 };
-}
-
-/**
- * The line under the buddy. It stays empty while the buddy listens or dances: it
- * only speaks up when the buddy is bored or asleep, or can't hear at all.
- */
-function earsText() {
-  if (ears.error === 'blocked') return 'I can’t hear you: the microphone is blocked. Ask a parent.';
-  if (ears.error === 'nomic') return 'I can’t hear you: no microphone was found.';
-  if (ears.error) return 'I can’t hear you right now. Try Pause, then Keep going.';
-  if (ears.asleep) return 'Asleep, so the timer is paused. Play to wake me up!';
-  if (ears.run && !ears.run.running) return 'Tap the screen so I can hear you!';
-  if (ears.run && ears.mood === 'bored') return 'I haven’t heard the piano in a while…';
-  return '';
-}
-
-function updateEarsUi(now = performance.now()) {
-  const $text = document.getElementById('ears-text');
-  if (!$text) return;
-  const text = earsText();
-  if ($text.textContent !== text) $text.textContent = text;
-  $text.hidden = !text;
-  const listener = ears.run?.listener;
-  const $b = document.querySelector('.timer .timer-buddy');
-  if (!(listener && pianoNow(listener, now) && ears.beat.following(now))) danceRest($b);
-  const kid = earsTask()?.kid;
-  const $sprite = $b?.querySelector('.timer-sprite');
-  if (!$sprite || !kid) return;
-  // the page keeps what it shows (a redraw may leave it be), so compare with the page
-  const mood = ears.run || ears.asleep ? ears.mood || 'waiting' : '';
-  if (mood !== $sprite.dataset.mood) $sprite.dataset.mood = mood;
-  feel(liveKey(kid), timerFeel(mood, Boolean(listener && pianoNow(listener, now) && ears.beat.following(now))));
-  // what it says (a cheer from a tap stays until it fades)
-  const say = now - ears.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';
-  const $say = $b.querySelector('.timer-bubble');
-  const mine = $say.dataset.ears || '';
-  if (say && (say !== mine || !$b.classList.contains('talking'))) { $say.textContent = say; $b.classList.add('talking'); }
-  else if (!say && mine && $say.textContent === mine) $b.classList.remove('talking');
-  $say.dataset.ears = say;
-}
 
 // ---------- views ----------
 
@@ -1182,7 +639,7 @@ function viewHome() {
       <button class="kid-card" data-action="open-kid" data-id="${kid.id}" style="--kid:${kid.color}">
         ${buddyHtml(kid, moodFor(kid), 'md', { live: true })}
         <div class="kid-name">${esc(kid.name)}</div>
-        <div class="streak ${info.streak ? '' : 'cold'}">🔥 ${info.streak}</div>
+        <div class="streak ${info.streak ? '' : 'cold'}">🔥 ${info.streak} <small class="best" title="Best streak">🏆 ${info.best}</small></div>
         <div class="bar"><span style="width:${pct}%"></span></div>
         <div class="muted">${s.complete ? 'Quest complete! 🌟' : `${s.done} of ${s.total} done`}</div>
       </button>`;
@@ -1245,13 +702,13 @@ function taskTile(kid, task, status) {
 
 // Board-game path: one stop per task, winding down the screen, ending at a treasure chest.
 const MAP_ROW = 124;
-const VILLAGE = 150; // extra room at the top of the map when buddies are visiting
+const VILLAGE = 225; // extra room at the top of the map when buddies are visiting
 
 // Everyone in the family who has a buddy: this device's kids plus, on a kid's
 // device, the others from the cloud.
 function familyBuddies() {
   const all = new Map((family.buddies || []).map((b) => [b.id, b]));
-  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: mover(k).exBest, today: todaySummary(state, k, today()), milestone: k.milestone || null });
+  for (const k of state.kids) all.set(k.id, { id: k.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: mover(k).exBest, today: todaySummary(state, k, today()), milestone: k.milestone || null, playBest: k.playBest || {}, gameBests: k.gameBests || null });
   return [...all.values()];
 }
 
@@ -1263,6 +720,9 @@ function familyBuddies() {
 function shareToday() {
   let changed = false;
   for (const k of state.kids) {
+    // the best exercise run, for this buddy's moves when it visits other kids' devices
+    const exBest = exerciseInfo(k).best;
+    if ((k.exBest || 0) < exBest) { k.exBest = exBest; changed = true; }
     // the kid's newest milestone, for visiting buddies to mention on other maps
     const m = milestoneFor(state, k, today());
     if (stableJson(m) !== stableJson(k.milestone)) { k.milestone = m; changed = true; }
@@ -1270,7 +730,7 @@ function shareToday() {
     const now = todaySummary(state, k, today());
     if (stableJson(now) !== stableJson(k.today)) { k.today = now; changed = true; }
   }
-  if (changed) save();
+  return changed;
 }
 
 // ---------- cheering each other's milestones ----------
@@ -1367,11 +827,11 @@ function maybeParty() {
   startParty();
 }
 function startParty() {
-  const keys = [...$app.querySelectorAll('.quest-map canvas.live-buddy')].map((c) => c.dataset.live);
+  const keys = [...$app.querySelectorAll('.quest-map canvas.live-buddy, .village canvas.live-buddy')].map((c) => c.dataset.live);
   partyAll(keys, PARTY_MS);
   mapParty(PARTY_MS);
-  $app.querySelector('.quest-map')?.classList.add('party');
-  setTimeout(() => $app.querySelector('.quest-map')?.classList.remove('party'), PARTY_MS);
+  $app.querySelectorAll('.quest-map, .village').forEach((el) => el.classList.add('party'));
+  setTimeout(() => $app.querySelectorAll('.quest-map, .village').forEach((el) => el.classList.remove('party')), PARTY_MS);
 }
 
 const visitorsArrived = new Set();
@@ -1385,9 +845,10 @@ function visitFeel(area, complete) {
   return { valence: 0.6, arousal: 0.55 };
 }
 
-function visitorsHtml(kid, s) {
+/** Today's visitors, what each one says, and who has news (shared by the map and the village). */
+function visitorInfo(kid, s) {
   const visitors = todaysVisitors(kid);
-  if (!visitors.length) return { html: '', room: 0, areas: '' };
+  if (!visitors.length) return { visitors, lines: [], news: {} };
   const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
   // once the quest is done, every visitor wants to play (see playWith)
   if (s.complete) {
@@ -1412,10 +873,16 @@ function visitorsHtml(kid, s) {
     lines[i] = milestoneBrag(m);
     news[v.id] = 'news';
   });
+  return { visitors, lines, news };
+}
+
+function visitorsHtml(kid, s) {
+  const { visitors, lines, news } = visitorInfo(kid, s);
+  if (!visitors.length) return { html: '', room: 0, areas: '' };
   // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
   const wide = ($app.clientWidth || window.innerWidth) > 600;
-  const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [22, 37], right: [78, 63] };
-  // players stand at the two ends of their field (see pondSpots in maparts.js)
+  const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [25, 40], right: [75, 60] };
+  // players stand at the two ends of their field; placePlayers in maparts.js puts them exactly on it
   const GX = wide ? { left: [16, 42], right: [84, 58] } : { left: [16, 41], right: [84, 59] };
   const gearOf = (v) => bestGear(v.owned);
   const plan = visitPlan(kid, visitors);
@@ -1427,13 +894,13 @@ function visitorsHtml(kid, s) {
     const x = (area && area.kind !== 'pond' ? GX : X)[spot.side][spot.slot];
     const solo = area && area.kind !== 'pond' && area.members.length === 1;
     const gear = gearOf(v);
-    let look = v.buddy;
+    let look = dressedVisitor(v);
     let cls = '';
     let extra = '';
     let data = '';
     if (area?.kind === 'pond') {
       // fishing in the village pond, facing away from the road
-      look = { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } };
+      look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } });
       cls = `fishing face-${spot.side}`;
       data = `data-rod="${gear.rod}"`;
       extra = '<div class="fish-line" aria-hidden="true"><span class="bobber"></span></div><div class="fish-catch" aria-hidden="true"></div>';
@@ -1442,12 +909,12 @@ function visitorsHtml(kid, s) {
       // on their own, they practice from the outer end (a borrowed stick if they have none)
       const a = x === Math.min(...area.members.map((id) => GX[plan.spots[id].side][plan.spots[id].slot]));
       const outfit = { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined };
-      look = { ...v.buddy, outfit };
+      look = dressedVisitor(v, { ...v.buddy, outfit });
       const facesIn = solo ? spot.side === 'right' : a && area.kind === 'hockey';
       cls = `playing play-${area.kind} ${solo ? 'solo' : `player-${a ? 'a' : 'b'}`} ${facesIn ? 'face-left' : ''}`;
     }
     return `
-      <div class="map-visitor ${i === 0 || news[v.id] ? 'talking' : ''} ${news[v.id] || ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
+      <div class="map-visitor ${i === 0 || news[v.id] ? 'talking' : ''} ${news[v.id] || ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} ${area && area.kind !== 'pond' ? `data-play-side="${spot.side}" data-slot="${solo ? 0 : spot.slot}"` : ''} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
         <div class="visitor-buddy">${liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` })}</div>
         ${extra}
         <div class="visitor-name">${esc(v.name)}</div>
@@ -1464,7 +931,7 @@ function visitorsHtml(kid, s) {
     if (a.host) tiers.push(bestGear(kid.owned || [])[a.kind] || 1);
     const solo = a.members.length === 1 ? `solo from-${a.side}` : '';
     const tap = a.host && playable > 0 ? `data-action="visitor" data-id="${esc(a.members[0])}" data-pick="${a.kind}" role="button" aria-label="Play ${GAME_NAMES[a.kind]}"` : 'aria-hidden="true"';
-    return `<div class="map-game game-${a.kind} ${solo} ${a.host ? 'host-field' : ''}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" ${tap}><span class="game-ball">${ballSvg(a.kind, Math.max(...tiers))}</span></div>`;
+    return `<div class="map-game game-${a.kind} ${solo} ${a.host ? 'host-field' : ''}" data-side="${a.side}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" ${tap}><span class="game-ball">${ballSvg(a.kind, Math.max(...tiers))}</span></div>`;
   }).join('');
   const areas = plan.areas.map((a) => `${a.side}:${a.kind}`).join(',');
   // they walk in once a day per kid; later redraws show them already there
@@ -1557,28 +1024,352 @@ function questMap(kid, s, entry, mood) {
     </section>`;
 }
 
+// The village: the same chores as the map, as quests from villagers (see village.js).
+function villageView(kid, s, entry, mood) {
+  const tasks = ['morning', 'afternoon'].flatMap((period) => planOrder(kid, s.tasks.filter((x) => x.period === period)));
+  let current = false;
+  // a kid who made their own plan sees its steps numbered, and the village follows them
+  const planned = Boolean(kid.plan?.order?.length);
+  const list = tasks.map((t, i) => {
+    const status = entry?.tasks?.[t.id];
+    let st = status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo';
+    if (st === 'todo' && !current) { st = 'current'; current = true; }
+    let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'A parent checks this one' : 'Tap "I did it" when it\'s done';
+    if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
+      const sec = status?.seconds || 0;
+      const left = t.minutes * 60 - sec;
+      sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left on the timer` : `${t.minutes} minute timer`;
+    }
+    const cue = cueFor(kid, t);
+    return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
+  });
+  // the buddy's house: where the day starts, and wherever the kid left the buddy after that
+  // (its house, the music house, or out in the village)
+  const place = placeOf(kid.id, today());
+  if (place === 'house') return houseView(kid, list, mood);
+  const prog = progressFor(kid);
+  const tier = musicTier(prog);
+  if (place === 'music' && tier) return musicView(kid, list, mood, tier);
+  const c = chestFor(kid, today());
+  // each map has its own village; a finished treasure map for it puts up its landmark
+  const theme = kidTheme(kid);
+  const lm = SECRETS[theme] && treasureFound(state.log, kid.id).maps.has(theme) ? SECRETS[theme] : null;
+  const size = lm ? secretSize(theme) : null;
+  const store = storeOpen(state, kid, today());
+  return villageHtml({
+    theme,
+    visit: villageVisit(kid, s),
+    // drawn twice as big, with fine pixels like the rest of the village
+    landmark: lm ? { html: secretSvg(theme, 1, { smooth: 2 }), name: lm.name, w: size.w * 2, h: size.h * 2 } : null,
+    shop: { open: store.open, left: store.left || 0 },
+    kidId: kid.id,
+    kidName: kid.name,
+    kidColor: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
+    buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
+    tasks: list,
+    planned,
+    chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
+    music: { tier, left: tier ? 0 : daysToMusicHouse(prog) },
+  });
+}
+
+// Which look of the music house each kid has seen on this device, so a new look is
+// greeted once (the first visit, and each better piano).
+const MUSIC_SEEN_KEY = 'kidquest.musicSeen';
+const musicHellos = new Map(); // kid id -> the look greeted while the app is open (the page keeps saying it the same way)
+function musicHello(kidId, tier) {
+  if (musicHellos.get(kidId) === tier) return tierInfo(tier).hello;
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem(MUSIC_SEEN_KEY) || '{}') || {}; } catch { seen = {}; }
+  if ((seen[kidId] || 0) >= tier) return '';
+  seen[kidId] = tier;
+  try { localStorage.setItem(MUSIC_SEEN_KEY, JSON.stringify(seen)); } catch { /* it just says hello again */ }
+  musicHellos.set(kidId, tier);
+  return tierInfo(tier).hello;
+}
+
+/** Inside the music house (musichouse.js): its look for the kid's best piano, and its stations. */
+function musicView(kid, list, mood, tier) {
+  return musicHouseHtml({
+    kidId: kid.id,
+    kidName: kid.name,
+    color: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
+    buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
+    tier,
+    studio: studioOpen(state, kid, today()),
+    hello: musicHello(kid.id, tier),
+    quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
+  });
+}
+
+const musicHandlers = {
+  onPiano: () => { ui.view = 'watch'; ui.watchSession = 0; ui.watchNote = ''; render(); },
+  onSheets: () => openSongbook(),
+  onStudio: () => openStudio(),
+  onExit: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setPlace(kid.id, today(), 'out');
+    cameOutOfMusic(kid.id, kidTheme(kid));
+    render();
+  },
+  sound: () => sounds.tap(),
+};
+/** Inside the buddy's house (house.js): today's bed, teeth and floor chores, the trophy shelf, the furniture. */
+function houseView(kid, list, mood) {
+  const t = today();
+  const hc = houseChores(state, kid, t);
+  const chores = {};
+  for (const k of ['bed', 'teeth', 'floor']) {
+    const q = hc[k] && list.find((x) => x.id === hc[k].id);
+    // the house looks done once the kid says it's done (a parent may still check it)
+    chores[k] = q ? { id: q.id, name: q.name, icon: q.icon, st: q.st === 'current' ? 'todo' : q.st, verify: q.verify, timer: q.timer, sub: q.sub } : null;
+  }
+  return houseHtml({
+    kidId: kid.id,
+    kidName: kid.name,
+    color: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
+    buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
+    layout: homeLayout(kid),
+    chores,
+    mess: hc.mess,
+    shelf: shelfLevel(treasureFound(state.log, kid.id).trophies.size, TROPHIES.length),
+    gear: bestGear(kid.owned || []),
+    quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
+    tank: tankFish(kid),
+    fish: bookCount(kid.fishRecords).caught,
+  });
+}
+
+const houseHandlers = {
+  onTask: (id, el) => onTaskTap(id, el),
+  onTrophies: () => actions.trophies(),
+  onLeaderboard: () => openLeaderboard(kidById(ui.kidId)),
+  onTank: () => openTankPicker(kidById(ui.kidId)),
+  onFishBook: () => openFishBook(kidById(ui.kidId)),
+  onExit: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setInside(kid.id, today(), false);
+    cameOut(kid.id, kidTheme(kid));
+    render();
+  },
+  sound: () => sounds.tap(),
+};
+
+// ---------- the fish book and the fish tank (in the house) ----------
+// The kid's biggest catch of every kind of fish (kid.fishRecords, kept by the fishing game),
+// and the one they picked and named for their tank (kid.tank). See fishbook.js.
+
+const fishImgCache = new Map();
+/** A fish picture as an image URL: in color, or a dark shape for one not caught yet. */
+function fishImg(id, dark = false) {
+  const key = `${id}|${dark}`;
+  if (!fishImgCache.has(key)) {
+    const sp = fishSpecies(id);
+    const pic = fishPic(sp.look, 18, 2);
+    if (dark) {
+      const x = pic.getContext('2d');
+      x.globalCompositeOperation = 'source-in';
+      x.fillStyle = '#6e5a7e';
+      x.fillRect(0, 0, pic.width, pic.height);
+    }
+    fishImgCache.set(key, pic.toDataURL());
+  }
+  return fishImgCache.get(key);
+}
+
+const fishDate = (key) => (key ? new Date(`${key}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
+
+function openFishBook(kid) {
+  if (!kid) return;
+  const recs = kid.fishRecords || {};
+  const { caught, total } = bookCount(recs);
+  const pages = bookPages(recs, kidTheme(kid)).map((page) => {
+    const n = page.fish.filter((f) => f.record).length;
+    return `
+      <div class="fb-map">
+        <h3>🎣 ${esc(page.name)} <small>${n} of ${page.fish.length}</small></h3>
+        <div class="fb-grid ${n ? '' : 'mini'}">
+          ${page.fish.map((f) => (f.record ? `
+            <div class="fb-fish ${f.rare ? 'rare' : ''}">
+              ${kid.tank?.species === f.id ? '<span class="fb-tank" title="In your tank">🐟</span>' : ''}
+              <img src="${fishImg(f.id)}" alt="">
+              <b>${esc(f.name)}</b>
+              <span class="fb-size">${f.record.size} in</span>
+              <small>${esc(fishDate(f.record.date))}</small>
+            </div>` : `
+            <div class="fb-fish none ${f.rare ? 'rare' : ''}" title="${f.rare ? 'A rare fish!' : 'Not caught yet'}">
+              <img src="${fishImg(f.id, true)}" alt="">
+              <b>???</b>
+              <small>${f.rare ? 'A rare fish!' : 'Not caught yet'}</small>
+            </div>`)).join('')}
+        </div>
+      </div>`;
+  }).join('');
+  openModal(`
+    <div class="fishbook" style="--kid:${esc(kid.color)}">
+      <h2>📖 ${esc(kid.name)}'s fish book</h2>
+      <p class="muted small fb-count">${caught ? `${caught} of ${total} kinds of fish caught. Each one shows the biggest yet.` : `No fish yet! Go fishing with a visiting buddy: every kind you catch goes in here (${total} to find).`}</p>
+      ${pages}
+      <button class="btn" data-action="modal-close">Close</button>
+    </div>`);
+}
+
+function openTankPicker(kid) {
+  if (!kid) return;
+  const recs = kid.fishRecords || {};
+  const mine = bookPages(recs, kidTheme(kid)).flatMap((p) => p.fish.filter((f) => f.record).map((f) => ({ ...f, mapName: p.name })));
+  if (!mine.length) {
+    openModal(`
+      <div class="tankpick">
+        <h2>🐟 Your fish tank</h2>
+        <p>The tank is empty! Go fishing with a visiting buddy. Every fish you catch goes in your fish book, and then you can pick one to live here and give it a name.</p>
+        <button class="btn" data-action="modal-close">OK!</button>
+      </div>`);
+    return;
+  }
+  const now = tankFish(kid);
+  ui.tankPick = now?.species || mine[0].id;
+  openModal(`
+    <div class="tankpick" style="--kid:${esc(kid.color)}">
+      <h2>🐟 Your fish tank</h2>
+      <p class="muted small">Pick a fish from your fish book to swim in your tank.</p>
+      <div class="tp-grid">
+        ${mine.map((f) => `<button class="tp-fish ${f.id === ui.tankPick ? 'on' : ''}" data-action="tank-pick" data-species="${esc(f.id)}" aria-pressed="${f.id === ui.tankPick}">
+            <img src="${fishImg(f.id)}" alt="">
+            <b>${f.rare ? '⭐ ' : ''}${esc(f.name)}</b>
+            <small>${f.record.size} in · ${esc(f.mapName)}</small>
+          </button>`).join('')}
+      </div>
+      <label class="tp-name">Give it a name
+        <input id="tank-name" type="text" maxlength="${NICK_MAX}" autocomplete="off" spellcheck="false" placeholder="${esc(fishSpecies(ui.tankPick)?.name || '')}" value="${esc(now?.nickname && now.nickname !== now.name ? now.nickname : '')}">
+      </label>
+      <div class="tp-buttons">
+        <button class="btn" data-action="tank-save">Put it in the tank</button>
+        ${now ? '<button class="btn ghost" data-action="tank-empty">Empty the tank</button>' : ''}
+        <button class="btn ghost" data-action="modal-close">Cancel</button>
+      </div>
+    </div>`);
+}
+
+// ---------- the family leaderboard (the chart on the house wall) ----------
+// Every family kid's best in each visitor game, this week (Sunday to Saturday) and of all time.
+function openLeaderboard(kid, mode = ui.lbMode || 'week') {
+  if (!kid) return;
+  ui.lbMode = mode;
+  const t = today();
+  const kids = familyBuddies().filter((b) => b.buddy);
+  const boards = leaderboard(kids, mode, t);
+  const medal = (n) => ['', '🥇', '🥈', '🥉'][n] || (n ? String(n) : '');
+  const games = boards.map(({ game, rows }) => `
+      <div class="lb-game">
+        <h3>${game.icon} ${esc(game.name)}</h3>
+        ${rows.map((r) => `<div class="lb-row ${r.score ? '' : 'none'} ${r.id === kid.id ? 'me' : ''}">
+            <span class="lb-place">${medal(r.place)}</span>
+            <span class="lb-buddy">${buddySvg(r.buddy, r.place === 1 ? 'excited' : 'happy', { background: false })}</span>
+            <span class="lb-name">${esc(r.name)}</span>
+            <span class="lb-score">${r.score ? esc(game.unit(r.score)) : 'No score yet'}</span>
+          </div>`).join('')}
+      </div>`).join('');
+  const sat = addDays(weekOf(t), 6);
+  openModal(`
+    <div class="leaderboard" style="--kid:${esc(kid.color)}">
+      <h2>📊 Family game scores</h2>
+      <div class="lb-tabs">
+        <button class="btn ${mode === 'week' ? 'on' : 'ghost'}" data-action="lb-mode" data-mode="week">This week</button>
+        <button class="btn ${mode === 'all' ? 'on' : 'ghost'}" data-action="lb-mode" data-mode="all">All time</button>
+      </div>
+      <p class="muted small lb-note">${mode === 'week' ? `Best scores since Sunday. A new week starts ${sat === t ? 'tonight at midnight' : 'Sunday at midnight'}.` : 'Everyone\'s best score ever.'} Play with visiting buddies to get on the chart!</p>
+      ${games}
+      <button class="btn" data-action="modal-close">Close</button>
+    </div>`);
+}
+
+/** Today's visitors for the village green: the same ones, lines, games and gear as on the map. */
+function villageVisit(kid, s) {
+  const { visitors, lines, news } = visitorInfo(kid, s);
+  if (!visitors.length) return null;
+  const plan = visitPlan(kid, visitors);
+  const areaOf = (id) => plan.areas.find((a) => a.members.includes(id));
+  const version = (tier) => ['regular', 'good', 'super'][tier - 1];
+  const playable = playableFor(kid, s.complete);
+  return {
+    host: kid.id,
+    visitors: visitors.map((v, i) => {
+      const area = areaOf(v.id);
+      const gear = bestGear(v.owned);
+      let look = dressedVisitor(v);
+      if (area?.kind === 'pond') look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } });
+      else if (area) look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined } });
+      return { id: v.id, name: v.name, color: v.color, rod: gear.rod || 1, line: lines[i], news: news[v.id] || '', html: liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` }) };
+    }),
+    areas: plan.areas.map((a) => {
+      const tiers = a.members.map((id) => bestGear(visitors.find((v) => v.id === id).owned)[a.kind] || 1);
+      if (a.host) tiers.push(bestGear(kid.owned || [])[a.kind] || 1);
+      return { side: a.side, kind: a.kind, members: a.members, ball: a.kind === 'pond' ? '' : ballSvg(a.kind, Math.max(...tiers)), tap: Boolean(a.host && playable > 0 && a.kind !== 'pond') };
+    }),
+  };
+}
+
+/** A finished treasure map's landmark in the village: it talks, and its show plays over the view. */
+function villageLandmark(el, layer) {
+  const kid = kidById(ui.kidId);
+  const theme = kid ? kidTheme(kid) : 'bg-meadow';
+  const info = SECRETS[theme];
+  if (!info || !kid || !layer) return;
+  const bubble = el.querySelector('.v-lm-bubble');
+  bubble.textContent = info.lines[(ui.secretLine = ((ui.secretLine ?? -1) + 1) % info.lines.length)];
+  bubble.hidden = false;
+  clearTimeout(bubble.hideTimer);
+  bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
+  if (showPlaying(layer) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(dressed(kid), 'excited', { background: false }))}`;
+  const r = el.getBoundingClientRect(); const lr = layer.getBoundingClientRect();
+  const scale = Number(layer.dataset.scale) || 3;
+  const def = playShow(layer, theme, { buddy: img, scale, spot: { x: r.left + r.width / 2 - lr.left, y: r.top + r.height / 2 - lr.top }, onDone: () => layer.closest('.village')?.classList.remove('show-on') });
+  if (!def) return;
+  ui.lastShow = Date.now();
+  layer.closest('.village')?.classList.add('show-on');
+  if (state.settings.sound !== false) playShowAudio(theme, { music: state.settings.music !== false, sfx: def.sfx });
+}
+
+const villageHandlers = {
+  onTask: (id, el) => onTaskTap(id, el),
+  onChest: (el) => actions.chest(el),
+  onVisitor: (el) => actions.visitor(el),
+  onLandmark: (el, layer) => villageLandmark(el, layer),
+  fishCatch: (rod, theme) => catchFor(theme || 'bg-meadow', rod),
+  onShop: () => actions.wardrobe(),
+  onHome: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setInside(kid.id, today(), true);
+    cameIn(kid.id);
+    render();
+  },
+  onMusic: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setPlace(kid.id, today(), 'music');
+    cameInMusic(kid.id);
+    render();
+  },
+  sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
+};
+
 function viewKid() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
   const t = today();
-  snapshotToday(state, kid, t);
-  save();
   const { s, info } = kidSummary(kid);
   const xp = totalXp(state, kid, t);
   const lv = levelFor(xp);
   const entry = entryFor(state, kid.id, t);
-  const section = (period, title, by) => {
-    const tasks = planOrder(kid, s.tasks.filter((x) => x.period === period));
-    if (!tasks.length) return '';
-    return `
-      <section>
-        <h2>${title} <small class="muted">${by ? `by ${esc(formatTime(by))}` : ''}</small></h2>
-        <div class="tiles">${tasks.map((x) => taskTile(kid, x, entry?.tasks?.[x.id])).join('')}</div>
-      </section>`;
-  };
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
   const mood = moodFor(kid);
-  const listMode = state.settings.questView === 'list';
+  const villageMode = state.settings.questView === 'village';
   const newCount = (kid.newItems || []).length;
   const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
   const late = lateChest(kid);
@@ -1588,7 +1379,7 @@ function viewKid() {
         <button class="btn ghost round" data-action="home" aria-label="Back">←</button>
         <div class="kid-title"><b>${esc(kid.name)}</b><small>Level ${lv.level} · <span class="xpbar"><span style="width:${lv.into}%"></span></span></small></div>
         <div class="chips">
-          <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak">🔥 ${info.streak}</span>
+          <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak (best ${info.best})">🔥 ${info.streak}</span>
           <span class="chip ice" title="Streak freezes">❄️ ${info.freezes}</span>
           <span class="chip coin" title="Coins">🪙 ${Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0))}</span>
           ${exTasks.length || kid.gemsSpent ? `<span class="chip gem" title="Gems">💎 ${Math.max(0, totalGems(state, kid, t) - (kid.gemsSpent || 0))}</span>` : ''}
@@ -1611,23 +1402,30 @@ function viewKid() {
       </div>
       ${exerciseSection(kid, exTasks, entry)}
       <div class="view-toggle">
-        <button class="${listMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
-        <button class="${listMode ? 'on' : ''}" data-action="quest-mode" data-mode="list">📋 List</button>
+        <button class="${villageMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
+        <button class="${villageMode ? 'on' : ''}" data-action="quest-mode" data-mode="village">🏘️ Village</button>
       </div>
-      ${listMode || !state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
+      ${!state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
       ${familyBanner()}
-      ${listMode ? `${section('morning', '🌅 Morning', state.settings.morningBy)}
-      ${section('afternoon', '☀️ After school', state.settings.bedtime)}` : questMap(kid, s, entry, mood)}
+      ${villageMode ? villageView(kid, s, entry, mood) : questMap(kid, s, entry, mood)}
       <section>
         <h2>This week</h2>
+        ${streakLine(kid, info)}
         ${weekDots(kid, info)}
         ${rewardLine(kid)}
         ${monthLine(kid)}
         ${weekCoinsHtml(kid)}
-        <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Miss a day without one and your streak is cut in half, not lost, and finishing the next day earns a welcome-back bonus. Best streak: ${info.best} days.</p>
+        <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Miss a day without one and you lose a quarter of your streak (at least 1 day), not all of it, and finishing the next day earns a welcome-back bonus.</p>
       </section>
       ${habitsSection(kid)}
     </div>`;
+}
+
+/** "🔥 Streak 5 days · 🏆 Best 12 days" (plus the piano streak when there is one). */
+function streakLine(kid, info) {
+  const days = (n) => `${n} ${n === 1 ? 'day' : 'days'}`;
+  const piano = pianoStreakInfo(state, kid, today());
+  return `<p class="streak-line"><span>🔥 Streak <b>${days(info.streak)}</b></span><span>🏆 Best <b>${days(info.best)}</b></span>${piano.perWeek ? `<span>🎹 Piano <b>${days(piano.streak)}</b> (best ${piano.best})</span>` : ''}</p>`;
 }
 
 /** How this week's real-world reward is going: it lands on Friday when Monday to Friday are all done. */
@@ -1692,350 +1490,39 @@ function weekCoinsHtml(kid) {
         </div>`;
 }
 
+const weeksLabel = (n) => `${n} strong ${n === 1 ? 'week' : 'weeks'}`;
+
+/**
+ * This week's exercise days as boxes: the box that keeps the strong-week count
+ * safe shows a 🛡️ and the box that makes a strong week shows a ⭐, so kids see
+ * the rule (3 days keeps it, 4 days adds one) without reading it.
+ */
+function exWeekHtml(ex) {
+  if (!ex.goal) return `<div class="ex-week"><small>🛡️ Excused week: your ${esc(weeksLabel(ex.weeks))} wait for you</small></div>`;
+  const dots = Array.from({ length: ex.goal }, (_, i) => {
+    const on = i < ex.thisWeek;
+    const mark = i === ex.goal - 1 ? ['star', '⭐'] : i === ex.keep - 1 ? ['shield', '🛡️'] : null;
+    return `<span class="ex-dot ${on ? 'on' : ''} ${mark ? mark[0] : ''}">${on ? (mark ? mark[1] : '💪') : mark ? mark[1] : ''}</span>`;
+  }).join('');
+  const left = (n) => `${n} more ${n === 1 ? 'day' : 'days'}`;
+  let text;
+  if (ex.status === 'strong') text = `<b>⭐ Strong week!</b> You have ${esc(weeksLabel(ex.weeks))}`;
+  else if (!ex.weeks) text = `${left(ex.goal - ex.thisWeek)} for a ⭐ strong week`;
+  else if (ex.status === 'safe') text = `<b>🛡️ Your ${esc(weeksLabel(ex.weeks))} are safe.</b> ${left(ex.goal - ex.thisWeek)} adds a ⭐`;
+  else text = `${left(ex.keep - ex.thisWeek)} keeps your ${esc(weeksLabel(ex.weeks))} safe 🛡️ · ${left(ex.goal - ex.thisWeek)} adds a ⭐`;
+  return `<div class="ex-week"><div class="ex-dots" aria-label="${ex.thisWeek} exercise days this week: ${ex.keep} keeps your strong weeks, ${ex.goal} adds one">${dots}</div><small>${text}</small></div>`;
+}
+
 /** Bonus exercise: optional tiles that earn gems, and how the exercise week is going. */
 function exerciseSection(kid, tasks, entry) {
   if (!tasks.length) return '';
   const ex = exerciseInfo(kid);
-  const dots = Array.from({ length: ex.goal }, (_, i) => `<span class="ex-dot ${i < ex.thisWeek ? 'on' : ''}">${i < ex.thisWeek ? '💪' : ''}</span>`).join('');
-  const streak = ex.weeks ? `${ex.weeks}-week exercise streak 🔥` : 'Exercise 5 days this week to start a streak';
   return `
       <section class="exercise">
         <h2>💪 Bonus exercise <small class="muted">earns 💎 gems</small></h2>
-        <div class="ex-week"><div class="ex-dots" aria-label="${ex.thisWeek} of ${ex.goal} exercise days this week">${dots}</div><small>${ex.thisWeek >= ex.goal ? '<b>This week counts!</b> ' : `${ex.thisWeek} of ${ex.goal} days this week · `}${esc(streak)}</small></div>
+        ${exWeekHtml(ex)}
         <div class="tiles">${tasks.map((x) => taskTile(kid, x, entry?.tasks?.[x.id])).join('')}</div>
       </section>`;
-}
-
-function viewTimer() {
-  const kid = kidById(ui.kidId);
-  const task = kid && taskById(kid, today(), ui.taskId);
-  if (!task) { ui.view = 'kid'; return viewKid(); }
-  const done = entryFor(state, kid.id, today())?.tasks?.[task.id]?.seconds || 0;
-  const total = task.minutes * 60;
-  const naps = 'If the piano stops for a minute, it falls asleep and the timer pauses until you play again.';
-  const tip = task.background
-    ? `You can switch to another app, like Note Rush. The timer keeps counting. Come back here when you’re done.${task.listen ? ` On this screen your buddy listens and dances to your beat. ${naps}` : ''}`
-    : task.listen
-      ? `Keep the tablet on the piano with this screen open. Your buddy listens and dances to your beat. ${naps} The timer also pauses if you leave the app.`
-      : 'Keep the tablet near the piano with this screen open. The timer pauses if you leave the app.';
-  const mood = task.listen && (ears.run || ears.asleep) ? ears.mood || 'waiting' : '';
-  return `
-    <div class="screen timer center" style="--kid:${kid.color}">
-      <header class="kid-head">
-        <button class="btn ghost round" data-action="timer-back" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(task.icon)} ${esc(task.name)}</b><small>${esc(kid.name)}</small></div>
-      </header>
-      <div class="timer-stage">
-        <div class="ring" id="timer-ring" style="--p:${done / total}">
-          <div class="ring-inner">
-            <div class="timer-left" id="timer-left">${mmss(total - done)}</div>
-            <small>${timer.running ? 'Keep playing! 🎶' : ears.asleep ? 'Asleep 💤' : done ? 'Paused' : 'Ready?'}</small>
-          </div>
-        </div>
-        <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
-          <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), kid.buddy, { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
-        </button>
-      </div>
-      ${task.listen ? `<p class="timer-ears" id="ears"><b id="ears-text" aria-live="polite"${earsText() ? '' : ' hidden'}>${esc(earsText())}</b></p>` : ''}
-      <button class="btn huge" data-action="${timer.running ? 'timer-pause' : 'timer-start'}">${timer.running ? 'Pause' : done ? 'Keep going' : 'Start practice'}</button>
-      <p class="muted small">${tip}</p>
-    </div>`;
-}
-
-// ---------- piano listening test (parents) ----------
-// A test page to see how well the tablet hears piano playing, before the timer
-// uses it. It shows what the engine in listen.js hears, live. A switch picks who
-// decides what is piano: the built-in engine, Google's recognizer, or both.
-// Every new sound also goes to the beat follower (beat.js): while piano is playing
-// and it finds a beat, the buddy dances on it and a little metronome swings along.
-const listenTest = { run: null, events: [], error: '', settings: null, lastUi: 0, woke: 0, loading: false, beat: null, side: 1 };
-const LISTEN_MODE_KEY = 'kidquest.listenMode';
-const LISTEN_MODES = [['builtin', 'Built-in'], ['google', 'Google'], ['both', 'Both agree']];
-function listenMode() {
-  if (!ui.listenMode) {
-    try { ui.listenMode = localStorage.getItem(LISTEN_MODE_KEY); } catch { /* private window */ }
-    if (!LISTEN_MODES.some(([m]) => m === ui.listenMode)) ui.listenMode = 'google';
-  }
-  return ui.listenMode;
-}
-let lastListenMood = '';
-const LISTEN_MOODS = { playing: 'excited', waiting: 'happy', bored: 'sad', asleep: 'sleepy' };
-const LISTEN_LABELS = { playing: '🎹 Hearing piano', waiting: '👂 Listening…', bored: '😐 Bored (no piano for 30 s)', asleep: '😴 Asleep (the timer would pause)' };
-const LISTEN_SAY = { bored: 'I’m bored… play something!', asleep: 'Zzz…' };
-const LISTEN_BEAT = { none: 'Listening for a beat', free: 'No steady beat (that’s ok)' };
-
-function viewListen() {
-  const kid = kidById(ui.listenKid) || state.kids[0];
-  const buddy = kid?.buddy || { species: 'fox', outfit: {} };
-  const on = !!listenTest.run;
-  const mode = listenMode();
-  lastListenMood = '';
-  return `
-    <div class="screen listen">
-      <header class="top row">
-        <button class="btn ghost round" data-action="listen-back" aria-label="Back">←</button>
-        <h1 class="grow">Piano listening test</h1>
-      </header>
-      ${state.kids.length > 1 ? `<div class="row wrap listen-kids">${state.kids.map((k) => `<button class="btn ${k.id === kid?.id ? '' : 'ghost'}" data-action="listen-kid" data-id="${k.id}">${esc(k.name)}</button>`).join('')}</div>` : ''}
-      <div class="listen-stage">
-        <button class="timer-buddy listen-buddy" aria-label="Buddy">
-          <span class="timer-bubble" id="ls-say" aria-live="polite"></span>
-          <span class="timer-sprite" id="ls-sprite">${buddySvg(buddy, 'happy', { background: false })}</span>
-        </button>
-        <div class="listen-status">
-          <b id="ls-state">${on ? LISTEN_LABELS.waiting : 'Not listening'}</b>
-          <div class="listen-clock"><span id="ls-since">–</span> s since the last piano note</div>
-          <div class="listen-bar" aria-hidden="true"><i id="ls-since-bar"></i><em style="left:50%"></em><em style="left:100%"></em></div>
-          <small class="muted">Bored at ${TUNING.boredAfter} s · asleep at ${TUNING.asleepAfter} s</small>
-          <div class="listen-beat">
-            <div class="listen-metro" id="ls-metro" aria-hidden="true"><i id="ls-arm"></i></div>
-            <div><b id="ls-beat">${on ? LISTEN_BEAT.none : '–'}</b><small class="muted">The buddy dances when it finds your beat</small></div>
-          </div>
-        </div>
-      </div>
-      <div class="listen-modes" role="group" aria-label="Who decides what is piano">
-        <span class="muted small">Who decides:</span>
-        ${LISTEN_MODES.map(([m, label]) => `<button class="btn ${m === mode ? '' : 'ghost'}" data-action="listen-mode" data-mode="${m}" aria-pressed="${m === mode}">${label}</button>`).join('')}
-      </div>
-      <div class="listen-actions">
-        ${listenTest.loading ? '<p class="muted">Loading Google’s sound recognizer (about 25 MB the first time)…</p>'
-    : `<button class="btn huge" data-action="${on ? 'listen-stop' : 'listen-start'}">${on ? 'Stop listening' : 'Start listening'}</button>`}
-      </div>
-      ${listenTest.error ? `<p class="listen-error">${esc(listenTest.error)}</p>` : ''}
-      <div class="card listen-live">
-        <div class="listen-row"><span>Loudness</span><div class="listen-meter"><i id="ls-level"></i><em id="ls-gate"></em></div></div>
-        <div class="listen-row"><span>Last sound</span><b id="ls-last">–</b></div>
-        ${mode === 'builtin' ? '' : `<div class="listen-row"><span>Google hears</span><b id="ls-google">–</b></div>
-        <div class="listen-row"><span>Piano score</span><div class="listen-meter"><i id="ls-gpiano"></i><em style="left:${TUNING.googlePiano * 100}%"></em></div></div>`}
-        <div class="listen-row"><span>Piano notes</span><b id="ls-piano">0</b></div>
-        <div class="listen-row"><span>Other sounds</span><b id="ls-other">0</b></div>
-        <div class="listen-row"><span>Last 60 s</span><div class="listen-line" id="ls-line"></div></div>
-        <small class="muted"><span class="dot piano"></span> piano &nbsp; <span class="dot other"></span> talking or other noise</small>
-        <p class="muted small" id="ls-mic">${listenTest.settings ? micNote(listenTest.settings) : ''}</p>
-      </div>
-      <div class="card">${danceLeadSlider()}</div>
-      <div class="card">
-        <h2>Things to try</h2>
-        <ol class="small listen-tries">
-          <li>Put the tablet on the piano, where it sits during practice, and tap Start.</li>
-          <li>Try each “Who decides” choice: Built-in hears each note at once, Google knows piano from voices best but decides about half a second later, and Both agree counts a note only when both say piano.</li>
-          <li>Play slowly, then fast, then chords. Each note should add a green dot and make the buddy hop.</li>
-          <li>Play a song with a steady beat. After a few notes the buddy should dance on the beat and the metronome should swing with you, sometimes on every other beat. Speed up, slow down, switch songs, or stop for a moment, and see how fast it follows.</li>
-          <li>Noodle around with no beat. The buddy should hop on your notes but not dance (that’s fine).</li>
-          <li>Stop playing and talk near the tablet. Talking should add orange dots and not reset the clock.</li>
-          <li>Have a kid practice while others talk in the room.</li>
-          <li>Stop for 30 seconds (bored), then 60 (asleep), then play one note to wake the buddy.</li>
-          <li>Try very soft playing.</li>
-        </ol>
-        <p class="muted small">Nothing is recorded or saved. Google’s recognizer runs on this tablet too: only the recognizer itself downloads, the sound never leaves the tablet. Listening stops when you leave this page or the app.</p>
-      </div>
-    </div>`;
-}
-
-function micNote(st) {
-  const on = ['echoCancellation', 'noiseSuppression', 'autoGainControl'].filter((k) => st[k] === true);
-  return on.length
-    ? `⚠️ Chrome kept these voice filters on: ${on.join(', ')}. They can hide held piano notes.`
-    : `Mic ready, voice filters off${st.sampleRate ? ` · ${st.sampleRate} Hz` : ''}${st.notesFrom ? ` · notes from ${st.notesFrom}` : ''}${st.latency > 0 ? ` · Chrome says the mic is ${Math.round(st.latency * 1000)} ms behind` : ''}.`;
-}
-
-async function startListenTest() {
-  if (listenTest.run) return;
-  listenTest.error = '';
-  listenTest.events = [];
-  listenTest.beat = createBeatFollower();
-  const mode = listenMode();
-  let recognizer = null;
-  if (mode !== 'builtin') {
-    listenTest.loading = true;
-    render();
-    try {
-      recognizer = await loadRecognizer();
-    } catch (e) {
-      listenTest.error = `Couldn’t load Google’s recognizer, so the built-in one is listening. It needs the internet the first time. (${e?.message || e})`;
-    }
-    listenTest.loading = false;
-    if (ui.view !== 'listen') return;
-  }
-  try {
-    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no mic'), { name: 'NoMic' });
-    listenTest.run = await startListening(onListenFrame, { mode, recognizer });
-    listenTest.settings = { ...listenTest.run.settings, sampleRate: listenTest.run.sampleRate, notesFrom: listenTest.run.notesFrom };
-    grabWakeLock();
-  } catch (e) {
-    listenTest.run = null;
-    listenTest.error = e?.name === 'NotAllowedError'
-      ? 'The microphone is blocked. In Chrome, tap the icon left of the web address, then Permissions, and allow the microphone.'
-      : e?.name === 'NotFoundError' || e?.name === 'NoMic' ? 'No microphone was found on this device.'
-        : `Could not start the microphone (${e?.message || e}).`;
-  }
-  render();
-}
-
-function stopListenTest() {
-  listenTest.run?.stop();
-  listenTest.run = null;
-  if (!timer.running) { timer.wakeLock?.release?.().catch(() => {}); timer.wakeLock = null; }
-}
-
-/** Piano is playing now: Google heard piano in the last moment (or, built-in, a piano note did). */
-function pianoNow(listener, now) {
-  if (listener.mode !== 'builtin') return listener.hearingPiano(now);
-  return listener.state.lastPiano != null && now - listener.state.lastPiano < 1500;
-}
-
-/** Restarts one of a buddy's moves: a hop on a note, or a dance step on a beat. */
-function buddyStep($b, cls, ms) {
-  if (!$b) return;
-  $b.classList.remove('hop', 'dance-l', 'dance-r');
-  void $b.offsetWidth;
-  if (ms) $b.style.setProperty('--move', `${Math.round(ms)}ms`);
-  $b.classList.add(cls);
-}
-
-/**
- * A beat (p ms long): the buddy steps to the other side, and the metronome ticks
- * and swings over. st keeps which side it is on.
- */
-// The buddy is seen dancing a little after the kid plays: the mic, the note finder
-// (about 30 ms) and the screen each take their time. The beat follower foretells the beats,
-// so each dance move starts this many ms early and lands on the beat the kid played. The
-// delay differs from tablet to tablet; a parent can change it on the listening test page.
-const DANCE_LEAD_KEY = 'kidquest.danceLead';
-const DANCE_LEAD = { normal: 120, min: 0, max: 400, step: 10 };
-function danceLead() {
-  if (ui.danceLead == null) {
-    let v = null;
-    try { v = localStorage.getItem(DANCE_LEAD_KEY); } catch { /* private window */ }
-    const n = v == null ? NaN : Number(v);
-    ui.danceLead = Number.isFinite(n) ? Math.min(DANCE_LEAD.max, Math.max(DANCE_LEAD.min, n)) : DANCE_LEAD.normal;
-  }
-  return ui.danceLead;
-}
-
-/** The "dance earlier" slider on the listening test page. */
-function danceLeadSlider() {
-  const v = danceLead();
-  return `
-    <label class="dance-lead">
-      <span class="row"><b class="grow">Dance earlier</b><b data-dance-lead-out>${v} ms</b></span>
-      <input type="range" min="${DANCE_LEAD.min}" max="${DANCE_LEAD.max}" step="${DANCE_LEAD.step}" value="${v}" data-dance-lead aria-label="Dance earlier, in milliseconds">
-    </label>
-    <small class="muted">The tablet hears, works out and shows each beat a little late, so the dancing buddy starts each move this much early. Play a steady song: if the buddy bounces just after your notes, slide right; if just before, slide left. It counts for the piano timer on this tablet too (it starts at ${DANCE_LEAD.normal} ms).</small>`;
-}
-
-/** Runs fn when the beat at b (ms, as the follower heard it) should show: lead ms early. */
-function atBeat(b, lead, now, fn) {
-  const wait = b - lead - now;
-  if (wait <= 4) fn();
-  else setTimeout(fn, wait);
-}
-
-function danceBeat(st, $b, $m, p) {
-  st.side = -(st.side || 1);
-  buddyStep($b, st.side < 0 ? 'dance-l' : 'dance-r', Math.min(450, p * 0.85));
-  const $arm = $m?.querySelector('i');
-  if (!$arm) return;
-  $m.classList.remove('tick');
-  void $m.offsetWidth;
-  $m.classList.add('tick', 'on');
-  // it reaches the far side right on the next beat
-  $arm.style.transitionDuration = `${Math.round(p)}ms`;
-  $arm.style.transform = `rotate(${st.side * -26}deg)`;
-}
-
-/** No beat: the metronome comes to rest in the middle and the buddy stands up straight. */
-function danceRest($b, $m) {
-  if ($b && !$b.classList.contains('hop')) $b.classList.remove('dance-l', 'dance-r');
-  const $arm = $m?.querySelector('i');
-  if (!$arm || !$m.classList.contains('on')) return;
-  $m.classList.remove('on');
-  $arm.style.transitionDuration = '600ms';
-  $arm.style.transform = 'rotate(0deg)';
-}
-
-function onListenFrame(listener, events, now) {
-  const wasAsleep = lastListenMood === 'asleep';
-  const builtin = listener.mode === 'builtin';
-  const beat = listenTest.beat;
-  const piano = pianoNow(listener, now);
-  // with a beat to follow, the buddy dances on the beat; without one, it hops on each note
-  const dancing = piano && !!beat?.following(now);
-  for (const ev of events) {
-    if (ev.type === 'onset') {
-      beat?.note(ev.at, ev);
-      // Google decides about half a second late, so with it the buddy hops on each
-      // new sound while Google is hearing piano
-      if (!builtin && !dancing && listener.hearingPiano(now)) buddyStep(document.querySelector('.listen-buddy'), 'hop');
-      continue;
-    }
-    listenTest.events.push(ev);
-    if (ev.type === 'piano') {
-      if (builtin && !dancing) buddyStep(document.querySelector('.listen-buddy'), 'hop');
-      if (wasAsleep) listenTest.woke = now;
-    }
-  }
-  // beats come due between frames; one step per frame, and only while piano is playing
-  const lead = danceLead();
-  for (const b of beat?.beats(now, listener.state.loud, lead) || []) {
-    if (!pianoNow(listener, now)) continue;
-    atBeat(b, lead, now, () => {
-      if (listenTest.run?.listener !== listener) return;
-      danceBeat(listenTest, document.querySelector('.listen-buddy'), document.getElementById('ls-metro'), beat.period);
-    });
-  }
-  if (!builtin && wasAsleep && listener.hearingPiano(now)) listenTest.woke = now;
-  while (listenTest.events.length && now - listenTest.events[0].at > 60000) listenTest.events.shift();
-  if (now - listenTest.lastUi > 100) { listenTest.lastUi = now; updateListenUi(listener, now); }
-}
-
-function updateListenUi(listener, now) {
-  const $ = (id) => document.getElementById(id);
-  if (!$('ls-state')) return;
-  const st = listener.state;
-  const since = listener.since(now);
-  const mood = buddyState(since, st.lastPiano != null);
-  $('ls-state').textContent = LISTEN_LABELS[mood];
-  $('ls-since').textContent = Math.floor(since);
-  $('ls-since-bar').style.width = `${Math.min(100, (since / TUNING.asleepAfter) * 100)}%`;
-  const pct = (dbv) => Math.max(0, Math.min(100, (dbv + 80) * 1.25));
-  $('ls-level').style.width = `${pct(st.level)}%`;
-  $('ls-level').classList.toggle('loud', !!st.loud);
-  $('ls-gate').style.left = `${pct(st.floor + TUNING.gate)}%`;
-  if (st.last) {
-    $('ls-last').textContent = st.last.type === 'piano'
-      ? `Piano${st.last.note ? ` · ${st.last.note}` : ''}`
-      : 'Not piano (talking or noise)';
-    const f = st.last.f || {};
-    $('ls-last').title = `built-in: ${st.last.local ? 'piano' : 'not piano'} (wobble ${f.wobble?.toFixed(1) ?? '–'} cents, clean ${f.tonal?.toFixed(2)}, growth ${f.growth?.toFixed(1)} dB)${st.last.google != null ? `; Google: ${st.last.google ? 'piano' : 'not piano'}` : ''}`;
-  }
-  const g = st.google;
-  if (g && $('ls-google')) {
-    $('ls-google').textContent = g.top.map((c) => `${c.name} ${Math.round(c.score * 100)}%`).join(' · ');
-    $('ls-gpiano').style.width = `${Math.min(100, g.piano * 100)}%`;
-    $('ls-gpiano').classList.toggle('loud', g.isPiano);
-  }
-  $('ls-piano').textContent = st.pianoNotes;
-  $('ls-other').textContent = st.otherSounds;
-  const beat = listenTest.beat;
-  const piano = pianoNow(listener, now);
-  const dancing = piano && !!beat?.following(now);
-  $('ls-beat').textContent = dancing ? `Dancing at about ${beat.bpm} beats a minute` : piano ? LISTEN_BEAT.free : LISTEN_BEAT.none;
-  if (!dancing) danceRest(document.querySelector('.listen-buddy'), $('ls-metro'));
-  $('ls-line').innerHTML = listenTest.events
-    .map((e) => `<span class="dot ${e.type}" style="left:${100 - ((now - e.at) / 60000) * 100}%"></span>`).join('');
-  const say = now - listenTest.woke < 2500 ? 'I’m up! Timer back on.' : LISTEN_SAY[mood] || '';
-  const $say = $('ls-say');
-  if ($say.textContent !== say) $say.textContent = say;
-  $say.parentElement.classList.toggle('talking', !!say);
-  if (mood !== lastListenMood) {
-    lastListenMood = mood;
-    const kid = kidById(ui.listenKid) || state.kids[0];
-    $('ls-sprite').innerHTML = buddySvg(kid?.buddy || { species: 'fox', outfit: {} }, LISTEN_MOODS[mood], { background: false });
-    $('ls-sprite').parentElement.classList.toggle('bobbing', mood === 'playing' || mood === 'waiting');
-  }
-  if (listenTest.settings && $('ls-mic') && !$('ls-mic').textContent) $('ls-mic').textContent = micNote(listenTest.settings);
 }
 
 function viewWardrobe() {
@@ -2052,14 +1539,15 @@ function viewWardrobe() {
     <div class="screen wardrobe" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="wardrobe-back" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Best streak ${prog.best} days${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days` : ''}</small></div>
+        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Streak ${prog.streak} days · best ${prog.best}${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days (best ${prog.pianoBest})` : ''}</small></div>
       </header>
       <div class="wardrobe-top">
         <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, 'happy', 'lg', { live: true, feel: { valence: 0.8, arousal: 0.6 } })}</button>
         <div class="buddy-side">
           <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
           ${sportTab ? `<p class="gem-line">💎 <b>${prog.gems}</b> gems to spend</p>
-          <p class="muted">💪 Exercise streak: <b>${prog.ex.weeks} ${prog.ex.weeks === 1 ? 'week' : 'weeks'}</b> (best ${prog.ex.best}) · ${prog.ex.thisWeek} of ${prog.ex.goal} days this week</p>` : `<p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
+          <p class="muted">💪 <b>${esc(weeksLabel(prog.ex.weeks))}</b> (best ${prog.ex.best})</p>
+          ${exWeekHtml(prog.ex)}` : `<p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
           ${nextItem ? `<p class="muted">Next streak prize: <b>${esc(nextItem.name)}</b> at ${esc(needLabel(nextItem))}</p>` : ''}`}
         </div>
       </div>
@@ -2067,14 +1555,16 @@ function viewWardrobe() {
       <div class="items">
         ${items.map((item) => {
     const open = isUnlocked(item, prog);
-    const on = kid.buddy.outfit[item.slot] === item.id;
-    const preview = { ...kid.buddy, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
-    const wearing = item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
+    const on = item.home ? isPlaced(kid, item) : kid.buddy.outfit[item.slot] === item.id;
+    // the wand's picture is lit all the way, to show what it does
+    const preview = { ...kid.buddy, wand: 1, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
+    const wearing = item.home ? (on ? 'In your house' : 'Tap to use') : item.noHold ? 'At the lake' : item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
     const price = item.gems ? `<span class="price gems ${prog.gems >= item.gems ? 'can' : ''}">💎 ${item.gems}</span>`
       : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : '';
     return `<button class="item ${open ? '' : 'locked'} ${item.price || item.gems ? 'shop' : ''} ${item.species ? 'special' : ''} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
             ${item.species ? `<span class="special-tag">⭐ ${esc(speciesName(item.species))} only</span>` : ''}
-            <span class="item-art">${buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
+            ${item.home ? `<span class="spot-tag">${spotById(item.spot).icon} ${esc(spotById(item.spot).name)}</span>` : ''}
+            <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : item.noHold ? `<img class="home-thumb" src="${boatThumb()}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
             <small>${open ? wearing : price || `🔒 ${esc(needLabel(item))}`}</small>
             ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
@@ -2083,8 +1573,9 @@ function viewWardrobe() {
       </div>
       ${sportTab ? movesList(kid, prog) : ''}
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
-      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on ${prog.ex.goal} days in a week to keep your exercise streak going: 1, 3 and 6 weeks in a row unlock new moves for each piece of gear you own, and moves stay yours even if the streak ends. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing!</p>` : ''}
-      ${sportTab ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
+      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish.</p>` : ''}
+      ${ui.slot === 'home' ? '<p class="muted small">Every task you finish earns coins to spend on furniture. Furniture goes in your buddy\'s house, and every buddy you have can use it. Each spot holds one thing at a time: tap something you own to put it in, or tap it again to take it out. Walk your buddy in the front door of your house in the village to see it!</p>' : ''}
+      ${sportTab || ui.slot === 'home' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
 }
 
@@ -2098,7 +1589,7 @@ function movesList(kid, prog) {
       <div class="moves">${MOVES.filter((m) => m.kind === k.id).map((m) => {
     const open = have.has(m.id);
     const weeks = moveWeeks(m);
-    const need = k.id !== 'body' && !gear[k.id] ? `Get a ${k.name.toLowerCase()} and a ${weeks}-week streak` : `${weeks}-week exercise streak`;
+    const need = k.id !== 'body' && !gear[k.id] ? `Get a ${k.name.toLowerCase()} and ${weeksLabel(weeks)}` : weeksLabel(weeks);
     return `<button class="move ${open ? '' : 'locked'}" ${open ? `data-action="try-move" data-move="${m.id}"` : 'data-action="move-locked"'} data-need="${esc(need)}">
           <b>${open ? '' : '🔒 '}${esc(m.name)}</b><small>${open ? 'Tap to see it' : esc(need)}</small></button>`;
   }).join('')}</div>`).join('')}`;
@@ -2259,6 +1750,13 @@ function repeatRow(kid, t) {
       ${others.length ? `<div class="row wrap turns"><small class="muted">Take turns with</small>${others.map((k) => `<button class="btn ghost small-btn" data-action="task-turns" data-task="${t.id}" data-kid="${k.id}">${esc(k.name)}</button>`).join('')}</div>` : ''}`;
 }
 
+/** Buttons to add a ready-made house chore (name, morning, linked to the house) that the kid doesn't have yet. */
+function houseAdds(kid) {
+  const missing = HOUSE_CHORES.filter((c) => !kid.tasks.some((t) => t.house === c.id));
+  if (!missing.length) return '';
+  return `<div class="row wrap house-adds"><small class="muted">🏠 Add a house chore:</small>${missing.map((c) => `<button class="btn ghost small-btn" data-action="add-house-task" data-house="${c.id}">+ ${c.icon} ${esc(c.label)}</button>`).join('')}</div>`;
+}
+
 function parentEditKid() {
   const kid = kidById(ui.editKidId);
   if (!kid) { ui.editKidId = null; return parentKids(); }
@@ -2278,6 +1776,10 @@ function parentEditKid() {
         <label>When <select data-field="period"><option value="morning" ${t.period === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${t.period === 'afternoon' ? 'selected' : ''}>After school</option><option value="exercise" ${t.period === 'exercise' ? 'selected' : ''}>Bonus exercise</option></select></label>
         <label>Checked by <select data-field="verify"><option value="self" ${t.verify === 'self' ? 'selected' : ''}>Kid taps done</option><option value="parent" ${t.verify === 'parent' ? 'selected' : ''}>Parent PIN</option></select></label>
         <label>Timer <input type="number" min="0" max="180" step="5" data-field="minutes" value="${t.minutes}" class="num"> min</label>
+        ${isExercise(t) ? '' : `<label>House chore <select data-action-change="task-house" data-task="${t.id}" aria-label="House chore">
+          <option value="" ${t.house ? '' : 'selected'}>None</option>
+          ${HOUSE_CHORES.map((c) => `<option value="${c.id}" ${t.house === c.id ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('')}
+        </select></label>`}
         ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>
         <label class="row"><input type="checkbox" data-field="listen" ${t.listen ? 'checked' : ''}> Listen to the piano</label>` : ''}
       </div>
@@ -2310,13 +1812,15 @@ function parentEditKid() {
     <h2>🌅 Morning tasks</h2>
     ${taskRows('morning')}
     <button class="btn ghost" data-action="add-task" data-period="morning">+ Add morning task</button>
+    ${houseAdds(kid)}
     <h2>☀️ After-school tasks</h2>
     ${taskRows('afternoon')}
     <button class="btn ghost" data-action="add-task" data-period="afternoon">+ Add after-school task</button>
     <h2>💪 Bonus exercise</h2>
     ${taskRows('exercise') || '<p class="muted small">None yet. Add a run, a bike ride, soccer practice or anything active.</p>'}
     <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise task</button>
-    <p class="muted small">Exercise tasks are optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week keeps the exercise streak going, which unlocks moves for the kid's buddy at 1, 3 and 6 weeks. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day, and a week with 5 or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
+    <p class="muted small">Exercise tasks are optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week (Monday to Sunday) makes a "strong week", and strong weeks unlock moves for the kid's buddy at 1, 3 and 6. A week with exactly ${EXERCISE_KEEP_DAYS} exercise days keeps the count without adding to it, and a week with fewer takes one strong week away. Moves already unlocked are never taken away. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day for each mark, and a week with ${EXERCISE_DAYS} or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
+    <p class="muted small">🏠 House chores show in ${esc(kid.name)}'s buddy house in the village: an unmade bed until “Make bed” is done, the toothbrush out until the morning “Brush teeth” is done, and a messy floor until “Pick up bedroom floor” is done (messier after 2 days, very messy after 4). Pick which task is which with “House chore”, or add one ready-made. Each can be linked to one task at a time. Tasks that aren't linked don't change the house.</p>
     <p class="muted small">A task can repeat every other week (weeks run Monday to Sunday). To have two kids take turns, like cleaning the bathroom, set the task to every other week for one kid, then tap the other kid's name next to “Take turns with”: they get the same task on the opposite weeks. On a kid's off week the task isn't on their list at all, so it never counts against their streak or the day's treasure.</p>
     <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. ${allowance ? `${esc(kid.name)} earns up to ${allowance.coins} coins and ${allowance.xp} XP a week. It is split across the week's tasks by size: a big task is worth 3 small ones, a medium one 2. A kid with more tasks doesn't earn more, each task is just worth a little less, and a missed task loses its share. Exercise is extra: it earns gems and its own XP.` : 'Each task earns 10 coins and 10 XP (30 for a timer task) unless you type other amounts; leave a box empty to use the default.'} Changes count from today, so coins already earned stay earned. Every 100 XP is a level.</p>
     <hr>
@@ -2373,10 +1877,20 @@ function parentSettings() {
     </div>
 ${allowanceCard()}
 ${gameTestCard()}
+    <div class="card studio-test">
+      <h2>🎚️ Try the recording studio</h2>
+      <p class="muted small">Open the recording studio right away to see how it works. This is a test desk: the kids' mixes and stickers are not touched.</p>
+      <button class="btn" data-action="studio-test">Open the studio</button>
+    </div>
     <div class="card">
       <h2>🎹 Piano listening test</h2>
       <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>
       <button class="btn ghost" data-action="listen-open">Open the listening test</button>
+    </div>
+    <div class="card rec-test">
+      <h2>🎙️ Save a test recording</h2>
+      <p class="muted small">Record up to 2 minutes of piano through the tablet's microphone and save it as a sound file. Nothing is kept in the game.</p>
+      <div id="rec-test"></div>
     </div>
     <div class="card">
       <h2>Parent PIN</h2>
@@ -2461,6 +1975,14 @@ function putAwayOther(kid, slot) {
 }
 
 const speciesName = (id) => SPECIES.find((sp) => sp.id === id)?.name || 'buddy';
+const furnitureName = (id) => (itemById(id)?.name || 'furniture').toLowerCase();
+
+// furniture pictures for the shop, drawn once each (houseart.js)
+const thumbs = new Map();
+function homeThumb(id) {
+  if (!thumbs.has(id)) thumbs.set(id, furnitureThumb(document, id)?.toDataURL() || '');
+  return thumbs.get(id);
+}
 
 function buyGear(kid, item, prog) {
   if (prog.gems < item.gems) {
@@ -2468,13 +1990,13 @@ function buyGear(kid, item, prog) {
     toast(`${item.gems - prog.gems} more gems to go! Exercise to earn them. 💪`);
     return;
   }
-  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, sport: item.id } };
+  const preview = { ...dressed(kid), outfit: { ...kid.buddy.outfit, sport: item.id } };
   openModal(`
     <div class="celebrate">
-      <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
+      ${item.noHold ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${boatThumb()}" alt=""></div>` : `<div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>`}
       <h1>Buy ${esc(item.name)}?</h1>
       <p>It costs <b>💎 ${item.gems}</b>. You'll have ${prog.gems - item.gems} gems left.</p>
-      <p class="muted small">Every buddy can use it. Keep exercising to unlock its moves.</p>
+      <p class="muted small">${item.noHold ? 'When you go fishing, you and your visitor row out into deep water, where the bigger fish swim. Every buddy can use it.' : 'Every buddy can use it. Keep exercising to unlock its moves.'}</p>
       <div class="stack">
         <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
         <button class="btn ghost" data-action="modal-close">Keep saving</button>
@@ -2489,14 +2011,16 @@ function buyItem(kid, item, prog) {
     toast(`${item.price - prog.coins} more coins to go! Finish tasks to earn them.`);
     return;
   }
-  const preview = { ...kid.buddy, outfit: { ...kid.buddy.outfit, [item.slot]: item.id } };
+  const preview = { ...kid.buddy, wand: 1, outfit: { ...kid.buddy.outfit, [item.slot]: item.id } };
   openModal(`
     <div class="celebrate">
-      <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
-      <h1>Buy ${esc(item.name)}${isWorn(item) ? ` for your ${esc(speciesName(kid.buddy.species).toLowerCase())}` : ''}?</h1>
+      ${item.home ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${homeThumb(item.id)}" alt=""></div>` : `<div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>`}
+      <h1>Buy ${esc(item.name)}${isWorn(item) ? ` for your ${esc(speciesName(kid.buddy.species).toLowerCase())}` : item.home ? ' for your house' : ''}?</h1>
       <p>It costs <b>🪙 ${item.price}</b>. You'll have ${prog.coins - item.price} coins left.</p>
+      ${item.note ? `<p>${esc(item.note)}</p>` : ''}
       ${item.species ? `<p class="muted small">⭐ A special made just for ${esc(speciesName(item.species).toLowerCase())}s. Every kind of buddy has its own.</p>`
-    : isWorn(item) ? '<p class="muted small">Only this buddy can wear it. Other buddies need their own.</p>' : ''}
+    : isWorn(item) ? '<p class="muted small">Only this buddy can wear it. Other buddies need their own.</p>'
+      : item.home ? `<p class="muted small">It goes in your buddy's house (${esc(spotById(item.spot).name.toLowerCase())}), for every buddy you have.</p>` : ''}
       <div class="stack">
         <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
         <button class="btn ghost" data-action="modal-close">Keep saving</button>
@@ -2504,7 +2028,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -2517,23 +2041,53 @@ let lastView = '';
 // amounts. repairAllowanceStart fixes families stamped by the older rule,
 // which started it the same day and lowered that day's coins.
 function stampAllowance() {
-  if (cloudCfg && !cloud.gotState) return;
+  if (cloudCfg && !cloud.gotState) return false;
+  let changed = false;
   if (!state.settings.allowance) {
     state.settings.allowance = { ...defaultAllowance(addDays(today(), 1)), startFixed: true };
-    save();
+    changed = true;
   } else if (repairAllowanceStart(state)) {
-    save();
+    changed = true;
   }
+  if (applyGrants(state)) changed = true;
+  return changed;
+}
+
+/** First run with the shop: keep anything the kid had already reached by level, for free. */
+function giveLegacyItems(kid) {
+  if (Array.isArray(kid.owned)) return false;
+  const lv = levelFor(totalXp(state, kid, today()));
+  kid.owned = ITEMS.filter((i) => i.price && LEGACY_LEVEL(i) <= lv.level).map((i) => i.id);
+  kid.spent = 0;
+  moveWornToBuddy(kid);
+  return true;
+}
+
+/**
+ * Everything that keeps the saved data up to date before a redraw (the
+ * allowance, one-time repairs, what other devices read about each kid, today's
+ * task list), saved once. The views themselves only read.
+ */
+function reconcile() {
+  let changed = stampAllowance();
+  for (const k of state.kids) if (giveLegacyItems(k)) changed = true;
+  if (shareToday()) changed = true;
+  const kid = ui.view === 'kid' && kidById(ui.kidId);
+  if (kid) {
+    // keep today's tasks and their pay as they are now, for the history
+    snapshotToday(state, kid, today());
+    changed = true; // save() only sends it if it actually changed
+  }
+  if (changed) save();
 }
 
 function render() {
-  stampAllowance();
   const scrollY = window.scrollY;
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
-  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe';
+  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
-  const html = withMemo(() => { shareToday(); return (views[ui.view] || viewHome)(); });
+  const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
   // load the sign-in code early, so a sign-in popup opens straight from the tap
   if (ui.view === 'setup' || (ui.view === 'parent' && ui.tab === 'settings')) loadCloud().catch(() => {});
   // Family sync can ask for a redraw many times a minute (another tablet saving, a piano timer
@@ -2547,6 +2101,12 @@ function render() {
   lastView = ui.view;
   $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
   paintQuestMaps($app);
+  mountVillages($app, villageHandlers);
+  mountHouses($app, houseHandlers);
+  mountMusicHouses($app, musicHandlers);
+  mountSongbook($app);
+  mountStudio($app);
+  mountTestRec($app);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
@@ -2578,10 +2138,11 @@ const actions = {
     setTimeout(() => celebrateIfDue(kidById(ui.kidId)), 300);
   },
   task: (el) => onTaskTap(el.dataset.id, el),
-  'timer-start': () => { wakeEars(); startTimer(); startEars(); },
+  'timer-start': () => { wakeEars(); startTimer(true); startEars(); },
   'timer-pause': () => { stopEars(); stopTimer(); },
   'timer-buddy': () => buddyCheer(),
   'timer-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
+  'watch-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
   parent: () => pinPad({ title: 'Parents only', subtitle: 'Type the parent PIN', onSuccess: () => { ui.view = 'parent'; ui.tab = pendingApprovals(state, today()).length ? 'approvals' : ui.tab; render(); } }),
   'listen-open': () => { ui.view = 'listen'; ui.listenKid = ui.listenKid || state.kids[0]?.id; render(); window.scrollTo(0, 0); },
   'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; render(); },
@@ -2595,7 +2156,7 @@ const actions = {
     if (was) startListenTest();
   },
   'listen-stop': () => { stopListenTest(); render(); },
-  'listen-kid': (el) => { ui.listenKid = el.dataset.id; lastListenMood = ''; render(); },
+  'listen-kid': (el) => { ui.listenKid = el.dataset.id; setLastListenMood(''); render(); },
   'parent-exit': () => { ui.view = 'home'; ui.editKidId = null; render(); },
   tab: (el) => { ui.tab = el.dataset.tab; ui.editKidId = null; render(); },
   approve: (el) => approve(el.dataset.kid, el.dataset.key, el.dataset.task),
@@ -2641,6 +2202,16 @@ const actions = {
     const prog = progressFor(kid);
     if (!isUnlocked(item, prog) && (item.price || item.gems)) { buyItem(kid, item, prog); return; }
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
+    if (item.home) {
+      // furniture: put it in its spot in the house (tap again to take it out)
+      const was = isPlaced(kid, item);
+      kid.home = placeFurniture(kid, item);
+      kid.newItems = (kid.newItems || []).filter((id) => id !== item.id);
+      sounds.task(); save(); render();
+      toast(was ? (spotById(item.spot).basic ? `Back to the ${furnitureName(spotById(item.spot).basic)}` : `${item.name} put away`) : `${item.name} is in your house! 🏠`);
+      return;
+    }
+    if (item.noHold) { sounds.tap(); toast('Your boat is waiting at the lake! 🚣 Go fishing with a visiting buddy to row out.'); return; }
     const outfit = kid.buddy.outfit;
     if (outfit[item.slot] === item.id && item.slot !== 'background') delete outfit[item.slot];
     else { outfit[item.slot] = item.id; putAwayOther(kid, item.slot); }
@@ -2677,7 +2248,7 @@ const actions = {
     bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
     if (showPlaying(section) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
     const img = new Image();
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(kid.buddy, 'excited', { background: false }))}`;
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(dressed(kid), 'excited', { background: false }))}`;
     const spot = { x: el.offsetLeft + el.offsetWidth / 2, y: el.offsetTop + el.offsetHeight / 2 };
     const def = playShow(section, theme, { buddy: img, spot, onDone: () => section.classList.remove('show-on') });
     if (!def) return;
@@ -2698,15 +2269,19 @@ const actions = {
       kid.spent = (kid.spent || 0) + item.price;
     }
     addOwned(kid, item);
-    kid.buddy.outfit[item.slot] = item.id;
-    putAwayOther(kid, item.slot);
+    // furniture goes straight into its spot in the house; anything else, the buddy puts on
+    if (item.home) kid.home = { ...(kid.home || {}), [item.spot]: item.id };
+    else if (!item.noHold) {
+      kid.buddy.outfit[item.slot] = item.id;
+      putAwayOther(kid, item.slot);
+    }
     save();
     closeModal();
     sounds.day();
     confetti(80, 1600);
     toast(`${item.name} is yours!`);
     render();
-    if (item.gems) setTimeout(() => showUnlocks(kid), 700);
+    if (item.gems) setTimeout(() => showUnlocks(currentKid(kid)), 700);
   },
   'try-move': (el) => {
     const kid = kidById(ui.kidId);
@@ -2758,6 +2333,16 @@ const actions = {
     const ex = el.dataset.period === 'exercise';
     kidById(ui.editKidId).tasks.push({ id: newId('task'), name: ex ? 'Exercise' : 'New task', icon: ex ? '🏃' : '⭐', period: el.dataset.period, days: [0, 1, 2, 3, 4, 5, 6], verify: ex ? 'parent' : 'self', minutes: 0 });
     save(); render();
+  },
+  'add-house-task': (el) => {
+    const kid = kidById(ui.editKidId);
+    const role = el.dataset.house;
+    if (!kid || !houseChoreById(role)) return;
+    const task = houseTask(role, newId('task'));
+    kid.tasks.push(task);
+    const cleared = setHouseRole(kid.tasks, task.id, role);
+    save(); render();
+    if (cleared.length) toast(`“${cleared[0].name}” is no longer the house's ${houseChoreById(role).label.toLowerCase()} chore`);
   },
   'delete-kid': () => {
     const kid = kidById(ui.editKidId);
@@ -2885,6 +2470,14 @@ document.addEventListener('change', (e) => {
     save(); render();
     return;
   }
+  if (act === 'task-house') {
+    const kid = kidById(ui.editKidId);
+    if (!kid) return;
+    const cleared = setHouseRole(kid.tasks, el.dataset.task, el.value || null);
+    save(); render();
+    if (cleared.length) toast(`“${cleared[0].name}” is no longer the house's ${houseChoreById(el.value).label.toLowerCase()} chore`);
+    return;
+  }
   if (act === 'history-date') { ui.historyDate = el.value && el.value <= today() ? el.value : null; render(); }
   if (act === 'history-excuse') { entryFor(state, el.dataset.kid, el.dataset.key, true).excused = el.checked; save(); render(); }
   if (act === 'import') importFile(el.files?.[0]);
@@ -2900,301 +2493,12 @@ function importFile(file) {
       title: 'Restore backup?',
       text: `This replaces everything on this tablet with the backup (${data.kids.length} kids). The parent PIN becomes the one from the backup.`,
       yes: 'Restore', danger: true,
-      onYes: () => { state = migrate(data); setSound(state.settings.sound); save(); ui.view = 'home'; render(); toast('Backup restored'); },
+      onYes: () => { setState(migrate(data)); setSound(state.settings.sound); save(); ui.view = 'home'; render(); toast('Backup restored'); },
     });
   });
 }
 
-// ---------- family sync ----------
-
-let pendingRemote = null;
-
-// One shared load: the settings screen, a join and startup may all ask at once.
-let cloudLoading = null;
-function loadCloud() {
-  cloudLoading ||= import('./cloud.js')
-    .then(async (mod) => { await mod.connect(); cloud.mod = mod; return mod; })
-    .catch((err) => { cloudLoading = null; throw err; });
-  return cloudLoading;
-}
-
-function onCloudStatus({ pending, error }) {
-  const before = `${cloud.pending}|${cloud.error}`;
-  if (pending !== undefined) cloud.pending = pending;
-  if (error !== undefined) cloud.error = error;
-  if (`${cloud.pending}|${cloud.error}` !== before && ui.view === 'parent' && ui.tab === 'settings') render();
-}
-
-async function startCloud() {
-  let mod;
-  try {
-    mod = await loadCloud();
-  } catch (err) {
-    console.error(err);
-    onCloudStatus({ error: 'Could not load sync. It will try again next time the app opens.' });
-    return;
-  }
-  if (!mod.currentUser()) {
-    cloud.signedOut = true;
-    render();
-    return;
-  }
-  if (cloud.queued) {
-    const { before, after } = cloud.queued;
-    cloud.queued = null;
-    mod.writeChanges(cloudCfg.familyId, mod.changesBetween(before, after), before, after, onCloudStatus);
-  }
-  cloud.ready = true;
-  mod.startSync(cloudCfg, { onState: applyRemote, onStatus: onCloudStatus });
-  if (cloudCfg.role === 'kid') {
-    mod.watchBuddies(cloudCfg.familyId, (list) => {
-      if (stableJson(list) === stableJson(family.buddies)) return;
-      family.buddies = list;
-      try { localStorage.setItem(BUDDIES_KEY, JSON.stringify(list)); } catch { /* only a cache */ }
-      if (ui.view === 'kid' && $modal.hidden) render();
-    });
-  }
-}
-
-// A newer state from the family (another device, or this one's writes coming back).
-function applyRemote(next) {
-  cloud.gotState = true;
-  for (const k of DEVICE_SETTINGS) {
-    if (k in state.settings) next.settings[k] = state.settings[k];
-    else delete next.settings[k];
-  }
-  if (stableJson(next) === stableJson(state)) return;
-  // don't swap the data under an open dialog; apply it when the dialog closes
-  if (!$modal.hidden) { pendingRemote = next; return; }
-  state = next;
-  store.replace(state);
-  if (ui.view === 'setup' && state.settings.pinHash) ui.view = 'home';
-  if (ui.view !== 'timer') render();
-}
-
-function familyCard() {
-  if (!cloudCfg) {
-    return `
-    <div class="card">
-      <h2>Family sync</h2>
-      <p class="muted small">Keep progress safe in the cloud and share it between each kid's tablet and the parents' phones. Start the family on a parent's phone, then join each kid's tablet with a code.</p>
-      <div class="row wrap">
-        <button class="btn" data-action="family-create">Start a family</button>
-        <button class="btn ghost" data-action="family-join">Join with a code</button>
-      </div>
-    </div>`;
-  }
-  const who = cloudCfg.role === 'kid' ? `${esc(kidById(cloudCfg.kidId)?.name || 'A kid')}'s device` : `a parent (${esc(cloudCfg.email || 'signed in')})`;
-  const status = cloud.signedOut ? '⚠️ This device was signed out of the family. Stop syncing, then join again with a new code.'
-    : cloud.error ? `⚠️ Sync problem: ${esc(cloud.error)}`
-      : cloud.pending ? `⏳ ${navigator.onLine ? 'Saving to the cloud…' : 'Offline. Changes are kept here and will sync when back online.'}`
-        : '✅ Synced';
-  return `
-    <div class="card">
-      <h2>Family sync</h2>
-      <p class="small">This device syncs with your family as ${who}.</p>
-      <p class="muted small">${status}</p>
-      ${cloudCfg.role === 'parent' ? `
-      <div class="row wrap">
-        <button class="btn" data-action="family-invite-kid">Add a kid's device</button>
-        <button class="btn ghost" data-action="family-invite-parent">Add a parent</button>
-      </div>` : ''}
-      <button class="btn ghost" data-action="family-leave">Stop syncing on this device</button>
-    </div>`;
-}
-
-// A plain reason for a Firebase error, plus its code so a parent can pass it on.
-function cloudProblem(err, fallback) {
-  const code = err?.code || '';
-  const why = code === 'permission-denied' ? 'The family database turned this down. The Firestore security rules may not be published yet (Firebase console › Firestore › Rules).'
-    : code === 'unavailable' || !navigator.onLine ? 'Could not reach the cloud. Check the Wi-Fi and try again.'
-      : code.startsWith('auth/') ? 'Google sign-in did not finish. Check that Google sign-in is turned on and this site is an authorized domain in Firebase.'
-        : fallback;
-  return code ? `${why} (${code})` : why;
-}
-
-function busyModal(text) {
-  openModal(`<div data-sticky class="celebrate"><h2>${esc(text)}</h2><p class="muted">Keep the app open.</p></div>`);
-}
-
-function errorModal(title, text) {
-  openModal(`
-    <div class="celebrate">
-      <h2>${esc(title)}</h2>
-      <p>${esc(text)}</p>
-      <button class="btn" data-action="modal-close">OK</button>
-    </div>`);
-}
-
-// Switch this device to the family and restart the app on the cloud copy.
-function finishJoin(cfg, cacheState) {
-  localStorage.setItem(CLOUD_KEY, JSON.stringify(cfg));
-  if (cacheState) localStorage.setItem(CLOUD_CACHE_KEY, JSON.stringify(cacheState));
-  else localStorage.removeItem(CLOUD_CACHE_KEY);
-  window.location.reload();
-}
-
-async function familyCreate() {
-  if (!navigator.onLine) { errorModal('You are offline', 'Connect to Wi-Fi to start a family.'); return; }
-  let mod;
-  let user;
-  try {
-    mod = await loadCloud();
-    user = await mod.signInParent();
-  } catch (err) {
-    console.error(err);
-    errorModal('Sign-in did not finish', `Try again. If no Google window appears, allow pop-ups for this site.${err?.code ? ` (${err.code})` : ''}`);
-    return;
-  }
-  try {
-    busyModal('Checking your account…');
-    const existing = await mod.findFamily();
-    closeModal();
-    if (existing) {
-      confirmModal({
-        title: 'You already have a family',
-        text: `${user.email} is already in a family. Connect this device to it as a parent? This device's own data stays saved here and is not uploaded.`,
-        yes: 'Connect',
-        onYes: () => finishJoin({ ...existing, email: user.email }, null),
-      });
-      return;
-    }
-    confirmModal({
-      title: 'Start a family?',
-      text: `This uploads this device's settings, parent PIN${state.kids.length ? ` and ${state.kids.map((k) => k.name).join(', ')}` : ''} to your family's cloud, signed in as ${user.email}. A backup file is saved first.`,
-      yes: 'Start family',
-      onYes: async () => {
-        actions.export();
-        busyModal('Uploading…');
-        try {
-          const cfg = await mod.createFamily(state);
-          finishJoin({ ...cfg, email: user.email }, state);
-        } catch (err) {
-          console.error(err);
-          closeModal();
-          if (err?.code === 'permission-denied') {
-            errorModal('This account can’t start a family', `Only Google accounts on the family’s allowed list can start a family. If you are already in a family, ask a parent for a code instead. (${user.email})`);
-          } else {
-            errorModal('That did not work', `Nothing changed on this device. ${cloudProblem(err, 'Try again in a moment.')}`);
-          }
-        }
-      },
-    });
-  } catch (err) {
-    console.error(err);
-    closeModal();
-    errorModal('That did not work', cloudProblem(err, 'Check the connection and try again.'));
-  }
-}
-
-function familyJoin() {
-  openModal(`
-    <div class="celebrate">
-      <h2>Join your family</h2>
-      <p class="muted">On a parent's device, open Parents › Settings › Family sync and tap "Add a kid's device" or "Add a parent" to get a code.</p>
-      <input class="code-input" data-join-code autocomplete="off" autocapitalize="characters" placeholder="Code" maxlength="12">
-      <div class="stack">
-        <button class="btn huge" data-action="family-join-go">Join</button>
-        <button class="btn ghost" data-action="modal-close">Cancel</button>
-      </div>
-    </div>`);
-  loadCloud().catch(() => {});
-  setTimeout(() => $modal.querySelector('[data-join-code]')?.focus(), 50);
-}
-
-async function familyJoinGo() {
-  const input = $modal.querySelector('[data-join-code]');
-  let mod;
-  try { mod = await loadCloud(); } catch { errorModal('You are offline', 'Connect to Wi-Fi and try again.'); return; }
-  const code = mod.normalizeCode(input?.value);
-  const role = mod.codeRole(code);
-  if (!role || code.length < 6) { toast('That code doesn’t look right. Check it and try again.'); return; }
-  if (role === 'kid' && state.kids.length > 1) {
-    errorModal('More than one kid here', 'A kid’s device should hold just that kid. Use this device as a parent instead, or remove the extra kids first.');
-    return;
-  }
-  let user;
-  try {
-    user = role === 'parent' ? await mod.signInParent() : await mod.signInDevice();
-  } catch (err) {
-    console.error(err);
-    errorModal('Sign-in did not finish', `Try again. If no Google window appears, allow pop-ups for this site.${err?.code ? ` (${err.code})` : ''}`);
-    return;
-  }
-  if (role === 'kid' && state.kids.length) actions.export();
-  busyModal(role === 'kid' && state.kids.length ? `Uploading ${state.kids[0].name}'s progress…` : 'Joining…');
-  try {
-    const cfg = await mod.joinFamily(code, state);
-    finishJoin({ ...cfg, email: role === 'parent' ? user.email : null }, role === 'kid' && state.kids.length ? state : null);
-  } catch (err) {
-    console.error(err);
-    closeModal();
-    const msg = err.code === 'bad-code' ? 'That code is wrong or has expired. Ask for a new one.'
-      : err.code === 'which-kid' ? err.message
-        : err.code === 'check-failed' ? 'The upload did not check out, so this device keeps using its own copy. Try again later.'
-          : `Nothing changed on this device. ${cloudProblem(err, 'Check the connection and try again.')}`;
-    errorModal('Could not join', msg);
-  }
-}
-
-async function familyInvite(role) {
-  let kidId = null;
-  if (role === 'kid') {
-    openModal(`
-      <div class="celebrate">
-        <h2>Add a kid's device</h2>
-        <p class="muted">Whose device is it?</p>
-        <div class="stack">
-          <button class="btn" data-action="family-invite-for" data-kid="">A kid whose progress is on that device</button>
-          ${state.kids.map((k) => `<button class="btn ghost" data-action="family-invite-for" data-kid="${k.id}">${esc(k.name)} (already in the family)</button>`).join('')}
-          <button class="btn ghost" data-action="modal-close">Cancel</button>
-        </div>
-      </div>`);
-    return;
-  }
-  showCode(role, kidId);
-}
-
-async function showCode(role, kidId) {
-  busyModal('Making a code…');
-  try {
-    const mod = await loadCloud();
-    const code = await mod.makeJoinCode(cloudCfg.familyId, role, kidId);
-    const pretty = `${code.slice(0, 4)}-${code.slice(4)}`;
-    closeModal();
-    openModal(`
-      <div class="celebrate">
-        <h2>Join code</h2>
-        <p class="join-code">${pretty}</p>
-        <p class="muted">${role === 'parent'
-    ? 'On the other parent’s phone, open Kid Quest, tap "Join your family with a code" (or Parents › Settings › Family sync), enter this code, and sign in with Google.'
-    : 'On the kid’s device, open Kid Quest, go to Parents › Settings › Family sync, tap "Join with a code" and enter this code.'} It works for 30 minutes.</p>
-        <button class="btn" data-action="modal-close">Done</button>
-      </div>`);
-  } catch (err) {
-    console.error(err);
-    closeModal();
-    errorModal('Could not make a code', cloudProblem(err, 'Try again in a moment.'));
-  }
-}
-
-function familyLeave() {
-  confirmModal({
-    title: 'Stop syncing on this device?',
-    text: 'This device goes back to the copy it had before joining. Everything stays safe in the family cloud, and you can join again with a new code.',
-    yes: 'Stop syncing', danger: true,
-    onYes: async () => {
-      try {
-        const mod = await loadCloud();
-        mod.stopSync();
-        await mod.signOutDevice();
-      } catch { /* offline: still leave */ }
-      localStorage.removeItem(CLOUD_KEY);
-      localStorage.removeItem(CLOUD_CACHE_KEY);
-      window.location.reload();
-    },
-  });
-}
+// ---------- family sync (see sync-ui.js) ----------
 
 Object.assign(actions, {
   'family-create': () => familyCreate(),
@@ -3238,62 +2542,41 @@ actions.visitor = (el) => {
     }
   }
   nextVisitorTalks(el);
-  if (!v || !doMove(el, v)) { sounds.tap(); live(`visit:${el.dataset.id}`).giggle(); }
+  if (!v || !doMove(el, { ...v, buddy: dressedVisitor(v) })) { sounds.tap(); live(`visit:${el.dataset.id}`).giggle(); }
 };
 
-// ---------- playing with a visitor ----------
-// What there is to play with a visitor: the game for the ball or stick the
-// kid's buddy is holding, the visitor's own game (the one on their field, or a
-// ball game they own, the same one all day), and always tag. More than one
-// and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
-// gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
-const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
-/** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
-const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).map((m) => m.move.id);
-const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
-// Chest games keep until the end of the next day (carriedGames).
-const chestGames = (kid, day) => entryFor(state, kid.id, day)?.chest?.games || 0;
-// A log with no cap is from before the limit dropped from 8 to 4, so yesterday's daily games were 8 (plus exercise).
-const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks) + OLD_GAMES_PER_DAY - GAMES_PER_DAY);
-const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));
-// Before today's chores are done, only last night's carried chest games can be played.
-const playableFor = (kid, complete = dayStatus(state, kid, today(), today()).complete) =>
-  complete ? gamesLeftFor(kid) : Math.min(gamesLeftFor(kid), earlyGames(kid, today(), carriedFor(kid)));
+// ---------- playing with a visitor (see play-ui.js) ----------
 
-/** The game the kid's buddy is holding a ball or stick for, if any. */
-function heldGame(kid) {
-  const item = itemById(kid.buddy?.outfit?.sport);
-  return item && PLAY_KINDS.includes(item.kind) ? item.kind : null;
-}
+// the leaderboard's This week / All time tabs
+Object.assign(actions, songbookActions);
+Object.assign(actions, studioActions);
+actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
 
-/** Who does what on the kid's map today (see planVisits): the kid's held gear gets its own field. */
-function visitPlan(kid, visitors) {
-  return planVisits(kid.id, visitors.map((v) => ({ id: v.id, gear: bestGear(v.owned) })), today(), heldGame(kid));
-}
-
-/** Fishing when the kid's buddy is holding a fishing rod (there's no field for it: the lake is in the game). */
-function heldRod(kid) {
-  return itemById(kid.buddy?.outfit?.sport)?.kind === 'rod' ? 'fishing' : null;
-}
-
-function gamesWith(kid, v, plan) {
-  const area = plan.areas.find((a) => a.members.includes(v.id));
-  // a visitor fishing at the village pond goes fishing with you
-  const theirs = area && PLAY_KINDS.includes(area.kind) ? area.kind : area?.kind === 'pond' ? 'fishing' : visitGame(v);
-  return [...new Set([heldGame(kid) || heldRod(kid), theirs, 'tag'].filter(Boolean))];
-}
-
-function pickGame(kid, v, games) {
-  const held = heldGame(kid) || heldRod(kid);
-  const note = (k) => (k === 'tag' ? 'No gear needed' : k === held ? `With your ${GEAR_WORD[k]}` : `With ${esc(v.name)}'s ${GEAR_WORD[k]}`);
-  openModal(`
-    <h2>Play with ${esc(v.name)}</h2>
-    <div class="game-pick">
-      ${games.map((k) => `<button class="btn" data-action="play-pick" data-kind="${k}" data-id="${esc(v.id)}" data-host="${esc(kid.id)}">${GAME_NAMES[k]}<small>${note(k)}</small></button>`).join('')}
-    </div>
-    <button class="btn ghost" data-action="modal-close">Not now</button>`);
-}
+actions['tank-pick'] = (el) => {
+  ui.tankPick = el.dataset.species;
+  $modal.querySelectorAll('.tp-fish').forEach((b) => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', String(b === el)); });
+  const input = $modal.querySelector('#tank-name');
+  if (input) input.placeholder = fishSpecies(ui.tankPick)?.name || '';
+};
+actions['tank-save'] = () => {
+  const kid = kidById(ui.kidId);
+  const tank = kid && makeTank(kid.fishRecords, ui.tankPick, $modal.querySelector('#tank-name')?.value);
+  if (!tank) return;
+  kid.tank = tank;
+  save();
+  closeModal();
+  sounds.tap();
+  toast(`🐟 ${tankFish(kid)?.nickname || 'Your fish'} is in the tank!`);
+  render();
+};
+actions['tank-empty'] = () => {
+  const kid = kidById(ui.kidId);
+  if (!kid) return;
+  delete kid.tank;
+  save();
+  closeModal();
+  render();
+};
 
 actions['play-pick'] = (el) => {
   const v = familyBuddies().find((b) => b.id === el.dataset.id);
@@ -3321,6 +2604,7 @@ function gameTestCard() {
         <label>Visitor <select id="gt-vis">${opt(ui.gtVis || (kids[1] || kids[0]).id, who)}</select></label>
         <label>Visitor's gear <select id="gt-vis-gear">${opt(ui.gtVisGear || '1', tiers)}</select></label>
         <label>Fishing spot <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
+        <label>Fishing boat <select id="gt-boat">${opt(ui.gtBoat || '0', [['0', 'No boat'], ['1', 'In the boat']])}</select></label>
       </div>
       <div class="row wrap">
         ${['soccer', 'tag', 'hockey', 'football', 'fishing'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
@@ -3331,7 +2615,7 @@ function gameTestCard() {
 actions['game-test'] = (el) => {
   const kind = el.dataset.kind;
   const val = (id) => document.getElementById(id)?.value;
-  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map') });
+  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map'), gtBoat: val('gt-boat') });
   const kid = kidById(ui.gtKid) || state.kids[0];
   const other = kidById(ui.gtVis) || kid;
   const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind;
@@ -3342,38 +2626,13 @@ actions['game-test'] = (el) => {
   openPlay({
     kind,
     best: 0,
-    kid: { buddy: kid.buddy, name: kid.name, gear: gear(ui.gtKidGear), moves: moveIds(mover(kid)) },
+    kid: { buddy: kid.buddy, name: kid.name, gear: { ...gear(ui.gtKidGear), ...(kind === 'fishing' && ui.gtBoat === '1' ? { boat: 1 } : {}) }, moves: moveIds(mover(kid)) },
     visitor: { buddy: other.buddy, name: visName, gear: gear(ui.gtVisGear), moves: moveIds(mover(other)) },
     map: ui.gtMap || kidTheme(kid),
     day: today(),
     sounds,
   });
 };
-
-function playWith(kid, v, kind) {
-  const gear = bestGear(v.owned);
-  const best = kid.playBest?.[kind] || 0;
-  openPlay({
-    kind,
-    best,
-    kid: { buddy: kid.buddy, name: kid.name, gear: bestGear(kid.owned || []), moves: moveIds(mover(kid)) },
-    visitor: { buddy: v.buddy, name: v.name, gear, moves: moveIds(v) },
-    map: kidTheme(kid),
-    day: today(),
-    sounds,
-    gamesLeft: () => playableFor(kid),
-    onStart: () => {
-      kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
-      save();
-    },
-    // the map's bubbles change when the games run out
-    onClose: () => render(),
-    onScore: (score) => {
-      kid.playBest = { ...(kid.playBest || {}), [kind]: score };
-      save();
-    },
-  });
-}
 
 // Fishing visitors now and then reel in something from the pond: what bites depends on the map.
 function fishBite() {
@@ -3444,7 +2703,7 @@ actions['buddy-move'] = (el) => {
   sounds.tap();
   if (zone) { live(liveKey(kid)).giggle(); if (moveHintShown) return; moveHintShown = true; }
   const ex = exerciseInfo(kid);
-  toast(`Exercise ${ex.goal} days in one week to learn your first move! 💪`);
+  toast(`Exercise ${ex.goal || EXERCISE_DAYS} days in one week for a ⭐ strong week and your first move! 💪`);
 };
 
 // ---------- reminders and day rollover ----------
@@ -3454,7 +2713,7 @@ const fired = new Set();
 
 setInterval(() => {
   const t = today();
-  if (t !== lastDay) { lastDay = t; if (ui.view !== 'timer') render(); }
+  if (t !== lastDay) { lastDay = t; if (!timerOnScreen()) render(); }
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   for (const r of state.settings.reminders) {
@@ -3479,17 +2738,26 @@ setInterval(() => {
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   // The service worker serves the cached app first, so after a new version is deployed the
   // first open still shows the old one. When the new worker takes over, reload once to show it,
-  // unless a piano timer is on screen (then the next open picks it up).
+  // unless a piano timer or the recording studio is on screen (then the next open picks it up).
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading || ui.view === 'timer') return;
+    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio') return;
     reloading = true;
     window.location.reload();
   });
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => reg.update()).catch(() => {});
 }
 navigator.storage?.persist?.().catch(() => {});
+
+// what the modules split out of app.js share (see ctx.js)
+provide({
+  ui, $modal, today, esc, kidById, taskById, liveKey, dressed,
+  save, render, viewKid, markDone, askParentNowOrLater,
+  toast, actions, openModal, closeModal, confirmModal,
+  cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY,
+  currentKid, buddyHtml, progressFor, mover, doMove, exerciseInfo, kidTheme,
+});
 
 restoreTimer();
 render();
