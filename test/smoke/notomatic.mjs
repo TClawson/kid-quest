@@ -20,7 +20,7 @@ const out = (process.argv[2] || 'previews/note-o-matic').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
 
 const site = await serve('.');
-const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
 const errors = [];
 const TABLET = { width: 1280, height: 800 };
 const PHONE = { width: 360, height: 740 };
@@ -37,6 +37,7 @@ function family() {
 /** A new tablet with the family on it, counting the sounds started. `noWorker`: a browser without module Workers. */
 async function start(viewport, { noWorker = false } = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2 });
+  await ctx.grantPermissions(['microphone']);
   await ctx.addInitScript((noWorker) => {
     if (noWorker) window.Worker = function Worker() { throw new Error('no module workers here'); };
     window.kqStarts = 0;
@@ -61,7 +62,7 @@ async function start(viewport, { noWorker = false } = {}) {
 function seedDesk(page, takes, bpm = 120) {
   return page.evaluate(async ({ takes, bpm, desk }) => {
     const { saveTake, saveMix } = await import('./js/studio-store.js');
-    const { newMix, addTake } = await import('./js/studiorules.js');
+    const { newMix, addTake, trimClip } = await import('./js/studiorules.js');
     const rate = 48000;
     const lead = 0.06;
     const beat = 60 / bpm;
@@ -91,7 +92,9 @@ function seedDesk(page, takes, bpm = 120) {
       }
       const id = await saveTake(desk, out, rate, lead);
       ids.push(id);
-      mix = addTake(mix, t.track, id, t.beats, t.at, { lead }).mix;
+      const added = addTake(mix, t.track, id, t.beats, t.at, { lead });
+      mix = added.mix;
+      if (t.trim) mix = trimClip(mix, added.id, t.trim).mix; // { start } trims its front
     }
     await saveMix(desk, 'draft', mix);
     return ids;
@@ -367,7 +370,117 @@ const LONG = Array.from({ length: 40 }, (_, i) => [[60, 62, 64, 65, 67, 65, 64, 
   await ctx.close();
 }
 
-// 2. a browser without module Workers listens on the page itself
+// 2. the panel belongs to the take it was opened on, as it was
+{
+  const { ctx, page } = await start(TABLET);
+  // a kid at their own speed (a note every 0.8 s; the mix's beat is 0.5 s): C D E F G A B C,
+  // the take trimmed to start at beat 6, so the first note kept is the G
+  const OWN = [60, 62, 64, 65, 67, 69, 71, 72].map((midi, i) => [midi, (0.3 + 0.8 * i) / 0.5]);
+  await seedDesk(page, [
+    { track: 0, at: 0, beats: 5, notes: FOUR }, { track: 1, at: 0, beats: 40, notes: LONG },
+    { track: 2, at: 0, beats: 14, notes: OWN, trim: { start: 6 } },
+  ]);
+  await openDesk(page);
+  const panelGone = async (why) => {
+    assert.equal(await nom(page), null, `${why}: the panel closed`);
+    assert.equal(await page.locator('#studio .st-nom').count(), 0, why);
+    assert.doesNotMatch(await page.locator('#studio').textContent(), /couldn't hear piano notes/, `${why}: never "couldn't hear"`);
+  };
+  const pick = async (loc) => { await loc.click(); if (!await page.locator('#studio .st-tools [data-action="st-nom"]').count()) await loc.click(); };
+  const byId = (id) => page.locator(`#studio .st-clip[data-id="${id}"]`);
+
+  // Undo while listening to a copy: the copy is gone, and so is the panel (quietly)
+  await pick(byId(2));
+  await page.click('#studio .st-tools [data-action="st-copy"]');
+  const copy = await page.locator('#studio .st-clip.sel').getAttribute('data-id');
+  await page.click('#studio .st-tools [data-action="st-nom"]');
+  await page.waitForSelector('#studio .st-progress');
+  assert.equal((await nom(page)).worker, true);
+  await page.click('[data-action="st-undo"]');
+  await panelGone('Undo while listening');
+  assert.equal(await byId(copy).count(), 0);
+  await page.waitForTimeout(1500); // (a Worker that went on would answer by now)
+  await panelGone('a moment later');
+
+  // the readings open on a copy, then Undo: closed, so Use it can't reach another clip
+  await pick(byId(1));
+  await page.click('#studio .st-tools [data-action="st-copy"]');
+  const copy2 = await page.locator('#studio .st-clip.sel').getAttribute('data-id');
+  assert.equal(copy2, copy, 'the copy gets the same clip id again');
+  await page.click('#studio .st-tools [data-action="st-nom"]');
+  await page.waitForSelector('#studio .st-reading', { timeout: 60000 });
+  await page.click('[data-action="st-undo"]');
+  await panelGone('Undo with the readings open');
+  await page.click('[data-action="st-redo"]');
+  assert.equal(await page.locator('#studio .st-nom').count(), 0, 'Redo doesn\'t bring the panel back');
+
+  // another clip picked while the panel is open: it closes, and that clip's tools show
+  await pick(byId(1));
+  await page.click('#studio .st-tools [data-action="st-nom"]');
+  await page.waitForSelector('#studio .st-reading', { timeout: 60000 });
+  await byId(2).click();
+  await panelGone('another clip picked');
+  assert.equal(await page.locator('#studio .st-clip.sel').getAttribute('data-id'), '2');
+  assert.equal(await page.locator('#studio .st-tools [data-action="st-nom"]').count(), 1, 'its own tools');
+  assert.equal(await byId(1).getAttribute('class').then((c) => /kind-take/.test(c)), true, 'the first take is still a take');
+
+  // trimmed while the panel is open (an Undo of a trim): closed, the readings were for the old trim
+  await page.click('#studio .st-tools [data-action="st-nudge"][data-do="shorter"]');
+  await page.click('#studio .st-tools [data-action="st-nom"]');
+  await page.waitForSelector('#studio .st-nom');
+  await page.click('[data-action="st-undo"]');
+  await panelGone('the take trimmed back');
+
+  // Record closes the panel
+  await pick(byId(1));
+  await page.click('#studio .st-tools [data-action="st-nom"]');
+  await page.waitForSelector('#studio .st-reading', { timeout: 60000 });
+  await page.locator('#studio .st-lane[data-track="3"]').click({ position: { x: 10, y: 20 } });
+  if (await page.locator('#studio .st-nom').count()) await page.click('[data-action="st-rec"]');
+  await panelGone('Record');
+  await page.waitForFunction(() => !document.querySelector('[data-action="st-rec"]').disabled, null, { timeout: 20000 });
+  if (await page.evaluate(() => window.kqStudio.studioSound().recording)) await page.click('[data-action="st-rec"]');
+
+  // a front-trimmed take at the kid's own speed: the notes are made from what was kept
+  await page.waitForFunction(() => !window.kqStudio.studioSound().recording && !document.querySelector('[data-action="st-rec"]').disabled, null, { timeout: 20000 });
+  const trimmed = page.locator('#studio .st-lane[data-track="2"] .st-clip');
+  await pick(trimmed);
+  await page.click('#studio .st-tools [data-action="st-nom"]');
+  await page.waitForSelector('#studio .st-reading', { timeout: 60000 });
+  assert.match(await page.locator('#studio .st-nom-key').textContent(), /You played at your own speed/);
+  await page.click('#studio .st-reading[data-reading="tidy"] .st-reading-pick');
+  await page.click('#studio .st-nom-use');
+  const made = page.locator('#studio .st-lane[data-track="2"] .st-clip');
+  assert.match(await made.getAttribute('class'), /kind-notes/);
+  await until(async () => (await draft(page))?.tracks[2][0]?.kind === 'notes', 'the draft to be saved');
+  const c = (await draft(page)).tracks[2][0];
+  const byTime = [...c.notes].sort((a, b) => a.at - b.at);
+  assert.equal(c.from, 0, 'from its own start');
+  assert.equal(c.start, 6, 'on the kept beat');
+  assert.equal(byTime[0].midi, 67, `starts with the first kept note: ${JSON.stringify(byTime)}`);
+  assert.ok(byTime.every((n) => n.midi >= 67), `nothing trimmed off: ${byTime.map((n) => n.midi)}`);
+  assert.ok(byTime[0].at <= 2, `a beat in, where it was played: ${byTime[0].at}`);
+  await ctx.close();
+}
+
+// 2b. a stored notes clip that claims to be 20000 beats long opens and plays as at most a loop
+{
+  const { ctx, page } = await start(TABLET);
+  await page.evaluate(async (desk) => {
+    const { saveMix } = await import('./js/studio-store.js');
+    const { newMix } = await import('./js/studiorules.js');
+    const mix = { ...newMix(), bpm: 120, tracks: [[{ id: 1, kind: 'notes', nid: 'nX', role: 'tune', start: 0, len: 4, from: 0, total: 20000, notes: [{ at: 0, len: 2, midi: 60 }, { at: 2, len: 1e9, midi: 64 }] }], [], [], []], next: 2 };
+    await saveMix(desk, 'draft', mix);
+  }, DESK);
+  await openDesk(page);
+  await page.click('[data-action="st-play"]');
+  await playing(page);
+  await page.click('[data-action="st-play"]');
+  assert.equal((await draft(page)).tracks[0][0].total, 84);
+  await ctx.close();
+}
+
+// 3. a browser without module Workers listens on the page itself
 {
   const { ctx, page } = await start(TABLET, { noWorker: true });
   await seedDesk(page, [{ track: 0, at: 0, beats: 5, notes: FOUR }]);
@@ -379,7 +492,7 @@ const LONG = Array.from({ length: 40 }, (_, i) => [[60, 62, 64, 65, 67, 65, 64, 
   await ctx.close();
 }
 
-// 3. phone: the panel fits, its buttons are big enough
+// 4. phone: the panel fits, its buttons are big enough
 {
   const { ctx, page } = await start(PHONE);
   await seedDesk(page, [{ track: 0, at: 0, beats: 5, notes: FOUR }, { track: 2, at: 0, beats: 40, notes: LONG }]);

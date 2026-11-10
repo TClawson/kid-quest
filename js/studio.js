@@ -27,6 +27,7 @@ import {
   trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges, shelfSongs,
   addBacking, setLoop, setVoice, setKit, shiftClip, moveIntoKey, clipFits, clipKey, remixed, splitShift, backingBeats, backingSwing,
   setTrackVolume, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME, takeToNotes, clipSwing, readingVoice, NOTES_VOICE, ownVoice, notesVoice,
+  keptHeard, readingOptions, mostNotesBeats,
 } from './studiorules.js';
 import { READINGS, readings } from './notomatic.js';
 import { VOICES, KITS, LOOPS, LOOP_IDS, BACKING, BACKING_GROUPS, backingEvents } from './studiokit.js';
@@ -408,6 +409,9 @@ function paint() {
   if (drag) { drag.repaint = true; return; }
   if (S.loading) { el.innerHTML = '<p class="muted st-wait">Getting your studio ready…</p>'; return; }
   if (S.chooser && S.chooser.id !== S.sel) S.chooser = null; // a chooser is for the picked clip
+  // the Note-o-Matic is for the take it was opened on, as it was: another pick, or that take
+  // gone, moved or trimmed (an edit, Undo, Redo), and it closes
+  if (S.nom && (S.sel !== S.nom.id || !nomClip(S.nom))) closeNom(false);
   if (!S.chooser) S.said = '';
   if (S.broken) {
     el.innerHTML = `<div class="st-note bad st-broken" role="alert"><span>${esc(SAY.cantOpen)}</span><button class="btn small-btn" data-action="st-retry">Try again</button></div>`;
@@ -1247,7 +1251,8 @@ function wanted(key) {
  */
 function renderSound(s, bpm, rate, alive = null) {
   if (s.kind === 'notes') {
-    return renderEvents(s.notes, { bpm, steps: s.beats * 2, swing: s.swing || 0, sampleRate: rate, alive, voice: s.voice || NOTES_VOICE, shift: s.shift });
+    // (never longer than a loop can be, whatever was stored)
+    return renderEvents(s.notes, { bpm, steps: Math.min(s.beats, mostNotesBeats(4)) * 2, swing: s.swing || 0, sampleRate: rate, alive, voice: s.voice || NOTES_VOICE, shift: s.shift });
   }
   if (s.kind === 'part') {
     if (!s.voice && !s.kit && !s.shift) return renderPart(s.song, s.part, bpm, rate, 0.5, alive);
@@ -1931,6 +1936,19 @@ function takeClicks(c, t, mix = S.mix) {
   return out;
 }
 
+/** Where a clip is on the desk and how it is trimmed: the panel's readings are for this stretch only. */
+const shapeOf = (c) => `${c.start}|${c.from}|${c.len}|${c.total}|${c.lead || 0}`;
+
+/**
+ * The take the Note-o-Matic's panel was opened on, as it was then (the same take, place and
+ * trim), or null when it is gone or changed: a clip id can come back for another clip (Undo,
+ * then a new recording), so the take's own id is checked too.
+ */
+function nomClip(nom) {
+  const c = findClip(S.mix, nom.id)?.clip;
+  return c && c.kind === 'take' && c.take === nom.take && shapeOf(c) === nom.shape ? c : null;
+}
+
 /** Open the Note-o-Matic for the picked take: listen to it (once a visit), then offer the readings. */
 async function openNom() {
   const found = S.sel != null && findClip(S.mix, S.sel);
@@ -1943,8 +1961,10 @@ async function openNom() {
   }
   const t = S.takes.get(c.take);
   if (!t || !t.samples?.length) { toast(SAY.nomMissing); paint(); return; }
-  if (S.nom || !findClip(S.mix, c.id)) return; // (a second tap while the take was fetched)
-  const nom = { id: c.id, take: c.take, phase: 'listen', progress: 0, result: null, pick: 'tidy', bufs: new Map() };
+  // (a second tap, or another pick or edit, while the take was fetched)
+  const now = findClip(S.mix, c.id)?.clip;
+  if (S.nom || S.sel !== c.id || !now || now.take !== c.take) return;
+  const nom = { id: c.id, take: c.take, shape: shapeOf(now), phase: 'listen', progress: 0, result: null, pick: 'tidy', bufs: new Map() };
   S.nom = nom;
   S.chooser = null;
   if (S.heard.has(c.take)) { heardIn(nom, S.heard.get(c.take)); return; }
@@ -1959,9 +1979,10 @@ async function openNom() {
  */
 function listenTo(nom, samples, rate, clicks) {
   const done = (notes, failed = false) => {
+    if (!failed && Array.isArray(notes)) S.heard.set(nom.take, notes); // (what the whole take holds: kept for the next time)
     if (S.nom !== nom) return; // stopped meanwhile
+    if (!nomClip(nom)) { closeNom(); return; } // the take is gone or changed: nothing to say about it
     if (failed || !Array.isArray(notes)) { nom.phase = 'broken'; paint(); updateWake(); return; }
-    S.heard.set(nom.take, notes);
     heardIn(nom, notes);
   };
   const here = () => {
@@ -2013,13 +2034,17 @@ function showProgress(nom) {
   bar.querySelector('i').style.width = `${p}%`;
 }
 
-/** What was heard in the take: the three readings, or "no notes" when fewer than 3 were heard. */
+/**
+ * What was heard in the take: the three readings of the stretch the kid kept (a trimmed take's
+ * trimmed-off notes don't count), or "no notes" when fewer than 3 were heard there.
+ */
 function heardIn(nom, notes) {
-  const c = findClip(S.mix, nom.id)?.clip;
-  if (notes.length < 3 || !c) nom.phase = 'nothing';
+  const c = nomClip(nom);
+  if (!c) { closeNom(); return; }
+  const kept = keptHeard(notes, c, S.mix.bpm);
+  if (kept.length < 3) nom.phase = 'nothing';
   else {
-    const mix = S.mix;
-    nom.result = readings(notes, { bpm: mix.bpm, meter: mix.meter, lead: c.lead || 0, beats: c.total, swing: backingSwing(mix), barAt: (((c.start - c.from) % mix.meter) + mix.meter) % mix.meter });
+    nom.result = readings(kept, readingOptions(S.mix, c));
     nom.phase = 'pick';
     nom.pick = 'tidy';
   }
@@ -2087,6 +2112,7 @@ function useNom() {
   const nom = S.nom;
   const parts = nom?.result?.[nom.pick];
   if (!parts || busyNow()) return;
+  if (!nomClip(nom)) { closeNom(); toast('That recording is gone.'); return; }
   const r = takeToNotes(S.mix, nom.id, parts, nom.result.key);
   if (r.error) { toast(r.error); return; }
   closeNom(false);
@@ -2207,6 +2233,7 @@ export const studioActions = {
     else if (!A.rec) startPlay(0);
   },
   'st-rec': () => {
+    closeNom(); // a recording isn't made with the Note-o-Matic's panel open
     const down = A.down && performance.now() - A.down.t < 1500 ? A.down.at : null;
     A.down = null;
     // Stop while the music for a recording is being made: no recording (the microphone closes)
