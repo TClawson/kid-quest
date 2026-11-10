@@ -1,7 +1,7 @@
 // Family sync: connecting to the cloud, applying the family's updates, and the
 // settings card with its start / join / invite / leave flows (split out of
 // app.js; shared things come from ctx.js).
-import { stableJson, DEVICE_SETTINGS } from './store.js';
+import { stableJson, DEVICE_SETTINGS, packLog } from './store.js';
 import { timerOnScreen } from './timer-ui.js';
 import {
   state, setState, ui, $modal, esc, kidById, toast, render, actions,
@@ -135,7 +135,7 @@ function errorModal(title, text) {
 // Switch this device to the family and restart the app on the cloud copy.
 function finishJoin(cfg, cacheState) {
   localStorage.setItem(CLOUD_KEY, JSON.stringify(cfg));
-  if (cacheState) localStorage.setItem(CLOUD_CACHE_KEY, JSON.stringify(cacheState));
+  if (cacheState) localStorage.setItem(CLOUD_CACHE_KEY, JSON.stringify(packLog(cacheState)));
   else localStorage.removeItem(CLOUD_CACHE_KEY);
   window.location.reload();
 }

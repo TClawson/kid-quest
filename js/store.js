@@ -113,6 +113,47 @@ export function diffDocs(before, after) {
   return { changed, removed };
 }
 
+// The device's own copy is packed before it goes into local storage, which
+// Chrome caps at about 5 MB. Most of a day's size is its `scheduled` list: a
+// copy of every task as it was that day, nearly always the same as the day
+// before. So the packed copy keeps each different task once, in `taskTable`,
+// and each day lists numbers into it. Unpacking gives back exactly the same
+// state, so nothing about streaks, treasure or history changes. The cloud
+// always gets the plain shape, and unpack reads copies saved before packing.
+export function packLog(state) {
+  const table = new Map();
+  const log = {};
+  for (const [date, byKid] of Object.entries(state.log || {})) {
+    log[date] = {};
+    for (const [kidId, entry] of Object.entries(byKid)) {
+      if (!entry || !Array.isArray(entry.scheduled)) { log[date][kidId] = entry; continue; }
+      const scheduled = entry.scheduled.map((task) => {
+        const text = JSON.stringify(task);
+        if (!table.has(text)) table.set(text, table.size);
+        return table.get(text);
+      });
+      log[date][kidId] = { ...entry, scheduled };
+    }
+  }
+  return { ...state, log, taskTable: [...table.keys()] };
+}
+
+export function unpackLog(saved) {
+  if (!saved || !Array.isArray(saved.taskTable)) return saved;
+  const { taskTable, ...state } = saved;
+  const log = {};
+  for (const [date, byKid] of Object.entries(state.log || {})) {
+    log[date] = {};
+    for (const [kidId, entry] of Object.entries(byKid)) {
+      log[date][kidId] = entry && Array.isArray(entry.scheduled)
+        // a fresh object for every day, so changing one day never changes another
+        ? { ...entry, scheduled: entry.scheduled.map((i) => (typeof i === 'number' ? JSON.parse(taskTable[i]) : i)) }
+        : entry;
+    }
+  }
+  return { ...state, log };
+}
+
 // Keeps the whole state as one JSON string, like every version so far.
 export function localBackend(storage = globalThis.localStorage, key = STORAGE_KEY) {
   return {
@@ -207,28 +248,37 @@ export function createStore(backend = localBackend(), { onSave } = {}) {
       let state;
       try {
         const raw = backend.read();
-        state = raw ? migrate(JSON.parse(raw)) : emptyState();
+        state = raw ? migrate(unpackLog(JSON.parse(raw))) : emptyState();
       } catch {
         state = emptyState();
       }
       lastDocs = splitState(state);
       return state;
     },
-    // Throws if the backend cannot save (for example, storage is full).
     // Returns which documents changed since the last load, save or replace.
+    // Without onSave (a device on its own), throws if the backend cannot save
+    // (for example, storage is full). With onSave (a family device), the
+    // changes still go to onSave, so a full device keeps syncing; the result
+    // then says local: false instead of throwing.
     save(state) {
-      backend.write(JSON.stringify(state));
+      let failed = null;
+      try {
+        backend.write(JSON.stringify(packLog(state)));
+      } catch (e) {
+        if (!onSave) throw e;
+        failed = e;
+      }
       const docs = splitState(state);
       const before = lastDocs;
       const changes = diffDocs(before, docs);
       lastDocs = docs;
       if (onSave && (changes.changed.length || changes.removed.length)) onSave(changes, before, docs);
-      return changes;
+      return failed ? { ...changes, local: false } : changes;
     },
     // Takes a state that came from elsewhere (another device): keeps it locally
     // without reporting it as a change to send back.
     replace(state) {
-      try { backend.write(JSON.stringify(state)); } catch { /* the cloud still has it */ }
+      try { backend.write(JSON.stringify(packLog(state))); } catch { /* the cloud still has it */ }
       lastDocs = splitState(state);
     },
   };
