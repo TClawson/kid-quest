@@ -504,3 +504,46 @@ export function waveLine(samples, rate, from, len, points = 48) {
   return out;
 }
 
+
+/**
+ * A sound file (WAV) of `samples` (numbers from -1 to 1) at `rate` samples a second: one
+ * channel, 16-bit, exactly as given (nothing louder or softer, no fades). A value past -1 or 1
+ * is kept at -1 or 1, and a value that isn't a number is silence. Returns a Uint8Array.
+ */
+export function wavBytes(samples, rate) {
+  const n = samples.length;
+  const bytes = new Uint8Array(44 + n * 2);
+  const v = new DataView(bytes.buffer);
+  const text = (at, s) => { for (let i = 0; i < s.length; i += 1) v.setUint8(at + i, s.charCodeAt(i)); };
+  text(0, 'RIFF');
+  v.setUint32(4, 36 + n * 2, true);
+  text(8, 'WAVE');
+  text(12, 'fmt ');
+  v.setUint32(16, 16, true);       // the size of the format part
+  v.setUint16(20, 1, true);        // plain PCM
+  v.setUint16(22, 1, true);        // one channel
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true); // bytes a second
+  v.setUint16(32, 2, true);        // bytes a sample
+  v.setUint16(34, 16, true);       // bits a sample
+  text(36, 'data');
+  v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i += 1) {
+    const x = Math.max(-1, Math.min(1, samples[i] || 0));
+    v.setInt16(44 + i * 2, Math.round(x < 0 ? x * 32768 : x * 32767), true);
+  }
+  return bytes;
+}
+
+/**
+ * The name of a test recording's file: kidquest-<label>-<YYYYMMDD-HHMMSS>.wav, from what the
+ * parent typed (made safe: lowercase letters, digits and dashes, "test" when nothing is left)
+ * and the local time `at` (a Date).
+ */
+export function recordingName(label, at) {
+  const safe = String(label || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    .slice(0, 40).replace(/-+$/, '') || 'test';
+  const two = (x) => String(x).padStart(2, '0');
+  const stamp = `${at.getFullYear()}${two(at.getMonth() + 1)}${two(at.getDate())}-${two(at.getHours())}${two(at.getMinutes())}${two(at.getSeconds())}`;
+  return `kidquest-${safe}-${stamp}.wav`;
+}

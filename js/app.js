@@ -29,6 +29,7 @@ import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
 import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
+import { mountTestRec } from './testrec.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
@@ -1828,6 +1829,11 @@ ${gameTestCard()}
       <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>
       <button class="btn ghost" data-action="listen-open">Open the listening test</button>
     </div>
+    <div class="card rec-test">
+      <h2>🎙️ Save a test recording</h2>
+      <p class="muted small">Record up to 2 minutes of piano through the tablet's microphone and save it as a sound file. Nothing is kept in the game.</p>
+      <div id="rec-test"></div>
+    </div>
     <div class="card">
       <h2>Parent PIN</h2>
       <button class="btn ghost" data-action="change-pin">Change PIN</button>
@@ -2042,6 +2048,7 @@ function render() {
   mountMusicHouses($app, musicHandlers);
   mountSongbook($app);
   mountStudio($app);
+  mountTestRec($app);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);

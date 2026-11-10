@@ -62,6 +62,8 @@ const SHELL = [
   'js/studio-store.js',
   'js/studio.js',
   'js/studio-audio.js',
+  'js/mic.js',
+  'js/testrec.js',
   'js/arrange.js',
   'js/arrangements.js',
   'js/houseart.js',

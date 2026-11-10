@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SILENT, CLICK, fadeEnds, peakOf, MOST_DELAY, usableDelay, stopPoint, firstPass, normalise, findOnsets, joinBlocks, alignTake, guessDelay, sliceSchedule, pct, beatAt, waveLine,
-  clickWave, countInDelay, echoDelay, makeTake, peakAway, phonesDelay, softClip, clickPlan,
+  clickWave, countInDelay, echoDelay, makeTake, peakAway, phonesDelay, softClip, clickPlan, wavBytes, recordingName,
 } from '../js/studio-audio.js';
 import { schedule, addPart, addTake, newMix } from '../js/studiorules.js';
 
@@ -504,4 +504,45 @@ test('the first time round keeps the lead of a take that starts just before play
   // started in the middle of a take's lead window but well after it: just cut
   const late = firstPass(plan, 2.2).find((e) => e.take === 'b');
   assert.ok(Math.abs(late.at - 2.2) < 1e-9);
+});
+
+test('a test recording\'s sound file has a plain mono 16-bit WAV header', () => {
+  const b = wavBytes(new Float32Array(1000), 44100);
+  const v = new DataView(b.buffer);
+  const text = (at) => String.fromCharCode(...b.slice(at, at + 4));
+  assert.equal(b.length, 44 + 2000, 'the header and two bytes a sample');
+  assert.equal(text(0), 'RIFF');
+  assert.equal(v.getUint32(4, true), 36 + 2000, 'the file\'s size after the first 8 bytes');
+  assert.equal(text(8), 'WAVE');
+  assert.equal(text(12), 'fmt ');
+  assert.equal(v.getUint32(16, true), 16);
+  assert.equal(v.getUint16(20, true), 1, 'plain PCM');
+  assert.equal(v.getUint16(22, true), 1, 'one channel');
+  assert.equal(v.getUint32(24, true), 44100, 'the sample rate as given');
+  assert.equal(v.getUint32(28, true), 88200, 'bytes a second');
+  assert.equal(v.getUint16(32, true), 2, 'bytes a sample');
+  assert.equal(v.getUint16(34, true), 16, '16 bits');
+  assert.equal(text(36), 'data');
+  assert.equal(v.getUint32(40, true), 2000, 'the sound\'s size');
+  assert.equal(wavBytes(new Float32Array(0), 48000).length, 44, 'an empty recording is just the header');
+  assert.equal(new DataView(wavBytes([], 48000).buffer).getUint32(24, true), 48000);
+});
+
+test('a test recording\'s sound is kept as it was, with values past full scale held at full scale', () => {
+  const b = wavBytes(new Float32Array([0, 0.5, -0.5, 1, -1, 1.7, -3, NaN, 0.25]), 48000);
+  const v = new DataView(b.buffer);
+  const at = (i) => v.getInt16(44 + i * 2, true);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 8].map(at), [0, 16384, -16384, 32767, -32768, 32767, -32768, 0, 8192]);
+  // not made louder or softer: a quiet sample stays quiet
+  assert.equal(new DataView(wavBytes([0.001], 48000).buffer).getInt16(44, true), 33);
+});
+
+test('a test recording\'s file name is safe and says when it was made', () => {
+  const at = new Date(2026, 10, 9, 7, 5, 3);
+  assert.equal(recordingName('c major scale', at), 'kidquest-c-major-scale-20261109-070503.wav');
+  assert.equal(recordingName('  Für Elise / bars 1–8!! ', at), 'kidquest-fur-elise-bars-1-8-20261109-070503.wav');
+  assert.equal(recordingName('', at), 'kidquest-test-20261109-070503.wav');
+  assert.equal(recordingName('🎹 ?? ', at), 'kidquest-test-20261109-070503.wav');
+  assert.equal(recordingName(undefined, at), 'kidquest-test-20261109-070503.wav');
+  assert.match(recordingName('x'.repeat(100), at), /^kidquest-x{40}-20261109-070503\.wav$/, 'a long label is cut short');
 });
