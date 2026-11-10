@@ -11,11 +11,13 @@
 
 /**
  * A bar's chords, from its entry in a song's chords: 'F' is one chord all bar, 'F E' two that
- * share it evenly. Returns [{ name, pos, len }] in steps (eighth notes).
+ * share it evenly. Each gets a whole number of beats, so two can't share a waltz bar (three
+ * can: a beat each). Returns [{ name, pos, len }] in steps (eighth notes).
  */
 export function barChords(entry, steps = 8) {
   const names = entry.split(' ');
   const len = steps / names.length;
+  if (names.length > 1 && len % 2) throw new Error(`the chords "${entry}" can't share a bar of ${steps / 2} beats evenly`);
   return names.map((name, k) => ({ name, pos: k * len, len }));
 }
 

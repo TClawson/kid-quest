@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SONGS, SHOW_SONGS, barChords } from '../js/songs.js';
 import {
   keyInfo, keyLabel, chordNotes, chordLabel, splitLength, barEvents, meterOf, parseNote,
-  songById, songAbc, melodyShift, SONGBOOK, songbookFor, stars, SWING_MARK,
+  songById, songAbc, melodyShift, lineRanges, SONGBOOK, songbookFor, stars, SWING_MARK,
 } from '../js/sheetmusic.js';
 
 const LETTERS = 'CDEFGAB';
@@ -78,7 +78,7 @@ function readVoice(abc, voice, key) {
   const keyAlter = [0, 0, 0, 0, 0, 0, 0];
   for (let i = 0; i < Math.abs(sig); i += 1) keyAlter[LETTERS.indexOf((sig > 0 ? 'FCGDAEB' : 'BEADGCF')[i])] = Math.sign(sig);
   const lines = abc.split('\n').filter((l) => (voice ? l.startsWith(`[V:${voice}]`) : /^[^A-Za-z%]|^[a-gzA-G"[_^=]/.test(l) && !/^[A-Za-z]:/.test(l)));
-  const music = lines.map((l) => l.replace(/^\[V:\w\]\s*/, '')).join(' ').replace(/"[^"]*"/g, '');
+  const music = lines.map((l) => l.replace(/^\[V:\w\]\s*/, '')).join(' ').replace(/"[^"]*"|![^!]*!/g, '');
   return music.split(/\|\]?/).map((b) => b.trim()).filter(Boolean).map((bar) => {
     const held = new Map();
     const out = [];
@@ -155,7 +155,11 @@ for (const p of SONGBOOK) {
 test('two chords can share a bar: both names are written, each on its own note', () => {
   assert.deepEqual(barChords('F'), [{ name: 'F', pos: 0, len: 8 }]);
   assert.deepEqual(barChords('F Bb'), [{ name: 'F', pos: 0, len: 4 }, { name: 'Bb', pos: 4, len: 4 }]);
-  assert.deepEqual(barChords('Dm A', 6).map((c) => [c.pos, c.len]), [[0, 3], [3, 3]], 'a waltz bar is shared evenly too');
+  // each chord gets whole beats: two can't share a waltz bar, three can, and three can't share four beats
+  assert.throws(() => barChords('Dm A', 6), /can't share a bar of 3 beats/);
+  assert.deepEqual(barChords('Dm A Dm', 6).map((c) => [c.pos, c.len]), [[0, 2], [2, 2], [4, 2]]);
+  assert.throws(() => barChords('C F G', 8), /can't share a bar of 4 beats/);
+  assert.deepEqual(barChords('C F G C', 8).map((c) => c.pos), [0, 2, 4, 6]);
   // every chord entry of every song can be read, and its chords start on whole steps
   for (const s of [...Object.values(SONGS), ...Object.values(SHOW_SONGS)]) {
     for (const entry of [...s.chords, ...(s.ending ? [s.ending.chord] : [])]) {
@@ -175,11 +179,15 @@ test('two chords can share a bar: both names are written, each on its own note',
   // Dragon King Fanfare, bar 2: F, then B flat
   assert.match(songAbc('show:bg-castle', { hands: 'melody', perLine: 8 }).split('|')[1], /^ "F"c2 cc "B♭"d2 B2 $/);
   // a note held over the chord change is cut there and tied, so the second name has a note to sit on
-  SONGS['test-held'] = { name: 'Held', key: 'C', bpm: 100, lead: ['C5 - - - - - - -', 'E5 - G5 - - - . .'], chords: ['C F', 'C G'] };
+  SONGS['test-held'] = { name: 'Held', key: 'C', bpm: 100, lead: ['C5 - - - - - - -', 'E5 - G5 - - - . .', 'B5 - - - . . . .'], chords: ['C F', 'C G', 'E Em'] };
   try {
     const held = songAbc('test-held', { hands: 'melody' });
-    assert.match(held, /"C"c4- "F"c4 \| "C"e2 g2- "G"g2 z2 \|\]/);
-    assert.deepEqual(readVoice(held, null, 'C').map((bar) => bar.reduce((n, e) => n + e.len, 0)), [8, 8]);
+    assert.match(held, /"C"C4- "F"C4 \| "C"E2 G2- "G"G2 z2 \| "E"B4 "Em"z4 \|\]/, 'a rest takes the second name too');
+    assert.deepEqual(readVoice(held, null, 'C').map((bar) => bar.reduce((n, e) => n + e.len, 0)), [8, 8, 8]);
+    // the left hand's sharp from the first chord is taken off again for the second (E, then E minor)
+    const left = songAbc('test-held', { hands: 'chords' }).split('\n').find((l) => l.startsWith('[V:L]'));
+    assert.match(left, /\[E,\^G,B,\]4 \[E,=G,B,\]4 \|\]$/);
+    assert.deepEqual(readVoice(songAbc('test-held', { hands: 'chords' }), 'L', 'C')[2].map((e) => e.chord.map((m) => m % 12)), [[4, 8, 11], [4, 7, 11]]);
   } finally {
     delete SONGS['test-held'];
   }
@@ -209,7 +217,31 @@ test('a loop that ends up in the air gets a closing bar on paper, and only there
   // the game's own song is untouched: 16 bars that go round
   assert.equal(SONGS['bg-ocean'].lead.length, 16);
   const waltz = songAbc('bg-ocean', { hands: 'chords', perLine: 4 });
-  assert.match(waltz.trim().split('\n').filter((l) => l.startsWith('[V:R]')).pop(), /"Dm"D6 \|\]$/);
+  // its long last note is held (a fermata) in both hands, and it shares the last line: no bar alone
+  const lines = (voice) => waltz.trim().split('\n').filter((l) => l.startsWith(`[V:${voice}]`));
+  assert.match(lines('R').pop(), /!fermata!"Dm"D6 \|\]$/);
+  assert.match(lines('L').pop(), /!fermata!\[[^\]]+\]6 \|\]$/);
+  assert.deepEqual(lines('R').map((l) => l.split('|').length - 1), [4, 4, 4, 5]);
+  assert.ok(!songAbc('bg-meadow', { hands: 'chords' }).includes('fermata'), 'a song without a closing bar has none');
+});
+
+test('bars are shared out over the lines, and a closing bar never sits alone', () => {
+  const sizes = (bars, per) => lineRanges(bars, per).map(([from, to]) => to - from);
+  assert.deepEqual(sizes(16, 4), [4, 4, 4, 4]);
+  assert.deepEqual(sizes(16, 2), [2, 2, 2, 2, 2, 2, 2, 2]);
+  assert.deepEqual(sizes(17, 4), [4, 4, 4, 5]);
+  assert.deepEqual(sizes(17, 2), [2, 2, 2, 2, 2, 2, 2, 3]);
+  // the short show tunes are laid out as before
+  assert.deepEqual(sizes(5, 4), [3, 2]);
+  assert.deepEqual(sizes(5, 2), [2, 2, 1]);
+  for (let bars = 1; bars <= 40; bars += 1) {
+    for (const per of [1, 2, 3, 4]) {
+      const r = lineRanges(bars, per);
+      assert.equal(r[0][0], 0);
+      assert.equal(r[r.length - 1][1], bars);
+      r.forEach(([from, to], i) => { assert.ok(to > from); if (i) assert.equal(from, r[i - 1][1]); });
+    }
+  }
 });
 
 test('the left hand sits on the bass staff, and the melody mostly on the treble staff', () => {

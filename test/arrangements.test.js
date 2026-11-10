@@ -97,7 +97,8 @@ test('the game plays both chords of a shared bar, each for its half', () => {
   const E = [4, 8, 11];
   assert.deepEqual(stepChords('F', 8), Array(8).fill(F));
   assert.deepEqual(stepChords('F E', 8), [F, F, F, F, E, E, E, E]);
-  assert.deepEqual(stepChords('F E', 6), [F, F, F, E, E, E]);
+  assert.throws(() => stepChords('F E', 6), /can't share/, 'not in a waltz: the change would fall between beats');
+  assert.deepEqual(stepChords('F E F', 6), [F, F, E, E, F, F]);
 });
 
 test('levels: easy always, medium and hard where written', () => {

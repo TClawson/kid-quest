@@ -256,6 +256,25 @@ export function melodyShift(song) {
 
 const lengthText = (len) => (len === 1 ? '' : String(len));
 
+/**
+ * Which bars go on each line: [[from, to), ...], perLine to a line, the last lines shared out
+ * evenly. A long piece's one bar left over (a closing bar) joins the line before it.
+ */
+export function lineRanges(bars, perLine) {
+  const out = [];
+  if (bars % perLine === 1 && bars >= 3 * perLine) {
+    for (let at = 0; at < bars - 1; at += perLine) out.push([at, at + perLine]);
+    out[out.length - 1][1] = bars;
+    return out;
+  }
+  const per = Math.ceil(bars / Math.ceil(bars / perLine));
+  for (let at = 0; at < bars; at += per) out.push([at, Math.min(bars, at + per)]);
+  return out;
+}
+
+/** The mark over a closing bar's last notes: hold them. */
+const FERMATA = '!fermata!';
+
 /** The header line that writes "Swing" over the first bar of a song the game swings. */
 export const SWING_MARK = 'Q:"Swing"';
 
@@ -275,8 +294,6 @@ export function songAbc(id, o = {}) {
   const meter = meterOf(song);
   const sig = signature(song.key);
   const shift = melodyShift(song);
-  const lines = Math.ceil(song.lead.length / perLine);
-  const per = Math.ceil(song.lead.length / lines);
 
   const right = [];
   const words = [];
@@ -313,6 +330,8 @@ export function songAbc(id, o = {}) {
         }
         const chord = chords.find((c) => c.pos === pos);
         if (chord) text = `"${chordLabel(chord.name)}"${text}`;
+        // the closing bar's long note is held
+        if (song.ending && b === song.lead.length - 1 && e.note && k === 0) text = FERMATA + text;
         tokens.push({ text: gap + text, len });
         pos += len;
       });
@@ -322,7 +341,8 @@ export function songAbc(id, o = {}) {
     if (hands !== 'melody') {
       const low = Math.min(...barEvents(bar).filter((e) => e.note).map((e) => parseNote(e.note).midi + 12 * shift));
       const held = new Map();
-      left.push(chords.map((c) => leftHand(c.name, hands, c.len, sig, low, held)).join(' '));
+      const hand = chords.map((c) => leftHand(c.name, hands, c.len, sig, low, held)).join(' ');
+      left.push(song.ending && b === song.lead.length - 1 ? FERMATA + hand : hand);
     }
   });
 
@@ -337,8 +357,7 @@ export function songAbc(id, o = {}) {
     hands === 'melody' ? '' : 'V:L clef=bass',
   ].filter(Boolean);
   const body = [];
-  for (let at = 0; at < song.lead.length; at += per) {
-    const end = Math.min(song.lead.length, at + per);
+  for (const [at, end] of lineRanges(song.lead.length, perLine)) {
     const last = end === song.lead.length;
     const bars = (list) => `${list.slice(at, end).join(' | ')} ${last ? '|]' : '|'}`;
     body.push(hands === 'melody' ? bars(right) : `[V:R] ${bars(right)}`);

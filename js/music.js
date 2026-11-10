@@ -108,7 +108,8 @@ function voice(r, wave, f, t, dur, vol, env = 'hold', dest = r.out) {
   if (env === 'pluck') {
     // quick ring-out, like a steel drum or a bell
     g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(vol * 0.25, t + Math.min(dur, 0.35));
+    // (a short note rings down over most of its length, then fades: never a jump to silence)
+    g.gain.exponentialRampToValueAtTime(vol * 0.25, t + Math.min(dur * 0.8, 0.35));
     g.gain.linearRampToValueAtTime(0.0001, t + dur);
   } else {
     g.gain.setValueAtTime(vol, t);

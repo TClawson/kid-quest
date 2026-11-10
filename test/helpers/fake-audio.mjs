@@ -1,6 +1,7 @@
-// A stand-in for the browser's AudioContext that plays nothing and writes down every
-// oscillator the music engine starts: { f (Hz), t (seconds), midi, swept (a drum: its pitch
-// slides) }. For tests of what the game music plays (test/gamemusic.test.js).
+// A stand-in for the browser's AudioContext that plays nothing and writes down every sound
+// the music engine starts: oscillators as { f (Hz), t (seconds), midi, swept (a kick or a tom:
+// its pitch slides) }, and bursts of noise (snares and hats) as { noise: true, t }. For tests
+// of what the game music plays (test/gamemusic.test.js).
 
 const PARAMS = ['gain', 'frequency', 'Q', 'delayTime', 'detune', 'playbackRate', 'threshold', 'ratio', 'knee', 'attack', 'release'];
 
@@ -48,9 +49,11 @@ export function fakeAudio() {
 
     createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length) }; }
 
+    createBufferSource() { return node({ start: (t) => { played.push({ noise: true, t }); } }); }
+
     resume() { return Promise.resolve(); }
   }
-  for (const name of ['createGain', 'createBufferSource', 'createBiquadFilter', 'createDelay', 'createDynamicsCompressor', 'createPeriodicWave']) {
+  for (const name of ['createGain', 'createBiquadFilter', 'createDelay', 'createDynamicsCompressor', 'createPeriodicWave']) {
     FakeAudioContext.prototype[name] = () => node();
   }
   return { FakeAudioContext, played, contexts };

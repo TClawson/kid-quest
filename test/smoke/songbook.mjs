@@ -182,6 +182,10 @@ async function litBar(page, n, ms = 8000) {
     assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0');
   }
   await page.screenshot({ path: `${out}/5-two-chords.png`, fullPage: true });
+  // the plain lead sheet (shown when the engraver can't load) names both chords too
+  const plain = await page.evaluate(async () => { const m = await import('./js/songbook.js'); return [m.leadSheetHtml('show:bg-volcano'), m.leadSheetHtml('show:bg-castle'), m.leadSheetHtml('bg-ocean')]; });
+  assert.ok(plain[0].includes('<b>F E</b>') && plain[1].includes('<b>F B♭</b>'), 'the lead sheet names both chords of a shared bar');
+  assert.equal(plain[2].split('class="lead-bar').length - 1, 17, 'and has the closing bar');
   await page.click('[data-action="song-level"][data-val="easy"]');
   await page.click('[data-action="song-back"]');
   // Bubble Waltz ends with its closing bar: a 17th bar on D minor
@@ -189,6 +193,13 @@ async function litBar(page, n, ms = 8000) {
   await page.waitForSelector('#sheet.engraved svg');
   assert.equal(await page.locator('#sheet .abcjs-mm16').count() > 0, true, 'the closing bar is on the page');
   assert.equal((await page.locator('#sheet .abcjs-chord').allTextContents()).pop().trim(), 'Dm');
+  assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0');
+  for (const level of ['medium', 'hard', 'easy']) {
+    await page.click(`[data-action="song-level"][data-val="${level}"]`);
+    await page.waitForSelector(`#sheet.engraved[data-level="${level}"] svg`);
+    assert.equal(await page.locator('#sheet .abcjs-mm16').count() > 0, true, `${level}: the closing bar`);
+    assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0', `${level}: no warnings`);
+  }
   await page.locator('#sheet').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${out}/6-closing-bar.png`, fullPage: true });
   await ctx.close();

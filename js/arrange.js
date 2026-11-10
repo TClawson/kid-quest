@@ -5,7 +5,7 @@
 // Pure logic, no DOM.
 
 import { ARRANGEMENTS } from './arrangements.js';
-import { songById, signature, meterOf, chordLabel, SWING_MARK } from './sheetmusic.js';
+import { songById, signature, meterOf, chordLabel, lineRanges, SWING_MARK } from './sheetmusic.js';
 import { barChords } from './songs.js';
 
 const LETTERS = 'CDEFGAB';
@@ -169,8 +169,6 @@ export function arrangementAbc(id, level, o = {}, version = ARRANGEMENTS[id]?.[l
   const meter = meterOf(song);
   const sig = signature(song.key);
   const perLine = Math.max(1, o.perLine || 4);
-  const lines = Math.ceil(song.lead.length / perLine);
-  const per = Math.ceil(song.lead.length / lines);
 
   let carried = null; // the top note a tie from the bar before carries on
   const right = arr.rh.map((text, b) => {
@@ -197,8 +195,7 @@ export function arrangementAbc(id, level, o = {}, version = ARRANGEMENTS[id]?.[l
 
   const head = ['X:1', `M:${meter.meter}`, 'L:1/8', ...(song.swing ? [SWING_MARK] : []), `K:${song.key}`, '%%score {(R) | (L)}', 'V:R clef=treble', 'V:L clef=bass'];
   const body = [];
-  for (let at = 0; at < song.lead.length; at += per) {
-    const end = Math.min(song.lead.length, at + per);
+  for (const [at, end] of lineRanges(song.lead.length, perLine)) {
     const close = end === song.lead.length ? '|]' : '|';
     body.push(`[V:R] ${right.slice(at, end).join(' | ')} ${close}`);
     if (o.names) body.push(`w: ${words.slice(at, end).join(' | ')}`);

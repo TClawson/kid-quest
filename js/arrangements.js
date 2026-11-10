@@ -17,7 +17,7 @@ export const ARRANGEMENTS = {
         '!mp! A,3 C [A,CE]4', '[A,F]2 [CE]2 [A,C]3 E', '[EG]3 F [CE]2 C2', '[B,D]6 EG',
         '[CEA]4 [EB]2 [Ac]2', '[FA]3 G [A,F]4', '[B,G]2 [DB]2 [Bd]4', '[GB]6 AB',
         '!mf! [FAc]2 B2 [FA]2 [CF]2', '[Bd]2 c2 [GB]2 [DG]2', '[EAce]4 [Ec]2 [CA]2', '[EB]2 [Ec]2 [Gce]4',
-        '!f! [FAcf]2 [Ee]2 [Cc]2 [A,A]2', '[B,G]2 [DB]2 [GBd]4', '[B,E^G]3 A [EGB]4', '[E^GBe]4 [D^GB]4',
+        '!f! [FAcf]2 [Ee]2 [Cc]2 [A,A]2', '[B,G]2 [DB]2 [GBd]4', '[B,E^G]3 A [EGB]4', '[E^GBe]4 [DGB]4',
         '!fermata![CEA]8',
       ],
       lh: [
@@ -33,7 +33,7 @@ export const ARRANGEMENTS = {
         '!mp! A,2 (E/A/c/e/) E2 (e/c/A/E/)', '[A,F]2 [CE]2 C2 (F/A/c/A/)', 'G2 (c/e/g/e/) [CE]2 C2', '[B,D]4 (G,/A,/B,/C/ D/E/F/G/)',
         '!mf! [CEA]2 (E/A/c/e/) [EB]2 [EAc]2', '[CFA]2 (F/A/c/A/) [CF]2 (c/A/F/C/)', '[B,DG]2 [DGB]2 [GBd]2 (g/d/B/G/)', '[EGB]3 [EGB]- [EGB]2 AB',
         '!mp! [Ac]F [GB]F [FA]C FC', '[Bd]G [Ac]G [GB]D GD', '[ce]A EA [Ac]E [EA]C', '[GB]E [Gc]E [Gce]2 (G/c/e/g/)',
-        '!f! [Ff]c [Ee]c [Cc]A [A,A]F', '[B,DG]2 [DGB]2 [DGBd]2 (g/d/B/G/)', '[B,E^G]3 [EGB]- [EGB]2 [EGB]2', '[E^GBe]2 (e/d/c/B/) [D^GB]4',
+        '!f! [Ff]c [Ee]c [Cc]A [A,A]F', '[B,DG]2 [DGB]2 [DGBd]2 (g/d/B/G/)', '[B,E^G]3 [EGB]- [EGB]2 [EGB]2', '[E^GBe]3 d/c/ [DGB]4',
         '!fermata![A,CEA]8',
       ],
       lh: [
