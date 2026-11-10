@@ -13,6 +13,7 @@
 // synced record: kid.garden = {
 //   beds: [plot | null] x BEDS, trees: [plot | null] x TREES,
 //   kept: [{ seed, kind, at, until }],  // harvests kept in the house
+//   seeds: { seedId: count },            // seed packets bought in the shop, not planted yet
 //   n: a counter for plot ids,
 // }, plot = { id, seed, task, planted }. Decorations are shop items in kid.owned, and
 // kid.gardenDecor says which owned one stands in each spot (like kid.home for furniture).
@@ -106,8 +107,24 @@ export function placeDecor(kid, item) {
 export function gardenOf(kid) {
   const g = kid?.garden || {};
   const fill = (list, n) => Array.from({ length: n }, (_, i) => (list && list[i] && seedById(list[i].seed) ? list[i] : null));
-  return { beds: fill(g.beds, BEDS), trees: fill(g.trees, TREES), kept: Array.isArray(g.kept) ? g.kept : [], n: g.n || 0 };
+  const seeds = {};
+  for (const [id, c] of Object.entries(g.seeds || {})) if (seedById(id) && c > 0) seeds[id] = Math.floor(c);
+  return { beds: fill(g.beds, BEDS), trees: fill(g.trees, TREES), kept: Array.isArray(g.kept) ? g.kept : [], seeds, n: g.n || 0 };
 }
+
+/** Buy a seed packet in the shop: kid.spent goes up by its price. The caller checks the coins. */
+export function buySeed(kid, seedId) {
+  const seed = seedById(seedId);
+  if (!seed) return false;
+  const g = gardenOf(kid);
+  g.seeds[seed.id] = (g.seeds[seed.id] || 0) + 1;
+  kid.garden = g;
+  kid.spent = (kid.spent || 0) + seed.price;
+  return true;
+}
+
+/** How many packets of a seed the kid has waiting to be planted. */
+export const seedCount = (kid, seedId) => gardenOf(kid).seeds[seedId] || 0;
 
 /** The chores a plant can stand for: the kid's quest tasks (not the bonus exercise). */
 export const plantableTasks = (kid) => (kid?.tasks || []).filter((t) => !isExercise(t));
@@ -164,9 +181,8 @@ export function sellPrice(info) {
 const slotList = (g, where) => (where === 'trees' ? g.trees : g.beds);
 
 /**
- * Plant a seed in an empty bed (where 'beds') or tree spot (where 'trees'), for one of the
- * kid's chores. Pays for the seed (kid.spent). Returns an error string, or null when planted.
- * The caller checks the kid has the coins.
+ * Plant one of the kid's seed packets in an empty bed (where 'beds') or tree spot (where
+ * 'trees'), for one of the kid's chores. Returns an error string, or null when planted.
  */
 export function plant(kid, where, index, seedId, taskId, today) {
   const seed = seedById(seedId);
@@ -177,10 +193,12 @@ export function plant(kid, where, index, seedId, taskId, today) {
   const list = slotList(g, where);
   if (index < 0 || index >= list.length) return 'No such spot.';
   if (list[index]) return 'Something is already growing there.';
+  if (!g.seeds[seed.id]) return 'Buy a packet of these seeds in the shop first.';
   const n = g.n + 1;
   list[index] = { id: `p${n}`, seed: seed.id, task: taskId, planted: today };
+  g.seeds[seed.id] -= 1;
+  if (!g.seeds[seed.id]) delete g.seeds[seed.id];
   kid.garden = { ...g, n };
-  kid.spent = (kid.spent || 0) + seed.price;
   return null;
 }
 

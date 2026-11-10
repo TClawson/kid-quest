@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyState, addDays } from '../js/logic.js';
 import {
   SEEDS, KINDS, DECOR, GARDEN_SPOTS, seedById, gardenOf, plant, digUp, relink, harvest, plantInfo, sellPrice,
-  houseHarvest, gardenView, gardenLayout, placeDecor, watered, setWatered, thirsty, BEDS, TREES,
+  houseHarvest, gardenView, buySeed, seedCount, gardenLayout, placeDecor, watered, setWatered, thirsty, BEDS, TREES,
 } from '../js/gardenrules.js';
 import { itemById } from '../js/items.js';
 
@@ -12,21 +12,28 @@ const every = [0, 1, 2, 3, 4, 5, 6];
 
 function setup() {
   const s = emptyState();
-  const kid = { id: 'k1', name: 'Ava', tasks: [{ id: 'bed', name: 'Make bed', period: 'morning', days: every }, { id: 'run', name: 'Run', period: 'exercise', days: every }], startDate: addDays(day, -200), owned: [], spent: 0 };
+  const kid = { id: 'k1', name: 'Ava', tasks: [{ id: 'bed', name: 'Make bed', period: 'morning', days: every }, { id: 'run', name: 'Run', period: 'exercise', days: every }], startDate: addDays(day, -200), owned: [], spent: 0, garden: { seeds: Object.fromEntries(SEEDS.map((x) => [x.id, 9])) } };
   s.kids.push(kid);
   return { s, kid };
 }
 const mark = (s, key, id = 'bed', status = 'done') => { s.log[key] ||= {}; s.log[key].k1 ||= { tasks: {} }; s.log[key].k1.tasks[id] = { status }; };
 const memStore = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
 
-test('planting pays for the seed and needs a chore and the right spot', () => {
+test('seeds are bought as packets, then planted for a chore in the right spot', () => {
   const { kid } = setup();
+  kid.garden = {};
+  assert.match(plant(kid, 'beds', 0, 'seed-tulip', 'bed', day), /shop first/);
+  buySeed(kid, 'seed-tulip'); buySeed(kid, 'seed-tulip'); buySeed(kid, 'seed-apple');
+  assert.equal(kid.spent, 35);
+  assert.equal(seedCount(kid, 'seed-tulip'), 2);
+  kid.spent = 0;
   assert.equal(plant(kid, 'beds', 0, 'seed-tulip', 'nope', day), 'Pick one of your chores for it.');
   assert.equal(plant(kid, 'beds', 0, 'seed-tulip', 'run', day), 'Pick one of your chores for it.', 'not the bonus exercise');
   assert.match(plant(kid, 'beds', 0, 'seed-apple', 'bed', day), /tree spots/);
   assert.match(plant(kid, 'trees', 0, 'seed-tulip', 'bed', day), /beds/);
   assert.equal(plant(kid, 'beds', 0, 'seed-tulip', 'bed', day), null);
-  assert.equal(kid.spent, 5);
+  assert.equal(kid.spent, 0, 'paid for when bought');
+  assert.equal(seedCount(kid, 'seed-tulip'), 1);
   assert.match(plant(kid, 'beds', 0, 'seed-carrot', 'bed', day), /already/);
   const g = gardenOf(kid);
   assert.equal(g.beds.length, BEDS);
