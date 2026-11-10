@@ -76,9 +76,10 @@ function room(doc, data) {
   return roomCache;
 }
 
-// what a station says while it's still being built (it gets its own screen soon)
+// what a station says while it has no screen of its own (the Note-o-Matic works at the studio
+// desk for now: studio.js, "Turn it into notes")
 const SOON = {
-  lab: () => 'Beep boop! The Note-o-Matic will turn your piano playing into other instruments. It\'s nearly finished!',
+  lab: () => 'Beep boop! I turn your piano playing into other instruments. Record at the studio desk, tap your recording, and press "Turn it into notes"!',
 };
 
 function mount(section, handlers) {
