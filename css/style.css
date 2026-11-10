@@ -674,3 +674,8 @@ span.dot.other { background: #f76707; }
 @keyframes map-quake { 0% { transform: translate(-2px, 1px); } 50% { transform: translate(2px, -1px); } }
 .quest-map.show-on .map-visitor, .quest-map.show-on .map-buddy { animation: show-hop 0.5s steps(2, end) infinite; }
 @keyframes show-hop { 50% { translate: 0 -8px; } }
+
+/* weekly rewards a parent still has to hand over, above the parent tabs */
+.reward-remind { display: grid; gap: 8px; margin: 0 0 12px; }
+.reward-remind .list-row { background: #fff9db; box-shadow: 0 0 0 3px #f0c040; }
+.toast-btn { margin-left: 10px; background: none; border: 2px solid currentColor; color: inherit; font: inherit; border-radius: 6px; padding: 2px 10px; cursor: pointer; }
