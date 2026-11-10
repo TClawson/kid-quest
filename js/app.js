@@ -23,6 +23,9 @@ import { musicTier, daysToMusicHouse, studioOpen, tierInfo } from './musicrules.
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
 import { applyGrants } from './grants.js';
 import { furnitureThumb } from './houseart.js';
+import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
+import { seedThumb, decorThumb } from './gardenart.js';
+import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
 import { leaderboard, weekOf } from './leaderboard.js';
 import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
@@ -1039,6 +1042,7 @@ function villageView(kid, s, entry, mood) {
   // (its house, the music house, or out in the village)
   const place = placeOf(kid.id, today());
   if (place === 'house') return houseView(kid, list, mood);
+  if (place === 'garden') return gardenScreen(kid, list, mood);
   const prog = progressFor(kid);
   const tier = musicTier(prog);
   if (place === 'music' && tier) return musicView(kid, list, mood, tier);
@@ -1062,6 +1066,7 @@ function villageView(kid, s, entry, mood) {
     planned,
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
     music: { tier, left: tier ? 0 : daysToMusicHouse(prog) },
+    garden: { thirsty: gardenThirsty(kid) },
   });
 }
 
@@ -1130,6 +1135,8 @@ function houseView(kid, list, mood) {
     quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
     tank: tankFish(kid),
     fish: bookCount(kid.fishRecords).caught,
+    garden: { thirsty: gardenThirsty(kid) },
+    harvest: houseHarvest(state, kid, t),
   });
 }
 
@@ -1139,6 +1146,7 @@ const houseHandlers = {
   onLeaderboard: () => openLeaderboard(kidById(ui.kidId)),
   onTank: () => openTankPicker(kidById(ui.kidId)),
   onFishBook: () => openFishBook(kidById(ui.kidId)),
+  onGarden: () => goGarden('house'),
   onExit: () => {
     const kid = kidById(ui.kidId);
     if (!kid) return;
@@ -1146,6 +1154,83 @@ const houseHandlers = {
     cameOut(kid.id, kidTheme(kid));
     render();
   },
+  sound: () => sounds.tap(),
+};
+
+// ---------- the garden behind the house (garden.js, rules in gardenrules.js) ----------
+
+/** How many plants are waiting for water: their chore is done today and they haven't been watered. */
+function gardenThirsty(kid) {
+  const g = gardenOf(kid);
+  if (![...g.beds, ...g.trees].some(Boolean)) return 0;
+  const t = today();
+  return thirsty(gardenView(state, kid, t), kid.id, t).length;
+}
+
+/** The buddy walks through to the garden (from the village or from inside the house). */
+function goGarden(from) {
+  const kid = kidById(ui.kidId);
+  if (!kid) return;
+  setPlace(kid.id, today(), 'garden');
+  cameInGarden(kid.id, from);
+  render();
+}
+
+function gardenScreen(kid, list, mood) {
+  const t = today();
+  const view = gardenView(state, kid, t);
+  return gardenHtml({
+    kidId: kid.id,
+    kidName: kid.name,
+    color: /^#[0-9a-f]{6}$/i.test(kid.color || '') ? kid.color : '#e03131',
+    buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
+    view,
+    thirsty: thirsty(view, kid.id, t),
+    tasks: plantableTasks(kid).map((x) => ({ id: x.id, name: x.name, icon: x.icon })),
+    seeds: gardenOf(kid).seeds,
+    theme: kidTheme(kid),
+    today: t,
+  });
+}
+
+const gardenHandlers = {
+  onPlant: (where, index, seedId, taskId) => {
+    const kid = kidById(ui.kidId);
+    const err = kid ? plant(kid, where, index, seedId, taskId, today()) : 'No kid.';
+    if (!err) { sounds.task(); save(); }
+    return err;
+  },
+  onDig: (where, index) => {
+    const kid = kidById(ui.kidId);
+    if (kid && digUp(kid, where, index)) save();
+  },
+  onRelink: (where, index, taskId) => {
+    const kid = kidById(ui.kidId);
+    if (kid && relink(kid, where, index, taskId, today())) save();
+  },
+  onHarvest: (index, how) => {
+    const kid = kidById(ui.kidId);
+    const r = kid ? harvest(state, kid, index, how, today()) : 'No kid.';
+    if (typeof r !== 'string') { sounds.day(); save(); }
+    return r;
+  },
+  onWatered: (ids) => { const kid = kidById(ui.kidId); if (kid) setWatered(kid.id, today(), ids); },
+  onShop: () => { ui.slot = 'garden'; actions.wardrobe(); },
+  onHouse: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setInside(kid.id, today(), true);
+    cameIn(kid.id);
+    render();
+  },
+  onVillage: () => {
+    const kid = kidById(ui.kidId);
+    if (!kid) return;
+    setPlace(kid.id, today(), 'out');
+    cameOut(kid.id, kidTheme(kid));
+    render();
+  },
+  refresh: () => render(),
   sound: () => sounds.tap(),
 };
 
@@ -1341,6 +1426,7 @@ const villageHandlers = {
     cameIn(kid.id);
     render();
   },
+  onGarden: () => goGarden('out'),
   onMusic: () => {
     const kid = kidById(ui.kidId);
     if (!kid) return;
@@ -1563,12 +1649,96 @@ function viewWardrobe() {
           </button>`;
   }).join('')}
       </div>
+      ${ui.slot === 'garden' ? gardenShop(kid, prog) : ''}
       ${sportTab ? movesList(kid, prog) : ''}
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
       ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish.</p>` : ''}
       ${ui.slot === 'home' ? '<p class="muted small">Every task you finish earns coins to spend on furniture. Furniture goes in your buddy\'s house, and every buddy you have can use it. Each spot holds one thing at a time: tap something you own to put it in, or tap it again to take it out. Walk your buddy in the front door of your house in the village to see it!</p>' : ''}
-      ${sportTab || ui.slot === 'home' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
+      ${sportTab || ui.slot === 'home' || ui.slot === 'garden' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
+}
+
+// ---------- the Garden tab of the shop (seed packets and garden decorations, see gardenrules.js) ----------
+
+const gardenThumbs = new Map();
+/** A seed packet's or decoration's picture for the shop, drawn once each (gardenart.js). */
+function gardenThumb(kind, id) {
+  const key = `${kind}|${id}`;
+  if (!gardenThumbs.has(key)) {
+    let url = '';
+    try { url = (kind === 'seed' ? seedThumb(document, id) : decorThumb(document, id))?.toDataURL() || ''; } catch { url = ''; }
+    gardenThumbs.set(key, url);
+  }
+  return gardenThumbs.get(key);
+}
+
+function gardenShop(kid, prog) {
+  const layout = gardenLayout(kid);
+  const owned = new Set(prog.owned);
+  const seedCard = (sd) => {
+    const have = seedCount(kid, sd.id);
+    const days = KINDS[sd.kind].days;
+    return `<button class="item shop garden-seed" data-action="garden-buy" data-kind="seed" data-id="${sd.id}">
+            <span class="spot-tag">${sd.icon} ${esc(KINDS[sd.kind].name)}</span>
+            <span class="item-art"><img class="home-thumb" src="${gardenThumb('seed', sd.id)}" alt=""></span>
+            <span class="item-name">${esc(sd.name)}</span>
+            <small>Grows in ${days} days${have ? ` · you have ${have}` : ''}</small>
+            <span class="price ${prog.coins >= sd.price ? 'can' : ''}">🪙 ${sd.price}</span>
+          </button>`;
+  };
+  const decorCard = (d) => {
+    const mine = !d.price || owned.has(d.id);
+    const on = layout[d.spot]?.id === d.id;
+    const spot = gardenSpotById(d.spot);
+    return `<button class="item ${mine ? '' : 'locked'} ${d.price ? 'shop' : ''} ${on ? 'on' : ''}" data-action="garden-buy" data-kind="decor" data-id="${d.id}">
+            <span class="spot-tag">${spot.icon} ${esc(spot.name)}</span>
+            <span class="item-art"><img class="home-thumb" src="${gardenThumb('decor', d.id)}" alt=""></span>
+            <span class="item-name">${esc(d.name)}</span>
+            <small>${mine ? (on ? 'In your garden' : 'Tap to use') : `<span class="price ${prog.coins >= d.price ? 'can' : ''}">🪙 ${d.price}</span>`}</small>
+          </button>`;
+  };
+  return `
+      <h2 class="garden-h">🌱 Seed packets</h2>
+      <p class="muted small">Buy a packet, then plant it in your garden behind your buddy's house. Each plant grows a little every day you do the chore you pick for it.</p>
+      <div class="items">${SEEDS.map(seedCard).join('')}</div>
+      <h2 class="garden-h">🪴 Garden things</h2>
+      <div class="items">${DECOR.filter((d) => d.price || layout[d.spot]?.id !== d.id || d.price === undefined).map(decorCard).join('')}</div>
+      <p class="muted small">Garden things go in your buddy's garden, for every buddy you have. Each spot holds one thing at a time: tap something you own to put it out, or tap it again to take it away. Walk your buddy through the back door of your house to see it!</p>`;
+}
+
+function buyGarden(kid, kind, id, prog) {
+  const item = kind === 'seed' ? seedById(id) : decorById(id);
+  if (!item) return;
+  if (!item.price) { toggleDecor(kid, item); return; }
+  if (kind === 'decor' && prog.owned.includes(item.id)) { toggleDecor(kid, item); return; }
+  if (prog.coins < item.price) {
+    sounds.error();
+    toast(`${item.price - prog.coins} more coins to go! Finish tasks to earn them.`);
+    return;
+  }
+  const note = kind === 'seed'
+    ? `<p class="muted small">${esc(KINDS[item.kind].name)} grow in ${KINDS[item.kind].days} days of doing the chore you pick. You'll plant it in your garden.</p>`
+    : `<p class="muted small">It goes in your buddy's garden (${esc(gardenSpotById(item.spot).name.toLowerCase())}), for every buddy you have.</p>`;
+  openModal(`
+    <div class="celebrate">
+      <div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${gardenThumb(kind, item.id)}" alt=""></div>
+      <h1>Buy ${esc(kind === 'seed' ? `${item.name} seeds` : item.name)}?</h1>
+      <p>It costs <b>🪙 ${item.price}</b>. You'll have ${prog.coins - item.price} coins left.</p>
+      ${note}
+      <div class="stack">
+        <button class="btn huge" data-action="garden-buy-confirm" data-kind="${kind}" data-id="${item.id}">Buy it!</button>
+        <button class="btn ghost" data-action="modal-close">Keep saving</button>
+      </div>
+    </div>`);
+}
+
+/** Put a garden thing out in its spot (or take it away if it's there already). */
+function toggleDecor(kid, item) {
+  const was = gardenLayout(kid)[item.spot]?.id === item.id;
+  kid.gardenDecor = placeDecor(kid, item);
+  sounds.task(); save(); render();
+  const basic = gardenSpotById(item.spot).basic;
+  toast(was ? (basic ? `Back to the ${decorById(basic).name.toLowerCase()}` : `${item.name} put away`) : `${item.name} is in your garden! 🌱`);
 }
 
 /** Every move, grouped by gear: which ones this kid has, and what the rest need. Tapping one shows it. */
@@ -2067,6 +2237,7 @@ function render() {
   paintQuestMaps($app);
   mountVillages($app, villageHandlers);
   mountHouses($app, houseHandlers);
+  mountGardens($app, gardenHandlers);
   mountMusicHouses($app, musicHandlers);
   mountSongbook($app);
   mountStudio($app);
@@ -2173,6 +2344,30 @@ const actions = {
     else { outfit[item.slot] = item.id; putAwayOther(kid, item.slot); }
     kid.newItems = (kid.newItems || []).filter((id) => id !== item.id);
     sounds.task(); save(); render();
+  },
+  'garden-buy': (el) => {
+    const kid = kidById(ui.kidId);
+    if (kid) buyGarden(kid, el.dataset.kind, el.dataset.id, progressFor(kid));
+  },
+  'garden-buy-confirm': (el) => {
+    const kid = kidById(ui.kidId);
+    const kind = el.dataset.kind;
+    const item = kind === 'seed' ? seedById(el.dataset.id) : decorById(el.dataset.id);
+    const prog = kid && progressFor(kid);
+    if (!kid || !item?.price || prog.coins < item.price) { closeModal(); return; }
+    if (kind === 'seed') buySeed(kid, item.id);
+    else {
+      if (prog.owned.includes(item.id)) { closeModal(); return; }
+      kid.spent = (kid.spent || 0) + item.price;
+      addOwned(kid, item);
+      kid.gardenDecor = { ...(kid.gardenDecor || {}), [item.spot]: item.id };
+    }
+    save();
+    closeModal();
+    sounds.day();
+    confetti(60, 1400);
+    toast(kind === 'seed' ? `${item.name} seeds are yours! Plant them in your garden.` : `${item.name} is in your garden!`);
+    render();
   },
   'music-toggle': () => { state.settings.music = state.settings.music === false; save(); render(); },
   'quest-mode': (el) => { state.settings.questView = el.dataset.mode; save(); render(); },

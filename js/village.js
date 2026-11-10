@@ -219,6 +219,20 @@ function musicDoor(L, music) {
   return `<button class="v-music ${tier ? 'open' : 'locked'}" style="left:${h.x}px;top:${h.y - 12}px;width:${h.w}px;height:${h.h + 12}px;z-index:${h.y + h.h - 1}" aria-label="${label}">${art}</button>`;
 }
 
+// The sign beside the kid's house that points round the back to the garden (garden.js). A 💧
+// count shows when plants there are waiting for water.
+function gardenSign(L, garden, people = []) {
+  const h = L.home;
+  // beside the house, on the side with room: not off the map and not on a villager (or their chore bubble)
+  const top = h.y + h.h - 18;
+  const spots = [h.x + h.w + 3, h.x - 35, h.x + h.w + 3 + 14].filter((x) => x >= 2 && x + 32 <= L.W - 2);
+  const hits = (x) => people.filter((p) => p.x + 10 > x && p.x - 10 < x + 32 && p.y + 3 > top && p.y - 38 < top + 18).length;
+  const left = spots.sort((a, b) => hits(a) - hits(b))[0] ?? h.x + h.w + 3;
+  const n = garden?.thirsty || 0;
+  const label = n ? `Go to the garden (${n} ${n === 1 ? 'plant is' : 'plants are'} thirsty)` : 'Go to the garden';
+  return `<button class="v-garden" style="left:${left}px;top:${top}px;z-index:450" aria-label="${label}"><span class="v-garden-post"></span><span class="v-garden-board">🌱 Garden${n ? `<i class="v-garden-n">💧${n}</i>` : ''}</span></button>`;
+}
+
 /**
  * The village for a kid. v: {
  *   theme: the kid's Places background (which map's village),
@@ -230,6 +244,7 @@ function musicDoor(L, music) {
  *   landmark: { html, name, w, h } or null: a finished treasure map's landmark,
  *   music: { tier, left }: the music house's look (0 while it is locked) and piano days still
  *     to go before it opens,
+ *   garden: { thirsty }: how many plants in the garden are waiting for water (the sign by the house),
  * }
  */
 export function villageHtml(v) {
@@ -274,6 +289,7 @@ export function villageHtml(v) {
           <div class="v-label home-label" style="left:${L.home.x + L.home.w / 2}px;top:${L.home.y + 10}px">${esc(v.kidName)}'s house</div>
           <button class="v-home" style="left:${L.home.x}px;top:${L.home.y - 12}px;width:${L.home.w}px;height:${L.home.h + 12}px;z-index:${L.home.y + L.home.h - 2}" aria-label="Go into ${esc(v.kidName)}'s house"><span class="v-home-door" style="left:${L.home.w / 2}px">🚪</span></button>
           ${musicDoor(L, data.music)}
+          ${gardenSign(L, v.garden, people)}
           ${am ? `<div class="v-label period" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
           ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
           ${folk}${keeper}
@@ -524,6 +540,7 @@ function land(L, color, areas = []) {
  *   onShop(): the kid wants to go into the buddy shop,
  *   onHome(): the buddy went in the door of the kid's house,
  *   onMusic(): the buddy went in the door of the music house,
+ *   onGarden(): the buddy went through to the garden behind the kid's house,
  *   onVisitor(el), onLandmark(el, layer), fishCatch(rod),
  *   sound(name): a little sound ('tap', 'talk'),
  * }
@@ -759,6 +776,11 @@ function mount(section, handlers) {
       me.face = 1;
       buddyEl.classList.add('going-in');
       setTimeout(() => handlers.onHome?.(), 380);
+    } else if (goal.garden) {
+      // round the back of the house (garden.js takes it from here)
+      me.face = 1;
+      buddyEl.classList.add('going-in');
+      setTimeout(() => handlers.onGarden?.(), 380);
     } else if (goal.music) {
       if (data.music.tier) {
         // in through the music hall's door (musichouse.js takes it from here)
@@ -901,6 +923,7 @@ function mount(section, handlers) {
     if (who) { handlers.sound?.('tap'); goTalk(personById(who.dataset.vid)); return; }
     if (e.target.closest('.v-chest')) { goChest(); return; }
     if (e.target.closest('.v-home')) { handlers.sound?.('tap'); walkTo(L.start.x, L.start.y, { home: true }); return; }
+    if (e.target.closest('.v-garden')) { handlers.sound?.('tap'); walkTo(L.start.x, L.start.y, { garden: true }); return; }
     if (e.target.closest('.v-music') && L.music) { handlers.sound?.('tap'); walkTo(L.music.door.x, L.music.door.y, { music: true }); return; }
     if (!dialog.hidden) { closeDialog(); return; }
     const r = view.getBoundingClientRect();

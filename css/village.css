@@ -236,3 +236,13 @@
 .v-home:hover .v-home-door, .v-home:focus-visible .v-home-door { opacity: 0.9; }
 .v-buddy.going-in { animation: v-go-in 0.4s steps(4, end) forwards; }
 @keyframes v-go-in { to { transform: translate(-50%, -110%); opacity: 0; } }
+
+/* the garden sign beside the kid's house: a little post with a board (js/garden.js is round the back) */
+.v-garden { position: absolute; width: 30px; height: 18px; padding: 0; border: 0; background: none; cursor: pointer; }
+.v-garden-post { position: absolute; left: 3px; bottom: 0; width: 2px; height: 9px; background: #6e3d1a; border-right: 1px solid var(--px-ink); }
+.v-garden-board {
+  position: absolute; left: 0; top: 0; white-space: nowrap; font: 700 6px/1 var(--px-font); color: var(--px-ink);
+  background: #fff8e7; border: 1px solid var(--px-ink); border-radius: 1px; padding: 1.5px 2.5px 1px; box-shadow: 0 1px 0 var(--px-ink);
+}
+.v-garden-n { font-style: normal; margin-left: 2px; color: #1c7ed6; }
+.v-garden:hover .v-garden-board, .v-garden:focus-visible .v-garden-board { background: #d3f9d8; }
