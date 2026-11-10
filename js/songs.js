@@ -58,7 +58,7 @@ export const SONGS = {
       'Bb5 - A5 G5 D5 - G5 Bb5', 'A5 - G5 E5 C5 - D5 E5', 'F5 - C5 - A4 - C5 -', 'F5 - - - . . . .',
     ],
     chords: ['F', 'Dm', 'Gm', 'C', 'F', 'Dm', 'Bb', 'C', 'Bb', 'C', 'Am', 'Dm', 'Gm', 'C', 'F', 'F'],
-    arp: { from: 8, wave: 'pulse12', vol: 0.05 },
+    arp: { from: 8, wave: 'triangle', env: 'pluck', vol: 0.13 }, // a second steel drum, under the tune
     bass: [[R, 2], null, null, [F, 2], [R, 2], null, [F, 2], null],
     drums: [['k...k...', '...s..s.', 'h.h.h.h.'], ['k...k...', '...s..s.', 'h.hhh.hh'], ['k...k...', '...s..s.', 'h.hhh.hh', '.......t'], ['k...k...', '...s..s.', 'h.hhh.hh', '..t....t']],
     fill: ['k...k...', '...s....', 'h.hh....', '....t.tt'],
@@ -213,7 +213,7 @@ export const SONGS = {
       'A5 - C6 - E6 - - -', 'D6 - - - F#6 - A6 -', 'G6 - - - D6 - B5 -', 'G5 - - - . . . .',
     ],
     chords: ['C', 'D', 'C', 'D', 'Em', 'Bm', 'C', 'D', 'C', 'D', 'Bm', 'Em', 'Am', 'D', 'G', 'G'],
-    arp: { wave: 'pulse12', octave: 5, order: 'updown', vol: 0.05 },
+    arp: { from: 4, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.05 }, // the sparkle waits for the tune's second line
     bass: [[R, 2, 3.5], null, null, null, [F, 2, 3.5], null, null, null],
     drums: [['........', '........', '..h...h.'], ['k.......', '........', '..h...h.'], ['k.......', '....s...', '..h...h.'], ['k.....k.', '....s...', '..h.h.h.']],
     fill: ['k.......', '....s...', '..h.....', '......tt'],
@@ -241,6 +241,7 @@ export const SHOW_SONGS = {
     bpm: 150, swing: 0.2,
     lead: ['D5 - A4 D5 F5 - E5 D5', 'C5 - G4 C5 E5 - D5 C5', 'Bb4 - D5 F5 A5 - G5 F5', 'A5 - C#5 E5 A5 - . .', 'D6 - A5 - D5 - - -'],
     chords: ['Dm', 'C', 'Bb', 'A', 'Dm'],
+    arp: { from: 1, wave: 'pulse12', octave: 4, vol: 0.045 },
     bass: [[R, 2], null, [F, 1], [R, 2], null, [F, 1], [R, 2], null],
     drums: [['k..k..k.', '...s...s', 'h.hh.hh.']],
     fill: ['k.k.k...', '....s...', '....o...'],
