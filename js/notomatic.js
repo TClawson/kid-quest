@@ -365,24 +365,21 @@ export function topLine(notes) {
   for (const n of notes) { if (!by.has(n.at)) by.set(n.at, []); by.get(n.at).push(n); }
   const strikesOf = [...by.entries()].sort((a, b) => a[0] - b[0]).map(([, list]) => list);
   const tops = strikesOf.map((list) => { const r = list.filter((n) => n.right); return r.length ? r.reduce((a, n) => (n.midi > a.midi ? n : a)) : null; });
-  const around = (i) => {
-    const near = [];
-    for (let j = i - 1; j >= 0 && near.length < 3; j -= 1) if (tops[j]) near.push(tops[j].midi);
-    let after = 0;
-    for (let j = i + 1; j < tops.length && after < 3; j += 1) if (tops[j]) { near.push(tops[j].midi); after += 1; }
-    near.sort((a, b) => a - b);
-    return near.length ? near[near.length >> 1] : null;
-  };
+  const middle = (list) => (list.length ? [...list].sort((x, y) => x - y)[list.length >> 1] : null);
   const out = [];
   tops.forEach((top, i) => {
     if (!top) return;
-    const mid = around(i);
+    const before = []; const after = [];
+    for (let j = i - 1; j >= 0 && before.length < 3; j -= 1) if (tops[j]) before.push(tops[j].midi);
+    for (let j = i + 1; j < tops.length && after.length < 3; j += 1) if (tops[j]) after.push(tops[j].midi);
+    const mid = middle([...before, ...after]);
     let pick = top;
     if (mid != null) {
-      const under = strikesOf[i].filter((n) => OVERTONES.includes(top.midi - n.midi)).sort((a, b) => Math.abs(a.midi - mid) - Math.abs(b.midi - mid))[0];
+      const under = strikesOf[i].filter((n) => OVERTONES.includes(top.midi - n.midi)).sort((x, y) => Math.abs(x.midi - mid) - Math.abs(y.midi - mid))[0];
       if (under && Math.abs(top.midi - mid) > 9 && Math.abs(under.midi - mid) + 4 < Math.abs(top.midi - mid)) pick = under;
-      if (pick.midi < mid - 8) return;
     }
+    // far under the tune on both sides (a tune that moves down and stays there is still the tune)
+    if (before.length && after.length && pick.midi < middle(before) - 8 && pick.midi < middle(after) - 8) return;
     out.push(pick);
   });
   return out;
@@ -440,10 +437,11 @@ function setNotes(groups, places, grid, split) {
  *   beats   how long the take is, in beats
  *   swing   how much the mix swings (0: it doesn't)
  *   barAt   the beat of the bar the take starts on (0 is the bar's first)
- * Returns { key, onBeat, heard, tidy, band }: the key the playing is in (null when too little
- * was played), whether it kept to the clicks, and for each reading its parts
+ * Returns { key, onBeat, heard, tidy, band, chords }: the key the playing is in (null when too
+ * little was played), whether it kept to the clicks, and for each reading its parts
  * [{ role: 'tune' | 'band', notes: [{ at, len, midi }] (steps), beats, follows }]; band is
- * null when there is no tune to make a band for (fewer than 4 notes).
+ * null when there is no tune to make a band for (fewer than 4 notes). chords (with a band
+ * only) are the band's: [{ at, len (steps), name ('I', 'vi', ...), root (0-11), minor }].
  */
 export function readings(heard, { bpm, meter = 4, lead = 0, beats, swing = 0, barAt = 0 }) {
   const steps = 2 * beats;
@@ -504,7 +502,7 @@ export function readings(heard, { bpm, meter = 4, lead = 0, beats, swing = 0, ba
       const band = bandPart(chords, { bar, under }).map((n) => ({ ...n, midi: fold(n.midi) }));
       const bandBeats = Math.max(tidyBeats, Math.ceil(to / 2));
       result.band = [part('tune', baked(tune), tidyBeats, follows), part('band', baked(band), bandBeats, follows)];
-      result.chords = chords.map((c) => ({ at: c.at, len: c.len, name: c.name }));
+      result.chords = chords.map((c) => ({ at: c.at, len: c.len, name: c.name, root: c.root, minor: c.third === 3 }));
     }
   }
   return result;

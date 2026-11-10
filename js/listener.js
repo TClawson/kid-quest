@@ -36,9 +36,10 @@ export const SETTINGS = {
   rho: 0.2, // ... and rises by this fraction of what the key was already sounding
   jump: 1, // the jump itself must be this fraction of alpha's loudness
   minGap: 0.15, // seconds between two strikes of one key
+  clear: 0.08, // ... and stands this far out of what is not piano at all (hiss, a room's hum), or it is not a note
   offFrac: 0.25, // a note ends when it falls to this fraction of its peak
   susFrom: 4, susTo: 9, // looks after the strike where the note's own loudness is read
-  ghost: 2, // an overtone: a note this many times softer than a note struck with it, an overtone's distance below
+  ghost: 3, // an overtone: a note this many times softer than a note struck with it, an overtone's distance below
   knock: 0.6, knockBelow: 58, // a key's knock: a low note that fades to under this at once (see pickNotes)
   cluster: 1, // of two neighbouring keys struck in one instant, the one this many times softer goes
   clickNear: 0.07, // seconds: a note this near a known click must keep sounding after it (see pickNotes)
@@ -349,7 +350,7 @@ export function factor(spec, keys, S = SETTINGS, { rate = S.rate, pitches = [], 
     }
     if (progress) progress((it + 1) / total);
   }
-  return { H, nK, T };
+  return { H, nK, nN, T };
 }
 
 /**
@@ -369,6 +370,9 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
   const row = (p) => H.subarray(p * T, (p + 1) * T);
   const med = (h, from, to) => { const v = []; for (let u = Math.max(0, from); u <= Math.min(T - 1, to); u += 1) v.push(h[u]); v.sort((x, y) => x - y); return v.length ? v[v.length >> 1] : 0; };
   const mean = (h, from, to) => { let s = 0; let c = 0; for (let u = Math.max(0, from); u <= Math.min(T - 1, to); u += 1) { s += h[u]; c += 1; } return c ? s / c : 0; };
+  // how loud everything that is not a piano string is, look by look
+  const other = new Float32Array(T);
+  for (let q = 0; q < (fac.nN || 0); q += 1) { const h = row(nK + q); for (let t = 0; t < T; t += 1) other[t] += h[t]; }
   const notes = [];
   for (let p = 0; p < nK; p += 1) {
     const h = row(p);
@@ -385,6 +389,8 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
       const before = med(h, t - S.susTo, t - S.susFrom);
       const strength = med(h, t + S.susFrom, t + S.susTo) - before;
       if (strength < floor || strength < S.rho * before) continue;
+      // in a recording of a room with no piano in it, the "loud notes" are only the hiss falling on a key
+      if (strength < S.clear * mean(other, t + S.susFrom, t + S.susTo)) continue;
       let peak = 0; for (let u = t; u <= Math.min(T - 1, t + 10); u += 1) if (h[u] > peak) peak = h[u];
       notes.push({ p, t, peak, strength, midi: keys[p].midi });
       last = t;
