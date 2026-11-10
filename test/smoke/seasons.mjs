@@ -149,6 +149,8 @@ for (const c of GCASES) {
     check(info.garden, `${label} ${sizeName}: the garden is open`);
     check(info.has && info.drawn > 0, `${label} ${sizeName}: the garden has weather`);
     check(info.pe === 'none', `${label} ${sizeName}: garden weather lets taps through`);
+    const critters = await page.locator('.g-critter').count();
+    check(critters >= 1, `${label} ${sizeName}: the garden has visitors (${critters})`);
     if (c.theme === 'bg-ocean') check(info.kind === 'sparkle', `${label} ${sizeName}: the dome gets the dome weather`);
     await page.locator('.garden-yard').scrollIntoViewIfNeeded();
     await page.clock.runFor(500);

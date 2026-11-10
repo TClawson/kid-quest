@@ -221,18 +221,41 @@ function mount(section, handlers) {
     el.style.transformOrigin = `${cs[0].fx}px ${cs[0].fy}px`;
     critters.push({ el, cs, fn, shown: 0 });
   };
+  const winter = se.season === 'winter';
   for (let i = 0; i < V.critters.butterflies; i += 1) {
     const idx = blooms.length ? blooms[i % blooms.length] : 0;
     const b = idx < V.beds.length ? Y.beds[idx] : null;
     const cx = b ? b.x + b.w / 2 : (Y.trees[idx - V.beds.length]?.x ?? 160);
     const cy = b ? b.y + b.h / 2 - 8 : (Y.trees[idx - V.beds.length]?.y ?? 80) - 24;
+    if (winter) {
+      // in winter the butterflies are away: a white hare, a cardinal and twinkling snowflakes visit instead
+      const gy = b ? b.y + b.h + 4 : cy + 26; // on the ground just in front of the plant
+      if (i % 3 === 0) {
+        spawn([0, 1], (f) => A.hareArt(f), (t) => {
+          // sits a while, then hops a little way and back
+          const u = (t * 0.25 + i * 0.37) % 1; const hop = u > 0.7 ? Math.sin(((u - 0.7) / 0.3) * Math.PI) : 0;
+          const side = Math.floor(t * 0.25 + i * 0.37) % 2 ? 1 : -1;
+          return { x: cx + side * 10 * Math.min(1, (u > 0.7 ? (u - 0.7) / 0.3 : 0)) - side * 5, y: gy - hop * 4, z: gy, frame: hop > 0.1 ? 1 : 0, dir: side };
+        });
+      } else if (i % 3 === 1) {
+        spawn([0, 1], (f) => A.cardinalArt(f), (t) => ({ x: cx + 8, y: gy - 1, z: gy, frame: Math.floor(t / 1.1 + i) % 3 === 0 ? 1 : 0, dir: Math.floor(t / 4 + i) % 2 ? 1 : -1 }));
+      } else {
+        for (let k = 0; k < 3; k += 1) {
+          spawn([0, 1, 2], (f) => A.sparkleArt(f), (t) => {
+            const u = t * 0.8 + k * 1.3 + i;
+            return { x: cx - 10 + k * 10 + Math.sin(u * 0.7) * 3, y: cy - 2 + Math.sin(u * 0.5 + k) * 6, z: 900, frame: [0, 1, 2, 1][Math.floor(t * 4 + k * 2) % 4] };
+          });
+        }
+      }
+      continue;
+    }
     const hue = [330, 45, 205][i % 3];
     spawn([0, 1, 2], (f) => A.butterflyArt(f, hue), (t) => {
       const u = t * 0.6 + i * 2.1;
       return { x: cx + Math.sin(u) * 22 + Math.sin(u * 2.3) * 5, y: cy + Math.sin(u * 1.4) * 9, z: 900, frame: [0, 1, 2, 1][Math.floor(t * 6 + i) % 4] };
     });
   }
-  if (V.critters.bees && Y.spots.bees) {
+  if (V.critters.bees && Y.spots.bees && !winter) { // bees stay in their house in winter
     const s = Y.spots.bees;
     for (let i = 0; i < V.critters.bees; i += 1) {
       spawn([0, 1], (f) => A.beeArt(f), (t) => {
