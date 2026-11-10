@@ -790,7 +790,7 @@ const SHOE = [{ s: '#e03131', l: '#ff6b6b', w: '#ffffff' }, { s: '#1c7ed6', l: '
  * { soccer: 1-3, football, hockey, rod, shoes }), each at its best version. Null when none.
  */
 export function gearArt(gear = {}) {
-  if (!Object.values(gear).some(Boolean)) return null;
+  if (!['soccer', 'football', 'hockey', 'rod', 'shoes'].some((k) => gear[k])) return null; // the boat stays at the lake
   return sprite(38, 36, (b) => {
     // the rack: two uprights and a top bar with pegs
     for (let y = 0; y < 30; y += 1) { b.set(2, y, WD[4]); b.set(3, y, WD[2]); b.set(34, y, WD[3]); b.set(35, y, WD[1]); }

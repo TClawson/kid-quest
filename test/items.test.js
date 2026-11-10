@@ -184,9 +184,13 @@ test('the panda’s bamboo leans on the side away from held gear', async () => {
   assert.ok(Math.max(...xs(draw('sport-rod-regular'))) <= 12, 'on the left when the rod is on the right');
 });
 
-test('sports gear: 5 kinds in 3 versions, bought with gems only', () => {
+test('sports gear: 5 kinds in 3 versions plus the fishing boat, bought with gems only', () => {
   const gear = ITEMS.filter((i) => i.slot === 'sport');
-  assert.equal(gear.length, 15);
+  assert.equal(gear.length, 16);
+  const boat = itemById('sport-boat');
+  assert.equal(boat.gems, 100);
+  assert.ok(boat.noHold, 'the boat stays at the lake');
+  assert.deepEqual(bestGear(['sport-rod-good', 'sport-boat']), { rod: 2, boat: 1 });
   const rod = itemById('sport-rod-good');
   assert.equal(rod.gems, 120);
   assert.equal(rod.price, undefined);

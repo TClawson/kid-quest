@@ -37,7 +37,7 @@ import {
 import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
 import { GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
-import { SPOTS as FISH_SPOTS } from './fishing.js';
+import { SPOTS as FISH_SPOTS, boatThumb } from './fishing.js';
 import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
 import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, secretSize, SECRETS } from './treasure-art.js';
 import { playShow, showPlaying } from './mapshow.js';
@@ -1550,13 +1550,13 @@ function viewWardrobe() {
     const on = item.home ? isPlaced(kid, item) : kid.buddy.outfit[item.slot] === item.id;
     // the wand's picture is lit all the way, to show what it does
     const preview = { ...kid.buddy, wand: 1, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
-    const wearing = item.home ? (on ? 'In your house' : 'Tap to use') : item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
+    const wearing = item.home ? (on ? 'In your house' : 'Tap to use') : item.noHold ? 'At the lake' : item.slot === 'sport' ? (on ? 'Holding' : 'Tap to hold') : (on ? 'Wearing' : 'Tap to wear');
     const price = item.gems ? `<span class="price gems ${prog.gems >= item.gems ? 'can' : ''}">💎 ${item.gems}</span>`
       : item.price ? `<span class="price ${prog.coins >= item.price ? 'can' : ''}">🪙 ${item.price}</span>` : '';
     return `<button class="item ${open ? '' : 'locked'} ${item.price || item.gems ? 'shop' : ''} ${item.species ? 'special' : ''} ${on ? 'on' : ''}" data-action="wardrobe-item" data-id="${item.id}">
             ${item.species ? `<span class="special-tag">⭐ ${esc(speciesName(item.species))} only</span>` : ''}
             ${item.home ? `<span class="spot-tag">${spotById(item.spot).icon} ${esc(spotById(item.spot).name)}</span>` : ''}
-            <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
+            <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : item.noHold ? `<img class="home-thumb" src="${boatThumb()}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
             <small>${open ? wearing : price || `🔒 ${esc(needLabel(item))}`}</small>
             ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
@@ -1565,7 +1565,7 @@ function viewWardrobe() {
       </div>
       ${sportTab ? movesList(kid, prog) : ''}
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
-      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing!</p>` : ''}
+      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish.</p>` : ''}
       ${ui.slot === 'home' ? '<p class="muted small">Every task you finish earns coins to spend on furniture. Furniture goes in your buddy\'s house, and every buddy you have can use it. Each spot holds one thing at a time: tap something you own to put it in, or tap it again to take it out. Walk your buddy in the front door of your house in the village to see it!</p>' : ''}
       ${sportTab || ui.slot === 'home' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
@@ -1957,10 +1957,10 @@ function buyGear(kid, item, prog) {
   const preview = { ...dressed(kid), outfit: { ...kid.buddy.outfit, sport: item.id } };
   openModal(`
     <div class="celebrate">
-      <div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>
+      ${item.noHold ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${boatThumb()}" alt=""></div>` : `<div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>`}
       <h1>Buy ${esc(item.name)}?</h1>
       <p>It costs <b>💎 ${item.gems}</b>. You'll have ${prog.gems - item.gems} gems left.</p>
-      <p class="muted small">Every buddy can use it. Keep exercising to unlock its moves.</p>
+      <p class="muted small">${item.noHold ? 'When you go fishing, you and your visitor row out into deep water, where the bigger fish swim. Every buddy can use it.' : 'Every buddy can use it. Keep exercising to unlock its moves.'}</p>
       <div class="stack">
         <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
         <button class="btn ghost" data-action="modal-close">Keep saving</button>
@@ -2167,6 +2167,7 @@ const actions = {
       toast(was ? (spotById(item.spot).basic ? `Back to the ${furnitureName(spotById(item.spot).basic)}` : `${item.name} put away`) : `${item.name} is in your house! 🏠`);
       return;
     }
+    if (item.noHold) { sounds.tap(); toast('Your boat is waiting at the lake! 🚣 Go fishing with a visiting buddy to row out.'); return; }
     const outfit = kid.buddy.outfit;
     if (outfit[item.slot] === item.id && item.slot !== 'background') delete outfit[item.slot];
     else { outfit[item.slot] = item.id; putAwayOther(kid, item.slot); }
@@ -2226,7 +2227,7 @@ const actions = {
     addOwned(kid, item);
     // furniture goes straight into its spot in the house; anything else, the buddy puts on
     if (item.home) kid.home = { ...(kid.home || {}), [item.spot]: item.id };
-    else {
+    else if (!item.noHold) {
       kid.buddy.outfit[item.slot] = item.id;
       putAwayOther(kid, item.slot);
     }
@@ -2559,6 +2560,7 @@ function gameTestCard() {
         <label>Visitor <select id="gt-vis">${opt(ui.gtVis || (kids[1] || kids[0]).id, who)}</select></label>
         <label>Visitor's gear <select id="gt-vis-gear">${opt(ui.gtVisGear || '1', tiers)}</select></label>
         <label>Fishing spot <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
+        <label>Fishing boat <select id="gt-boat">${opt(ui.gtBoat || '0', [['0', 'No boat'], ['1', 'In the boat']])}</select></label>
       </div>
       <div class="row wrap">
         ${['soccer', 'tag', 'hockey', 'football', 'fishing'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
@@ -2569,7 +2571,7 @@ function gameTestCard() {
 actions['game-test'] = (el) => {
   const kind = el.dataset.kind;
   const val = (id) => document.getElementById(id)?.value;
-  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map') });
+  Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map'), gtBoat: val('gt-boat') });
   const kid = kidById(ui.gtKid) || state.kids[0];
   const other = kidById(ui.gtVis) || kid;
   const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind;
@@ -2580,7 +2582,7 @@ actions['game-test'] = (el) => {
   openPlay({
     kind,
     best: 0,
-    kid: { buddy: kid.buddy, name: kid.name, gear: gear(ui.gtKidGear), moves: moveIds(mover(kid)) },
+    kid: { buddy: kid.buddy, name: kid.name, gear: { ...gear(ui.gtKidGear), ...(kind === 'fishing' && ui.gtBoat === '1' ? { boat: 1 } : {}) }, moves: moveIds(mover(kid)) },
     visitor: { buddy: other.buddy, name: visName, gear: gear(ui.gtVisGear), moves: moveIds(mover(other)) },
     map: ui.gtMap || kidTheme(kid),
     day: today(),

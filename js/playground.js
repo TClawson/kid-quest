@@ -45,8 +45,9 @@ export function openPlay(opts) {
   // fishing: the lake for the kid's map, and today's bait odds
   const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch });
   root.game = game; // for tests
-  // fishing draws its lake and fish with finer pixels
-  if (game.Z) { field.width = W * game.Z; field.height = H * game.Z; }
+  // fishing draws its lake and fish with finer pixels, and a better rod shows more of the
+  // lake (fieldW x fieldH lake pixels, shrunk to fit the same screen)
+  if (game.Z) { field.width = (game.fieldW || W) * game.Z; field.height = (game.fieldH || H) * game.Z; }
   // the daily limit: opts.gamesLeft() says how many games are left today
   const left = () => (opts.gamesLeft ? opts.gamesLeft() : Infinity);
   const $left = root.querySelector('.play-left');

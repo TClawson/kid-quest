@@ -68,6 +68,21 @@ try {
   // the soccer ball's first move is now unlocked and announced
   await page.waitForTimeout(800);
   assert.match(await page.locator('#modal').innerText(), /Keepy-uppy/);
+  while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
+
+  // the fishing boat: 100 gems, stays at the lake (the soccer ball stays in hand)
+  await page.click('[data-action="wardrobe-item"][data-id="sport-boat"]');
+  assert.match(await page.locator('#modal').innerText(), /deep water/);
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/boat-buy.png` });
+  await page.click('[data-action="buy-confirm"]');
+  await page.waitForTimeout(400);
+  while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
+  const s2 = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
+  assert.ok(s2.kids[0].owned.includes('sport-boat'));
+  assert.equal(s2.kids[0].gemsSpent, 140);
+  assert.equal(s2.kids[0].buddy.outfit.sport, 'sport-soccer-regular', 'the boat is not held');
+  assert.match(await page.locator('[data-id="sport-boat"]').innerText(), /At the lake/);
+  if (process.env.SHOTS) await page.locator('[data-id="sport-boat"]').scrollIntoViewIfNeeded().then(() => page.screenshot({ path: `${process.env.SHOTS}/boat-shop.png` }));
 
   assert.deepEqual(errors, []);
   console.log('sports test passed');
