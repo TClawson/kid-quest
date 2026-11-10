@@ -108,13 +108,17 @@ test('a key struck again while it still rings is a new note; a held key under ot
   assert.equal(heard.length, 7);
 });
 
-test('an octave above: the piano\'s usual ghost goes, a real octave among single notes stays', () => {
+test('an octave above: the piano\'s usual ghost goes; a real octave among single notes and playing in octaves stay', () => {
   const rate = 24000;
   const tune = [60, 62, 64, 65, 67, 65, 64, 62, 60, 64, 67, 64];
   const note = (midi, i, vel = 0.5) => ({ midi, on: 0.3 + i * 0.4, len: 0.35, vel });
-  // every strike brings a soft note an octave up with it (what a bright piano's overtones look like): only the tune is heard
-  const bright = tune.flatMap((midi, i) => [note(midi, i), note(midi + 12, i, 0.22)]);
+  // every strike brings a soft note an octave up with it, some stronger than others (what a
+  // bright piano's overtones look like): only the tune is heard
+  const bright = tune.flatMap((midi, i) => [note(midi, i), note(midi + 12, i, i % 3 === 1 ? 0.22 : 0.12)]);
   assert.deepEqual(keysOf(listen(piano(bright, rate, 5.6), rate)), tune);
+  // but a tune played in octaves all the way, the upper hand softer, is two hands: every note stays
+  const hands = tune.flatMap((midi, i) => [note(midi, i), note(midi + 12, i, 0.3)]);
+  assert.deepEqual(keysOf(listen(piano(hands, rate, 5.6), rate)).sort((a, b) => a - b), [...tune, ...tune.map((m) => m + 12)].sort((a, b) => a - b));
   // one such octave in a tune of single notes is out of the usual: it was played
   const once = tune.flatMap((midi, i) => (i === 5 ? [note(midi, i), note(midi + 12, i, 0.22)] : [note(midi, i)]));
   const heard = listen(piano(once, rate, 5.6), rate);

@@ -44,6 +44,7 @@ export const SETTINGS = {
   ghost: 3, // an overtone: a note this many times softer than a note struck with it, an overtone's distance below
   ghostLeak: 2, ghostMost: 0.35, // ... for the octave: softer than this many times what the octave key usually rises by in this recording (counted up to ghostMost of the lower note)
   ghostLate: 8, // ... and an overtone can show up this many looks after its note
+  ghostNorm: 0.3, ghostNear: 500, // ... but not where the playing is in octaves: this share of the notes within ghostNear looks have a note an octave under them
   ghostOwn: 2.5, // a note an octave or more under another: an overtone of its own stands this far out of the picture, or it was not struck
   knock: 0.6, knockBelow: 58, // a key's knock: a low note that fades to under this at once (see pickNotes)
   cluster: 1, // of two neighbouring keys struck in one instant, the one this many times softer goes
@@ -538,8 +539,7 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
   // An overtone of a louder note struck in the same moment is not a note. For the octave the
   // recording itself says how much to expect: each time a key is struck its octave key rises
   // a little too (more on a bright piano, and more the harder the key is hit), so an octave
-  // note counts only when it is clearly more than this piano's usual. (Playing in octaves all
-  // the way through reads as the usual, so there the upper note of a soft pair goes.)
+  // note counts only when it is clearly more than this piano's usual.
   if (S.ghost > 0) {
     const above = [12, 19, 24, 28, 31, 34, 36];
     const middle = (v) => { v.sort((x, y) => x - y); return v.length ? v[v.length >> 1] : 0; };
@@ -556,10 +556,20 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
       const near = notes.filter((x) => x !== m && Math.abs(x.p - m.p) <= 2).map(leakOf);
       return Math.max(middle(same), middle(near));
     };
+    // (Where the playing around a note is in octaves, both hands on one tune or an octave
+    // bass, the octave key's rise is no overtone and nothing can be learned from it: there
+    // only the plain rule holds, and soft upper notes stay.)
+    const lower = new Map(); // a found note -> whether a note an octave under it was struck with it (and it is no plain overtone of that note)
+    for (const n of notes) lower.set(n, notes.some((m) => m.p === n.p - 12 && m.t - n.t <= 4 && n.t - m.t <= S.ghostLate && n.strength * S.ghost >= m.strength));
+    const inOctaves = (n) => {
+      if (!(S.ghostNorm > 0)) return false;
+      const around = notes.filter((x) => Math.abs(x.t - n.t) <= S.ghostNear);
+      return around.filter((x) => lower.get(x)).length >= S.ghostNorm * around.length;
+    };
     kept = notes.filter((n) => !notes.some((m) => {
       const d = n.midi - m.midi;
       if (m === n || m.t - n.t > 4 || n.t - m.t > S.ghostLate || !above.includes(d)) return false;
-      const most = d === 12 && S.ghostLeak > 0 ? Math.max(1 / S.ghost, S.ghostLeak * Math.min(S.ghostMost, usual(m))) : 1 / S.ghost;
+      const most = d === 12 && S.ghostLeak > 0 && !inOctaves(n) ? Math.max(1 / S.ghost, S.ghostLeak * Math.min(S.ghostMost, usual(m))) : 1 / S.ghost;
       return n.strength < most * m.strength;
     }));
   }
