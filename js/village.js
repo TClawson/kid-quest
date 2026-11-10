@@ -16,6 +16,7 @@ import { paintVillage } from './villageprops.js';
 import { villageLayout } from './villagemaps.js';
 import { MAP_THEMES } from './maparts.js';
 import { startMapLife } from './maplife.js';
+import { mountBloom, bloomHint } from './villagebloom.js';
 import { OAK, startOak } from './oakart.js';
 import { WRECK, startWreck } from './wreckart.js';
 import { GALLEON, startGalleon } from './galleonart.js';
@@ -247,6 +248,7 @@ function gardenSign(L, garden, people = []) {
  *   music: { tier, left }: the music house's look (0 while it is locked) and piano days still
  *     to go before it opens,
  *   garden: { thirsty }: how many plants in the garden are waiting for water (the sign by the house),
+ *   bloom: the family's trees and flowers (bloomData in villagebloom.js) or null,
  * }
  */
 export function villageHtml(v) {
@@ -264,6 +266,7 @@ export function villageHtml(v) {
     areas: greenAreas(v.visit, L), spots: visitorSpots(v.visit, L), landmark: lm,
     home: v.home || null,
     music: { tier: v.music?.tier || 0, left: v.music?.left || 0 },
+    bloom: v.bloom || null, // the family's trees and flowers (villagebloom.js)
   };
   const folk = people.map((p) => {
     const a = activeQuest(p.tasks);
@@ -508,6 +511,7 @@ export function standSpot(grid, x, y, fromX = 0) {
 // ---------- the live village ----------
 
 // Per kid and map, while the app is open: where the buddy is and what each quest last looked like.
+let hintTaps = 0; // how often villagers have talked, so their plant lines rotate
 const memory = new Map();
 const spriteCache = new Map();
 
@@ -729,6 +733,11 @@ function mount(section, handlers) {
       buttons = offPlan
         ? `${goNext.replace('Next quest', 'Go to my plan')}<button class="btn ghost" data-v="do" data-q="${esc(q.id)}">${doLabel(q)}</button>`
         : `<button class="btn" data-v="do" data-q="${esc(q.id)}">${doLabel(q)}</button><button class="btn ghost" data-v="bye">Not yet</button>`;
+    }
+    // sometimes a villager mentions the family's plants, so kids can see why they grow or droop
+    if (mode !== 'pending' && q.st !== 'pending') {
+      const hint = bloomHint(data.bloom?.hint, `${data.bloom?.today}|${p.id}|${hintTaps += 1}`);
+      if (hint) text += ` ${hint}`;
     }
     open(card(villagerName(p.kind), text, quest, buttons), p.kind, doneAll(p) || mode === 'thanks', p.id);
     typeText(text);
@@ -1031,6 +1040,8 @@ function mount(section, handlers) {
     view: () => ({ top: cam.y, bottom: cam.y + vh / S }),
     toMap: (e) => { const r = world.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; },
   });
+  // the family's trees and flowers, and the critters they bring
+  mountBloom(section, L, data, canvas, { host: view, toMap: (e) => { const r = world.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; } });
   place();
   requestAnimationFrame(tick);
 

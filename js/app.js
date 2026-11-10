@@ -15,6 +15,8 @@ import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { liveHtml, live, liveStart, partyAll } from './live.js';
 import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
+import { dailySummaries } from './familygarden.js';
+import { bloomData, gardenLine } from './villagebloom.js';
 import { villageHtml, mountVillages, cameOut, cameOutOfMusic } from './village.js';
 import { houseHtml, mountHouses, cameIn } from './house.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
@@ -716,6 +718,16 @@ function familyBuddies() {
 }
 
 /**
+ * Everyone in the family with what the village garden needs (id, daily, today, startDate, tasks):
+ * this device's kids in full, and on a kid's device the others from the cloud.
+ */
+function gardenKids() {
+  const all = new Map((family.buddies || []).map((b) => [b.id, b]));
+  for (const k of state.kids) all.set(k.id, k);
+  return [...all.values()];
+}
+
+/**
  * Keep each kid's summary of today (kid.today) up to date, so the family's
  * other devices can tell how the whole family is doing (see familyDay).
  * Only needed with family sync: on one device every kid is here already.
@@ -729,6 +741,9 @@ function shareToday() {
     // the kid's newest milestone, for visiting buddies to mention on other maps
     const m = milestoneFor(state, k, today());
     if (stableJson(m) !== stableJson(k.milestone)) { k.milestone = m; changed = true; }
+    // each day's chores done, for the family's village garden (the other devices can't load this kid's days)
+    const daily = dailySummaries(state, k, today());
+    if (daily) { k.daily = daily; changed = true; }
     if (!cloudCfg) continue;
     const now = todaySummary(state, k, today());
     if (stableJson(now) !== stableJson(k.today)) { k.today = now; changed = true; }
@@ -812,6 +827,12 @@ function familyBanner() {
       ? `👨‍👩‍👧‍👦 Family: ${f.done} chores done so far · when everyone gets to ${goal}%, the whole map celebrates`
       : `👨‍👩‍👧‍👦 Family: ${f.done} of ${f.total} chores done · at ${goal}% the whole map celebrates`;
   return `<div class="family-banner ${f.happy ? 'happy' : ''}" data-action="family-party">${esc(text)}${f.happy ? '' : `<span class="bar"><span style="width:${Math.min(100, Math.round((f.share / FAMILY_GOAL) * 100))}%"></span></span>`}</div>`;
+}
+
+/** Why the village is growing (or thirsty): one small, warm line under the family banner. */
+function gardenBanner() {
+  const line = gardenLine(gardenKids(), today());
+  return line ? `<p class="garden-line ${line.wilted ? 'wilted' : ''}">${line.icon} ${esc(line.text)}</p>` : '';
 }
 
 // The family party: every buddy on the map gets a silly happy face and dances,
@@ -1083,6 +1104,7 @@ function villageView(kid, s, entry, mood) {
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
     music: { tier, left: tier ? 0 : daysToMusicHouse(prog) },
     garden: { thirsty: gardenThirsty(kid) },
+    bloom: bloomData(gardenKids(), today()),
   });
 }
 
@@ -1499,6 +1521,7 @@ function viewKid() {
       </div>
       ${!state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
       ${familyBanner()}
+      ${villageMode ? gardenBanner() : ''}
       ${villageMode ? villageView(kid, s, entry, mood) : questMap(kid, s, entry, mood)}
       <section>
         <h2>This week</h2>

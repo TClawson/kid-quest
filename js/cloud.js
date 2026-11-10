@@ -252,12 +252,13 @@ export function startSync({ familyId, role, kidId }, { onState, onStatus = () =>
 }
 
 // Every kid's name, buddy (with outfit), gear, best exercise streak and game scores in the family, for visiting buddies
-// on a kid's device, which otherwise only loads its own kid.
+// on a kid's device, which otherwise only loads its own kid. daily, startDate and tasks let the device work out how
+// the whole family did each day (familygarden.js grows the village from that).
 export function watchBuddies(familyId, onBuddies) {
   unsubs.push(fb.onSnapshot(kidsCol(familyId), (snap) => {
     onBuddies(snap.docs.map((d) => {
       const k = d.data();
-      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: k.exBest || 0, today: k.today || null, milestone: k.milestone || null, playBest: k.playBest || {}, gameBests: k.gameBests || null };
+      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: k.exBest || 0, today: k.today || null, milestone: k.milestone || null, playBest: k.playBest || {}, gameBests: k.gameBests || null, daily: k.daily || {}, startDate: k.startDate || null, tasks: k.tasks || [] };
     }));
   }, (err) => console.error('Kid Quest buddies', err)));
 }

@@ -1,0 +1,156 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>body{background:#1e1a26;margin:0;padding:8px;font:bold 13px sans-serif;color:#fff} canvas{image-rendering:pixelated;display:block} h2{margin:6px 0;font-size:15px}</style></head>
+<body><div id="out" style="display:inline-block"></div>
+<script type="module">
+// The village's trees, flowers and critters (js/bloomart.js), for previews (test/smoke/bloom-preview.mjs).
+//   ?map=bg-meadow&mode=sheet             every tree (stages 0-5, wilt 0-3), flower (kinds x stages, wilt) and critter
+//   ?map=bg-meadow&mode=village&at=year   the village with what a family has grown: week2 | month4 | year | wilted | all
+//   &marks=1                              (village) the spots, numbered: trees red, flowers blue
+//   &scale=3
+import { treeArt, flowerArt, critterArt, CRITTERS } from '../../js/bloomart.js';
+import { villageLayout } from '../../js/villagemaps.js';
+import { paintVillage } from '../../js/villageprops.js';
+import { drawVillager } from '../../js/villageart.js';
+
+const q = new URLSearchParams(location.search);
+const map = q.get('map') || 'bg-meadow';
+const mode = q.get('mode') || 'sheet';
+const S = Number(q.get('scale') || 3);
+const out = document.getElementById('out');
+const L = villageLayout(map);
+const land = paintVillage(document.createElement('canvas'), L, { homeRoof: '#e03131', areas: [{ ...L.green.left, kind: 'pond', side: 'left' }, { ...L.green.right, kind: 'soccer', side: 'right' }] });
+
+function title(t) { const h = document.createElement('h2'); h.textContent = t; out.append(h); }
+function show(c, w, h) { c.style.width = `${w * S}px`; c.style.height = `${h * S}px`; out.append(c); }
+
+// a patch of the map's own open ground, to draw the sheet on
+function groundPatch() {
+  let best = null;
+  for (let y = 40; y < L.H - 80; y += 8) for (let x = 30; x < L.W - 80; x += 8) {
+    let ok = true;
+    for (let yy = 0; yy < 48 && ok; yy += 4) for (let xx = 0; xx < 48 && ok; xx += 4) if (L.blocked(x + xx, y + yy, 2) || L.onPath(x + xx, y + yy, 8) || L.covered(x + xx, y + yy) || L.inWater(x + xx, y + yy, 6)) ok = false;
+    if (ok && ['left', 'right'].every((k) => { const g = L.green[k]; return x + 48 < g.x - 8 || x > g.x + g.w + 8 || y + 48 < g.y - 8 || y > g.y + g.h + 8; })) { best = [x, y]; break; }
+    if (best) break;
+  }
+  const p = document.createElement('canvas'); p.width = 48; p.height = 48;
+  const [x, y] = best || [200, 200];
+  p.getContext('2d').drawImage(land, x, y, 48, 48, 0, 0, 48, 48);
+  return p;
+}
+
+if (mode === 'sheet') {
+  const patch = groundPatch();
+  // lay out cells of art on a ground canvas, one village pixel each, then scale up
+  const sheet = (rows, cw, ch, labels) => {
+    const W = cw * Math.max(...rows.map((r) => r.length)); const H = ch * rows.length;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.fillStyle = x.createPattern(patch, 'repeat'); x.fillRect(0, 0, W, H);
+    rows.forEach((r, j) => r.forEach((a, i) => { if (!a) return; x.drawImage(a, Math.round(i * cw + cw / 2 - a.ax), Math.round(j * ch + ch - 6 - a.ay)); }));
+    const big = document.createElement('canvas'); big.width = W * S; big.height = H * S;
+    const b = big.getContext('2d'); b.imageSmoothingEnabled = false; b.drawImage(c, 0, 0, W * S, H * S);
+    if (labels) { b.font = 'bold 12px sans-serif'; labels.forEach((t, j) => { b.fillStyle = 'rgba(0,0,0,0.55)'; b.fillRect(2, j * ch * S + 2, b.measureText(t).width + 8, 16); b.fillStyle = '#fff'; b.fillText(t, 6, j * ch * S + 14); }); }
+    out.append(big);
+  };
+  title(`${map}: trees, stages 0-5, then grand and stage 3 wilting 1, 2, 3`);
+  const kinds = [0, 1, 2, 3, 4, 5].map((spot) => treeArt(map, spot, 5, 0));
+  const tRows = []; const tLabels = [];
+  for (let spot = 0; spot < 8; spot += 1) {
+    tRows.push([0, 1, 2, 3, 4, 5].map((st) => treeArt(map, spot, st, 0)).concat([1, 2, 3].map((w) => treeArt(map, spot, 5, w)), [treeArt(map, spot, 3, 2), treeArt(map, spot, 3, 3)]));
+    tLabels.push(`spot ${spot}`);
+  }
+  void kinds;
+  sheet(tRows, 52, 64, tLabels);
+  title('flowers: kind 0-3 (rows) - stages 0, 1, 2, 3, bloom day 5, day 6, other clumps, then wilting 1, 2, 3 (bloom) and 2 (bud)');
+  const fRows = []; const fLabels = [];
+  for (let k = 0; k < 4; k += 1) {
+    fRows.push([0, 1, 2, 3].map((st) => flowerArt(map, k, st)).concat([flowerArt(map, k, 3, 0, 5), flowerArt(map, k, 3, 0, 6), flowerArt(map, k, 3, 0, 0, 1), flowerArt(map, k, 3, 0, 0, 2), flowerArt(map, k, 0, 0, 0, 1)], [1, 2, 3].map((w) => flowerArt(map, k, 3, w)), [flowerArt(map, k, 2, 2)]));
+    fLabels.push(`kind ${k}`);
+  }
+  sheet(fRows, 26, 26, fLabels);
+  title('critters: every frame and colour');
+  const cRows = []; const cLabels = [];
+  for (const cr of CRITTERS[map] || []) {
+    const row = [];
+    for (let v = 0; v < (cr.variants || 1); v += 1) for (let f = 0; f < cr.frames; f += 1) row.push(critterArt(map, cr.id, f, v));
+    cRows.push(row); cLabels.push(`${cr.id} (${cr.moves}, level ${cr.level})`);
+  }
+  sheet(cRows, 30, 36, cLabels);
+}
+
+if (mode === 'village') {
+  const { bloomSpotsFor } = await import('../../js/bloomspots.js');
+  const { villageGarden, critterLevel } = await import('../../js/familygarden.js');
+  const { addDays } = await import('../../js/logic.js');
+  const spots = bloomSpotsFor(map);
+  const at = q.get('at') || 'year';
+  const start = '2026-11-10';
+  const every = [0, 1, 2, 3, 4, 5, 6];
+  const tasks = Array.from({ length: 5 }, (_, i) => ({ id: `t${i}`, name: `T${i}`, period: 'morning', days: every }));
+  // two kids, 5 chores a day each; pattern(i) says how many each did on day i
+  const family = (days, pattern) => {
+    const kids = [{ id: 'a', tasks, daily: {} }, { id: 'b', tasks, daily: {} }];
+    for (let i = 0; i < days; i += 1) { const [x, y] = pattern(i); kids[0].daily[addDays(start, i)] = [x, 5]; kids[1].daily[addDays(start, i)] = [y, 5]; }
+    return villageGarden(kids, addDays(start, days - 1));
+  };
+  const steady = (i) => (i % 11 === 5 ? [3, 4] : i % 17 === 9 ? [2, 1] : [5, 4]); // mostly good, now and then a slip
+  const G = {
+    week2: () => family(14, () => [5, 5]),
+    month4: () => family(122, steady),
+    year: () => family(365, steady),
+    wilted: () => family(372, (i) => (i < 365 ? steady(i) : [0, 1])),
+    all: () => ({ trees: spots.trees.map((_, spot) => ({ spot, stage: 5 })), flowers: spots.flowers.map((_, spot) => ({ spot, kind: spot % 4, stage: 3, age: spot % 7 })), wilt: 0, matureTrees: 20, blooms: 50 }),
+  }[at]();
+  const level = G.critters ?? critterLevel(G);
+  const c = document.createElement('canvas'); c.width = L.W; c.height = L.H;
+  const x = c.getContext('2d');
+  x.drawImage(land, 0, 0);
+  const items = [];
+  // the landmark, standing (as if its treasure map were finished)
+  const lm = L.landmark;
+  try {
+    const mods = { oak: ['oakart.js', 'startOak'], wreck: ['wreckart.js', 'startWreck'], galleon: ['galleonart.js', 'startGalleon'], cave: ['caveart.js', 'startCave'], gate: ['gateart.js', 'startGate'], stone: ['stoneart.js', 'startStone'], kapok: ['kapokart.js', 'startKapok'], goldpot: ['goldpotart.js', 'startGoldpot'], starwhale: ['starwhaleart.js', 'startStarwhale'] };
+    const [file, fn] = mods[lm.art];
+    const mod = await import(`../../js/${file}`);
+    const lc = document.createElement('canvas'); lc.width = lm.w; lc.height = lm.h;
+    mod[fn](lc, null)(1000);
+    items.push({ y: lm.y + lm.h, draw: () => x.drawImage(lc, lm.x, lm.y) });
+  } catch (e) { console.log('landmark', e.message); }
+  // the quest givers and the shopkeeper
+  const folk = drawVillager(document.createElement('canvas'), 'bunny');
+  const keeper = drawVillager(document.createElement('canvas'), 'badger');
+  [...L.slots.morning.slice(0, 6), ...L.slots.afternoon.slice(0, 6)].forEach((s) => items.push({ y: s.y, draw: () => x.drawImage(folk, s.x - 8, s.y - folk.height) }));
+  items.push({ y: L.shop.y, draw: () => x.drawImage(keeper, L.shop.x - 8, L.shop.y - keeper.height) });
+  const put = (a, px, py) => items.push({ y: py, draw: () => x.drawImage(a, Math.round(px - a.ax), Math.round(py - a.ay)) });
+  for (const t of G.trees) { const p = spots.trees[t.spot]; if (p) put(treeArt(map, t.spot, t.stage, G.wilt), p.x, p.y); }
+  for (const f of G.flowers) { const p = spots.flowers[f.spot]; if (p) put(flowerArt(map, f.kind, f.stage, G.wilt, f.age, f.spot), p.x, p.y); }
+  // critters out at this level, in a few fixed places near the plants
+  const list = (CRITTERS[map] || []).filter((cr) => cr.level <= level);
+  list.forEach((cr, i) => {
+    for (let n = 0; n < (cr.level <= 2 ? 2 : 1); n += 1) {
+      const fl = spots.flowers[(i * 7 + n * 23 + 3) % spots.flowers.length]; const tr = spots.trees[(i * 5 + n * 9 + 2) % spots.trees.length];
+      const art = critterArt(map, cr.id, n % cr.frames, n % (cr.variants || 1));
+      if (cr.moves === 'fly') put(art, fl.x + 6 - n * 12, fl.y - 18 - (i % 3) * 6);
+      else if (cr.moves === 'swim' && map !== 'bg-ocean') { const w = L.water[0].pts; const k = (i + n * 2) % (w.length - 1); put(art, (w[k][0] + w[k + 1][0]) / 2 + n * 8, (w[k][1] + w[k + 1][1]) / 2); }
+      else if (cr.moves === 'swim') put(art, tr.x + 14 - n * 30, tr.y - 30);
+      else put(art, (n ? tr.x - 18 : fl.x + 10), (n ? tr.y + 4 : fl.y + 6));
+    }
+  });
+  items.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
+  const big = document.createElement('canvas'); big.width = L.W * S; big.height = L.H * S;
+  const b = big.getContext('2d'); b.imageSmoothingEnabled = false; b.drawImage(c, 0, 0, L.W * S, L.H * S);
+  const lab = (lx, ly, t) => { b.font = `bold ${6 * S}px sans-serif`; const w = b.measureText(t).width; b.fillStyle = 'rgba(0,0,0,0.5)'; b.fillRect(lx * S - w / 2 - 6, ly * S - 2, w + 12, 9 * S); b.fillStyle = '#fff'; b.fillText(t, lx * S - w / 2, ly * S + 6 * S); };
+  lab(...L.labels.morning); lab(...L.labels.afternoon);
+  if (q.get('marks')) {
+    b.font = 'bold 11px sans-serif';
+    spots.trees.forEach((p, i) => { b.strokeStyle = '#ff2030'; b.lineWidth = 2; b.beginPath(); b.arc(p.x * S, p.y * S, 6, 0, 7); b.stroke(); b.fillStyle = '#ffffff'; b.fillText(`T${i}`, p.x * S + 7, p.y * S - 4); });
+    spots.flowers.forEach((p, i) => { b.fillStyle = '#2060ff'; b.fillRect(p.x * S - 3, p.y * S - 3, 6, 6); b.fillStyle = '#d0e4ff'; b.fillText(`${i}`, p.x * S + 4, p.y * S + 10); });
+  }
+  b.font = `bold ${8 * S}px sans-serif`; b.fillStyle = 'rgba(0,0,0,0.55)';
+  const cap = `${map} - ${at}: ${G.trees.length} trees (${G.matureTrees} grown), ${G.flowers.length} flowers (${G.blooms} in bloom), wilt ${G.wilt}, critters ${level}`;
+  b.fillRect(0, 0, b.measureText(cap).width + 16, 10 * S); b.fillStyle = '#fff'; b.fillText(cap, 8, 8 * S);
+  out.append(big);
+}
+document.body.dataset.ready = '1';
+</script></body></html>
