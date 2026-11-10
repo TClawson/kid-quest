@@ -172,6 +172,25 @@ async function litBar(page, n, ms = 8000) {
   const list = await page.locator('.songbook').textContent();
   assert.ok(!list.includes('Secret song'));
   for (const song of Object.values(SHOW_SONGS)) assert.ok(list.includes(song.name), `${song.name} shows its name`);
+  // Phoenix Fire has two chords in bar 4: five bars, six chord names, at every level
+  await page.click('[data-action="song-open"][data-id="show:bg-volcano"]');
+  for (const level of ['easy', 'medium', 'hard']) {
+    await page.click(`[data-action="song-level"][data-val="${level}"]`);
+    await page.waitForSelector(`#sheet.engraved[data-level="${level}"] svg`);
+    const names = await page.locator('#sheet .abcjs-chord').allTextContents();
+    assert.deepEqual(names.map((n) => n.trim()), ['Am', 'Am', 'G', 'F', 'E', 'Am'], `Phoenix Fire ${level}`);
+    assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0');
+  }
+  await page.screenshot({ path: `${out}/5-two-chords.png`, fullPage: true });
+  await page.click('[data-action="song-level"][data-val="easy"]');
+  await page.click('[data-action="song-back"]');
+  // Bubble Waltz ends with its closing bar: a 17th bar on D minor
+  await page.click('[data-action="song-open"][data-id="bg-ocean"]');
+  await page.waitForSelector('#sheet.engraved svg');
+  assert.equal(await page.locator('#sheet .abcjs-mm16').count() > 0, true, 'the closing bar is on the page');
+  assert.equal((await page.locator('#sheet .abcjs-chord').allTextContents()).pop().trim(), 'Dm');
+  await page.locator('#sheet').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${out}/6-closing-bar.png`, fullPage: true });
   await ctx.close();
 }
 
