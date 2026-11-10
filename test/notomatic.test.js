@@ -173,6 +173,13 @@ test('playing at its own speed is set even from its own gaps', () => {
   // quick pairs are half steps only when the playing clearly has them
   assert.deepEqual(ownGrid([0, 1, 2, 2.5, 3, 4, 4.5, 5, 6]), [0, 1, 2, 2.5, 3, 4, 4.5, 5, 6]);
   assert.deepEqual(ownGrid([0, 1, 2, 2.7, 4, 5]), [0, 1, 2, 3, 4, 5]);
+  // a strike squeezed in between two steps of uneven playing (a hand that comes in late, a slip
+  // of two quick notes) does not push the notes after it a step late
+  const uneven = [0.06, -0.07, 0.05, -0.04, 0.08, -0.06, 0.03, -0.08, 0.07, -0.05];
+  const steady = Array.from({ length: 24 }, (_, i) => i + uneven[i % uneven.length]);
+  const slips = ownGrid([...steady, 6.47, 13.42, 13.72].sort((a, b) => a - b));
+  assert.deepEqual(slips.slice(0, 9), [0, 1, 2, 3, 4, 5, 6, 6.5, 7]);
+  assert.deepEqual(slips.slice(-9), [15, 16, 17, 18, 19, 20, 21, 22, 23]);
   assert.deepEqual(ownGrid([]), []);
   assert.deepEqual(ownGrid([4.4]), [4]);
 });

@@ -160,10 +160,21 @@ export function ownGrid(xs) {
   if (gaps.filter((g) => g / unit > 0.3 && g / unit < 0.68).length < 2) halves = false;
   const out = [Math.round(xs[0])];
   let u = unit;
+  let held = 0; // the last strike on a step before a squeezed one
   gaps.forEach((g, i) => {
     const k = g / u;
     // (a strike right after another is the rest of the same chord: it stays in its place)
     let steps = k < 0.3 ? 0 : halves && k < 0.75 ? 0.5 : Math.max(1, Math.round(k));
+    if (!halves && k >= 0.3) {
+      // A strike squeezed in between two steps (a hand that comes in late, a slip of a finger)
+      // takes half a step when the strike after it makes the step whole, and what follows is
+      // counted from the strike before the squeezed one: it must not push the rest a step late.
+      const next = i + 1 < gaps.length ? gaps[i + 1] / u : Infinity;
+      if (!Number.isInteger(out[i])) {
+        const since = (xs[i + 1] - xs[held]) / u;
+        steps = since < 0.75 ? 0 : out[held] + Math.max(1, Math.round(since)) - out[i];
+      } else if (k < 0.75 && k + next >= 0.7 && k + next <= 1.3) { steps = 0.5; held = i; }
+    }
     // A long gap that falls between two counts goes to the one that lands the next strike
     // on a beat, and a very long one leans short as well: a gap that is a little too long
     // is a kid finding the next note, and the bars after it should still line up.
