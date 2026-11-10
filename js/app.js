@@ -89,9 +89,15 @@ const store = cloudCfg
   ? createStore(localBackend(localStorage, CLOUD_CACHE_KEY), { onSave: cloudWrite })
   : createStore();
 
+let fullWarned = false;
 function save() {
   try {
-    const { changed, removed } = store.save(state);
+    const { changed, removed, local } = store.save(state);
+    // A full device still sends its saves to the family; say so once.
+    if (local === false && !fullWarned) {
+      fullWarned = true;
+      toast('Saved to the family, but this device’s storage is full.');
+    }
     // A family update held back while a dialog was open is now older than this
     // device's own data. Applying it when the dialog closes would undo what was
     // just saved (a kid buys something, then right away buys something else on
