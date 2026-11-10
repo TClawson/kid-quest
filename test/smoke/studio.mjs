@@ -823,6 +823,150 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await ctx.close();
 }
 
+// 9. the remix kit: backing tracks, a song's cymbals and hook, voices, kits, higher and lower,
+// moving into the mix's key; Undo and Redo, a reload, and playing it all
+{
+  const { ctx, page } = await start(TABLET, true);
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-backing');
+  const backing = page.locator('#studio .st-backing');
+  const clipOf = (sel) => page.locator(`#studio .st-clip${sel}`);
+  const draft = () => page.evaluate(async () => (await import('./js/studio-store.js')).loadMixes('kid_ava', true).then((m) => m.draft));
+  // an empty desk shows the backing tracks of both beats, the waltz ones marked
+  assert.equal(await backing.locator('h3').textContent(), 'Backing tracks');
+  assert.equal(await backing.locator('[data-action="st-loop"]').count(), 6, 'six chord loops');
+  assert.equal(await backing.locator('[data-action="st-loop"].on').textContent(), 'Sunny, in C major', 'the chosen loop says its key');
+  assert.deepEqual(await backing.locator('.st-group-name b').allTextContents(), ['Beats', 'Cymbals', 'Bass lines', 'Chords', 'Sparkles']);
+  assert.ok(await backing.locator('[data-pattern="beat-waltz"] .st-waltz').count(), 'a waltz beat is marked: 3 beats');
+  assert.equal(await backing.locator('[data-action="st-back-hear"]').count(), await backing.locator('[data-action="st-back-add"]').count(), 'every one can be heard first');
+  // a song lists its new pieces
+  const meadowParts = await page.locator('.st-song[data-song="bg-meadow"] [data-action="st-add"]').allTextContents();
+  for (const name of ['Hook', 'Kick and snare', 'Cymbals']) assert.ok(meadowParts.some((t) => t.includes(name)), `Forest Village has ${name}`);
+  await backing.screenshot({ path: `${out}/shelf-backing-tablet.png` });
+
+  // hear one first, then a beat, a bass line and chords: the House band sticker
+  await page.click('[data-action="st-back-hear"][data-pattern="bass-walk"]');
+  await wait(page, 300);
+  await page.click('[data-action="st-back-add"][data-pattern="beat-rock"]');
+  assert.match(await page.locator('.st-bar').textContent(), /Speed 120/, 'a backing track starts the mix at speed 120');
+  assert.equal(await backing.locator('.st-waltz').count(), 0, 'now only four-beat backing tracks');
+  await page.click('[data-action="st-back-add"][data-pattern="bass-walk"]');
+  await page.click('[data-action="st-back-add"][data-pattern="chords-held"]');
+  await wait(page, 200);
+  assert.equal(await page.locator('.st-sticker[data-sticker="house"]').count(), 1, 'the House band sticker');
+  assert.match(await page.locator('.st-mixname').textContent(), /C major/, 'the chords gave the mix a key');
+  // change the loop: the bass line and the chords follow
+  await page.click('[data-action="st-loop"][data-loop="spooky"]');
+  assert.equal(await backing.locator('[data-action="st-loop"].on').textContent(), 'Spooky, in A minor');
+  assert.match(await toastText(page), /Spooky chords/);
+  assert.equal(await page.locator('#studio .st-clip.group-chords small').first().textContent(), 'Spooky chords');
+
+  // a song's cymbals and its hook
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="cymbals"]');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="hook"]');
+  const hook = clipOf('.kind-hook');
+  assert.equal(await hook.count(), 1);
+  near((await place(hook)).width, 25, 'a hook is 2 bars: 8 of 32 beats');
+  // its voice: the chooser, Deep bass moves it down, the Remixer sticker, an icon on the clip
+  await page.click('[data-action="st-chooser"][data-what="voice"]');
+  const chooser = page.locator('#studio .st-chooser');
+  assert.equal(await chooser.locator('.st-choice').count(), 11, 'its own sound and ten voices');
+  assert.match(await chooser.locator('.st-choice.on').textContent(), /Its own sound/);
+  await chooser.locator('[data-voice="deep"]').click();
+  await wait(page, 100);
+  assert.match(await toastText(page), /Now it plays as Deep bass\. It moved 2 octaves lower/);
+  assert.equal(await hook.getAttribute('data-voice'), 'deep');
+  assert.equal(await hook.getAttribute('data-shift'), '-24');
+  assert.equal(await hook.locator('.st-vicon').textContent(), '🐋', 'the voice\'s icon on the clip');
+  assert.equal(await page.locator('.st-sticker[data-sticker="remixer"]').count(), 1, 'the Remixer sticker');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.locator('#studio .st-tools').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${out}/voice-chooser-tablet.png` });
+  // an octave higher
+  await page.click('[data-action="st-shift"][data-d="12"]');
+  assert.equal(await hook.getAttribute('data-shift'), '-12');
+  assert.match(await page.locator('.st-what small').textContent(), /Deep bass, 1 octave lower/);
+  // a drum clip's kit
+  await clipOf('.kind-cymbals').click();
+  assert.equal(await page.locator('[data-action="st-shift"]').count(), 0, 'drums don\'t go higher or lower');
+  await page.click('[data-action="st-chooser"][data-what="kit"]');
+  assert.equal(await page.locator('#studio .st-chooser .st-choice').count(), 3);
+  await page.click('[data-action="st-kit"][data-kit="tiny"]');
+  assert.equal(await clipOf('.kind-cymbals').getAttribute('data-kit'), 'tiny');
+  assert.equal(await clipOf('.kind-cymbals').locator('.st-vicon').textContent(), '🐭');
+
+  // a part in another key, moved into the mix's
+  await page.click('[data-action="st-add"][data-song="bg-sunset"][data-part="lead"]');
+  const sunny = clipOf('.kind-lead');
+  assert.match(await sunny.locator('.st-key').textContent(), /F major · another key/);
+  assert.equal(await page.locator('[data-action="st-fit"]').textContent(), '🎯 Move into C major');
+  await page.click('[data-action="st-fit"]');
+  assert.match(await toastText(page), /Moved into C major/);
+  assert.equal(await sunny.getAttribute('data-shift'), '-5');
+  assert.equal(await sunny.locator('.st-key').textContent(), 'C major', 'it fits now');
+  assert.equal(await page.locator('[data-action="st-fit"]').count(), 0);
+
+  // Undo and Redo a voice change
+  await hook.click();
+  await page.click('[data-action="st-chooser"][data-what="voice"]');
+  await page.click('[data-action="st-voice"][data-voice="musicbox"]');
+  assert.equal(await hook.getAttribute('data-voice'), 'musicbox');
+  assert.equal(await hook.getAttribute('data-shift'), '-12', 'a second voice doesn\'t move it again');
+  await page.click('[data-action="st-undo"]');
+  assert.equal(await hook.getAttribute('data-voice'), 'deep', 'Undo');
+  await page.click('[data-action="st-redo"]');
+  assert.equal(await hook.getAttribute('data-voice'), 'musicbox', 'Redo');
+  assert.ok(await noSideScroll(page), 'no sideways scrolling on the tablet');
+
+  // after a reload it is all still there
+  await wait(page, 800);
+  const kept = await draft();
+  const how = (m) => m.tracks.flat().map((c) => [c.kind, c.part || c.pattern, c.loop || '', c.voice || '', c.kit || '', c.shift || 0].join(' ')).sort();
+  await page.reload();
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-clip');
+  assert.equal(await page.locator('#studio .st-clip').count(), 6);
+  assert.equal(await clipOf('.kind-hook').getAttribute('data-voice'), 'musicbox');
+  assert.equal(await clipOf('.kind-cymbals').getAttribute('data-kit'), 'tiny');
+  assert.equal(await clipOf('.kind-lead').getAttribute('data-shift'), '-5');
+  assert.equal(await backing.locator('[data-action="st-loop"].on').textContent(), 'Spooky, in A minor', 'the chord picker shows the mix\'s chords');
+  assert.deepEqual(how(await draft()), how(kept));
+  assert.ok(how(kept).includes('backing chords-held spooky   0'));
+  for (const id of ['house', 'remixer']) assert.equal(await page.locator(`.st-sticker[data-sticker="${id}"]`).count(), 1);
+
+  // play it all
+  const starts = await page.evaluate(() => window.kqStarts);
+  await page.click('[data-action="st-play"]');
+  await wait(page, 1500);
+  assert.match(await page.locator('[data-action="st-play"]').textContent(), /Stop/);
+  assert.ok(await page.evaluate(() => window.kqStarts) - starts >= 6, 'every clip sounds');
+  assert.equal(await page.locator('.st-note').count(), 0, 'no part broke');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: `${out}/remixed-desk-tablet.png` });
+  await page.click('[data-action="st-play"]');
+  await ctx.close();
+}
+
+// 10. phone: the voice chooser, and the remix kit on the parent's test desk
+{
+  const { ctx, page } = await start({ width: 390, height: 844 }, false, firstDay());
+  await page.reload();
+  await toSettings(page);
+  await page.click('[data-action="studio-test"]');
+  await page.waitForSelector('#studio .st-backing');
+  assert.ok(await noSideScroll(page), 'the backing tracks fit a phone');
+  await page.click('[data-action="st-back-add"][data-pattern="chords-hop"]');
+  await page.click('[data-action="st-add"][data-song="show:bg-meadow"][data-part="hook"]');
+  await page.click('[data-action="st-chooser"][data-what="voice"]');
+  await page.click('[data-action="st-voice"][data-voice="flute"]');
+  assert.equal(await page.locator('#studio .st-clip.kind-hook').getAttribute('data-voice'), 'flute');
+  assert.equal(await page.locator('.st-sticker[data-sticker="remixer"]').count(), 1);
+  assert.ok(await noSideScroll(page), 'no sideways scrolling with the chooser open');
+  await page.locator('#studio .st-tools').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await page.screenshot({ path: `${out}/voice-chooser-phone.png` });
+  await ctx.close();
+}
+
 await browser.close();
 site.close();
 if (errors.length) { console.log(errors.join('\n')); process.exit(1); }
