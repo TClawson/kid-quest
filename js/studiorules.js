@@ -1,17 +1,28 @@
 // The recording studio's mixer, as rules: a mix is a short loop (30 seconds at most) of four
 // tracks. A track holds clips that never overlap: ready-made parts of the game's songs (the
-// tune, the arpeggio, the bass or the drums, see music.js songParts) and the kid's own takes
-// (recordings, kept on the tablet by studio-store.js). Clips can be moved, trimmed, copied and
-// thrown away. Everything is counted in beats (quarter notes) at the mix's speed, and snaps
+// tune, its hook, the arpeggio, the bass, the drums or their kick and snare or cymbals, see
+// music.js songParts), backing tracks that belong to no song (studiokit.js BACKING), and the
+// kid's own takes (recordings, kept on the tablet by studio-store.js). Clips can be moved,
+// trimmed, copied and thrown away. A clip with notes can be played in another voice and
+// moved higher or lower; a clip with drums can be played on another kit (the remix kit,
+// remix.js). Everything is counted in beats (quarter notes) at the mix's speed, and snaps
 // to whole beats. Pure logic, no DOM and no sound: studio.js draws and plays it.
+//
+// Clips: { id, kind: 'part', song, part, start, len, from, total }, { kind: 'backing',
+// pattern, loop, ... } or { kind: 'take', take, lead, ... }. A clip with notes may have
+// `voice` (a VOICES id) and `shift` (semitones); a clip with drums may have `kit` (a KITS id).
 
 import { SONGS, SHOW_SONGS } from './songs.js';
-import { keyInfo, songbookFor } from './sheetmusic.js';
+import { keyInfo, keyLabel, songbookFor } from './sheetmusic.js';
+import { VOICES, KITS, LOOPS, BACKING, LOOP_BARS } from './studiokit.js';
+import { clipSound, clipEvents, noteSpan, sameSig, shiftKey, sigOf, LOWEST, HIGHEST, MOST_SHIFT } from './remix.js';
 
 export const TRACKS = 4;
 export const MAX_SECONDS = 30;
 export const MIX_SLOTS = 3; // mixes a kid can keep
-export const PART_NAMES = { lead: 'Tune', arp: 'Sparkle', bass: 'Bass', drums: 'Drums' };
+export const PART_NAMES = { lead: 'Tune', arp: 'Sparkle', bass: 'Bass', drums: 'Drums', hook: 'Hook', beat: 'Kick and snare', cymbals: 'Cymbals' };
+/** A new mix that starts with a backing track plays at this speed. */
+export const BACKING_BPM = 120;
 export const BPM_RANGE = [70, 170];
 
 const songOf = (id) => {
@@ -26,6 +37,12 @@ export function sourceOf(songId) {
   const meter = (s.beat || 8) / 2;
   return { song: songId, name: s.name, key: s.key, bpm: s.bpm, meter, beats: s.lead.length * meter };
 }
+
+/** How many beats a part of a song lasts: the hook is its first 2 bars, the others the whole song. */
+export const partBeats = (src, part) => (part === 'hook' ? Math.min(src.beats, 2 * src.meter) : src.beats);
+
+/** A backing track's length in beats: 4 bars. */
+export const backingBeats = (pattern) => LOOP_BARS * BACKING[pattern].meter;
 
 /** The most bars a loop can have at this speed and beat, to stay within 30 seconds (at least 2). */
 export function maxBars(bpm, meter = 4) {
@@ -106,7 +123,8 @@ export function bestSpot(mix) {
  * Put a ready-made part on a track at beat `at` (snapped; the first free place from there on).
  * The first clip of a mix sets its speed, beat and key, and trims the loop to 30 seconds. A
  * part of another beat (a waltz in a four-beat mix) is turned down. The clip is as long as
- * the part, or the room there is. Returns { mix, error, id }.
+ * the part, or the room there is. A mix with no key yet (only drums so far) takes the song's.
+ * Returns { mix, error, id }.
  */
 export function addPart(mix, track, songId, part, at = 0) {
   const src = sourceOf(songId);
@@ -120,15 +138,201 @@ export function addPart(mix, track, songId, part, at = 0) {
     next.bars = Math.max(2, Math.min(maxBars(src.bpm, src.meter), 8, Math.ceil(src.beats / src.meter)));
   } else if (src.meter !== next.meter) {
     return no(mix, `${src.name} has ${src.meter} beats in a bar, and this mix has ${next.meter}. They can't play together.`);
-  }
+  } else if (!next.key) next.key = src.key;
   const start = freeSpot(next, track, 1, Math.round(at));
   if (start < 0) return no(mix, 'That track is full.');
-  const len = Math.min(src.beats, roomAt(next, track, start));
+  const total = partBeats(src, part);
+  const len = Math.min(total, roomAt(next, track, start));
   const id = next.next;
   next = { ...next, next: id + 1 };
-  next.tracks[track].push({ id, kind: 'part', song: songId, part, start, len, from: 0, total: src.beats });
+  next.tracks[track].push({ id, kind: 'part', song: songId, part, start, len, from: 0, total });
   next.tracks[track].sort((a, b) => a.start - b.start);
   return { mix: next, error: null, id };
+}
+
+/**
+ * Put a backing track (a BACKING pattern, 4 bars) on a track at beat `at`, as addPart does.
+ * One with notes plays the chord loop `loop` in the mix's key (see remix.js backingKey). An
+ * empty mix takes the pattern's beat and a speed of 120; a mix with no key yet gets C major
+ * or A minor (as the loop's mood) from a backing with notes. Another beat is turned down.
+ * Returns { mix, error, id }.
+ */
+export function addBacking(mix, track, pattern, loop = 'sunny', at = 0) {
+  const b = Object.hasOwn(BACKING, pattern) ? BACKING[pattern] : null;
+  if (!b) return no(mix, 'That backing track is not in the studio.');
+  if (!Object.hasOwn(LOOPS, loop)) return no(mix, 'Pick the chords first.');
+  let next = clone(mix);
+  if (!allClips(next).length) {
+    next.bpm = BACKING_BPM;
+    next.meter = b.meter;
+    next.key = null;
+    next.bars = Math.max(2, Math.min(maxBars(BACKING_BPM, b.meter), 8));
+  } else if (b.meter !== next.meter) {
+    return no(mix, `${b.name} has ${b.meter} beats in a bar, and this mix has ${next.meter}. They can't play together.`);
+  }
+  if (b.kind === 'notes' && !next.key) next.key = LOOPS[loop].mood === 'minor' ? 'Am' : 'C';
+  const start = freeSpot(next, track, 1, Math.round(at));
+  if (start < 0) return no(mix, 'That track is full.');
+  const total = backingBeats(pattern);
+  const len = Math.min(total, roomAt(next, track, start));
+  const id = next.next;
+  next = { ...next, next: id + 1 };
+  next.tracks[track].push({ id, kind: 'backing', pattern, loop, start, len, from: 0, total });
+  next.tracks[track].sort((a, b2) => a.start - b2.start);
+  return { mix: next, error: null, id };
+}
+
+/**
+ * Play every backing track with notes in a mix on the chord loop `loop` (they follow the
+ * chords the kid picks). Returns { mix, error, changed (how many clips) }.
+ */
+export function setLoop(mix, loop) {
+  if (!Object.hasOwn(LOOPS, loop)) return { ...no(mix, 'Pick the chords first.'), changed: 0 };
+  const next = clone(mix);
+  let changed = 0;
+  for (const c of allClips(next)) {
+    if (c.kind === 'backing' && clipSound(c) === 'notes' && c.loop !== loop) { c.loop = loop; changed += 1; }
+  }
+  return { mix: changed ? next : mix, error: null, changed };
+}
+
+// ---------- the remix kit: voices, kits, higher and lower ----------
+
+/** A clip's own voice: absent for a song's part (its own waves), the pattern's for a backing track. */
+const ownVoice = (c) => (c.kind === 'backing' ? BACKING[c.pattern]?.voice || null : null);
+
+/** Whether a clip plays in a voice or on a kit of the kid's choosing (not its own sound). */
+export const remixed = (c) => Boolean((c.voice && c.voice !== ownVoice(c)) || (c.kit && c.kit !== 'chip'));
+
+/** The notes a clip plays now (its shift too): { low, high }, or null when it has none. */
+export function clipSpan(mix, c) {
+  const span = noteSpan(clipEvents(c, mix.key));
+  return span && { low: span.low + (c.shift || 0), high: span.high + (c.shift || 0) };
+}
+
+/** A shift's whole octaves and what is left (-6 to 5 semitones): 14 is 1 octave and 2. */
+export function splitShift(shift = 0) {
+  const rest = ((((shift + 6) % 12) + 12) % 12) - 6;
+  return { octaves: (shift - rest) / 12, rest };
+}
+
+/** Whether a clip may be moved by `shift` semitones in all: within the limits, every note playable. */
+function shiftOk(mix, c, shift) {
+  if (Math.abs(shift) > MOST_SHIFT) return false;
+  const span = noteSpan(clipEvents(c, mix.key));
+  return !span || (span.low + shift >= LOWEST && span.high + shift <= HIGHEST);
+}
+
+/**
+ * Give a clip with notes a voice (a VOICES id), or its own sound back (null). The first time a
+ * clip gets a voice, and it hasn't been moved by octaves yet, it moves by whole octaves so its
+ * notes sit around that voice's home octave (a tune played on Deep bass plays low at once).
+ * Returns { mix, error, octaves (how far it moved) }.
+ */
+export function setVoice(mix, id, voice) {
+  const found = findClip(mix, id);
+  if (!found) return no(mix, 'That clip is gone.');
+  const c = found.clip;
+  if (clipSound(c) !== 'notes') return no(mix, 'Only music with notes can change its voice.');
+  if (voice != null && !Object.hasOwn(VOICES, voice)) return no(mix, 'That voice is not in the studio.');
+  const next = clone(mix);
+  const clip = findClip(next, id).clip;
+  let octaves = 0;
+  if (voice == null || voice === ownVoice(c)) delete clip.voice;
+  else {
+    const { octaves: moved, rest } = splitShift(c.shift || 0);
+    const span = clipSpan(mix, c);
+    if (!c.voice && moved === 0 && span) {
+      // the middle of the voice's home octave (octave 4 is MIDI 60 to 71)
+      const home = (VOICES[voice].home + 1) * 12 + 5.5;
+      const want = Math.round((home - (span.low + span.high) / 2) / 12);
+      // the nearest octave that keeps every note playable (else it stays where it is)
+      const fits = [-2, -1, 0, 1, 2].filter((o) => shiftOk(mix, c, rest + 12 * o));
+      octaves = fits.length ? fits.reduce((a, o) => (Math.abs(o - want) < Math.abs(a - want) ? o : a)) : 0;
+      if (octaves) clip.shift = rest + 12 * octaves;
+    }
+    clip.voice = voice;
+  }
+  return { mix: next, error: null, octaves };
+}
+
+/** Play a clip with drums on a kit (a KITS id), or the game's own kit (null or 'chip'). */
+export function setKit(mix, id, kit) {
+  const found = findClip(mix, id);
+  if (!found) return no(mix, 'That clip is gone.');
+  if (clipSound(found.clip) !== 'drums') return no(mix, 'Only drums can change their kit.');
+  if (kit != null && !Object.hasOwn(KITS, kit)) return no(mix, 'That kit is not in the studio.');
+  const next = clone(mix);
+  const clip = findClip(next, id).clip;
+  if (kit == null || kit === 'chip') delete clip.kit;
+  else clip.kit = kit;
+  return ok(next);
+}
+
+/**
+ * Move a clip with notes higher or lower by `by` semitones (12 is an octave up). Turned down
+ * when a note would leave what can be heard well (MIDI 24 to 96) or it would move more than
+ * 2 octaves.
+ */
+export function shiftClip(mix, id, by) {
+  const found = findClip(mix, id);
+  if (!found) return no(mix, 'That clip is gone.');
+  const c = found.clip;
+  if (clipSound(c) !== 'notes') return no(mix, 'Only music with notes can go higher or lower.');
+  const shift = (c.shift || 0) + Math.round(by);
+  if (!shiftOk(mix, c, shift)) return no(mix, by > 0 ? 'It can\'t go any higher. Its notes would be too high to hear well.' : 'It can\'t go any lower. Its notes would be too low to hear well.');
+  const next = clone(mix);
+  const clip = findClip(next, id).clip;
+  if (shift) clip.shift = shift;
+  else delete clip.shift;
+  return ok(next);
+}
+
+/**
+ * How many semitones (-6 to 5, the smallest move) bring music in key `from` to the key
+ * signature of key `to`: fitShift('F', 'C') is -5, fitShift('G', 'C') is 5.
+ */
+export function fitShift(from, to) {
+  const k = (((7 * (sigOf(to) - sigOf(from))) % 12) + 12) % 12;
+  return k > 5 ? k - 12 : k;
+}
+
+/** The key a song's part with notes plays in now, moved by its shift (null for anything else). */
+export function clipKey(c) {
+  if (c.kind !== 'part' || clipSound(c) !== 'notes') return null;
+  const src = sourceOf(c.song);
+  return src ? shiftKey(src.key, c.shift || 0) : null;
+}
+
+/** Whether a clip goes with the mix's key (a backing track always does: it follows the mix). */
+export function clipFits(mix, c) {
+  const key = clipKey(c);
+  return !mix.key || !key || sameSig(mix.key, key);
+}
+
+/**
+ * Move a song's part into the mix's key: the smallest move that brings it there, keeping
+ * any octaves it was moved by (or the octave next to them, when the notes would go too far).
+ * Returns { mix, error }.
+ */
+export function moveIntoKey(mix, id) {
+  const found = findClip(mix, id);
+  if (!found) return no(mix, 'That clip is gone.');
+  const c = found.clip;
+  if (!clipKey(c) || !mix.key) return no(mix, 'That clip has no key to move.');
+  if (clipFits(mix, c)) return no(mix, `It already goes with ${keyLabel(mix.key)}.`);
+  const { octaves } = splitShift(c.shift || 0);
+  const k = fitShift(sourceOf(c.song).key, mix.key);
+  for (const o of [octaves, octaves - 1, octaves + 1]) {
+    const shift = 12 * o + k;
+    if (!shiftOk(mix, c, shift)) continue;
+    const next = clone(mix);
+    const clip = findClip(next, id).clip;
+    if (shift) clip.shift = shift;
+    else delete clip.shift;
+    return ok(next);
+  }
+  return no(mix, 'It can\'t move into that key. Its notes would be too high or too low.');
 }
 
 /**
@@ -260,8 +464,9 @@ export function keyFits(mixKey, key) {
 }
 
 /**
- * What to play for one time round the loop: [{ id, track, kind, song, part, take, at, offset,
- * dur }] in seconds: when it starts, how far into its part or take, and for how long.
+ * What to play for one time round the loop: [{ id, track, kind, song, part, pattern, loop,
+ * voice, kit, shift, take, at, offset, dur }] in seconds: when it starts, how far into its
+ * part, backing track or take, and for how long, and how it is played.
  * A take keeps `lead` seconds of sound from before its beat, so a note played a little early
  * keeps its start. Untrimmed, it starts that much before its beat (a clip on the loop's first
  * beat then starts at the end of the loop before). Trimmed at the front, it starts on its beat.
@@ -271,10 +476,13 @@ export function schedule(mix) {
   return mix.tracks.flatMap((clips, track) => clips.map((c) => {
     const lead = c.kind === 'take' ? c.lead || 0 : 0;
     const early = c.from === 0 ? lead : 0;
-    return {
+    const e = {
       id: c.id, track, kind: c.kind, song: c.song, part: c.part, take: c.take,
       at: c.start * beat - early, offset: c.from === 0 ? 0 : c.from * beat + lead, dur: c.len * beat + early,
     };
+    // the remix kit's fields, when the clip has them
+    for (const k of ['pattern', 'loop', 'voice', 'kit', 'shift']) if (c[k] !== undefined) e[k] = c[k];
+    return e;
   })).sort((a, b) => a.at - b.at || a.track - b.track);
 }
 
@@ -290,9 +498,13 @@ export function badges(mix) {
   if (takes.length && parts.length) out.push({ id: 'duet', name: 'Duet', why: 'You played along with the game.' });
   if (['lead', 'bass', 'drums'].every((k) => kinds.has(k))) out.push({ id: 'band', name: 'Full band', why: 'A tune, a bass and drums together.' });
   if (songs.size >= 2) out.push({ id: 'remix', name: 'Remix', why: 'Parts from two songs in one mix.' });
-  if (songs.size >= 2 && [...songs].every((s) => keyFits(mix.key, sourceOf(s)?.key))) out.push({ id: 'match', name: 'Perfect match', why: 'Every part is in the same key.' });
+  // (a part moved into the mix's key counts as in it)
+  if (songs.size >= 2 && parts.every((c) => (c.shift ? clipFits(mix, c) : keyFits(mix.key, sourceOf(c.song)?.key)))) out.push({ id: 'match', name: 'Perfect match', why: 'Every part is in the same key.' });
   const mine = mix.tracks.filter((t) => t.some((c) => c.kind === 'take')).length;
-  if (mine >= TRACKS && !parts.length) out.push({ id: 'solo', name: 'One-kid band', why: 'Every track is you!' });
+  if (mine >= TRACKS && !parts.length && !clips.some((c) => c.kind === 'backing')) out.push({ id: 'solo', name: 'One-kid band', why: 'Every track is you!' });
+  if (clips.some(remixed)) out.push({ id: 'remixer', name: 'Remixer', why: 'You gave the music a new sound.' });
+  const groups = new Set(clips.filter((c) => c.kind === 'backing').map((c) => BACKING[c.pattern]?.group));
+  if (['beats', 'bass', 'chords'].every((g) => groups.has(g))) out.push({ id: 'house', name: 'House band', why: 'A beat, a bass line and chords from the backing tracks.' });
   return out;
 }
 
@@ -323,15 +535,29 @@ export function cleanMix(raw) {
     for (const c of Array.isArray(clips) ? clips : []) {
       const src = c?.kind === 'part' && typeof c.song === 'string' ? sourceOf(c.song) : null;
       const part = src && typeof c.part === 'string' && Object.hasOwn(PART_NAMES, c.part) && src.meter === mix.meter;
+      // a backing track: a known pattern of the mix's beat
+      const pattern = c?.kind === 'backing' && typeof c.pattern === 'string' && Object.hasOwn(BACKING, c.pattern) && BACKING[c.pattern].meter === mix.meter;
       const take = c?.kind === 'take' && typeof c.take === 'string';
       const [start, len, from, total] = [c?.start, c?.len, c?.from, c?.total];
-      if (!(part || take) || ![start, len, from, total].every(Number.isInteger)) continue;
+      if (!(part || pattern || take) || ![start, len, from, total].every(Number.isInteger)) continue;
       if (!(len >= 1) || !(from >= 0) || !(total >= from + len) || !isFree(mix, t, start, len)) continue;
-      if (part) {
-        // never longer than the song itself
-        const keep = Math.min(len, src.beats - from);
+      if (part || pattern) {
+        // never longer than the part or the backing track itself
+        const whole = part ? partBeats(src, c.part) : backingBeats(c.pattern);
+        const keep = Math.min(len, whole - from);
         if (keep < 1) continue;
-        mix.tracks[t].push({ id: next, kind: 'part', song: c.song, part: c.part, start, len: keep, from, total: src.beats });
+        const clip = part
+          ? { id: next, kind: 'part', song: c.song, part: c.part, start, len: keep, from, total: whole }
+          : { id: next, kind: 'backing', pattern: c.pattern, loop: Object.hasOwn(LOOPS, c.loop) ? c.loop : 'sunny', start, len: keep, from, total: whole };
+        // how it is played: a known voice and a shift in range for notes, a known kit for drums
+        const sound = clipSound(clip);
+        if (sound === 'notes' && typeof c.voice === 'string' && Object.hasOwn(VOICES, c.voice) && c.voice !== ownVoice(clip)) clip.voice = c.voice;
+        if (sound === 'drums' && typeof c.kit === 'string' && Object.hasOwn(KITS, c.kit) && c.kit !== 'chip') clip.kit = c.kit;
+        if (sound === 'notes' && Number.isFinite(c.shift)) {
+          const shift = Math.max(-MOST_SHIFT, Math.min(MOST_SHIFT, Math.round(c.shift)));
+          if (shift) clip.shift = shift;
+        }
+        mix.tracks[t].push(clip);
       } else {
         const clip = { id: next, kind: 'take', take: c.take, start, len, from, total };
         if (Number.isFinite(c.lead) && c.lead > 0 && c.lead <= 0.2) clip.lead = c.lead;
@@ -342,6 +568,8 @@ export function cleanMix(raw) {
     mix.tracks[t].sort((a, b) => a.start - b.start);
   });
   if (!mix.key) mix.key = sourceOf(mix.tracks.flat().find((c) => c.kind === 'part')?.song || '')?.key || null;
+  const notes = mix.tracks.flat().find((c) => c.kind === 'backing' && clipSound(c) === 'notes');
+  if (!mix.key && notes) mix.key = LOOPS[notes.loop].mood === 'minor' ? 'Am' : 'C';
   mix.next = next;
   return mix;
 }
