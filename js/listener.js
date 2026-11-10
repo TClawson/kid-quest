@@ -43,6 +43,7 @@ export const SETTINGS = {
   susFrom: 4, susTo: 9, // looks after the strike where the note's own loudness is read
   ghost: 3, // an overtone: a note this many times softer than a note struck with it, an overtone's distance below
   ghostLeak: 2, ghostMost: 0.35, // ... for the octave: softer than this many times what the octave key usually rises by in this recording (counted up to ghostMost of the lower note)
+  ghostLate: 8, // ... and an overtone can show up this many looks after its note
   ghostOwn: 2.5, // a note an octave or more under another: an overtone of its own stands this far out of the picture, or it was not struck
   knock: 0.6, knockBelow: 58, // a key's knock: a low note that fades to under this at once (see pickNotes)
   cluster: 1, // of two neighbouring keys struck in one instant, the one this many times softer goes
@@ -557,7 +558,7 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
     };
     kept = notes.filter((n) => !notes.some((m) => {
       const d = n.midi - m.midi;
-      if (m === n || Math.abs(m.t - n.t) > 4 || !above.includes(d)) return false;
+      if (m === n || m.t - n.t > 4 || n.t - m.t > S.ghostLate || !above.includes(d)) return false;
       const most = d === 12 && S.ghostLeak > 0 ? Math.max(1 / S.ghost, S.ghostLeak * Math.min(S.ghostMost, usual(m))) : 1 / S.ghost;
       return n.strength < most * m.strength;
     }));
