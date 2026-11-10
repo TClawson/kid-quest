@@ -24,7 +24,7 @@ import {
   TRACKS, MIX_SLOTS, PART_NAMES, BPM_RANGE, BACKING_BPM, newMix, sourceOf, maxBars, mixBeats, mixSeconds, addPart, addTake, moveClip,
   trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges, shelfSongs,
   addBacking, setLoop, setVoice, setKit, shiftClip, moveIntoKey, clipFits, clipKey, remixed, splitShift, backingBeats, backingSwing,
-  setTrackVolume, muteTrack, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME,
+  setTrackVolume, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME,
 } from './studiorules.js';
 import { VOICES, KITS, LOOPS, LOOP_IDS, BACKING, BACKING_GROUPS, backingEvents } from './studiokit.js';
 import { partEvents, clipSound, backingKey, keyTonic } from './remix.js';
@@ -166,6 +166,7 @@ const S = {
   waiting: '',        // 'play' or 'rec' while Play or Record waits for sounds to be made
   hearWait: '',       // the sound being heard (S.hearing) while it is being made
   volTrack: null,     // the track whose loudness panel is open, or null
+  unmuteTo: [],       // by track: the level it had when it was muted, for Unmute (not kept in the mix)
   phones: readNumber(PHONES_KEY) === 1,
   takes: new Map(),   // take id -> { rate, samples, lead }, or null when it is gone
   waves: new Map(),   // a take's little picture, by take and stretch
@@ -301,7 +302,7 @@ function sweep(kid = S.kid) {
 async function openDesk(kid) {
   stopAll();
   flushSave();
-  Object.assign(S, { kid, loading: true, broken: false, mix: newMix(), slots: [], clean: '', sel: null, volTrack: null, panel: '', note: '', badges: [], pop: '', undo: [], redo: [], saveWarned: false, spot: { track: 0, beat: 0, picked: false } });
+  Object.assign(S, { kid, loading: true, broken: false, mix: newMix(), slots: [], clean: '', sel: null, volTrack: null, unmuteTo: [], panel: '', note: '', badges: [], pop: '', undo: [], redo: [], saveWarned: false, spot: { track: 0, beat: 0, picked: false } });
   S.takes.clear();
   S.waves.clear();
   paint();
@@ -1103,13 +1104,16 @@ function audio() {
     const Ctx = globalThis.AudioContext || globalThis.webkitAudioContext;
     A.ac = new Ctx();
     A.clicks = new Map(); // clicks made for another AudioContext can't play in this one
-    // four tracks at once stay safe: half volume, and the loudest bits bent over softly.
+    // four tracks at once stay safe: 0.4 of full volume, and the loudest bits bent over softly.
+    // Four tracks play together, and quiet sounds (plucked voices, drums) are lifted up to 1.6
+    // times (music.js levelGain), so a whole mix must stay under the soft clip's ceiling; the
+    // tracks' own levels only balance them (studiorules.js trackGain), never add to it.
     // The bending adds no delay, so the music stays in time with the clicks.
     const net = A.ac.createWaveShaper();
     net.curve = softClip();
     net.oversample = 'none';
     A.master = A.ac.createGain();
-    A.master.gain.value = 0.5;
+    A.master.gain.value = 0.4;
     A.master.connect(net).connect(A.ac.destination);
   } catch {
     A.ac = null;
@@ -1864,6 +1868,7 @@ function openSlot(i) {
     syncLoop();
     S.clean = fingerprint(S.mix);
     S.sel = null;
+    S.unmuteTo = [];
     S.spot = { track: 0, beat: 0, picked: false };
     S.badges = badges(S.mix);
     S.panel = '';
@@ -1908,6 +1913,7 @@ function newDesk() {
     S.mix = newMix();
     S.clean = '';
     S.sel = null;
+    S.unmuteTo = [];
     S.spot = { track: 0, beat: 0, picked: false };
     S.badges = [];
     S.panel = '';
@@ -2027,7 +2033,12 @@ export const studioActions = {
   'st-vol-mute': () => {
     const t = S.volTrack;
     if (t == null || busyNow()) return;
-    commit(muteTrack(S.mix, t).mix);
+    // Unmute goes back to the level the track had when it was muted (this visit), else the usual
+    const v = trackVolume(S.mix, t);
+    const r = setTrackVolume(S.mix, t, v === 0 ? S.unmuteTo[t] ?? USUAL_VOLUME : 0);
+    if (r.error) { toast(r.error); return; }
+    S.unmuteTo[t] = v === 0 ? null : v;
+    commit(r.mix);
   },
   'st-chooser': (el) => {
     if (S.sel == null) return;

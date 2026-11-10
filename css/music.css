@@ -275,12 +275,12 @@
   .st-main { width: 100%; }
   .st-main .btn { flex: 1; min-width: 0; padding: 8px 6px; white-space: nowrap; }
   .st-undos { width: 100%; flex-wrap: nowrap; }
-  .st-undos .btn { flex: 1; min-width: 0; padding: 6px; min-height: 40px; }
+  .st-undos .btn { flex: 1; min-width: 0; padding: 6px; min-height: 44px; }
   .st-more { margin-left: 0; width: 100%; flex-wrap: nowrap; gap: 6px; }
   .st-more .btn { flex: 1 1 auto; min-width: 0; padding: 8px 6px; font-size: 0.9rem; white-space: nowrap; }
   .st-more [data-panel="help"] { flex: 0 0 48px; }
   .st-step { flex: 1 1 150px; justify-content: space-between; gap: 4px; }
-  .st-step .btn.round { width: 40px; min-height: 40px; }
+  .st-step .btn.round { width: 44px; min-height: 44px; }
   .st-val small { font-size: 0.7rem; }
   .st-val { min-width: 0; }
   .st-time { grid-template-columns: 44px minmax(0, 1fr); gap: 0 4px; }

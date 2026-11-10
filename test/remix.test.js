@@ -658,10 +658,10 @@ test('track volume: levels 0 to 5, 3 the usual; mute is level 0 and unmute goes 
   assert.equal('vols' in mix, false, 'a mix has no levels until one changes');
   assert.deepEqual([0, 1, 2, 3].map((t) => trackVolume(mix, t)), [3, 3, 3, 3]);
   assert.deepEqual([0, 1, 2, 3].map((t) => trackGain(mix, t)), [1, 1, 1, 1]);
-  // the gains: silent, -12, -6, 0, +3, +6 dB
-  const gains = [0, 1, 2, 3, 4, 5].map((v) => trackGain(must(setTrackVolume(mix, 2, v)).mix, 2));
+  // the gains of one track among usual ones: silent, -12, -6, 0 dB; louder ones balance (see below)
+  const gains = [0, 1, 2, 3].map((v) => trackGain(must(setTrackVolume(mix, 2, v)).mix, 2));
   assert.equal(gains[0], 0);
-  [-12, -6, 0, 3, 6].forEach((db, i) => near(20 * Math.log10(gains[i + 1]), db, `level ${i + 1}`));
+  [-12, -6, 0].forEach((db, i) => near(20 * Math.log10(gains[i + 1]), db, `level ${i + 1}`));
   // a change: only that track; the same level is no change at all
   const r = must(setTrackVolume(mix, 1, 5));
   assert.deepEqual(r.mix.vols, [3, 5, 3, 3]);
@@ -686,6 +686,38 @@ test('track volume: levels 0 to 5, 3 the usual; mute is level 0 and unmute goes 
   moved = must(setLoop(must(addBacking(moved, 3, 'chords-held')).mix, 'spooky')).mix;
   assert.deepEqual(moved.vols, [0, 3, 3, 3]);
   assert.deepEqual(schedule(moved).map((e) => e.track).sort(), moved.tracks.flatMap((t, i) => t.map(() => i)).sort());
+});
+
+test('track volume is a balance, never a boost of the whole mix', () => {
+  const at = (vols) => [0, 1, 2, 3].map((t) => trackGain({ ...newMix(), vols }, t));
+  const dB = (g) => 20 * Math.log10(g);
+  // no levels at all, every track usual
+  assert.deepEqual(at(undefined), [1, 1, 1, 1]);
+  // one track up to 5 (+6 dB): it plays as usual, the others 6 dB lower
+  let g = at([5, 3, 3, 3]);
+  near(g[0], 1, 'the loud track');
+  for (const x of g.slice(1)) near(dB(x), -6, 'the others');
+  // one at 4 (+3 dB) and one at 5: the loudest is the top
+  g = at([4, 5, 3, 1]);
+  near(dB(g[0]), -3, 'level 4 under level 5');
+  near(g[1], 1);
+  near(dB(g[2]), -6);
+  near(dB(g[3]), -18, 'level 1 is still 12 dB under level 3');
+  // all up: as all at 3
+  assert.deepEqual(at([5, 5, 5, 5]).map((x) => +x.toFixed(9)), [1, 1, 1, 1]);
+  assert.deepEqual(at([4, 4, 4, 4]).map((x) => +x.toFixed(9)), [1, 1, 1, 1]);
+  // a muted track stays silent, and doesn't move the others
+  g = at([0, 5, 3, 3]);
+  assert.equal(g[0], 0);
+  near(g[1], 1);
+  near(dB(g[2]), -6);
+  // levels at or below 3 are never raised
+  g = at([2, 1, 0, 2]);
+  near(dB(g[0]), -6);
+  near(dB(g[1]), -12);
+  assert.equal(g[2], 0);
+  assert.deepEqual(at([0, 0, 0, 0]), [0, 0, 0, 0]);
+  for (const vols of [[5, 3, 3, 3], [4, 2, 1, 0], [5, 5, 5, 5], [3, 3, 3, 3], [1, 2, 0, 1]]) assert.ok(Math.max(...at(vols)) <= 1, `${vols}: nothing above 1`);
 });
 
 test('track volume in a stored mix: kept when good, repaired or dropped when odd; none added to an old mix', () => {

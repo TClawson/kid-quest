@@ -574,6 +574,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await measure();
   // the take is kept: a second tap on Undo straight away does nothing
   for (let i = 0; i < 60 && !(await clips(page, 1).count()); i += 1) await wait(page, 50);
+  // (the label says Saving… a moment longer, until the take is kept on the tablet)
+  for (let i = 0; i < 60 && await recBtn.textContent() !== '● Record'; i += 1) await wait(page, 50);
   await measure();
   assert.deepEqual(sizes.map((x) => x[0]), ['● Record', 'Get ready… 4', '■ Stop recording', 'Saving…', '● Record'].slice(0, sizes.length).map((t, i) => (i === 1 ? sizes[1][0] : t)));
   assert.equal(new Set(sizes.map((x) => x[1])).size, 1, `Record keeps its width: ${JSON.stringify(sizes)}`);
@@ -1019,6 +1021,9 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   // the message is under the choices, and nothing covers them
   const said = page.locator('#studio .st-said');
   assert.match(await said.textContent(), /Now it plays as Music box\..*New sticker: Remixer!/);
+  // (the preview's sound is made, then the studio is drawn again: wait for that before measuring)
+  for (let i = 0; i < 100 && /Getting the new sound ready/.test(await said.textContent()); i += 1) await wait(page, 100);
+  assert.doesNotMatch(await said.textContent(), /Getting the new sound ready/);
   assert.doesNotMatch(await toastText(page), /Now it plays|sticker/, 'no toast over the choices');
   const boxes = await page.evaluate(() => {
     const box = (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
@@ -1029,8 +1034,9 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await page.locator('#studio .st-remix').evaluate((el) => el.scrollIntoView({ block: 'start' }));
   assert.ok(await said.evaluate((el) => el.getBoundingClientRect().bottom <= window.innerHeight), 'the message is on screen with the choices');
   await page.screenshot({ path: `${out}/voice-chooser-phone.png` });
-  // big enough for a finger on a phone: Voice, Higher, Lower, the chords, the 🔊 buttons, the parts
-  assert.deepEqual(await tooSmall(page, '#studio .st-tools .btn, #studio .st-loops .btn, #studio .st-shelf .st-part .btn, #studio .st-vol'), []);
+  // big enough for a finger on a phone: Voice, Higher, Lower, the chords, the 🔊 buttons, the
+  // parts, the tracks' loudness, Undo and Redo, the loop's length and the speed
+  assert.deepEqual(await tooSmall(page, '#studio .st-tools .btn, #studio .st-loops .btn, #studio .st-shelf .st-part .btn, #studio .st-vol, #studio .st-undos .btn, #studio .st-step .btn'), []);
   await ctx.close();
 }
 
@@ -1067,8 +1073,9 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await wait(page, 200);
   let now = await sound();
   assert.equal(now.playing, true, 'still playing');
-  near(now.tracks[0], 10 ** (3 / 20), 'track 1 is 3 dB louder');
-  assert.equal(now.tracks[1], 1);
+  // (a balance, never a boost: the loudest track plays as usual, the others 3 dB under it)
+  near(now.tracks[0], 1, 'track 1 is the loudest');
+  near(now.tracks[1], 10 ** (-3 / 20), 'track 2 is 3 dB under it');
   assert.equal(await page.evaluate(() => window.kqStops), stops, 'nothing was stopped: the music didn\'t start again');
   assert.equal(await panel.locator('.st-dots i.on').count(), 4);
   assert.equal(await vol(0).textContent(), '1🔊');
@@ -1084,7 +1091,10 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   assert.equal(await vol(0).textContent(), '1🔇');
   await page.click('[data-action="st-vol-mute"]');
   await wait(page, 200);
-  assert.equal((await sound()).tracks[0], 1, 'unmuted: the usual loudness');
+  now = await sound();
+  assert.equal(await panel.locator('.st-dots i.on').count(), 4, 'unmuted: back to the level it had');
+  near(now.tracks[0], 1, 'the loudest track plays as usual');
+  near(now.tracks[1], 10 ** (-3 / 20), 'and the others balance 3 dB under it');
   await page.click('[data-action="st-vol-mute"]');
   await wait(page, 200);
   // Undo and Redo
@@ -1098,19 +1108,34 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await wait(page, 200);
   now = await sound();
   assert.deepEqual([now.tracks[0], now.playing], [1, true]);
-  await page.click('[data-action="st-vol-step"][data-d="-1"]');
-  await page.click('[data-action="st-vol-step"][data-d="-1"]');
+  await page.click('[data-action="st-vol-step"][data-d="1"]');
   await wait(page, 200);
-  near((await sound()).tracks[0], 10 ** (-12 / 20), 'two quieter: -12 dB');
+  now = await sound();
+  near(now.tracks[0], 1, 'level 5: still as usual');
+  near(now.tracks[1], 10 ** (-6 / 20), 'the others 6 dB under it');
+  for (let i = 0; i < 3; i += 1) await page.click('[data-action="st-vol-step"][data-d="-1"]');
+  await wait(page, 200);
+  now = await sound();
+  near(now.tracks[0], 10 ** (-6 / 20), 'three quieter, level 2: -6 dB');
+  assert.equal(now.tracks[1], 1, 'and the others back to usual');
   assert.equal(await page.evaluate(() => window.kqStops), stops, 'the music never started again');
   await page.click('[data-action="st-play"]');
-  // a reload keeps it
+  // a reload keeps the levels; a track muted before it unmutes to the usual level
   await wait(page, 800);
-  assert.deepEqual((await draft()).vols, [1, 3, 3, 3]);
+  assert.deepEqual((await draft()).vols, [2, 3, 3, 3]);
+  await vol(1).click();
+  await page.click('[data-action="st-vol-step"][data-d="1"]');
+  await page.click('[data-action="st-vol-mute"]');
+  await wait(page, 800);
+  assert.deepEqual((await draft()).vols, [2, 0, 3, 3]);
   await page.reload();
   await walkIn(page);
   await page.waitForSelector('#studio .st-vol');
-  assert.equal(await vol(0).textContent(), '1🔈');
+  assert.equal(await vol(0).textContent(), '1🔉');
+  assert.equal(await vol(1).textContent(), '2🔇');
+  await vol(1).click();
+  await page.click('[data-action="st-vol-mute"]');
+  assert.equal(await page.locator('#studio .st-volpanel .st-dots i.on').count(), 3, 'nothing remembered: the usual level');
   assert.ok(await noSideScroll(page));
   await ctx.close();
 }

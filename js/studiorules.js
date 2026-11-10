@@ -484,10 +484,18 @@ export const USUAL_VOLUME = 3;
 /** A track's level (a mix without `vols` has every track at the usual 3). */
 export const trackVolume = (mix, track) => (Array.isArray(mix.vols) && Number.isInteger(mix.vols[track]) ? mix.vols[track] : USUAL_VOLUME);
 
-/** How much a track's sound is multiplied by: 0 when muted, 1 at the usual level. */
+/** A level's gain from the table: 0 when muted, 1 at the usual level. */
+const levelGain = (level) => (VOLUME_DB[level] == null ? 0 : 10 ** (VOLUME_DB[level] / 20));
+
+/**
+ * How much a track's sound is multiplied by: a balance between the tracks, never a boost of the
+ * whole mix. Its level's gain is divided by the loudest track's when that is above the usual
+ * (so one track at 5 plays as usual and the others 6 dB lower; all at 5 play as all at 3).
+ * Levels at or below 3 are never raised. 0 when muted.
+ */
 export function trackGain(mix, track) {
-  const db = VOLUME_DB[trackVolume(mix, track)];
-  return db == null ? 0 : 10 ** (db / 20);
+  const top = Math.max(...Array.from({ length: TRACKS }, (_, t) => levelGain(trackVolume(mix, t))));
+  return levelGain(trackVolume(mix, track)) / Math.max(1, top);
 }
 
 /**
