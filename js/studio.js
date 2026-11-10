@@ -23,7 +23,8 @@ import { songParts, renderPart, renderEvents, partStyle } from './music.js';
 import {
   TRACKS, MIX_SLOTS, PART_NAMES, BPM_RANGE, BACKING_BPM, newMix, sourceOf, maxBars, mixBeats, mixSeconds, addPart, addTake, moveClip,
   trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges, shelfSongs,
-  addBacking, setLoop, setVoice, setKit, shiftClip, moveIntoKey, clipFits, clipKey, remixed, splitShift, backingBeats,
+  addBacking, setLoop, setVoice, setKit, shiftClip, moveIntoKey, clipFits, clipKey, remixed, splitShift, backingBeats, backingSwing,
+  setTrackVolume, muteTrack, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME,
 } from './studiorules.js';
 import { VOICES, KITS, LOOPS, LOOP_IDS, BACKING, BACKING_GROUPS, backingEvents } from './studiokit.js';
 import { partEvents, clipSound, backingKey, keyTonic } from './remix.js';
@@ -68,6 +69,9 @@ const SAY = {
   draftFailed: 'I couldn\'t save your mix. This tablet may be full.',
   takeNotKept: 'Your take is on your desk, but I couldn\'t keep it on this tablet. This tablet may be full.',
   cantOpen: 'I couldn\'t open your mixes just now.',
+  readyPlay: 'Getting the music ready. It starts in a moment.',
+  readyRec: 'Getting the music ready for your recording. The clicks start in a moment.',
+  readyClip: 'Getting the new sound ready…',
 };
 
 /** "1 beat", "16 beats". */
@@ -158,6 +162,10 @@ const S = {
   hearing: '',        // the part being heard on the shelf ('song|part', 'backing|pattern'), or a clip
   loop: 'sunny',      // the chords the backing tracks play (studiokit.js LOOPS)
   chooser: null,      // the voice or kit chooser open for a clip: { id, what: 'voice' or 'kit' }
+  said: '',           // what the last remix button did, shown under the open chooser (a toast would cover it)
+  waiting: '',        // 'play' or 'rec' while Play or Record waits for sounds to be made
+  hearWait: '',       // the sound being heard (S.hearing) while it is being made
+  volTrack: null,     // the track whose loudness panel is open, or null
   phones: readNumber(PHONES_KEY) === 1,
   takes: new Map(),   // take id -> { rate, samples, lead }, or null when it is gone
   waves: new Map(),   // a take's little picture, by take and stretch
@@ -166,6 +174,7 @@ const S = {
 // the sound: one AudioContext for playing and recording
 const A = {
   ac: null, master: null,
+  hearKey: '',         // the sound (soundKey) being heard, so it is wanted while it is made
   parts: new Map(),    // a clip's sound at a speed (soundKey) -> Promise<AudioBuffer|null>, the last used at the end
   buffers: new Map(),  // 'take|id' -> AudioBuffer
   clicks: new Map(),   // the metronome's click for each note -> AudioBuffer
@@ -176,6 +185,7 @@ const A = {
   rec: null,           // a recording or timing check under way
   finishing: null,     // a recording that stopped and is being kept
   bus: null,           // the volume knob for this run of play, faded down when it stops
+  lanes: null,         // each track's loudness for this run of play (gain nodes into the knob), or null
   down: null,          // when a finger landed on Record or Stop: { at (audio clock), t }
   keptAt: -1e9,        // when the last take was kept (performance.now())
 };
@@ -188,7 +198,9 @@ let saveTimer = 0;
 let pending = null;    // the draft waiting to be saved: { kid, mix }
 
 const hasClips = (mix) => mix.tracks.some((t) => t.length);
-const fingerprint = (mix) => JSON.stringify([mix.bpm, mix.bars, mix.meter, mix.tracks]);
+const fingerprint = (mix) => JSON.stringify([mix.bpm, mix.bars, mix.meter, mix.tracks, ...(mix.vols ? [mix.vols] : [])]);
+/** The music of a mix without the tracks' loudness: a change to only that needn't start the music again. */
+const musicOf = (mix) => JSON.stringify([mix.bpm, mix.bars, mix.meter, mix.key, mix.tracks]);
 const dirty = () => hasClips(S.mix) && fingerprint(S.mix) !== S.clean;
 const onScreen = () => S.on && ui.view === 'studio' && document.visibilityState !== 'hidden';
 const wait = (ms) => new Promise((r) => { setTimeout(r, ms); });
@@ -289,7 +301,7 @@ function sweep(kid = S.kid) {
 async function openDesk(kid) {
   stopAll();
   flushSave();
-  Object.assign(S, { kid, loading: true, broken: false, mix: newMix(), slots: [], clean: '', sel: null, panel: '', note: '', badges: [], pop: '', undo: [], redo: [], saveWarned: false, spot: { track: 0, beat: 0, picked: false } });
+  Object.assign(S, { kid, loading: true, broken: false, mix: newMix(), slots: [], clean: '', sel: null, volTrack: null, panel: '', note: '', badges: [], pop: '', undo: [], redo: [], saveWarned: false, spot: { track: 0, beat: 0, picked: false } });
   S.takes.clear();
   S.waves.clear();
   paint();
@@ -376,6 +388,7 @@ function paint() {
   if (drag) { drag.repaint = true; return; }
   if (S.loading) { el.innerHTML = '<p class="muted st-wait">Getting your studio ready…</p>'; return; }
   if (S.chooser && S.chooser.id !== S.sel) S.chooser = null; // a chooser is for the picked clip
+  if (!S.chooser) S.said = '';
   if (S.broken) {
     el.innerHTML = `<div class="st-note bad st-broken" role="alert"><span>${esc(SAY.cantOpen)}</span><button class="btn small-btn" data-action="st-retry">Try again</button></div>`;
     return;
@@ -443,12 +456,15 @@ function transportHtml() {
   const takes = mix.tracks.flat().some((c) => c.kind === 'take');
   const speedWhy = takes ? setBpm(mix, mix.bpm + 1).error : '';
   const secs = Math.round(mixSeconds(mix));
-  const recLabel = S.busy === 'mic' ? 'Getting ready…' : S.busy === 'save' ? 'Saving…' : rec ? '■ Stop recording' : '● Record';
+  // waiting for sounds to be made: the kid sees why it is quiet, and can still stop
+  const ready = S.busy === 'play' && S.waiting === 'play' ? SAY.readyPlay : S.busy === 'mic' && S.waiting === 'rec' ? SAY.readyRec : '';
+  const recWait = S.busy === 'mic' && S.waiting === 'rec';
+  const recLabel = recWait ? '■ Stop' : S.busy === 'mic' ? 'Getting ready…' : S.busy === 'save' ? 'Saving…' : rec ? '■ Stop recording' : '● Record';
   return `
     <div class="st-bar">
       <div class="st-main">
         <button class="btn st-play ${playing ? 'playing' : ''}" data-action="st-play" ${rec || held ? 'disabled' : ''}>${steady(playing ? '■ Stop' : '▶ Play', '▶ Play', '■ Stop')}</button>
-        <button class="btn st-rec ${rec ? 'recording' : ''}" data-action="st-rec" ${held ? 'disabled' : ''}>${steady(recLabel, '■ Stop recording', 'Getting ready…', 'st-rec-label')}</button>
+        <button class="btn st-rec ${rec ? 'recording' : ''}" data-action="st-rec" ${held && !recWait ? 'disabled' : ''}>${steady(recLabel, '■ Stop recording', 'Getting ready…', 'st-rec-label')}</button>
       </div>
       <div class="st-undos">
         <button class="btn ghost st-undo ${S.undo.length ? '' : 'off'}" data-action="st-undo" ${S.undo.length ? '' : 'aria-disabled="true"'}>↩ Undo</button>
@@ -469,6 +485,7 @@ function transportHtml() {
         <button class="btn ghost ${S.panel === 'mixes' ? 'on' : ''}" data-action="st-panel" data-panel="mixes" aria-pressed="${S.panel === 'mixes'}">💾 My mixes</button>
         <button class="btn ghost ${S.panel === 'help' ? 'on' : ''}" data-action="st-panel" data-panel="help" aria-pressed="${S.panel === 'help'}" aria-label="Help">❓</button>
       </div>
+      ${ready ? `<p class="st-ready" role="status"><span aria-hidden="true">⏳</span> ${esc(ready)}</p>` : ''}
     </div>`;
 }
 
@@ -503,7 +520,8 @@ function clipWords(c, mix = S.mix) {
     };
   }
   const src = sourceOf(c.song);
-  const key = clipKey(c) || src?.key;
+  // drums have no key
+  const key = clipSound(c) === 'notes' ? clipKey(c) || src?.key : '';
   return { icon: PART_ICONS[c.part] || '🎵', name: PART_NAMES[c.part] || 'Part', song: src?.name || '', key: key ? keyLabel(key) : '', fits: clipFits(mix, c), voice, kit, moved };
 }
 
@@ -525,7 +543,12 @@ function timelineHtml() {
     const body = clips.map((c) => clipHtml(c, beats)).join('');
     const mark = spot && spot.track === t && !A.rec ? `<span class="st-spot ${spot.picked ? '' : 'auto'}" style="left:${pct(spot.beat, beats)}%;width:${pct(1, beats)}%" aria-hidden="true"></span>` : '';
     const recBox = A.rec?.kind === 'take' && A.rec.track === t ? `<span class="st-recbox" style="left:${pct(A.rec.beat, beats)}%;width:0"></span>` : '';
-    return `<div class="st-lane" data-track="${t}" aria-label="Track ${t + 1}">${body}${mark}${recBox}</div>`;
+    return `<div class="st-lane ${trackVolume(mix, t) === 0 ? 'muted' : ''}" data-track="${t}" aria-label="Track ${t + 1}">${body}${mark}${recBox}</div>`;
+  }).join('');
+  // each track's loudness button: its number and a speaker that shows how loud it is
+  const names = mix.tracks.map((_, t) => {
+    const v = trackVolume(mix, t);
+    return `<button class="st-vol lvl-${v} ${S.volTrack === t ? 'on' : ''}" data-action="st-vol" data-track="${t}" aria-expanded="${S.volTrack === t}" aria-label="${esc(`Track ${t + 1}: ${volumeWords(v)}. Tap to change how loud it is.`)}"><b>${t + 1}</b><i aria-hidden="true">${volumeIcon(v)}</i></button>`;
   }).join('');
   const label = hasClips(mix)
     ? `${esc(mix.name)}${mix.key ? ` · ${esc(keyLabel(mix.key))}` : ''} · ${mix.meter} beats in a bar`
@@ -534,14 +557,38 @@ function timelineHtml() {
     <section class="st-desk" aria-label="Your mix">
       <p class="st-mixname">${label}</p>
       <div class="st-time">
-        <div class="st-names" aria-hidden="true"><span></span>${mix.tracks.map((_, t) => `<span>${t + 1}</span>`).join('')}</div>
+        <div class="st-names"><span aria-hidden="true"></span>${names}</div>
         <div class="st-lanes" style="--beats:${beats};--bars:${mix.bars}">
           <div class="st-ruler">${ruler}</div>
           ${lanes}
           <div class="st-head" hidden></div>
         </div>
       </div>
+      ${S.volTrack != null && S.volTrack < TRACKS ? volumeHtml(S.volTrack) : ''}
     </section>`;
+}
+
+/** A speaker that shows a track's level: crossed out when muted. */
+const volumeIcon = (v) => (v === 0 ? '🔇' : v <= 1 ? '🔈' : v <= USUAL_VOLUME ? '🔉' : '🔊');
+
+/** A track's level in words. */
+const volumeWords = (v) => (v === 0 ? 'muted' : `loudness ${v} of ${VOLUME_TOP}`);
+
+/** The loudness panel of a track: Quieter, Louder, five dots for the level, Mute or Unmute. */
+function volumeHtml(t) {
+  const v = trackVolume(S.mix, t);
+  const dots = Array.from({ length: VOLUME_TOP }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('');
+  return `
+    <div class="st-volpanel" role="group" aria-label="How loud track ${t + 1} is">
+      <p class="st-vol-what"><b>Track ${t + 1}</b><small>${v === 0 ? 'Muted: you can\'t hear it.' : v === USUAL_VOLUME ? 'Usual loudness' : v < USUAL_VOLUME ? 'Quieter than usual' : 'Louder than usual'}</small></p>
+      <div class="st-vol-buttons">
+        <button class="btn ghost small-btn" data-action="st-vol-step" data-d="-1">🔉 Quieter</button>
+        <span class="st-dots ${v === 0 ? 'off' : ''}" role="img" aria-label="${esc(volumeWords(v))}">${dots}</span>
+        <button class="btn ghost small-btn" data-action="st-vol-step" data-d="1">🔊 Louder</button>
+        <button class="btn ghost small-btn ${v === 0 ? 'on' : ''}" data-action="st-vol-mute" aria-pressed="${v === 0}">${v === 0 ? '🔈 Unmute' : '🔇 Mute'}</button>
+        <button class="btn ghost small-btn" data-action="st-vol" data-track="${t}" aria-label="Done">✓ Done</button>
+      </div>
+    </div>`;
 }
 
 function clipHtml(c, beats) {
@@ -588,7 +635,7 @@ function toolsHtml() {
     const w = clipWords(c);
     words = c.kind === 'backing'
       ? `${w.icon} ${w.name}, a backing track${w.key ? `: ${w.song}, in ${w.key}` : ''}`
-      : `${w.icon} ${w.name} from ${w.song}, in ${w.key}`;
+      : `${w.icon} ${w.name} from ${w.song}${w.key ? `, in ${w.key}` : ''}`;
     how = howWords(w);
   }
   const b = (todo, label, aria) => `<button class="btn ghost small-btn" data-action="st-nudge" data-do="${todo}" aria-label="${aria}">${label}</button>`;
@@ -642,7 +689,18 @@ function remixHtml(c) {
       chooser = `<div class="st-chooser" role="group" aria-label="Drum kits">${choices}</div>`;
     }
   }
-  return `<div class="st-tool-buttons st-remix">${buttons}</div>${chooser}`;
+  // what a button did shows under the choices (a toast would cover them on a phone)
+  const making = S.hearing.startsWith('clip|') && S.hearWait === S.hearing;
+  const said = open && (S.said || making)
+    ? `<p class="st-said" role="status">${S.said ? `<span>${esc(S.said)}</span>` : ''}${making ? `<span class="st-making"><i aria-hidden="true">⏳</i> ${esc(SAY.readyClip)}</span>` : ''}</p>`
+    : '';
+  return `<div class="st-tool-buttons st-remix">${buttons}</div>${chooser}${said}`;
+}
+
+/** A 🔊 button's face: ⏳ while its sound is being made, ■ while it plays (a tap stops it either way). */
+function hearFace(key, name) {
+  if (S.hearing !== key) return { face: '🔊', label: `Hear the ${name}`, on: false };
+  return S.hearWait === key ? { face: '⏳', label: 'Getting it ready. Tap to stop.', on: true } : { face: '■', label: 'Stop', on: true };
 }
 
 function stickersHtml() {
@@ -662,8 +720,8 @@ function shelfHtml() {
     const beatNote = src.meter === 3 ? '<small class="st-waltz">3 beats in a bar</small>' : '';
     const fit = fits === true ? '<small class="st-fit">✓ Goes with your mix</small>' : fits === false ? '<small class="st-fit no">Another key</small>' : '';
     const buttons = parts.map((part) => {
-      const on = S.hearing === `${p.id}|${part}`;
-      return `<span class="st-part"><button class="btn small-btn st-add kind-${part}" data-action="st-add" data-song="${esc(p.id)}" data-part="${part}">${PART_ICONS[part]} ${PART_NAMES[part]}</button><button class="btn ghost small-btn st-hear ${on ? 'on' : ''}" data-action="st-hear" data-song="${esc(p.id)}" data-part="${part}" aria-label="${on ? 'Stop' : `Hear the ${PART_NAMES[part]}`}">${on ? '■' : '🔊'}</button></span>`;
+      const h = hearFace(`${p.id}|${part}`, PART_NAMES[part]);
+      return `<span class="st-part"><button class="btn small-btn st-add kind-${part}" data-action="st-add" data-song="${esc(p.id)}" data-part="${part}">${PART_ICONS[part]} ${PART_NAMES[part]}</button><button class="btn ghost small-btn st-hear ${h.on ? 'on' : ''}" data-action="st-hear" data-song="${esc(p.id)}" data-part="${part}" aria-label="${esc(h.label)}">${h.face}</button></span>`;
     }).join('');
     return `<div class="st-song" data-song="${esc(p.id)}">
       <p class="st-song-name"><span aria-hidden="true">${p.kind === 'show' ? '✨' : '🎵'}</span><b>${esc(p.name)}</b></p>
@@ -683,8 +741,9 @@ const backingMixKey = () => (hasClips(S.mix) ? S.mix.key : null);
 
 /**
  * The backing tracks: a picker for the chords (the chosen one says the key it plays in), and
- * the beats, cymbals, bass lines, chords and sparkles of the mix's beat (all of them while
- * the desk is empty, the waltz ones marked).
+ * the beats, cymbals, bass lines, chords and sparkles of the mix's beat. While the desk is
+ * empty there are both: the four-beat ones, then the waltz ones apart under their own heading
+ * (the first one picked sets the mix's beat).
  */
 function backingHtml() {
   const mix = S.mix;
@@ -695,22 +754,30 @@ function backingHtml() {
     const on = id === S.loop;
     return `<button class="btn ghost small-btn st-loop ${on ? 'on' : ''}" data-action="st-loop" data-loop="${id}" aria-pressed="${on}">${on ? `${esc(l.name)}, in ${esc(keyLabel(backingKey(key, l.mood)))}` : esc(l.name)}</button>`;
   }).join('');
-  const groups = Object.entries(BACKING_GROUPS).map(([group, title]) => {
-    const items = Object.entries(BACKING).filter(([, b]) => b.group === group && (empty || b.meter === mix.meter));
+  const groups = (meter) => Object.entries(BACKING_GROUPS).map(([group, title]) => {
+    const items = Object.entries(BACKING).filter(([, b]) => b.group === group && b.meter === meter);
     if (!items.length) return '';
     const buttons = items.map(([id, b]) => {
-      const on = S.hearing === `backing|${id}`;
+      const h = hearFace(`backing|${id}`, b.name);
       const waltz = b.meter === 3 ? '<small class="st-waltz">3 beats</small>' : '';
-      return `<span class="st-part"><button class="btn small-btn st-add group-${group}" data-action="st-back-add" data-pattern="${id}"><span>${GROUP_ICONS[group]} ${esc(b.name)}</span>${waltz}</button><button class="btn ghost small-btn st-hear ${on ? 'on' : ''}" data-action="st-back-hear" data-pattern="${id}" aria-label="${on ? 'Stop' : `Hear the ${esc(b.name)}`}">${on ? '■' : '🔊'}</button></span>`;
+      return `<span class="st-part"><button class="btn small-btn st-add group-${group}" data-action="st-back-add" data-pattern="${id}"><span>${GROUP_ICONS[group]} ${esc(b.name)}</span>${waltz}</button><button class="btn ghost small-btn st-hear ${h.on ? 'on' : ''}" data-action="st-back-hear" data-pattern="${id}" aria-label="${esc(h.label)}">${h.face}</button></span>`;
     }).join('');
     return `<div class="st-group" data-group="${group}"><p class="st-group-name"><b>${esc(title)}</b></p><div class="st-parts">${buttons}</div></div>`;
   }).join('');
+  const list = empty
+    ? `<div class="st-songs" data-meter="4">${groups(4)}</div>
+      <div class="st-waltz-time" data-meter="3">
+        <h4>Waltz time: 3 beats in a bar</h4>
+        <p class="muted small">These are for a waltz. Pick one, and your mix has 3 beats in a bar.</p>
+        <div class="st-songs">${groups(3)}</div>
+      </div>`
+    : `<div class="st-songs" data-meter="${mix.meter}">${groups(mix.meter)}</div>`;
   return `
     <section class="st-shelf st-backing" aria-label="Backing tracks">
       <h3>Backing tracks</h3>
       <p class="muted small">Beats, cymbals, bass lines and chords that go with any song. Pick the chords first: the bass lines, chords and sparkles play them in the key of your mix.</p>
       <div class="st-loops" role="group" aria-label="Chords">${loops}</div>
-      <div class="st-songs">${groups}</div>
+      ${list}
     </section>`;
 }
 
@@ -745,6 +812,7 @@ function helpHtml() {
         <li>Tap a clip to move it, copy it, make it shorter or longer, or throw it away. You can also drag a clip, or drag its edges.</li>
         <li>Backing tracks are beats, bass lines and chords that go with any song. They play in the key of your mix.</li>
         <li>Tap a clip with notes to give it a new voice, or to move it higher or lower. Tap drums to play them on another drum kit.</li>
+        <li>Tap the speaker beside a track's number to make that track quieter or louder, or to mute it.</li>
         <li>To record your piano, choose a spot and press Record. Listen to the clicks count you in, then play! Press Stop when you're done.</li>
         <li>Wearing headphones? Turn on Headphones to hear your whole mix while you record. Without headphones you only hear soft clicks, so the tablet doesn't record its own music.</li>
       </ul>
@@ -773,6 +841,7 @@ function say(text, kind = '') {
 function commit(mix, { select, undo = true, back = false, quiet = false } = {}) {
   const had = new Set(S.badges.map((b) => b.id));
   if (undo) rememberUndo();
+  const sameMusic = musicOf(S.mix) === musicOf(mix);
   S.mix = mix;
   if (back) syncLoop();
   if (select !== undefined) S.sel = select;
@@ -784,18 +853,28 @@ function commit(mix, { select, undo = true, back = false, quiet = false } = {}) 
   if (fresh && !quiet) setTimeout(() => toast(stickerNews(fresh)), 50);
   autosave();
   forgetTakes();
-  if (A.play || S.busy === 'play') restartPlay();
+  if (A.play && sameMusic) {
+    // only a track's loudness changed: the music plays on, a little louder or quieter
+    A.play.mix = mix;
+    setLanes(mix);
+  } else if (A.play || S.busy === 'play') restartPlay();
   paint();
   return fresh;
 }
 
 const stickerNews = (b) => `🏅 New sticker: ${b.name}! ${b.why}`;
 
-/** After a remix button: the new mix on the desk and what happened (with a new sticker), or why not. */
-function remixDone(r, said) {
-  if (r.error) { toast(r.error); return; }
+/**
+ * After a remix button: the new mix on the desk and what happened (with a new sticker), or why
+ * not. With the chooser open it says so under the choices, where a toast can't cover them;
+ * `toast` says it in a toast anyway (for a button far from the chooser).
+ */
+function remixDone(r, said, { toast: inToast = false } = {}) {
+  const here = !inToast && S.chooser && S.chooser.id === S.sel;
+  const tell = (text) => { if (here) { S.said = text; paint(); } else toast(text); };
+  if (r.error) { tell(r.error); return; }
   const fresh = commit(r.mix, { quiet: true });
-  toast(`${said}${fresh ? ` ${stickerNews(fresh)}` : ''}`);
+  tell(`${said}${fresh ? ` ${stickerNews(fresh)}` : ''}`);
 }
 
 /** Undo can go back to the desk's mix as it is now. A new change ends what Redo could bring back. */
@@ -1047,52 +1126,92 @@ const outLag = () => (A.ac ? A.ac.outputLatency || A.ac.baseLatency || 0 : 0);
  * loop, tonic (the key note a backing track's chords are on), voice, kit, shift }. Two clips
  * with the same sound share one rendering.
  */
-function soundOf(c, mixKey) {
+function soundOf(c, mixKey, swing = 0) {
   const how = { voice: c.voice || '', kit: c.kit || '', shift: c.shift || 0 };
   if (c.kind === 'part') return { kind: 'part', song: c.song, part: c.part, ...how };
   const notes = clipSound(c) === 'notes';
   const loop = notes ? (LOOPS[c.loop] ? c.loop : 'sunny') : '';
-  return { kind: 'backing', pattern: c.pattern, loop, tonic: notes ? keyTonic(backingKey(mixKey, LOOPS[loop].mood)) : '', ...how };
+  // a backing track swings with the mix's song parts (studiorules.js backingSwing)
+  return { kind: 'backing', pattern: c.pattern, loop, tonic: notes ? keyTonic(backingKey(mixKey, LOOPS[loop].mood)) : '', swing, ...how };
 }
 
+/** A clip's sound in a mix. */
+const mixSound = (c, mix) => soundOf(c, mix.key, backingSwing(mix));
+
 /** Where a sound at a speed is kept among the rendered ones. */
-const soundKey = (s, bpm) => [s.kind, s.song || s.pattern, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? ''].join('|');
+const soundKey = (s, bpm) => [s.kind, s.song || s.pattern, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? '', s.swing || 0].join('|');
+
+/** The sounds a mix plays (soundKey), worked out once a mix. */
+const keysMade = new WeakMap();
+function mixKeys(mix) {
+  if (!keysMade.has(mix)) keysMade.set(mix, new Set(mix.tracks.flat().filter((c) => c.kind !== 'take').map((c) => soundKey(mixSound(c, mix), mix.bpm))));
+  return keysMade.get(mix);
+}
+
+/**
+ * Whether a sound is still wanted: the desk's mix or the one playing uses it, or it is being
+ * heard. A voice, kit, shift, chords or speed changed again, or a clip thrown away, and the
+ * sound being made for it isn't.
+ */
+function wanted(key) {
+  if (!S.on) return false;
+  return A.hearKey === key || mixKeys(S.mix).has(key) || Boolean(A.play && mixKeys(A.play.mix).has(key));
+}
 
 /**
  * Render a ready-made clip's sound once through. A song's part in its own sound, not moved,
  * is the song itself (music.js renderPart); anything else is played from its notes.
  */
-function renderSound(s, bpm, rate) {
+function renderSound(s, bpm, rate, alive = null) {
   if (s.kind === 'part') {
-    if (!s.voice && !s.kit && !s.shift) return renderPart(s.song, s.part, bpm, rate);
+    if (!s.voice && !s.kit && !s.shift) return renderPart(s.song, s.part, bpm, rate, 0.5, alive);
     const style = partStyle(s.song, s.part);
     const events = partEvents(s.song, s.part);
-    const common = { bpm, steps: style.steps, swing: style.swing, sampleRate: rate };
+    const common = { bpm, steps: style.steps, swing: style.swing, sampleRate: rate, alive };
     if (clipSound(s) === 'drums') return renderEvents(events, { ...common, kit: s.kit || null, vol: style.drumVol });
     // its own sound keeps the song's echo; a new voice plays without it
     return renderEvents(events, { ...common, voice: s.voice || style.voice, shift: s.shift, echo: s.voice ? 0 : style.echo });
   }
   const b = BACKING[s.pattern];
   const steps = backingBeats(s.pattern) * 2;
-  if (b.kind === 'drums') return renderEvents(backingEvents(s.pattern), { bpm, steps, kit: s.kit || null, sampleRate: rate });
-  return renderEvents(backingEvents(s.pattern, { loop: s.loop, tonic: s.tonic }), { bpm, steps, voice: s.voice || b.voice, shift: s.shift, sampleRate: rate });
+  const common = { bpm, steps, swing: s.swing || 0, sampleRate: rate, alive };
+  if (b.kind === 'drums') return renderEvents(backingEvents(s.pattern), { ...common, kit: s.kit || null });
+  return renderEvents(backingEvents(s.pattern, { loop: s.loop, tonic: s.tonic }), { ...common, voice: s.voice || b.voice, shift: s.shift });
 }
 
-/** A clip's sound at a speed, rendered once and kept (null when it can't be made). */
+/**
+ * A clip's sound at a speed, rendered once and kept (null when it can't be made). A sound that
+ * stops being wanted while it is made is given up half way (music.js renderInSlices): that
+ * one is never kept or played. Wanted again by then, it is made again from the start.
+ */
 function soundBuffer(s, bpm) {
   const key = soundKey(s, bpm);
   let made = A.parts.get(key);
   if (made) A.parts.delete(key);
-  else made = Promise.resolve().then(() => renderSound(s, bpm, A.ac.sampleRate)).catch(() => null);
+  else {
+    let dropped = false;
+    const alive = () => { if (!dropped && !wanted(key)) dropped = true; return !dropped; };
+    const job = Promise.resolve().then(() => renderSound(s, bpm, A.ac.sampleRate, alive)).catch(() => null).then((buf) => {
+      if (buf && !dropped) { job.ready = true; return buf; }
+      if (A.parts.get(key) === job) A.parts.delete(key); // a broken or half-made sound is never kept
+      return dropped && wanted(key) ? soundBuffer(s, bpm) : null;
+    });
+    made = job;
+  }
   A.parts.set(key, made); // the last used goes to the end
   trimParts();
   return made;
 }
 
+/** Whether a sound is made already, so using it needs no wait. */
+const soundReady = (s, bpm) => A.parts.get(soundKey(s, bpm))?.ready === true;
+
+/** Whether some clip of a mix still has to have its sound made (then the kid is told to wait). */
+const mixWaits = (mix) => mix.tracks.flat().some((c) => c.kind !== 'take' && !soundReady(mixSound(c, mix), mix.bpm));
+
 /** Keep only a few rendered sounds: forget the ones used longest ago, but never the mix's. */
 function trimParts() {
-  const mixes = [S.mix, A.play?.mix].filter(Boolean);
-  const used = new Set(mixes.flatMap((m) => m.tracks.flat().filter((c) => c.kind !== 'take').map((c) => soundKey(soundOf(c, m.key), m.bpm))));
+  const used = new Set([S.mix, A.play?.mix].filter(Boolean).flatMap((m) => [...mixKeys(m)]));
   for (const k of [...A.parts.keys()]) {
     if (A.parts.size <= MOST_PARTS) break;
     if (!used.has(k)) A.parts.delete(k);
@@ -1118,11 +1237,15 @@ async function takeBuffer(id) {
   } catch { return null; }
 }
 
-/** Every clip's sound for a mix: Map clip id -> AudioBuffer. Missing ones are left out, kindly. */
-async function buffersFor(mix) {
+/**
+ * Every clip's sound for a mix: Map clip id -> AudioBuffer. Missing ones are left out, kindly.
+ * Nothing is said when the wait was given up meanwhile (`token`, see A.token).
+ */
+async function buffersFor(mix, token = A.token) {
   const plan = schedule(mix);
-  const got = await Promise.all(plan.map((e) => (e.kind === 'take' ? takeBuffer(e.take) : soundBuffer(soundOf(findClip(mix, e.id).clip, mix.key), mix.bpm))));
+  const got = await Promise.all(plan.map((e) => (e.kind === 'take' ? takeBuffer(e.take) : soundBuffer(mixSound(findClip(mix, e.id).clip, mix), mix.bpm))));
   const out = new Map();
+  if (token !== A.token) return out;
   let lost = 0;
   let broken = 0;
   plan.forEach((e, i) => {
@@ -1136,18 +1259,40 @@ async function buffersFor(mix) {
 }
 
 /** A fresh volume knob for one run of play (or one part heard): Stop fades it down. */
-function newBus() {
+function newBus(mix = null) {
   const g = A.ac.createGain();
   g.connect(A.master);
   A.bus = g;
+  A.lanes = null;
+  // a mix's tracks each get their own loudness between their clips and the knob
+  if (mix) {
+    A.lanes = Array.from({ length: TRACKS }, (_, t) => {
+      const lane = A.ac.createGain();
+      lane.gain.value = trackGain(mix, t);
+      lane.connect(g);
+      return lane;
+    });
+  }
   return g;
+}
+
+/** Each track's loudness as `mix` has it, while it plays: a short smooth slide, no click. */
+function setLanes(mix) {
+  if (!A.lanes) return;
+  const t = A.ac.currentTime;
+  A.lanes.forEach((lane, i) => {
+    const p = lane.gain;
+    p.cancelScheduledValues(t);
+    p.setValueAtTime(p.value, t);
+    p.linearRampToValueAtTime(trackGain(mix, i), t + 0.04);
+  });
 }
 
 /**
  * Start a sound at `when` (context time), `offset` seconds in, for `dur`, with 5 ms fades.
  * `sharp`: the very start of a part, where a drum or a note begins, isn't faded in.
  */
-function startSource(buffer, when, offset, dur, { sharp = false } = {}) {
+function startSource(buffer, when, offset, dur, { sharp = false, track = null } = {}) {
   const ac = A.ac;
   if (![when, offset, dur].every(Number.isFinite)) return;
   let w = when;
@@ -1163,7 +1308,7 @@ function startSource(buffer, when, offset, dur, { sharp = false } = {}) {
   g.gain.linearRampToValueAtTime(1, w + fade);
   g.gain.setValueAtTime(1, w + len - fade);
   g.gain.linearRampToValueAtTime(0, w + len);
-  src.connect(g).connect(A.bus || newBus());
+  src.connect(g).connect((track != null && A.lanes?.[track]) || A.bus || newBus());
   src.start(w, off, len);
   A.sources.add(src);
   src.onended = () => { A.sources.delete(src); try { g.disconnect(); } catch { /* gone */ } };
@@ -1201,7 +1346,9 @@ function stopSources() {
   const ac = A.ac;
   const t = ac ? ac.currentTime : 0;
   const bus = A.bus;
+  const lanes = A.lanes || [];
   A.bus = null; // the next sound gets a new knob, so this fade never touches it
+  A.lanes = null;
   if (bus) {
     try {
       bus.gain.cancelScheduledValues(t);
@@ -1218,6 +1365,7 @@ function stopSources() {
   setTimeout(() => {
     for (const s of gone) { try { s.disconnect(); } catch { /* gone */ } }
     try { bus?.disconnect(); } catch { /* gone */ }
+    for (const lane of lanes) { try { lane.disconnect(); } catch { /* gone */ } }
   }, 120);
 }
 
@@ -1231,21 +1379,23 @@ async function startPlay(fromBeat = 0) {
   if (!ac) { say(SAY.noSound, 'bad'); return; }
   stopHearing();
   const token = ++A.token;
+  const mix = S.mix;
   S.busy = 'play';
+  S.waiting = mixWaits(mix) ? 'play' : '';
   paint();
   try { await ac.resume(); } catch { /* it starts on the next tap */ }
-  const mix = S.mix;
-  const bufs = await buffersFor(mix);
+  const bufs = await buffersFor(mix, token);
   if (token !== A.token || !onScreen()) {
     // a stop already tidied up; if nothing did (the studio went away), do it here
     if (token === A.token && S.busy === 'play') S.busy = '';
     return;
   }
   S.busy = '';
+  S.waiting = '';
   const beat = 60 / mix.bpm;
   const beats = mixBeats(mix);
   const first = (((fromBeat % beats) + beats) % beats) * beat;
-  newBus();
+  newBus(mix);
   A.play = { mix, bufs, plan: schedule(mix), loop: mixSeconds(mix), beat, origin: ac.currentTime + 0.08 - first, k: 0, first };
   playTick();
   clearInterval(A.timer);
@@ -1264,7 +1414,7 @@ function playTick() {
     // when there is time, and later at the very end of the loop before
     for (const e of p.k === 0 ? firstPass(p.plan, p.first) : sliceSchedule(p.plan, -Infinity)) {
       const b = p.bufs.get(e.id);
-      if (b) startSource(b, base + e.at, e.offset, e.dur, { sharp: e.kind !== 'take' && e.offset === 0 });
+      if (b) startSource(b, base + e.at, e.offset, e.dur, { sharp: e.kind !== 'take' && e.offset === 0, track: e.track });
     }
     p.k += 1;
   }
@@ -1346,11 +1496,14 @@ function hear(song, part) {
   hearSound(`${song}|${part}`, soundOf({ kind: 'part', song, part }, null), { bpm: hasClips(S.mix) ? S.mix.bpm : src.bpm, beats: 4 * src.meter });
 }
 
+/** How a backing track swings on this desk: as the mix's song parts (none while the desk is empty). */
+const deskSwing = () => (hasClips(S.mix) ? backingSwing(S.mix) : 0);
+
 /** Hear one backing track on the shelf (all four bars, on the chords picked), or stop it. */
 function hearBacking(pattern) {
   const b = BACKING[pattern];
   if (!b) return;
-  const s = soundOf({ kind: 'backing', pattern, loop: S.loop }, backingMixKey());
+  const s = soundOf({ kind: 'backing', pattern, loop: S.loop }, backingMixKey(), deskSwing());
   hearSound(`backing|${pattern}`, s, { bpm: hasClips(S.mix) ? S.mix.bpm : BACKING_BPM, beats: backingBeats(pattern) });
 }
 
@@ -1358,7 +1511,7 @@ function hearBacking(pattern) {
 function hearClip(id) {
   const c = findClip(S.mix, id)?.clip;
   if (!c || c.kind === 'take' || A.play || S.busy === 'play') return;
-  const s = soundOf(c, S.mix.key);
+  const s = mixSound(c, S.mix);
   hearSound(`clip|${soundKey(s, S.mix.bpm)}`, s, { bpm: S.mix.bpm, beats: Math.min(S.mix.meter, c.len), from: c.from, again: true });
 }
 
@@ -1374,11 +1527,16 @@ async function hearSound(key, s, { bpm, beats, from = 0, again = false }) {
   if (!ac) { say(SAY.noSound, 'bad'); return; }
   stopPlay(false);
   S.hearing = key;
+  A.hearKey = soundKey(s, bpm); // (so the sound being made is wanted: see wanted())
+  S.hearWait = soundReady(s, bpm) ? '' : key;
   paint();
   try { await ac.resume(); } catch { /* the next tap */ }
   const b = await soundBuffer(s, bpm);
   if (S.hearing !== key) return;
-  if (!b) { S.hearing = ''; say(SAY.partBroken); return; }
+  const waited = S.hearWait === key;
+  S.hearWait = '';
+  if (!b) { S.hearing = ''; A.hearKey = ''; say(SAY.partBroken); return; }
+  if (waited) paint();
   const beat = 60 / bpm;
   const len = Math.min(b.duration - from * beat, beats * beat);
   newBus();
@@ -1390,6 +1548,8 @@ async function hearSound(key, s, { bpm, beats, from = 0, again = false }) {
 /** Stop the part being heard. */
 function stopHearing(draw = true) {
   clearTimeout(A.hearTimer);
+  A.hearKey = '';
+  S.hearWait = '';
   if (!S.hearing) return;
   S.hearing = '';
   if (!A.play) stopSources();
@@ -1460,12 +1620,16 @@ async function startRecording() {
   stopPlay(false);
   const token = ++A.token;
   S.busy = 'mic';
+  S.waiting = '';
   S.note = '';
   paint();
   const cap = await listen(ac, token);
   if (!cap) return;
   const phones = S.phones;
-  const bufs = phones ? await buffersFor(mix) : null;
+  // with headphones the mix plays along: its sounds may have to be made first
+  if (phones && token === A.token && mixWaits(mix)) { S.waiting = 'rec'; paint(); }
+  const bufs = phones ? await buffersFor(mix, token) : null;
+  S.waiting = '';
   if (token !== A.token || !onScreen()) {
     cap.stop();
     if (S.busy === 'mic') { S.busy = ''; paint(); }
@@ -1482,10 +1646,10 @@ async function startRecording() {
   const end = at + room * beat;
   const origin = at - spot.beat * beat;
   if (bufs) {
-    newBus();
+    newBus(mix); // (the tracks' loudness too: it changes what is heard, never what is recorded)
     for (const e of sliceSchedule(schedule(mix), spot.beat * beat, (spot.beat + room) * beat)) {
       const b = bufs.get(e.id);
-      if (b) startSource(b, origin + e.at, e.offset, e.dur);
+      if (b) startSource(b, origin + e.at, e.offset, e.dur, { track: e.track });
     }
   }
   A.rec = {
@@ -1775,6 +1939,8 @@ export const studioActions = {
   'st-rec': () => {
     const down = A.down && performance.now() - A.down.t < 1500 ? A.down.at : null;
     A.down = null;
+    // Stop while the music for a recording is being made: no recording (the microphone closes)
+    if (S.busy === 'mic' && S.waiting === 'rec') { A.token += 1; S.busy = ''; S.waiting = ''; paint(); return; }
     if (A.rec?.kind === 'take') finishRecording({ down });
     else startRecording();
   },
@@ -1834,13 +2000,40 @@ export const studioActions = {
     S.loop = loop;
     // the backing tracks already in the mix follow the chords picked
     const r = setLoop(S.mix, loop);
-    if (r.changed) remixDone(r, `Your backing tracks play the ${LOOPS[loop].name} chords now.`);
-    else paint();
+    if (!r.changed) { paint(); return; }
+    // a clip moved higher or lower that the new chords took too far moved back
+    const back = r.moved.map(({ id, octaves }) => {
+      const name = BACKING[findClip(r.mix, id)?.clip.pattern]?.name || 'A backing track';
+      return `${name} moved ${octavesWord(Math.abs(octaves))} ${octaves > 0 ? 'higher' : 'lower'}, so its notes aren't too ${octaves > 0 ? 'low' : 'high'} to hear well.`;
+    });
+    remixDone(r, [`Your backing tracks play the ${LOOPS[loop].name} chords now.`, ...back].join(' '), { toast: true });
+  },
+  'st-vol': (el) => {
+    const t = Number(el.dataset.track);
+    S.volTrack = S.volTrack === t ? null : t;
+    paint();
+  },
+  'st-vol-step': (el) => {
+    const t = S.volTrack;
+    if (t == null || busyNow()) return;
+    const d = Number(el.dataset.d);
+    const v = trackVolume(S.mix, t);
+    if (d > 0 && v >= VOLUME_TOP) { toast('That\'s as loud as it goes.'); return; }
+    if (d < 0 && v === 0) { toast('This track is muted already.'); return; }
+    const r = setTrackVolume(S.mix, t, v + d);
+    if (r.error) { toast(r.error); return; }
+    commit(r.mix);
+  },
+  'st-vol-mute': () => {
+    const t = S.volTrack;
+    if (t == null || busyNow()) return;
+    commit(muteTrack(S.mix, t).mix);
   },
   'st-chooser': (el) => {
     if (S.sel == null) return;
     const what = el.dataset.what;
     S.chooser = S.chooser?.id === S.sel && S.chooser.what === what ? null : { id: S.sel, what };
+    S.said = '';
     paint();
   },
   'st-voice': (el) => {
@@ -1894,9 +2087,9 @@ export const studioActions = {
   'st-check': () => { if (!busyNow()) timingCheck(); },
 };
 
-/** What the studio's sound is doing (for tests): { playing, recording, sounds }. */
+/** What the studio's sound is doing (for tests): { playing, recording, sounds, tracks (each track's loudness now, while it plays) }. */
 export function studioSound() {
-  return { playing: Boolean(A.play), recording: Boolean(A.rec), sounds: A.sources.size };
+  return { playing: Boolean(A.play), recording: Boolean(A.rec), sounds: A.sources.size, ...(A.lanes ? { tracks: A.lanes.map((g) => g.gain.value) } : {}) };
 }
 
 /** The clicks of the recording under way (for tests): { rate, from, countIn, clicks } or null. */

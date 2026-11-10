@@ -184,16 +184,28 @@ export function addBacking(mix, track, pattern, loop = 'sunny', at = 0) {
 
 /**
  * Play every backing track with notes in a mix on the chord loop `loop` (they follow the
- * chords the kid picks). Returns { mix, error, changed (how many clips) }.
+ * chords the kid picks). Other chords can take a clip moved higher or lower past what can be
+ * heard well (MIDI 24 to 96): it then moves back by the fewest whole octaves that keep every
+ * note in. Returns { mix, error, changed (how many clips), moved: [{ id, octaves }] (the clips
+ * that moved back, and how far: negative is lower) }.
  */
 export function setLoop(mix, loop) {
-  if (!Object.hasOwn(LOOPS, loop)) return { ...no(mix, 'Pick the chords first.'), changed: 0 };
+  if (!Object.hasOwn(LOOPS, loop)) return { ...no(mix, 'Pick the chords first.'), changed: 0, moved: [] };
   const next = clone(mix);
   let changed = 0;
+  const moved = [];
   for (const c of allClips(next)) {
-    if (c.kind === 'backing' && clipSound(c) === 'notes' && c.loop !== loop) { c.loop = loop; changed += 1; }
+    if (c.kind !== 'backing' || clipSound(c) !== 'notes' || c.loop === loop) continue;
+    c.loop = loop;
+    changed += 1;
+    const was = c.shift || 0;
+    const shift = inRange(next, c, was);
+    if (shift === was) continue;
+    moved.push({ id: c.id, octaves: Math.round((shift - was) / 12) });
+    if (shift) c.shift = shift;
+    else delete c.shift;
   }
-  return { mix: changed ? next : mix, error: null, changed };
+  return { mix: changed ? next : mix, error: null, changed, moved };
 }
 
 // ---------- the remix kit: voices, kits, higher and lower ----------
@@ -218,9 +230,23 @@ export function splitShift(shift = 0) {
 
 /** Whether a clip may be moved by `shift` semitones in all: within the limits, every note playable. */
 function shiftOk(mix, c, shift) {
-  if (Math.abs(shift) > MOST_SHIFT) return false;
+  return shiftFits(noteSpan(clipEvents(c, mix.key)), shift);
+}
+const shiftFits = (span, shift) => Math.abs(shift) <= MOST_SHIFT && (!span || (span.low + shift >= LOWEST && span.high + shift <= HIGHEST));
+
+/**
+ * The shift nearest to `shift` by whole octaves (so the clip keeps its key) that lets clip c
+ * play every note within MIDI 24 to 96 in a mix: `shift` itself when it does already, the
+ * fewest octaves back otherwise, and 0 (no move) when no octave fits.
+ */
+function inRange(mix, c, shift) {
   const span = noteSpan(clipEvents(c, mix.key));
-  return !span || (span.low + shift >= LOWEST && span.high + shift <= HIGHEST);
+  if (shiftFits(span, shift)) return shift;
+  const toward = shift > 0 ? [-12, 12] : [12, -12];
+  for (let o = 1; o <= 2 * Math.ceil(MOST_SHIFT / 12) + 1; o += 1) {
+    for (const d of toward) if (shiftFits(span, shift + d * o)) return shift + d * o;
+  }
+  return 0;
 }
 
 /**
@@ -445,6 +471,42 @@ export function setBpm(mix, bpm) {
   return r.error ? no(mix, 'That would make your loop longer than 30 seconds. Make the loop shorter first.') : r;
 }
 
+// ---------- how loud each track plays ----------
+
+/**
+ * A track's loudness is a level from 0 to 5: 3 is the usual (and every track's until a kid
+ * changes one), 0 is silent (muted). In decibels, by level (null: silent).
+ */
+export const VOLUME_DB = [null, -12, -6, 0, 3, 6];
+export const VOLUME_TOP = VOLUME_DB.length - 1;
+export const USUAL_VOLUME = 3;
+
+/** A track's level (a mix without `vols` has every track at the usual 3). */
+export const trackVolume = (mix, track) => (Array.isArray(mix.vols) && Number.isInteger(mix.vols[track]) ? mix.vols[track] : USUAL_VOLUME);
+
+/** How much a track's sound is multiplied by: 0 when muted, 1 at the usual level. */
+export function trackGain(mix, track) {
+  const db = VOLUME_DB[trackVolume(mix, track)];
+  return db == null ? 0 : 10 ** (db / 20);
+}
+
+/**
+ * Set a track's level (0 to 5). Turned down for a track or level that isn't there; the same
+ * level changes nothing (the same mix comes back). A mix only gets `vols` once a level changes.
+ */
+export function setTrackVolume(mix, track, level) {
+  if (!Number.isInteger(track) || track < 0 || track >= TRACKS) return no(mix, 'That track is not on the desk.');
+  if (!Number.isInteger(level) || level < 0 || level > VOLUME_TOP) return no(mix, level > VOLUME_TOP ? 'That\'s as loud as it goes.' : 'That\'s as quiet as it goes.');
+  if (trackVolume(mix, track) === level) return ok(mix);
+  const next = clone(mix);
+  next.vols = Array.from({ length: TRACKS }, (_, t) => trackVolume(mix, t));
+  next.vols[track] = level;
+  return ok(next);
+}
+
+/** Mute a track (level 0), or unmute it: back to the usual level 3. */
+export const muteTrack = (mix, track) => setTrackVolume(mix, track, trackVolume(mix, track) === 0 ? USUAL_VOLUME : 0);
+
 /** The take ids a mix uses. */
 export const takesIn = (mix) => [...new Set(allClips(mix).filter((c) => c.kind === 'take').map((c) => c.take))];
 
@@ -486,6 +548,16 @@ export function schedule(mix) {
   })).sort((a, b) => a.at - b.at || a.track - b.track);
 }
 
+/**
+ * How much a backing track swings in a mix (see music.js swingAt): as the mix's song parts do.
+ * The first song part counts (the earliest, then the lowest track); none, no swing.
+ */
+export function backingSwing(mix) {
+  let first = null;
+  mix.tracks.forEach((clips) => clips.forEach((c) => { if (c.kind === 'part' && (!first || c.start < first.start)) first = c; }));
+  return (first && songOf(first.song)?.swing) || 0;
+}
+
 /** The stickers a mix has earned, for its card: [{ id, name, why }]. */
 export function badges(mix) {
   const clips = allClips(mix);
@@ -499,7 +571,11 @@ export function badges(mix) {
   if (['lead', 'bass', 'drums'].every((k) => kinds.has(k))) out.push({ id: 'band', name: 'Full band', why: 'A tune, a bass and drums together.' });
   if (songs.size >= 2) out.push({ id: 'remix', name: 'Remix', why: 'Parts from two songs in one mix.' });
   // (a part moved into the mix's key counts as in it)
-  if (songs.size >= 2 && parts.every((c) => (c.shift ? clipFits(mix, c) : keyFits(mix.key, sourceOf(c.song)?.key)))) out.push({ id: 'match', name: 'Perfect match', why: 'Every part is in the same key.' });
+  // only parts with notes have a key: drums count neither for it nor against it
+  const keyed = parts.filter((c) => clipSound(c) === 'notes');
+  if (new Set(keyed.map((c) => c.song)).size >= 2 && keyed.every((c) => (c.shift ? clipFits(mix, c) : keyFits(mix.key, sourceOf(c.song)?.key)))) {
+    out.push({ id: 'match', name: 'Perfect match', why: 'All the notes fit the key of your mix.' });
+  }
   const mine = mix.tracks.filter((t) => t.some((c) => c.kind === 'take')).length;
   if (mine >= TRACKS && !parts.length && !clips.some((c) => c.kind === 'backing')) out.push({ id: 'solo', name: 'One-kid band', why: 'Every track is you!' });
   if (clips.some(remixed)) out.push({ id: 'remixer', name: 'Remixer', why: 'You gave the music a new sound.' });
@@ -554,8 +630,10 @@ export function cleanMix(raw) {
         if (sound === 'notes' && typeof c.voice === 'string' && Object.hasOwn(VOICES, c.voice) && c.voice !== ownVoice(clip)) clip.voice = c.voice;
         if (sound === 'drums' && typeof c.kit === 'string' && Object.hasOwn(KITS, c.kit) && c.kit !== 'chip') clip.kit = c.kit;
         if (sound === 'notes' && Number.isFinite(c.shift)) {
-          const shift = Math.max(-MOST_SHIFT, Math.min(MOST_SHIFT, Math.round(c.shift)));
-          if (shift) clip.shift = shift;
+          let shift = Math.max(-MOST_SHIFT, Math.min(MOST_SHIFT, Math.round(c.shift)));
+          // a backing track plays in the mix's key: it only ever moves by whole octaves
+          if (clip.kind === 'backing') shift = 12 * Math.round(shift / 12);
+          if (shift) clip.shift = shift; // (the notes are checked below, once the mix's key is known)
         }
         mix.tracks[t].push(clip);
       } else {
@@ -570,6 +648,18 @@ export function cleanMix(raw) {
   if (!mix.key) mix.key = sourceOf(mix.tracks.flat().find((c) => c.kind === 'part')?.song || '')?.key || null;
   const notes = mix.tracks.flat().find((c) => c.kind === 'backing' && clipSound(c) === 'notes');
   if (!mix.key && notes) mix.key = LOOPS[notes.loop].mood === 'minor' ? 'Am' : 'C';
+  // a moved clip whose notes went past what can be heard well moves back by whole octaves
+  for (const c of mix.tracks.flat()) {
+    if (c.shift === undefined) continue;
+    const shift = inRange(mix, c, c.shift);
+    if (shift) c.shift = shift;
+    else delete c.shift;
+  }
   mix.next = next;
+  // track levels: kept only when the mix had them; an odd one is the usual level, a list of
+  // the wrong length is dropped (every track at the usual level)
+  if (Array.isArray(raw.vols) && raw.vols.length === TRACKS) {
+    mix.vols = raw.vols.map((v) => (Number.isInteger(v) && v >= 0 && v <= VOLUME_TOP ? v : USUAL_VOLUME));
+  }
   return mix;
 }
