@@ -43,6 +43,11 @@
 .song-card.locked { background: #efeaf4; box-shadow: none; color: var(--muted); cursor: default; }
 .song-card.locked .song-icon { filter: grayscale(1); opacity: 0.6; }
 .song-card:not(.locked):active { transform: translateY(2px); box-shadow: 0 1px 0 var(--px-ink, #2b2238); }
+/* a song the pianos opened, waiting to be bought: its price looks like a button */
+.song-card.buy { background: #fff3d6; }
+.song-card .song-price { grid-column: 2; justify-self: start; margin-top: 4px; padding: 4px 12px; border: 2px solid #f0c040; border-radius: 4px; background: #fff3bf; color: #8a5a00; font-family: var(--px-font); font-weight: 800; font-size: 1.05rem; box-shadow: 0 2px 0 #c99a1e; }
+.song-card .song-price.can { background: #ffe066; border-color: var(--px-ink, #2b2238); box-shadow: 0 2px 0 var(--px-ink, #2b2238); }
+.song-buy-art { font-size: 3.5rem; line-height: 1.2; }
 
 .song-tools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin: 8px 0 10px; }
 /* the buttons stay on top while the music scrolls by, so Stop is always in reach */

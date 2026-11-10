@@ -4,7 +4,8 @@
 // chord names go above it, and an easy left hand (root notes or chords) goes on a bass
 // staff below. Also the songbook itself: which pieces there are, how hard each is, and
 // which unlock with each piano (the first piano opens every map song, the upright piano the
-// secret shows' tunes, and a finished treasure map opens its show's tune early). Pure logic, no DOM.
+// secret shows' tunes, and a finished treasure map opens its show's tune early), and buying an
+// open piece with coins (SONG_PRICE). Pure logic, no DOM.
 
 import { SONGS, SHOW_SONGS, barChords } from './songs.js';
 
@@ -217,14 +218,56 @@ export const SONGBOOK = (() => {
 /**
  * The songbook for a music house look (tier 0-3) and the maps whose treasure the kid has
  * found (a Set of background ids): every piece, with open (its piano is here, or, for a
- * show's tune, its treasure map is finished) and secret (a show's tune that isn't open: its
- * name stays hidden).
+ * show's tune, its treasure map is finished: the kid may have it, and the studio may use it),
+ * secret (a show's tune that isn't open: its name stays hidden) and bought (owned: the kid's
+ * shared purchases, kid.owned, hold it; see SONG_PRICE). The songbook shows a piece's music
+ * only when it is open and bought.
  */
-export function songbookFor(tier, found = new Set()) {
+export function songbookFor(tier, found = new Set(), owned = []) {
+  const have = songsBought(owned);
   return SONGBOOK.map((p) => {
     const open = tier >= 1 && (tier >= p.tier || (p.kind === 'show' && found.has(p.map)));
-    return { ...p, secret: p.kind === 'show' && !open, open };
+    return { ...p, secret: p.kind === 'show' && !open, open, bought: have.has(p.id) };
   });
+}
+
+// ---------- buying songs ----------
+// Each piece costs SONG_PRICE coins, once: one purchase opens its easy, medium and hard music
+// for every buddy. A bought piece goes in the kid's shared purchases (kid.owned, like the
+// places and the furniture) as 'song:<piece id>', and its price is added to kid.spent, the
+// same two fields a shop purchase changes (so it saves and syncs the same way). These ids are
+// not shop items: itemById doesn't know them, so the wardrobe, gear and furniture skip them.
+
+export const SONG_PRICE = 20;
+const SONG_PREFIX = 'song:';
+/** The id a bought piece has in kid.owned. */
+export const songItemId = (pieceId) => `${SONG_PREFIX}${pieceId}`;
+/** Whether an id in kid.owned is a bought piece. */
+export const isSongItem = (id) => typeof id === 'string' && id.startsWith(SONG_PREFIX);
+/** The piece ids bought, from the kid's shared purchases (kid.owned). */
+export const songsBought = (owned = []) => new Set((owned || []).filter(isSongItem).map((id) => id.slice(SONG_PREFIX.length)));
+
+/**
+ * Whether a piece (from songbookFor) can be bought with the coins the kid has: 'ok', 'bought'
+ * (already theirs), 'locked' (the piano doesn't let them have it yet) or 'short' (not enough coins).
+ */
+export function songBuyCheck(piece, coins) {
+  if (!piece) return 'locked';
+  if (piece.bought) return 'bought';
+  if (!piece.open) return 'locked';
+  return coins >= SONG_PRICE ? 'ok' : 'short';
+}
+
+/**
+ * Buy a piece for a kid who has coins to spend: kid.spent goes up by the price and the piece
+ * goes in kid.owned. Does nothing (returns false) unless songBuyCheck says 'ok', so tapping
+ * Buy twice never charges twice.
+ */
+export function buySong(kid, piece, coins) {
+  if (songBuyCheck(piece, coins) !== 'ok' || songsBought(kid.owned).has(piece.id)) return false;
+  kid.spent = (kid.spent || 0) + SONG_PRICE;
+  kid.owned = [...(kid.owned || []), songItemId(piece.id)];
+  return true;
 }
 
 /** Stars for a piece's level (1-3), for the songbook list. */

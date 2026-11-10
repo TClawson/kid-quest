@@ -4,7 +4,11 @@ import { SONGS, SHOW_SONGS, barChords } from '../js/songs.js';
 import {
   keyInfo, keyLabel, chordNotes, chordLabel, splitLength, barEvents, meterOf, parseNote,
   songById, songAbc, melodyShift, lineRanges, SONGBOOK, songbookFor, stars, SWING_MARK,
+  SONG_PRICE, songItemId, isSongItem, songsBought, songBuyCheck, buySong,
 } from '../js/sheetmusic.js';
+import { emptyState, defaultTasks, addDays, totalCoins } from '../js/logic.js';
+import { itemById, ownedFor, bestGear, moveWornToBuddy, isUnlocked, switchSpecies } from '../js/items.js';
+import { applyGrants } from '../js/grants.js';
 
 const LETTERS = 'CDEFGAB';
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
@@ -302,4 +306,87 @@ test('piano tiers open songs: first piano the map songs, upright all, a finished
   }
   assert.deepEqual(ids(3), ids(2), 'the rock star piano opens nothing new yet');
   assert.ok(songbookFor(1).filter((p) => p.kind === 'map').every((p) => !p.secret));
+});
+
+// ---------- buying songs ----------
+
+/** A kid with every chore done for `days` days before day, so they have coins to spend. */
+function kidWithCoins(days) {
+  const day = '2026-11-11';
+  const s = emptyState();
+  const kid = { id: 'kid_a', name: 'A', color: '#f00', tasks: defaultTasks(), startDate: addDays(day, -days), owned: ['bg-ocean'], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } };
+  s.kids.push(kid);
+  for (let i = 1; i <= days; i += 1) s.log[addDays(day, -i)] = { kid_a: { tasks: Object.fromEntries(kid.tasks.map((t) => [t.id, { status: 'done', by: 'parent' }])) } };
+  // the coins a kid has left, worked out the way progressFor in app.js does
+  const coins = () => Math.max(0, totalCoins(s, kid, day) - (kid.spent || 0));
+  return { s, kid, coins };
+}
+const pieceOf = (kid, id, tier = 1, found = new Set()) => songbookFor(tier, found, kid.owned).find((p) => p.id === id);
+
+test('a song costs 20 coins; only an open song can be bought, and bought is kept apart from open', () => {
+  assert.equal(SONG_PRICE, 20);
+  assert.equal(songItemId('show:bg-meadow'), 'song:show:bg-meadow');
+  assert.ok(isSongItem('song:bg-meadow') && !isSongItem('bg-meadow') && !isSongItem(undefined));
+  assert.deepEqual([...songsBought(['bg-ocean', 'song:bg-space', 'song:show:bg-meadow'])], ['bg-space', 'show:bg-meadow']);
+  assert.deepEqual([...songsBought(undefined)], []);
+  // open still means what the piano allows, whatever is bought (the studio uses it)
+  const owned = ['song:bg-meadow'];
+  assert.deepEqual(songbookFor(1, new Set(), owned).map((p) => p.open), songbookFor(1).map((p) => p.open));
+  assert.deepEqual(songbookFor(1, new Set(), owned).filter((p) => p.bought).map((p) => p.id), ['bg-meadow']);
+  assert.ok(songbookFor(2).every((p) => p.open && !p.bought), 'the upright piano opens all 18, but none is bought');
+  // what can be bought
+  const book = songbookFor(1, new Set(), owned);
+  const at = (id) => book.find((p) => p.id === id);
+  assert.equal(songBuyCheck(at('bg-space'), 20), 'ok', 'an open map song with 20 coins');
+  assert.equal(songBuyCheck(at('bg-space'), 19), 'short', 'one coin short');
+  assert.equal(songBuyCheck(at('bg-meadow'), 100), 'bought', 'already bought');
+  assert.equal(songBuyCheck(at('show:bg-ocean'), 100), 'locked', 'a secret show song the piano has not opened');
+  assert.equal(songBuyCheck(songbookFor(0).find((p) => p.id === 'bg-space'), 100), 'locked', 'no piano: nothing to buy');
+  assert.equal(songBuyCheck(undefined, 100), 'locked');
+  assert.equal(songBuyCheck(songbookFor(1, new Set(['bg-ocean'])).find((p) => p.id === 'show:bg-ocean'), 20), 'ok', 'a finished treasure map lets its show song be bought');
+});
+
+test('buying a song: 20 coins once, all three levels, every buddy, no double charge', () => {
+  const { kid, coins } = kidWithCoins(3);
+  const before = coins();
+  assert.ok(before >= 40, `coins to spend (${before})`);
+  assert.equal(buySong(kid, pieceOf(kid, 'bg-space'), coins()), true);
+  assert.equal(coins(), before - 20, 'coins left after buying');
+  assert.equal(kid.spent, 20);
+  assert.deepEqual(kid.owned, ['bg-ocean', 'song:bg-space'], 'kept with the kid\'s shared purchases');
+  assert.deepEqual(kid.buddyOwned, undefined, 'not tied to one buddy');
+  // bought once: the piece is bought (its easy, medium and hard music all come with the piece id)
+  assert.equal(pieceOf(kid, 'bg-space').bought, true);
+  // a second tap, or a stale dialog, never charges again
+  assert.equal(buySong(kid, pieceOf(kid, 'bg-space'), coins()), false);
+  assert.equal(buySong(kid, { ...pieceOf(kid, 'bg-space'), bought: false }, coins()), false, 'even from a piece looked up before the purchase');
+  assert.equal(coins(), before - 20);
+  assert.equal(kid.owned.filter((id) => id === 'song:bg-space').length, 1);
+  // every buddy has it: switching buddies keeps it
+  switchSpecies(kid, 'panda', () => true);
+  assert.ok(ownedFor(kid).includes('song:bg-space'), 'the panda has it too');
+  assert.equal(pieceOf(kid, 'bg-space').bought, true);
+  // a locked song can't be bought, and costs nothing
+  assert.equal(buySong(kid, pieceOf(kid, 'show:bg-ocean'), coins()), false);
+  assert.equal(kid.spent, 20);
+});
+
+test('not enough coins: nothing is bought and nothing is spent', () => {
+  const { kid, coins } = kidWithCoins(0);
+  assert.ok(coins() < SONG_PRICE);
+  assert.equal(songBuyCheck(pieceOf(kid, 'bg-meadow'), coins()), 'short');
+  assert.equal(buySong(kid, pieceOf(kid, 'bg-meadow'), coins()), false);
+  assert.deepEqual([kid.spent, kid.owned], [0, ['bg-ocean']]);
+});
+
+test('bought songs in kid.owned trip up nothing else that reads it', () => {
+  const kid = { id: 'k', owned: ['song:bg-meadow', 'sport-rod-good', 'song:show:bg-ocean'], buddy: { species: 'fox', outfit: {} } };
+  assert.equal(itemById('song:bg-meadow'), undefined, 'not a shop item');
+  assert.deepEqual(bestGear(kid.owned), { rod: 2 });
+  assert.equal(moveWornToBuddy(kid), false, 'not worn: they stay with the kid');
+  assert.deepEqual(kid.owned, ['song:bg-meadow', 'sport-rod-good', 'song:show:bg-ocean']);
+  assert.equal(isUnlocked(itemById('bg-ocean'), { owned: kid.owned }), false);
+  const s = { kids: [kid] };
+  assert.equal(applyGrants(s, [{ id: 'g', kid: 'k', item: 'bg-ocean' }]), true);
+  assert.ok(kid.owned.includes('song:bg-meadow') && kid.owned.includes('bg-ocean'));
 });
