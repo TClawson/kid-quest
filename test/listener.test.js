@@ -103,6 +103,39 @@ test('silence, hiss and a recording too short to look at give no notes', () => {
   assert.deepEqual(listen(piano([], 48000, 2, { hiss: 0.01 }), 48000), []);
 });
 
+/** A quiet room: a low rumble with hiss on top (most of a real room's noise is low), at loudness `level`. */
+function room(rate, seconds, level, seed = 11) {
+  const x = new Float32Array(Math.round(seconds * rate));
+  const r = seeded(seed);
+  let low = 0;
+  for (let i = 0; i < x.length; i += 1) {
+    const w = 2 * r() - 1;
+    low = 0.98 * low + w;
+    x[i] = level * (0.05 * low + 0.005 * w);
+  }
+  return x;
+}
+
+test('a quiet room with no piano in it gives no notes, however the take is turned up', () => {
+  // (a take is made as loud as it can be before it is kept, so "quiet" can't be told from its loudness)
+  for (const level of [0.001, 0.02, 0.9]) {
+    assert.deepEqual(listen(room(48000, 6, level), 48000), [], `at ${level}`);
+  }
+  assert.deepEqual(listen(room(24000, 3, 0.01, 5), 24000), []);
+});
+
+test('a little playing and then a long quiet room: the playing, and nothing from the room', () => {
+  const rate = 24000;
+  const few = TUNE.slice(0, 4);
+  const x = piano(few, rate, 24);
+  const quiet = room(rate, 24, 0.004);
+  for (let i = 0; i < x.length; i += 1) x[i] += quiet[i];
+  const heard = listen(x, rate);
+  assert.deepEqual(keysOf(heard), keysOf(few));
+  // and the same playing is heard the same with the room cut off
+  assert.deepEqual(keysOf(listen(x.subarray(0, 3 * rate), rate)), keysOf(few));
+});
+
 test('the studio\'s clicks are not notes, once it is told when they sound', () => {
   const rate = 48000;
   // a tune on the beat (two beats a second) with a click on every beat, as loud as the piano

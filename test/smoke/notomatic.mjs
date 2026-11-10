@@ -54,7 +54,7 @@ async function start(viewport, { noWorker = false } = {}) {
 }
 
 /**
- * Put takes on the test desk's draft, made in the page: [{ track, at, beats, notes: [midi, at (beats)] | 'silent' }].
+ * Put takes on the test desk's draft, made in the page: [{ track, at, beats, notes: [midi, at (beats)] | 'silent' (a quiet room, no piano) }].
  * Each note is 6 decaying overtones with a fast attack, about 0.4 s long, at 48 kHz, with a
  * little noise. Returns the take ids.
  */
@@ -82,7 +82,13 @@ function seedDesk(page, takes, bpm = 120) {
           out[from + i] += 0.25 * env * v;
         }
       }
-      for (let i = 0; i < out.length; i += 1) out[i] += (t.notes === 'silent' ? 0 : 0.003) * noise();
+      // every take has a little hiss; the silent one is a quiet room (a low rumble, which is what real rooms sound like)
+      let low = 0;
+      for (let i = 0; i < out.length; i += 1) {
+        const w = noise();
+        low = 0.98 * low + w;
+        out[i] += t.notes === 'silent' ? 0.002 * low + 0.0002 * w : 0.003 * w;
+      }
       const id = await saveTake(desk, out, rate, lead);
       ids.push(id);
       mix = addTake(mix, t.track, id, t.beats, t.at, { lead }).mix;

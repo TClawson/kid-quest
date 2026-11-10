@@ -7,7 +7,9 @@
 // this very piano while doing so (how strong each overtone is, shared between neighbouring
 // keys). A note starts where a key's loudness jumps up. Then a few rules take away what a real
 // piano adds that is not a note: an overtone heard as a note of its own, the knock of a key
-// through a tablet standing on the piano, a mistuned string heard as two keys.
+// through a tablet standing on the piano, a mistuned string heard as two keys. And what is not
+// a piano at all: a take is made as loud as it can be before it is kept, so a quiet room looks
+// as loud as playing does. Only a string draws thin steady lines in the picture (toneOf).
 //
 // No trained network and nothing to download. Pure arithmetic: no DOM and no sound, so it
 // runs in a Worker (listener-worker.js) and in Node (the tests).
@@ -44,6 +46,10 @@ export const SETTINGS = {
   cluster: 1, // of two neighbouring keys struck in one instant, the one this many times softer goes
   clickNear: 0.07, // seconds: a note this near a known click must keep sounding after it (see pickNotes)
   clickStay: 0.4, // ... at this fraction of its first loudness, 100 to 140 ms on
+  sounding: 0.15, // a look counts as sounding when its loudest key is at least this much of the take's loudest
+  tone: 5.5, // a note's overtones stand this many times out of the picture around them, or it is noise and not a string (see toneOf)
+  toneMost: 0.2, // when fewer than this share of the would-be notes sound like a string, the take is mostly noise: then only notes twice as clear stay
+  toneTo: 16, toneWide: 16, // ... measured from susFrom to this many looks after the strike, against this many bins on each side
 };
 
 // ---------- getting the recording ready ----------
@@ -256,6 +262,21 @@ function noiseShapes(spec, rate, S, pitches = []) {
 }
 
 /**
+ * How loud the loud notes of a recording are: the level that 9 in 10 of its sounding looks stay
+ * under (`tops` is the loudest key of each look). Looks where next to nothing sounds are not
+ * counted, so a take that is mostly a quiet room is still measured by the playing in it.
+ */
+function loudOf(tops, S) {
+  const sorted = Float64Array.from(tops).sort();
+  const n = sorted.length;
+  if (!n) return 0;
+  const line = S.sounding * sorted[Math.floor(0.995 * (n - 1))];
+  let from = 0;
+  while (from < n - 1 && sorted[from] < line) from += 1;
+  return sorted[from + Math.floor(0.9 * (n - 1 - from))] || 0;
+}
+
+/**
  * Explain the picture as fingerprints: H[key][look] is how loud each key is over time. Tunes
  * the fingerprints as it goes. `progress(0..1)` is called after every round.
  */
@@ -316,7 +337,7 @@ export function factor(spec, keys, S = SETTINGS, { rate = S.rate, pitches = [], 
       // makes the rest of the rounds several times faster.
       const tops = new Float32Array(T);
       for (let t = 0; t < T; t += 1) { let m = 0; for (let p = 0; p < nK; p += 1) if (H[p * T + t] > m) m = H[p * T + t]; tops[t] = m; }
-      quiet = Math.max(quiet, S.prune * (tops.sort()[Math.floor(0.9 * (T - 1))] || 0));
+      quiet = Math.max(quiet, S.prune * loudOf(tops, S));
     }
     if (joint) {
       // tune each key's overtone strengths, then share them with the keys next to it
@@ -354,6 +375,36 @@ export function factor(spec, keys, S = SETTINGS, { rate = S.rate, pitches = [], 
 }
 
 /**
+ * How clearly a string sounds in the picture after look t. A string draws thin lines (its
+ * overtones) that stand far out of what is around them and stay for a while; a room's noise,
+ * a bump or a breath draws none, however loud it is next to the rest of the recording. For
+ * each of the key's first overtones: the line's height over the low ground near it. The answer
+ * is the middle (geometric mean) of the three best, since one line alone can be luck.
+ */
+export function toneOf(spec, key, t, S = SETTINGS) {
+  const { V, T, K, df } = spec;
+  const from = Math.min(T - 1, t + S.susFrom); const to = Math.min(T - 1, t + S.toneTo);
+  const B = stretchOf(key.midi);
+  const at = (b) => { let s = 0; for (let u = from; u <= to; u += 1) s += V[u * K + b]; return s; };
+  const scores = [];
+  const near = [];
+  for (let k = 1; k <= 8; k += 1) {
+    const c = Math.round((k * key.f0 * Math.sqrt(1 + B * k * k)) / df);
+    if (c + 2 >= K) break;
+    const peak = Math.max(at(Math.max(1, c - 1)), at(c), at(c + 1));
+    near.length = 0;
+    for (let b = Math.max(1, c - S.toneWide); b <= Math.min(K - 1, c + S.toneWide); b += 1) near.push(at(b));
+    near.sort((x, y) => x - y);
+    scores.push(peak / (near[Math.floor(0.2 * (near.length - 1))] + 1e-9));
+  }
+  scores.sort((x, y) => y - x);
+  const n = Math.min(3, scores.length);
+  let log = 0;
+  for (let i = 0; i < n; i += 1) log += Math.log(scores[i]);
+  return n ? Math.exp(log / n) : 0;
+}
+
+/**
  * Notes from the loudness of each key over time: [{ midi, on, off, vel }], in seconds.
  * `clickTimes` (seconds, sorted) are when known clicks sound in the recording.
  */
@@ -364,7 +415,7 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
   // how loud the loud notes of this recording are
   const tops = new Float64Array(T);
   for (let t = 0; t < T; t += 1) { let m = 0; for (let p = 0; p < nK; p += 1) if (H[p * T + t] > m) m = H[p * T + t]; tops[t] = m; }
-  const ref = tops.slice().sort()[Math.floor(0.9 * (T - 1))] || 1e-6;
+  const ref = loudOf(tops, S) || 1e-6;
   const floor = S.alpha * ref;
   const gap = Math.max(1, Math.round(S.minGap / dt));
   const row = (p) => H.subarray(p * T, (p + 1) * T);
@@ -373,7 +424,8 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
   // how loud everything that is not a piano string is, look by look
   const other = new Float32Array(T);
   for (let q = 0; q < (fac.nN || 0); q += 1) { const h = row(nK + q); for (let t = 0; t < T; t += 1) other[t] += h[t]; }
-  const notes = [];
+  let notes = [];
+  let seen = 0;
   for (let p = 0; p < nK; p += 1) {
     const h = row(p);
     let last = -1e9;
@@ -391,11 +443,18 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
       if (strength < floor || strength < S.rho * before) continue;
       // in a recording of a room with no piano in it, the "loud notes" are only the hiss falling on a key
       if (strength < S.clear * mean(other, t + S.susFrom, t + S.susTo)) continue;
+      // a room with no piano in it is full of would-be notes too: loud next to the rest, but no string
+      const tone = S.tone > 0 ? toneOf(spec, keys[p], t, S) : 0;
+      seen += 1;
+      if (tone < S.tone) continue;
       let peak = 0; for (let u = t; u <= Math.min(T - 1, t + 10); u += 1) if (h[u] > peak) peak = h[u];
-      notes.push({ p, t, peak, strength, midi: keys[p].midi });
+      notes.push({ p, t, peak, strength, midi: keys[p].midi, tone });
       last = t;
     }
   }
+  // In a take with no piano in it now and then some noise looks like a string by luck. So when
+  // nearly all the would-be notes were noise, the few left over must be very clear to stay.
+  if (S.tone > 0 && notes.length < S.toneMost * seen) notes = notes.filter((n) => n.tone >= 2 * S.tone);
   let kept = notes;
   // an overtone of a louder note struck in the same moment is not a note
   if (S.ghost > 0) {
