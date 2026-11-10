@@ -25,6 +25,11 @@
 // stronger line, twitches that hook more often instead of spooking, and (the
 // kid's rod) more visits from the map's rare fish. Points for each catch: more for rarer and bigger fish.
 //
+// Farther out, bigger fish (Taylor, 2026-11-10): each fish lives somewhere in the lake, and the
+// farther from the shore, the likelier it is big. The kid's better rod zooms the view out (ROD_ZOOM),
+// so the lake is bigger, holds more fish and the cast reaches farther. The fishing boat (100 gems)
+// rows both buddies out from the shore, so the whole view is deeper water.
+//
 // Same interface as Play in play.js (tap, step, draw, drawHud, score, phase).
 // holdAnywhere: a finger held down anywhere reels, so playground.js calls
 // release() for every finger that comes up.
@@ -53,6 +58,20 @@ export const strikeChance = (size, tier = 1) => 0.44 - 0.24 * size + RODS_STRIKE
 export const RODS_STRIKE = 0.06;
 /** Each better rod (the kid's): the map's rare fish turns up this much more often (+75%, then +150%). */
 export const RODS_RARE = 0.75;
+/**
+ * Each better rod (the kid's) zooms the view out this much, so the kid sees and casts
+ * farther across a bigger lake (Taylor, 2026-11-10). Things look smaller, as when you step back.
+ */
+export const ROD_ZOOM = [1, 1.2, 1.4];
+/** The fishing boat (100 gems) rows out this far, as a share of the lake you see from the shore. */
+export const BOAT_OUT = 0.55;
+/**
+ * Fish farther from the shore tend to be bigger (Taylor, 2026-11-10). out: distance from the
+ * shore, where 1 is the far edge of what a regular rod sees. A fish's size (0-1) is r ** sizePower(out):
+ * near the shore mostly small ones, about as before at a regular rod's middle distance, and out
+ * past it the big ones are common.
+ */
+export const sizePower = (out) => 2.2 / (1 + 0.9 * Math.max(0, out));
 /** How much likelier than before a fish of this size is to take the bait on its own (0.8 small, 0.5 biggest). */
 const biteScale = (size) => 0.8 - 0.3 * size;
 /** Seconds a fish that saw another one spooked stays away from the bait. */
@@ -273,6 +292,66 @@ export function baitNames(map) {
 export function baitPic(map, bait, Z = 1) { return baitArt(spotFor(map).baits?.[bait]?.[1] || bait, Z); }
 
 
+// ---------- the fishing boat ----------
+/**
+ * A wooden rowboat, side on, in fine pixels: P(color, x, y, w, h). x0, top: its left end and
+ * rim; len: its length. part 'back' is the far rim and the dark inside, 'front' the hull and
+ * an oar, 'all' both (the shop picture). t: time, for ripples at the waterline.
+ */
+export function paintBoat(P, x0, top, len, Z, part = 'all', t = 0) {
+  const depth = 9 * Z; // rim to keel
+  const plank = ['#a0612f', '#8b5a2b', '#6e4520'];
+  // how far in the hull curves at each row below the rim (bow on the right rises more)
+  const inL = (j) => Math.round(((j / depth) ** 1.6) * 7 * Z);
+  const inR = (j) => Math.round(((j / depth) ** 1.3) * 10 * Z);
+  if (part === 'back' || part === 'all') {
+    // the far rim and the inside of the boat, seen over the near rim
+    P(INK, x0 + Z, top - 2 * Z - 1, len - 2 * Z, 2 * Z + 2);
+    P('#5c3a1e', x0 + 2 * Z, top - 2 * Z, len - 4 * Z, 2 * Z);
+    P('#c98a4b', x0 + 2 * Z, top - 2 * Z, len - 4 * Z, 1);
+    // the bow post
+    P(INK, x0 + len - 2 * Z - 1, top - 4 * Z - 1, 2 * Z + 2, 4 * Z + 1); P('#8b5a2b', x0 + len - 2 * Z, top - 4 * Z, 2 * Z, 4 * Z);
+  }
+  if (part === 'front' || part === 'all') {
+    for (let j = 0; j <= depth; j += 1) {
+      const a = x0 + inL(j); const b = x0 + len - inR(j);
+      P(INK, a - 1, top + j, b - a + 2, 1);
+      if (j === 0 || j === depth) continue;
+      const band = Math.floor((j - 1) / (3 * Z));
+      let col = plank[Math.min(2, band)];
+      if ((j - 1) % (3 * Z) === 0) col = '#c98a4b'; // the light top edge of each plank
+      P(col, a, top + j, b - a, 1);
+    }
+    P(INK, x0 - 1, top - 1, len + 2, 1);
+    P('#e9b872', x0, top, len, Z); // the rim
+    // rivets, and the boat's name stripe
+    for (let i = x0 + 4 * Z; i < x0 + len - 6 * Z; i += 6 * Z) P('#5c3a1e', i, top + 2 * Z, Z, Z);
+    P('#e03131', x0 + 9 * Z, top + 5 * Z, len - 22 * Z, Z);
+    // an oar resting in its lock, blade in the water
+    const ox = x0 + Math.round(len * 0.42);
+    for (let k = 0; k < 12 * Z; k += 1) P(k < 2 ? INK : '#c98a4b', ox - Math.round(k * 0.55), top - 2 * Z + k, Z, 1);
+    P(INK, ox - 8 * Z - 1, top + 8 * Z, 4 * Z + 2, 3 * Z); P('#e9b872', ox - 8 * Z, top + 8 * Z + 1, 4 * Z, 3 * Z - 2);
+    // ripples where it sits in the water
+    const wl = top + 5 * Z;
+    const s = Math.round(Math.sin(t * 2) * Z);
+    P('rgba(255,255,255,0.8)', x0 - 4 * Z + s, wl, 3 * Z, 1); P('rgba(255,255,255,0.8)', x0 + len + Z - s, wl, 3 * Z, 1);
+  }
+}
+
+let boatPic = null;
+/** A picture of the boat for the shop (a data URL). */
+export function boatThumb() {
+  if (boatPic) return boatPic;
+  const Z = 2; const c = canvas(64 * Z, 34 * Z); const x = c.getContext('2d');
+  const P = (col, a, b, w = 1, h = 1) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+  // a bit of lake under it
+  P('#4dabf7', 0, 21 * Z, 64 * Z, 13 * Z); P('#a5d8ff', 0, 21 * Z, 64 * Z, Z);
+  for (let i = 0; i < 64 * Z; i += 9 * Z) P('#ffffff', i, 21 * Z - 1, 4 * Z, 1);
+  paintBoat(P, 7 * Z, 16 * Z, 50 * Z, Z, 'all');
+  boatPic = c.toDataURL ? c.toDataURL() : '';
+  return boatPic;
+}
+
 // ---------- the game ----------
 export class Fishing {
   /**
@@ -295,20 +374,38 @@ export class Fishing {
     this.points = { kid: 0, vis: 0 }; this.newBest = false;
     this.holdAnywhere = true; this.locked = false;
     this.rodTier = clamp(opts.kid.gear?.rod || 1, 1, 3); this.visTier = clamp(opts.visitor.gear?.rod || 1, 1, 3);
+    // The kid's rod zooms the view out: the lake (the world, in game pixels) is bigger than
+    // the screen (vW x vH), and drawn smaller. The boat rows out from the shore: the lake gets
+    // longer still and the view moves along with the boat (camX), so the shore is left behind.
+    this.vW = opts.W; this.vH = opts.H;
+    this.zoom = ROD_ZOOM[this.rodTier - 1];
+    this.boat = Boolean(opts.kid.gear?.boat);
+    const W0 = Math.round(this.vW * this.zoom);
+    this.H = Math.round(this.vH * this.zoom);
     this.surface = Math.round(this.H * 0.36);
-    this.bankX = Math.max(46, Math.round(this.W * 0.21));
+    this.bankX = Math.max(46, Math.round(W0 * 0.21));
+    // how far out is "far": the lake a regular rod sees from the shore
+    this.lakeRef = this.vW - Math.max(46, Math.round(this.vW * 0.21));
+    this.camX = this.boat ? Math.round((W0 - this.bankX) * BOAT_OUT) : 0;
+    this.W = W0 + this.camX;
+    this.fieldW = W0; this.fieldH = this.H; // the part of the lake on screen
+    // where the buddies fish from: the shore's edge, or the boat
+    this.homeX = this.bankX + this.camX;
     // the lake bed slopes up to the shore under the buddies, then runs along the bottom
-    this.slopeRun = Math.round((this.W - this.bankX) * 0.34);
+    this.slopeRun = Math.round((W0 - this.bankX) * 0.34);
     const deepest = this.H - 9 - this.surface;
     this.slopeK = deepest / this.slopeRun; // pixels down for each pixel out
     const floor = (x) => Math.round(this.H - 9 + 1.6 * Math.sin(x / 13) + Math.sin(x / 5.3));
     this.bedAt = (x) => (x <= this.bankX ? this.surface + 2 : Math.min(floor(x), Math.round(this.surface + 2 + (x - this.bankX) * this.slopeK)));
     // the slope: nothing at depth y goes left of this
     this.shoreX = (y) => this.bankX + Math.max(0, y - this.surface - 2) / this.slopeK;
-    this.leftLimit = this.bankX + this.slopeRun * 0.55;
+    this.leftLimit = Math.max(this.bankX + this.slopeRun * 0.55, this.camX + 10);
+    // a bigger lake holds more fish (a regular rod from the shore: 1)
+    this.room = (this.W - this.leftLimit) / Math.max(1, this.lakeRef * 0.8);
     const rod = (b) => ({ ...b, outfit: { ...(b?.outfit || {}), music: undefined, sport: `sport-rod-${['regular', 'good', 'super'][Math.max(0, Math.min(2, (opts.kid.gear?.rod || 1) - 1))]}` } });
-    this.kid = new Player(rod(opts.kid.buddy), opts.kid.name, 11, this.bankX - 13, this.surface - 3);
-    this.vis = new Player(rod(opts.visitor.buddy), opts.visitor.name, 23, this.bankX - 32, this.surface - 3);
+    const feet = this.boat ? this.surface - 6 : this.surface - 3;
+    this.kid = new Player(rod(opts.kid.buddy), opts.kid.name, 11, this.homeX - 13, feet);
+    this.vis = new Player(rod(opts.visitor.buddy), opts.visitor.name, 23, this.homeX - 32, feet);
     for (const p of [this.kid, this.vis]) { p.face = 1; p.brain.set(HAPPY); }
     this.lines = { kid: this.newLine(this.kid), vis: this.newLine(this.vis) };
     this.bait = 'worm';
@@ -320,7 +417,7 @@ export class Fishing {
     this.baitName = baitNames(this.map);
     this.fish = []; this.schools = [];
     this.nextSpawn = 0;
-    this.button = { x: this.W - 15, y: this.H - 15, r: 12 };
+    this.button = { x: this.vW - 15, y: this.vH - 15, r: 12 }; // on the screen, not in the lake
     this.left = GAME_SECONDS;
     this.phase = 'ready';
     this.catches = [];
@@ -344,7 +441,7 @@ export class Fishing {
       const h = Math.round((this.bedAt(x) - this.surface) * (0.3 + r() * 0.35));
       this.weeds.push({ x, w: 7 + Math.round(r() * 5), h, top: this.bedAt(x) - h, seed: r() * 10 });
     }
-    const nl = W > 160 ? 2 : 1;
+    const nl = Math.max(1, Math.round((W - this.bankX) / 85));
     for (let i = 0; i < nl; i += 1) {
       const x0 = this.bankX + this.slopeRun + 4;
       const x = Math.round(x0 + (W - x0 - 40) * (i / nl + (r() * 0.35) / nl) + 10 * i);
@@ -646,14 +743,30 @@ export class Fishing {
   seedFish() {
     // the lake starts empty and fills up as fish swim in from the right
     this.arrivals = [[0, 'bluegill'], [0.7, 'largemouth'], [1.5, 'catfish'], [2.4, 'pike'], [3.4, this.pickKind()]];
+    // a bigger lake starts with more on the way
+    for (let i = 0; i < Math.round(5 * (this.room - 1)); i += 1) this.arrivals.push([4.2 + i * 0.8, this.pickKind()]);
     this.nextSpawn = 6;
   }
 
-  makeFish(kind, x, y, move) {
+  /** How far from the shore x is: 1 is the far edge of what a regular rod sees from the shore. */
+  outAt(x) { return (x - this.bankX) / this.lakeRef; }
+
+  /** Where a new fish will spend its time: anywhere from near the shore to the far side. */
+  pickHome() { return this.leftLimit + 8 + this.r() * Math.max(1, this.W - 22 - this.leftLimit); }
+
+  /** The part of the lake a roaming fish (or school) swims back and forth in, around its home. */
+  range(home) {
+    const R = this.lakeRef * 0.35;
+    const lo = Math.max(this.leftLimit + 8, home - R); const hi = Math.min(this.W - 16, home + R);
+    return [Math.min(lo, hi - 20), hi];
+  }
+
+  /** home: where it lives; farther out, bigger fish (sizePower). */
+  makeFish(kind, x, y, move, home = x) {
     const sp = this.spot;
     const base = kind === 'special' ? SPECIES[sp.special.as] : SPECIES[kind];
     const { look, name } = lookFor(this.map, kind);
-    const size = this.r() ** 1.6; // big ones are rarer
+    const size = this.r() ** sizePower(this.outAt(home)); // big ones are rarer, more so near the shore
     const len = base.len[0] + (base.len[1] - base.len[0]) * size;
     const f = {
       kind, likeKey: kind === 'special' ? sp.special.id : kind, name,
@@ -673,53 +786,63 @@ export class Fishing {
     const edgeX = W + 50; // the left side is the shore, so new fish swim in from the right
     const move = kind === 'special' ? MOVES[this.spot.special.as] : MOVES[kind];
     const startX = edgeX;
+    const home = this.pickHome();
     if (move === 'school') {
       const cy = S + deep * (0.3 + this.r() * 0.3);
-      const school = { x: startX, y: cy, dir: -1, speed: 5 + this.r() * 3, born: this.t, life: 12 + this.r() * 18, members: [] };
+      const school = { x: startX, y: cy, dir: -1, speed: 5 + this.r() * 3, born: this.t, life: 12 + this.r() * 18, members: [], home };
+      [school.minX, school.maxX] = this.range(home);
       const n = 5 + Math.floor(this.r() * 5);
       for (let i = 0; i < n; i += 1) {
-        const f = this.makeFish(kind, startX, cy, 'school');
+        const f = this.makeFish(kind, startX, cy, 'school', home);
         f.ox = (this.r() - 0.5) * 26; f.oy = (this.r() - 0.5) * 12; f.school = school;
         school.members.push(f);
       }
       this.schools.push(school);
       // a smallmouth or two hang around the school
       const sm = this.r() < 0.6 ? 1 + (this.r() < 0.4 ? 1 : 0) : 0;
-      for (let i = 0; i < sm; i += 1) { const f = this.makeFish('smallmouth', startX, cy, 'shadow'); f.school = school; f.ox = (this.r() < 0.5 ? -1 : 1) * (18 + this.r() * 8); f.oy = 4 + this.r() * 6; }
+      for (let i = 0; i < sm; i += 1) { const f = this.makeFish('smallmouth', startX, cy, 'shadow', home); f.school = school; f.ox = (this.r() < 0.5 ? -1 : 1) * (18 + this.r() * 8); f.oy = 4 + this.r() * 6; }
       return;
     }
     if (move === 'shadow') {
       const sc = this.schools.find((s) => !s.gone);
       if (!sc) return this.spawn('largemouth');
-      const f = this.makeFish(kind, startX, sc.y, 'shadow'); f.school = sc; f.ox = (this.r() < 0.5 ? -1 : 1) * (18 + this.r() * 8); f.oy = 4 + this.r() * 6;
+      const f = this.makeFish(kind, startX, sc.y, 'shadow', sc.home ?? sc.x); f.school = sc; f.ox = (this.r() < 0.5 ? -1 : 1) * (18 + this.r() * 8); f.oy = 4 + this.r() * 6;
       return;
     }
     if (move === 'lurk') {
-      const w = this.weeds[Math.floor(this.r() * this.weeds.length)];
+      const w = this.nearest(this.weeds, home, (o) => o.x);
       const y = this.bedAt(w.x) - 4 - this.r() * Math.max(4, w.h * 0.6);
-      const f = this.makeFish(kind, edgeX, y, 'lurk');
+      const f = this.makeFish(kind, edgeX, y, 'lurk', w.x);
       f.post = [w.x + (this.r() - 0.5) * 10, y]; f.life = 15 + this.r() * 25;
       return;
     }
     if (move === 'bottom') {
-      const g = this.logs[Math.floor(this.r() * this.logs.length)];
+      const g = this.nearest(this.logs, home, (o) => o.x + o.len / 2);
       const px = g.x + (this.r() < 0.5 ? -8 : g.len + 6);
-      const f = this.makeFish(kind, edgeX, this.bedAt(px) - 3, 'bottom');
+      const f = this.makeFish(kind, edgeX, this.bedAt(px) - 3, 'bottom', px);
       f.post = [px, this.bedAt(px) - 2]; f.life = 18 + this.r() * 30;
       return;
     }
     // cruise: mostly one depth, near the weeds for largemouth
     const y = S + deep * (0.2 + this.r() * 0.55);
-    this.makeFish(kind, startX, y, 'cruise').dir = -1;
+    const f = this.makeFish(kind, startX, y, 'cruise', home);
+    f.dir = -1; [f.minX, f.maxX] = this.range(home);
+  }
+
+  /** Of a few weeds or logs, the one nearest x (ties: a random one of them). */
+  nearest(list, x, at) {
+    let best = list[0]; let bd = Infinity;
+    for (const o of list) { const d = Math.abs(at(o) - x) + this.r() * 6; if (d < bd) { bd = d; best = o; } }
+    return best;
   }
 
   stepFish(dt) {
     const W = this.W; const S = this.surface;
     while (this.arrivals.length && this.t >= this.arrivals[0][0]) this.spawn(this.arrivals.shift()[1]);
     if (this.t >= this.nextSpawn) {
-      this.nextSpawn = this.t + 3 + this.r() * 5;
+      this.nextSpawn = this.t + (3 + this.r() * 5) / clamp(this.room, 1, 2);
       const loose = this.fish.filter((f) => f.move !== 'school').length;
-      if (loose < 6 || (this.schools.filter((s) => !s.gone).length === 0)) this.spawn(this.pickKind());
+      if (loose < Math.round(6 * this.room) || (this.schools.filter((s) => !s.gone).length === 0)) this.spawn(this.pickKind());
     }
     for (const sc of this.schools) {
       if (sc.gone) continue;
@@ -727,8 +850,8 @@ export class Fishing {
       const leaving = age > sc.life;
       sc.x += sc.dir * sc.speed * dt;
       sc.y += Math.sin(this.t * 0.3 + sc.born) * 1.5 * dt;
-      if (!leaving && sc.x < this.leftLimit + 8) sc.dir = 1;
-      if (!leaving && sc.x > W - 18) sc.dir = -1;
+      if (!leaving && sc.x < (sc.minX ?? this.leftLimit + 8)) sc.dir = 1;
+      if (!leaving && sc.x > (sc.maxX ?? W - 18)) sc.dir = -1;
       if (leaving) sc.dir = 1;
       if (sc.x > W + 60) sc.gone = true;
     }
@@ -765,8 +888,8 @@ export class Fishing {
       } else {
         // cruise
         if (leaving) f.dir = 1;
-        else if (f.x < this.leftLimit && f.dir < 0) f.dir = 1;
-        else if (f.x > W - 14 && f.dir > 0) f.dir = -1;
+        else if (f.x < (f.minX ?? this.leftLimit) && f.dir < 0) f.dir = 1;
+        else if (f.x > (f.maxX ?? W - 14) && f.dir > 0) f.dir = -1;
         tx = f.x + f.dir * 20; ty = f.homeY + Math.sin(this.t * 0.4 + f.wob) * 4;
       }
       ty = clamp(ty, S + 4, this.bedAt(f.x) - 2);
@@ -800,10 +923,10 @@ export class Fishing {
     const tier = L === this.lines.vis ? this.visTier : this.rodTier;
     const zone = this.zoneOf(m, tier);
     const g = 0.82 - 0.04 * (tier - 1);
-    const reach = this.W - this.bankX - 14;
+    const reach = this.W - this.homeX - 14;
     const span = { red: [0.12, 0.32], yellow: [0.38, 0.62], green: [0.7, 0.95] }[zone];
     const k = zone === 'red' ? m / 0.45 : zone === 'yellow' ? (m - 0.45) / (g - 0.45) : (m - g) / (1 - g);
-    const land = this.bankX + 14 + reach * (span[0] + (span[1] - span[0]) * clamp(k, 0, 1));
+    const land = this.homeX + 14 + reach * (span[0] + (span[1] - span[0]) * clamp(k, 0, 1));
     const [rx, ry] = this.rodTip(L.who);
     L.state = 'air'; L.from = [rx, ry]; L.to = [Math.round(land), this.surface]; L.t0 = this.t; L.flight = 0.5 + 0.5 * (land - rx) / reach;
     L.zone = zone; L.tried = new Set(); L.snagged = null; L.fish = null; L.tension = 0;
@@ -815,7 +938,7 @@ export class Fishing {
   /** Tap: a quick twitch of the bait. */
   twitch(L) {
     if (L.state !== 'water') return;
-    L.y = Math.max(this.surface + 2, L.y - 3); L.x = Math.max(this.bankX + 4, L.x - 2); L.twitchAt = this.t;
+    L.y = Math.max(this.surface + 2, L.y - 3); L.x = Math.max(this.homeX + 4, L.x - 2); L.twitchAt = this.t;
     for (const f of this.fish) {
       if (f.line !== L || f.state !== 'interest') continue;
       if (Math.hypot(f.x - L.x, f.y - L.y) > 12 + f.len / 2) continue;
@@ -859,7 +982,7 @@ export class Fishing {
     if (L.state === 'air') {
       const k = Math.min(1, (this.t - L.t0) / L.flight);
       L.x = L.from[0] + (L.to[0] - L.from[0]) * k;
-      L.y = L.from[1] + (L.to[1] - L.from[1]) * k - Math.sin(Math.PI * k) * 26;
+      L.y = L.from[1] + (L.to[1] - L.from[1]) * k - Math.sin(Math.PI * k) * 26 * this.zoom;
       if (k >= 1) { L.state = 'water'; L.y = S + 1; this.splash(L.x); }
       return;
     }
@@ -878,17 +1001,17 @@ export class Fishing {
     const bed = this.bedAt(L.x) - 1;
     const [rx] = this.rodTip(L.who);
     if (holding) {
-      // reel toward the bank, rising a little
-      const tx = this.bankX + 3; const ty = S + 1;
+      // reel toward the bank (or the boat), rising a little; as fast on screen however far the view is zoomed out
+      const tx = this.homeX + 3; const ty = S + 1;
       const dx = tx - L.x; const dy = ty - L.y; const d = Math.hypot(dx, dy);
-      const sp = 24 * dt;
+      const sp = 24 * this.zoom * dt;
       L.x += (dx / d) * sp; L.y += (dy / d) * sp * 0.55;
       // up along the bank instead of into it
       // up along the slope, never into it
       L.y = clamp(L.y, S + 1, this.bedAt(L.x) - 1);
-      if (d < 3 || (L.x <= this.bankX + 6 && L.y <= S + 3)) { L.state = 'idle'; this.pop('Reeled in', rx + 10, S - 8, '#ffffff'); return; }
+      if (d < 3 || (L.x <= this.homeX + 6 && L.y <= S + 3)) { L.state = 'idle'; this.pop('Reeled in', rx + 10, S - 8, '#ffffff'); return; }
     } else if (L.y < bed) {
-      L.y = Math.min(bed, L.y + BAIT[L.bait].sink * dt);
+      L.y = Math.min(bed, L.y + BAIT[L.bait].sink * this.zoom * dt);
     }
     // snags: each weed or log gets one chance per cast
     for (const w of this.weeds) {
@@ -933,8 +1056,8 @@ export class Fishing {
     if (holding) {
       const strong = 1 - 0.12 * ((L === this.lines.vis ? this.visTier : this.rodTier) - 1);
       L.tension += (pull * 0.9 * strong - 0.15) * dt;
-      const sp = Math.max(4, 22 - pull * 14) * dt;
-      const tx = this.bankX + 3; const ty = S + 1;
+      const sp = Math.max(4, 22 - pull * 14) * this.zoom * dt;
+      const tx = this.homeX + 3; const ty = S + 1;
       const dx = tx - L.x; const dy = ty - L.y; const d = Math.hypot(dx, dy);
       L.x += (dx / d) * sp; L.y += (dy / d) * sp * 0.6;
       // up along the slope, never into it
@@ -943,7 +1066,7 @@ export class Fishing {
     } else {
       L.tension -= 0.6 * dt;
       // the fish swims off with it
-      L.x = Math.min(this.W - 6, L.x + pull * 10 * dt); L.y = Math.min(this.bedAt(L.x) - 2, L.y + pull * 3 * dt);
+      L.x = Math.min(this.W - 6, L.x + pull * 10 * this.zoom * dt); L.y = Math.min(this.bedAt(L.x) - 2, L.y + pull * 3 * this.zoom * dt);
       f.stamina = Math.max(0, f.stamina - dt * 0.05);
     }
     L.tension = clamp(L.tension, 0, 1.05);
@@ -953,7 +1076,7 @@ export class Fishing {
     // the hook is in its mouth: nose on the bait, body trailing away from the shore
     f.x = L.x + f.pw / 2 - 1; f.y = L.y + 1; f.dir = -1; f.face = -1;
     if (L.tension >= 1) { this.pop('Snap! It got away', L.x, L.y - 6, '#ff8787', true); this.spook(f); L.state = 'idle'; L.fish = null; return; }
-    if (L.x <= this.bankX + 6 && L.y <= S + 4) this.land(L, f);
+    if (L.x <= this.homeX + 6 && L.y <= S + 4) this.land(L, f);
   }
 
   land(L, f) {
@@ -966,7 +1089,7 @@ export class Fishing {
       const got = this.onCatch?.({ kind: f.likeKey, size: f.inches, points: c.points, map: this.map });
       if (got === 'first' || got === 'record') { c.record = got; this.records += 1; }
     }
-    this.pop(c.who === 'kid' ? `+${c.points}` : `${this.vis.name}: ${f.name} +${c.points}`, c.who === 'kid' ? L.who.x + 10 : this.W / 2, this.surface - 30, '#b2f2bb', true);
+    this.pop(c.who === 'kid' ? `+${c.points}` : `${this.vis.name}: ${f.name} +${c.points}`, c.who === 'kid' ? L.who.x + 10 : this.camX + this.fieldW / 2, this.surface - 30, '#b2f2bb', true);
     L.who.brain.set({ ...HAPPY, valence: 1, arousal: 0.8 });
   }
 
@@ -1003,7 +1126,7 @@ export class Fishing {
   }
 
   chips() {
-    const w = 14; const gap = 2; const x0 = Math.round(this.W / 2 - (3 * w + 2 * gap) / 2);
+    const w = 14; const gap = 2; const x0 = Math.round(this.vW / 2 - (3 * w + 2 * gap) / 2);
     return BAITS.map((b, i) => ({ bait: b, x: x0 + i * (w + gap), y: 3, w, h: 12 }));
   }
 
@@ -1069,8 +1192,8 @@ export class Fishing {
     const Z = this.Z;
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(this.field, 0, 0);
-    ctx.setTransform(Z, 0, 0, Z, 0, 0); // game pixels from here on
+    ctx.drawImage(this.field, -this.camX * Z, 0);
+    ctx.setTransform(Z, 0, 0, Z, -this.camX * Z, 0); // game pixels from here on (the view follows the boat)
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
     // fish
     for (const f of this.fish) {
@@ -1092,11 +1215,21 @@ export class Fishing {
       }
       P('rgba(255,255,255,0.7)', sx - 8 - Math.round(a * 6), FS, 16 + Math.round(a * 12), 1);
     }
-    // buddies
+    // buddies (in the boat: between its far side and its near side)
+    if (this.boat) this.drawBoat(ctx, 'back');
     for (const p of [this.vis, this.kid]) { p.paint(this.t); p.draw(ctx); }
+    if (this.boat) this.drawBoat(ctx, 'front');
     // lines and bait
     for (const L of [this.lines.vis, this.lines.kid]) this.drawLine(ctx, L);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  /** The rowboat the buddies stand in, side on: its far rim and inside ('back'), then the hull ('front'). */
+  drawBoat(ctx, part) {
+    const Z = this.Z;
+    const x0 = (this.homeX - 44) * Z; const len = 50 * Z; const top = (this.surface - 5) * Z;
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
+    paintBoat(P, x0, top, len, Z, part, this.t);
   }
 
   drawLine(ctx, L) {
@@ -1125,7 +1258,10 @@ export class Fishing {
   }
 
   drawHud(ctx, scale) {
-    const S = scale; const W = this.W * S;
+    // S: screen pixels for each screen game pixel (buttons, chips, text);
+    // k: screen pixels for each lake pixel (the lake may be zoomed out), and X/Y to place things in the lake
+    const S = scale; const W = this.vW * S; const k = S / this.zoom;
+    const X = (x) => (x - this.camX) * k; const Y = (y) => y * k; const SY = Y(this.surface);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const text = (s, x, y, px, color = '#ffffff') => {
@@ -1159,7 +1295,7 @@ export class Fishing {
     ctx.textAlign = 'left'; text(`${this.vis.name} ${this.points.vis}`, (ch2.x + ch2.w + 3) * S, (ch2.y + 6) * S, u * 1.5, '#ffffff');
     ctx.textAlign = 'center';
     // the spot's name
-    ctx.textAlign = 'right'; text(this.spot.name, W - u * 1.2, (this.surface - 4) * S, u * 1.2, '#ffffff'); ctx.textAlign = 'center';
+    ctx.textAlign = 'right'; text(this.spot.name, W - u * 1.2, SY - 4 * S, u * 1.2, '#ffffff'); ctx.textAlign = 'center';
 
     // cast button
     const bt = this.button; const bx = bt.x * S; const by = bt.y * S; const br = bt.r * S;
@@ -1173,7 +1309,7 @@ export class Fishing {
     // cast meter: red short, yellow medium, green far
     if (L.state === 'aim') {
       const m = this.meter(L);
-      const mx = (this.bankX + 4) * S; const my = (this.surface - 22) * S; const mw = u * 18; const mh = u * 1.6;
+      const mx = X(this.homeX) + 4 * S; const my = SY - 22 * S; const mw = u * 18; const mh = u * 1.6;
       drawMeter(ctx, (k) => this.zoneOf(k), m, mx, my, mw, mh, S);
       ctx.textAlign = 'left'; text('short', mx + u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'right'; text('far', mx + mw - u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'center';
     }
@@ -1186,18 +1322,18 @@ export class Fishing {
       ctx.fillRect(mx + S, my + mh - k * (mh - 2 * S) - S, mw - 2 * S, k * (mh - 2 * S));
       ctx.lineWidth = S * 0.6; ctx.strokeStyle = '#1b1430'; ctx.strokeRect(mx, my, mw, mh);
       text('line', mx + mw / 2, my - u * 0.6, u * 0.8);
-      if (k > 0.8 && Math.floor(this.t * 6) % 2) text('Let go!', W / 2, (this.surface + 8) * S, u * 2, '#ff8787');
+      if (k > 0.8 && Math.floor(this.t * 6) % 2) text('Let go!', W / 2, SY + 8 * S, u * 2, '#ff8787');
     }
     for (const p of this.pops) {
       const age = (this.t - p.at) / 1.4;
       ctx.globalAlpha = Math.min(1, (1 - age) * 3);
-      text(p.text, clamp(p.x, 20, this.W - 20) * S, (p.y - age * 8) * S, u * (p.big ? 2 : 1.4), p.color);
+      text(p.text, clamp(X(p.x), 20 * S, W - 20 * S), Y(p.y) - age * 8 * S, u * (p.big ? 2 : 1.4), p.color);
       ctx.globalAlpha = 1;
     }
     // a catch: the fish up close
     const c = this.showCatch;
     if (c) {
-      const cw = u * 26; const ch = u * 13; const cx = W / 2 - cw / 2; const cy = (this.surface + 6) * S;
+      const cw = u * 26; const ch = u * 13; const cx = W / 2 - cw / 2; const cy = SY + 6 * S;
       ctx.fillStyle = 'rgba(27,20,48,0.88)'; ctx.fillRect(cx, cy, cw, ch);
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(cx, cy, cw, ch);
       const z = Math.min((cw * 0.6) / c.pic.width, (ch * 0.5) / c.pic.height);
@@ -1216,9 +1352,9 @@ export class Fishing {
         if (Math.floor(this.t * 3) % 2) text(c.record === 'first' ? 'Added to your fish book!' : 'Your biggest one yet!', W / 2, cy + ch + u * 1.3, u * 1.2, '#b2f2bb');
       }
     }
-    if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) text(this.locked ? "That's all our games today!" : 'Pick a bait, then tap CAST!', W / 2, (this.surface + 10) * S, u * 1.8);
+    if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) text(this.locked ? "That's all our games today!" : 'Pick a bait, then tap CAST!', W / 2, SY + 10 * S, u * 1.8);
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
-      const cy = (this.surface + 22) * S;
+      const cy = SY + 22 * S;
       const bw = Math.min(W * 0.84, u * 34); const bh = u * 11;
       ctx.fillStyle = 'rgba(27,20,48,0.88)'; ctx.fillRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(W / 2 - bw / 2, cy - bh / 2, bw, bh);
