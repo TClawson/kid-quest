@@ -1,15 +1,16 @@
 // The music house's sheet music stand: a songbook of the game's own songs (the map songs and
 // the secret shows' tunes), engraved as piano sheet music by abcjs (js/vendor/abcjs.js,
-// loaded the first time the songbook opens). Each better piano opens more songs, easiest
-// first (sheetmusic.js); a secret show's tune also waits until its treasure map is finished,
-// like the show itself. Each piece comes easy (the melody, chord names and a simple left
+// loaded the first time the songbook opens). The first piano opens every map song and the
+// upright piano the secret shows' tunes, easiest first (sheetmusic.js); a finished treasure
+// map opens its show's tune early, with any piano. The list has two sections: map songs
+// and show tunes. Each piece comes easy (the melody, chord names and a simple left
 // hand), medium and hard (two-hand piano versions, arrange.js). A piece can be heard (easy:
 // the game's own arrangement; medium and hard: the version on screen, on a piano-like voice,
 // music.js) with the bar being played lit up, at the game's speed or slower.
 // Shared things come from ctx.js; app.js adds songbookActions to its actions.
 
 import { ui, state, esc, kidById, render, progressFor, toast, viewKid } from './ctx.js';
-import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars, PIECES_PER_TIER } from './sheetmusic.js';
+import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars } from './sheetmusic.js';
 import { barChords } from './songs.js';
 import { treasureFound } from './treasure.js';
 import { musicTier, MUSIC_TIERS } from './musicrules.js';
@@ -43,7 +44,6 @@ function setPrefs(change) {
 // ---------- the screens ----------
 
 const pianoName = (tier) => itemById(MUSIC_TIERS[tier - 1].piano)?.name.toLowerCase() || 'next piano';
-const TIER_TITLE = ['', 'Little keyboard songs', 'Upright piano songs', 'Rock star piano songs'];
 
 const mapName = (p) => itemById(p.map)?.name || 'map';
 /** Where a piece comes from, in words. */
@@ -68,7 +68,7 @@ function listHtml(kid, book, tier) {
     const name = p.secret ? 'Secret song' : p.name;
     const head = `<span class="song-icon" aria-hidden="true">${p.kind === 'show' ? '✨' : '🎵'}</span><b>${esc(name)}</b>`;
     if (!p.open) {
-      const why = p.secret ? `Finish the ${mapName(p)} treasure map` : `Opens with the ${pianoName(p.tier)}`;
+      const why = p.kind === 'show' ? `Opens with the ${pianoName(p.tier)}, or finish the ${mapName(p)} treasure map` : `Opens with the ${pianoName(p.tier)}`;
       return `<div class="song-card locked" aria-label="${esc(name)}, locked">${head}<small>🔒 ${esc(why)}</small></div>`;
     }
     return `<button class="song-card" data-action="song-open" data-id="${esc(p.id)}">${head}
@@ -76,8 +76,9 @@ function listHtml(kid, book, tier) {
       <span class="song-stars" aria-label="${['', 'Easy', 'Medium', 'Tricky'][s]}">${'★'.repeat(s)}${'☆'.repeat(3 - s)}</span></button>`;
   };
   const section = (title, list, locked) => `<section class="song-tier ${locked ? 'locked' : ''}"><h3>${title}</h3><div class="song-grid">${list.map(card).join('')}</div></section>`;
+  const maps = book.filter((p) => p.kind === 'map');
   const shows = book.filter((p) => p.kind === 'show');
-  const sections = [1, 2, 3].map((t) => section(TIER_TITLE[t], book.filter((p) => p.tier === t), t > tier)).join('')
+  const sections = section('Map songs', maps, !maps.some((p) => p.open))
     + section('✨ Secret show songs', shows, !shows.some((p) => p.open));
   return `
     <div class="screen songbook" style="--kid:${kid.color}">
@@ -85,7 +86,7 @@ function listHtml(kid, book, tier) {
         <button class="btn ghost round" data-action="songbook-back" aria-label="Back to the music house">←</button>
         <div class="kid-title"><b>🎼 Sheet music</b><small>${esc(kid.name)}'s songbook · ${open} of ${book.length} songs open</small></div>
       </header>
-      <p class="muted song-intro">Songs from the game to play on your piano. Every new piano opens ${PIECES_PER_TIER[0]} more, and each treasure map you finish opens its secret show's song!</p>
+      <p class="muted song-intro">Songs from the game to play on your piano. Your first piano opens every map song. The upright piano opens the secret shows' songs, and each treasure map you finish opens its song early!</p>
       ${sections}
     </div>`;
 }

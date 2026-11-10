@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SONGS, SHOW_SONGS, barChords } from '../js/songs.js';
 import {
   keyInfo, keyLabel, chordNotes, chordLabel, splitLength, barEvents, meterOf, parseNote,
-  songById, songAbc, melodyShift, SONGBOOK, songbookFor, PIECES_PER_TIER, stars, SWING_MARK,
+  songById, songAbc, melodyShift, SONGBOOK, songbookFor, stars, SWING_MARK,
 } from '../js/sheetmusic.js';
 
 const LETTERS = 'CDEFGAB';
@@ -234,32 +234,40 @@ test('note names go under the notes, one per note (tied notes skipped)', () => {
 
 // ---------- the songbook ----------
 
-test('the songbook: 18 pieces, three more map songs with each piano, easiest first', () => {
+test('the songbook: 18 pieces, the map songs for the first piano and the show tunes for the upright', () => {
   assert.equal(SONGBOOK.length, 18);
   assert.equal(new Set(SONGBOOK.map((p) => p.id)).size, 18);
-  assert.deepEqual(PIECES_PER_TIER, [3, 6, 9]);
   const maps = SONGBOOK.filter((p) => p.kind === 'map');
   const shows = SONGBOOK.filter((p) => p.kind === 'show');
-  assert.deepEqual([1, 2, 3].map((t) => maps.filter((p) => p.tier === t).length), [3, 3, 3]);
-  assert.ok(shows.length === 9 && shows.every((p) => p.tier === null), 'show tunes wait for their treasure, not a piano');
+  assert.ok(maps.length === 9 && maps.every((p) => p.tier === 1), 'every map song opens with the first piano');
+  assert.ok(shows.length === 9 && shows.every((p) => p.tier === 2), 'every show tune opens with the upright piano');
+  assert.deepEqual(SONGBOOK.slice(0, 9).map((p) => p.kind), Array(9).fill('map'), 'map songs are listed first');
   for (const list of [maps, shows]) {
     for (let i = 1; i < list.length; i += 1) assert.ok(list[i].level >= list[i - 1].level, `${list[i].name}: easier pieces first`);
   }
-  assert.equal(SONGBOOK.find((p) => p.id === 'bg-meadow').tier, 1, 'the home map song, the one every kid knows, opens first');
+  assert.ok(maps.slice(0, 3).some((p) => p.id === 'bg-meadow'), 'the home map song, the one every kid knows, is among the easiest');
   assert.ok(SONGBOOK.every((p) => p.name && p.key && [1, 2, 3].includes(stars(p.level))));
   assert.equal(stars(Math.min(...SONGBOOK.map((p) => p.level))), 1);
   assert.equal(stars(Math.max(...SONGBOOK.map((p) => p.level))), 3);
 });
 
-test('a show tune stays secret until its map\'s treasure is found, then opens with any piano', () => {
-  const open = (t, found) => songbookFor(t, found).filter((p) => p.open).length;
-  assert.deepEqual([0, 1, 2, 3].map((t) => open(t)), [0, 3, 6, 9], 'no treasure found: the map songs');
-  const every = new Set(Object.keys(SHOW_SONGS));
-  assert.deepEqual([0, 1, 2, 3].map((t) => open(t, every)), [0, 12, 15, 18]);
+test('piano tiers open songs: first piano the map songs, upright all, a finished map opens its show tune early', () => {
+  const ids = (t, found) => songbookFor(t, found).filter((p) => p.open).map((p) => p.id);
+  const mapIds = SONGBOOK.filter((p) => p.kind === 'map').map((p) => p.id);
+  assert.deepEqual(ids(0), [], 'no piano, nothing open');
+  assert.deepEqual(ids(0, new Set(['bg-meadow'])), [], 'a finished map is no use without a piano');
+  assert.deepEqual(ids(1), mapIds, 'tier 1 opens exactly the 9 map songs');
   const oak = (tier, found) => songbookFor(tier, found).find((p) => p.id === 'show:bg-meadow');
-  assert.deepEqual([oak(3).secret, oak(3).open], [true, false]);
   const meadow = new Set(['bg-meadow']);
-  assert.deepEqual([oak(1, meadow).secret, oak(1, meadow).open], [false, true], 'the first treasure map opens its tune with the little keyboard');
-  assert.equal(oak(0, meadow).open, false, 'but not before there is a music house');
-  assert.ok(songbookFor(3).filter((p) => p.kind === 'map').every((p) => !p.secret));
+  assert.deepEqual(ids(1, meadow), [...mapIds, 'show:bg-meadow'], 'tier 1 and a finished map: that one show tune too');
+  assert.equal(oak(1, meadow).secret, false);
+  assert.deepEqual([oak(1).secret, oak(1).open], [true, false], 'otherwise it stays secret');
+  assert.equal(songbookFor(1, meadow).filter((p) => p.secret).length, 8);
+  for (const t of [2, 3]) {
+    const book = songbookFor(t);
+    assert.equal(book.filter((p) => p.open).length, 18, `tier ${t}: all 18 open`);
+    assert.ok(book.every((p) => !p.secret), `tier ${t}: nothing is secret`);
+  }
+  assert.deepEqual(ids(3), ids(2), 'the rock star piano opens nothing new yet');
+  assert.ok(songbookFor(1).filter((p) => p.kind === 'map').every((p) => !p.secret));
 });

@@ -3,7 +3,8 @@
 // plays the melody (moved down an octave or two when it sits high above the staff), the
 // chord names go above it, and an easy left hand (root notes or chords) goes on a bass
 // staff below. Also the songbook itself: which pieces there are, how hard each is, and
-// which unlock with each piano. Pure logic, no DOM.
+// which unlock with each piano (the first piano opens every map song, the upright piano the
+// secret shows' tunes, and a finished treasure map opens its show's tune early). Pure logic, no DOM.
 
 import { SONGS, SHOW_SONGS, barChords } from './songs.js';
 
@@ -198,9 +199,9 @@ export function difficulty(song) {
 
 /**
  * Every piece in the songbook: { id, name, key, bars, kind ('map' or 'show'), map (the map's
- * background id), level (difficulty), tier }. The map songs come first, easiest first, a third
- * of them opened by each piano (tier 1-3). Then the secret shows' tunes, easiest first (tier
- * null): each opens with its treasure map, whatever the piano.
+ * background id), level (difficulty), tier (the piano that opens it) }. The map songs come
+ * first, easiest first, all opened by the first piano (tier 1). Then the secret shows' tunes,
+ * easiest first, opened by the upright piano (tier 2). The rock star piano opens nothing new yet.
  */
 export const SONGBOOK = (() => {
   const all = [
@@ -208,24 +209,21 @@ export const SONGBOOK = (() => {
     ...Object.entries(SHOW_SONGS).map(([map, s]) => ({ id: `show:${map}`, map, kind: 'show', song: s })),
   ].map((p) => ({ id: p.id, map: p.map, kind: p.kind, name: p.song.name, key: p.song.key, bars: songById(p.id).lead.length, level: difficulty(p.song) - (FAMILIAR[p.id] || 0) }));
   const easiest = (a, b) => a.level - b.level || a.id.localeCompare(b.id);
-  const maps = all.filter((p) => p.kind === 'map').sort(easiest).map((p, i, list) => ({ ...p, tier: 1 + Math.floor((i * 3) / list.length) }));
-  const shows = all.filter((p) => p.kind === 'show').sort(easiest).map((p) => ({ ...p, tier: null }));
+  const maps = all.filter((p) => p.kind === 'map').sort(easiest).map((p) => ({ ...p, tier: 1 }));
+  const shows = all.filter((p) => p.kind === 'show').sort(easiest).map((p) => ({ ...p, tier: 2 }));
   return [...maps, ...shows];
 })();
 
-/** How many map songs the pianos have opened by each tier (1, 2, 3). */
-export const PIECES_PER_TIER = [1, 2, 3].map((t) => SONGBOOK.filter((p) => p.tier && p.tier <= t).length);
-
 /**
- * The songbook for a music house look (tier 1-3) and the maps whose treasure the kid has
- * found (a Set of background ids): every piece, with secret (a show's tune whose show the
- * kid hasn't found yet: its name stays hidden) and open (its piano is here, or its show was
- * found).
+ * The songbook for a music house look (tier 0-3) and the maps whose treasure the kid has
+ * found (a Set of background ids): every piece, with open (its piano is here, or, for a
+ * show's tune, its treasure map is finished) and secret (a show's tune that isn't open: its
+ * name stays hidden).
  */
 export function songbookFor(tier, found = new Set()) {
   return SONGBOOK.map((p) => {
-    const secret = p.kind === 'show' && !found.has(p.map);
-    return { ...p, secret, open: tier >= 1 && (p.kind === 'show' ? !secret : p.tier <= tier) };
+    const open = tier >= 1 && (tier >= p.tier || (p.kind === 'show' && found.has(p.map)));
+    return { ...p, secret: p.kind === 'show' && !open, open };
   });
 }
 
