@@ -68,6 +68,7 @@ const SHELL = [
   'js/arrangements.js',
   'js/houseart.js',
   'js/houserules.js',
+  'js/gardenrules.js',
   'js/furniture.js',
   'js/leaderboard.js',
   'js/pixelkit.js',
