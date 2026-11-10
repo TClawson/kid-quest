@@ -79,7 +79,7 @@ function room(doc, data) {
 // what a station says while it has no screen of its own (the Note-o-Matic works at the studio
 // desk for now: studio.js, "Turn it into notes")
 const SOON = {
-  lab: () => 'Beep boop! I turn your piano playing into other instruments. Record at the studio desk, tap your recording, and press "Turn it into notes"!',
+  lab: () => 'Beep boop! I\'m the Note-o-Matic. I turn your piano playing into other instruments. Record at the studio desk, tap your recording, and press "Turn it into notes"!',
 };
 
 function mount(section, handlers) {
