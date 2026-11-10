@@ -4,8 +4,10 @@
 // thrown away, dragged to another place and trimmed by its edges; Play loops the mix with a
 // moving playhead, a redraw doesn't stop it, Stop does; the loop length and speed change;
 // a recording (Chrome's fake microphone beeps) lands on the chosen track and beat and is
-// still there after a reload; mixes are saved, opened and deleted; the timing check
-// answers in plain words; no sideways scrolling on a tablet or a phone. Saves screenshots.
+// still there after a reload; mixes are saved, opened and deleted (a deleted mix never takes
+// the desk's recording with it); the timing check answers in plain words; a shorter loop
+// never throws music away; Undo steps back; a thrown-away recording is swept from the tablet
+// once it is old enough; no sideways scrolling on a tablet or a phone. Saves screenshots.
 // Run: node test/smoke/studio.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import { chromium } from 'playwright';
@@ -105,6 +107,25 @@ async function dragTo(page, from, to) {
   await page.mouse.up();
 }
 const centre = (b) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+/** The takes kept on the tablet: [{ id, kid, at }]. */
+const takeRows = (page) => page.evaluate(() => new Promise((resolve) => {
+  const req = indexedDB.open('kidquest-studio', 1);
+  req.onsuccess = () => {
+    const out = [];
+    const tx = req.result.transaction('takes', 'readonly');
+    tx.objectStore('takes').openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { out.push({ id: c.key, kid: c.value.kid, at: c.value.at }); c.continue(); } };
+    tx.oncomplete = () => { req.result.close(); resolve(out); };
+  };
+}));
+/** Make every kept take older than five minutes (so it may be swept). */
+const ageTakes = (page) => page.evaluate(() => new Promise((resolve) => {
+  const req = indexedDB.open('kidquest-studio', 1);
+  req.onsuccess = () => {
+    const tx = req.result.transaction('takes', 'readwrite');
+    tx.objectStore('takes').openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { c.update({ ...c.value, at: c.value.at - 6 * 60 * 1000 }); c.continue(); } };
+    tx.oncomplete = () => { req.result.close(); resolve(); };
+  };
+}));
 const noSideScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${b}`);
 
@@ -289,6 +310,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await page.click('[data-action="st-slot-open"][data-slot="0"]');
   await wait(page, 300);
   assert.equal(await page.locator('#studio .st-clip').count(), 4, 'the saved mix is back on the desk');
+  // the take is old now: deleting the saved mix must not sweep the desk's take away
+  await ageTakes(page);
   await page.click('[data-action="st-panel"][data-panel="mixes"]');
   await page.click('[data-action="st-slot-del"][data-slot="0"]');
   assert.match(await page.locator('#modal').textContent(), /Delete Mix 1/);
@@ -296,12 +319,18 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await wait(page, 300);
   assert.equal(await page.locator('.st-slot.empty').count(), 3, 'the slot is empty again');
   assert.equal(await page.locator('#studio .st-clip').count(), 4, 'and the desk keeps its mix');
+  assert.equal(await page.locator('#studio .st-clip.gone').count(), 0, 'the desk\'s take is not missing');
+  assert.equal((await takeRows(page)).length, 1, 'and its sound is still kept on the tablet');
 
   // the timing check answers in plain words
   await page.click('[data-action="st-panel"][data-panel="help"]');
   await page.click('[data-action="st-check"]');
   await wait(page, 7000);
-  assert.match(await page.locator('.st-note').textContent(), /All set! Your recordings will line up\.|I couldn't hear the clicks\./);
+  // Chrome's fake microphone beeps in step with the check's clicks (every half second), so
+  // the check always finds them, and keeps a delay
+  assert.equal(await page.locator('.st-note span').textContent(), 'All set! Your recordings will line up.');
+  const kept = await page.evaluate(() => Number(localStorage.getItem('kidquest.studio.delay')));
+  assert.ok(kept >= 0 && kept <= 0.6, `a delay is kept (${kept})`);
   await page.screenshot({ path: `${out}/6-help-tablet.png`, fullPage: true });
   assert.ok(await noSideScroll(page), 'no sideways scrolling on the tablet');
 
@@ -403,6 +432,86 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   const note = await page.locator('.st-note').count() ? await page.locator('.st-note').textContent() : '';
   assert.equal(note, '', `no complaint (${note})`);
   assert.equal(await clips(page, 1).count(), 1, 'a take on track 2');
+  await ctx.close();
+}
+
+// 5. tablet: a shorter loop never throws music away, Undo steps back, and a recording that
+// was thrown away is swept from the tablet once it is old enough
+{
+  const { ctx, page } = await start(TABLET, true);
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-bar');
+  const beats = 32;
+  const undoBtn = page.locator('[data-action="st-undo"]');
+  assert.ok(await undoBtn.evaluate((b) => b.classList.contains('off')), 'nothing to undo yet');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="lead"]');
+  await page.click('[data-action="st-unselect"]');
+  assert.match(await page.locator('.st-hint').textContent(), /New music goes on track 2, beat 1\. There is room for 32 beats\./, 'the hint says where new music goes');
+  // the bass in the last bar
+  await tapLane(page, 1, 28, beats);
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="bass"]');
+  near((await place(clips(page, 1).first())).left, 87.5, 'the bass starts at beat 29');
+  await page.click('[data-action="st-bars"][data-d="-1"]');
+  assert.equal(await toastText(page), 'Move or delete the music in the last bar first.');
+  assert.match(await page.locator('.st-bar').textContent(), /8 bars/, 'the loop stays');
+  assert.equal(await page.locator('#studio .st-clip').count(), 2, 'and so does the bass');
+  // throw the bass away, then Undo brings it back, and Undo again takes it off
+  await page.click('[data-action="st-delete"]');
+  assert.equal(await page.locator('#studio .st-clip').count(), 1);
+  await undoBtn.click();
+  assert.equal(await page.locator('#studio .st-clip').count(), 2, 'Undo brings the bass back');
+  near((await place(clips(page, 1).first())).left, 87.5, 'in its place');
+  await undoBtn.click();
+  assert.equal(await page.locator('#studio .st-clip').count(), 1, 'Undo again: before the bass was added');
+  await undoBtn.click();
+  assert.equal(await page.locator('#studio .st-clip').count(), 0, 'and before the tune');
+  assert.ok(await undoBtn.evaluate((b) => b.classList.contains('off')), 'nothing more to undo');
+  await undoBtn.click({ force: true });
+  assert.equal(await toastText(page), 'There is nothing to undo.');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="lead"]');
+  await tapLane(page, 0, 0, beats);
+  await page.screenshot({ path: `${out}/9-undo-tablet.png` });
+
+  // record on track 2, keep it, then throw it away
+  await tapLane(page, 1, 0, beats);
+  await page.click('[data-action="st-rec"]');
+  await wait(page, (60 / sourceOf('bg-meadow').bpm) * 4 * 1000 + 2500);
+  await page.click('[data-action="st-rec"]');
+  await wait(page, 1500);
+  assert.equal(await clips(page, 1).count(), 1, 'a take on track 2');
+  assert.equal((await takeRows(page)).length, 1, 'kept on the tablet');
+  await page.screenshot({ path: `${out}/10-take-picked-tablet.png` });
+  if (!(await page.locator('.st-tools').count())) await clips(page, 1).first().click();
+  await page.click('[data-action="st-delete"]');
+  await wait(page, 800);
+  // a young take is never swept (it may be on its way to a mix); an old one that no mix uses is
+  await page.click('[data-action="studio-back"]');
+  await wait(page, 800);
+  assert.equal((await takeRows(page)).length, 1, 'young: still there');
+  await ageTakes(page);
+  await page.evaluate(async () => (await import('./js/studio.js')).openStudio());
+  await page.waitForSelector('#studio .st-bar');
+  await page.click('[data-action="studio-back"]');
+  await wait(page, 800);
+  assert.deepEqual(await takeRows(page), [], 'the thrown-away take is swept from the tablet');
+  await ctx.close();
+}
+
+// 6. phone: the transport bar with Undo, and a picked clip with its handles
+{
+  const { ctx, page } = await start({ width: 390, height: 844 }, true);
+  await walkIn(page);
+  await page.waitForSelector('#studio .st-bar');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="lead"]');
+  await page.click('[data-action="st-add"][data-song="bg-meadow"][data-part="drums"]'); // picked
+  for (let i = 0; i < 28; i += 1) await page.click('[data-action="st-nudge"][data-do="shorter"]');
+  await page.click('[data-action="st-nudge"][data-do="later"]');
+  assert.ok(await noSideScroll(page), 'no sideways scrolling on a phone');
+  const edge = await clips(page, 1).first().locator('.st-edge.right').boundingBox();
+  assert.ok(edge.width >= 40, `a handle is wide enough for a finger (${edge.width})`);
+  await page.screenshot({ path: `${out}/11-phone-undo.png` });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: `${out}/12-phone-bar.png` });
   await ctx.close();
 }
 
