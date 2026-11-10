@@ -135,7 +135,7 @@ function showNewMoves(kid) {
       <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" data-move="${first.move.id}" aria-label="See the move again">${buddyHtml(kid, 'excited', 'xl')}</button>
       <h1>New move${fresh.length > 1 ? 's' : ''}!</h1>
       <p>${fresh.map((m) => `<b>${esc(m.move.name)}</b>`).join(', ')}</p>
-      <p class="muted small">Best exercise streak: ${who.exBest} ${who.exBest === 1 ? 'week' : 'weeks'} 💪 Tap your buddy anytime to see a move.</p>
+      <p class="muted small">Best: ${who.exBest} strong ${who.exBest === 1 ? 'week' : 'weeks'} in a row 💪 Tap your buddy anytime to see a move.</p>
       <button class="btn huge" data-action="modal-close">Awesome!</button>
     </div>`, () => setTimeout(() => showUnlocks(currentKid(kid)), 250));
   setTimeout(() => { const el = $modal.querySelector('.buddy-tap'); if (el) doMove(el, who, first.move.id); }, 500);
