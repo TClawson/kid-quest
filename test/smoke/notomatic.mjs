@@ -294,6 +294,28 @@ const LONG = Array.from({ length: 40 }, (_, i) => [[60, 62, 64, 65, 67, 65, 64, 
   assert.match(await band.textContent(), /🎺 My band/);
   assert.equal(await page.locator('.st-sticker[data-sticker="leader"]').count(), 1, 'the Band leader sticker');
   assert.match(await page.locator('#studio .st-note').textContent(), /^Your take became notes\./);
+  // the band version's voices are the clips' own sound: no Remixer for them
+  const said = await page.locator('#studio .st-note').textContent();
+  assert.doesNotMatch(said, /Remixer/, said);
+  assert.match(said, /New sticker: Note-o-Matic!/);
+  assert.equal(await page.locator('.st-sticker[data-sticker="remixer"]').count(), 0, 'no Remixer by itself');
+  assert.equal(await page.locator('#studio .st-clip .st-vicon').count(), 0, 'no voice icon of the kid\'s choosing');
+  assert.match(await page.locator('#studio .st-what small').textContent(), /· 🟩 Beep/, 'the tools say what it plays in');
+  await page.click('#studio [data-action="st-chooser"][data-what="voice"]');
+  const ownChoice = page.locator('#studio [data-action="st-voice"][data-voice=""]');
+  assert.equal(await ownChoice.getAttribute('aria-pressed'), 'true', 'its own sound is the pressed choice');
+  assert.match(await ownChoice.textContent(), /🟩Its own sound/);
+  assert.equal(await page.locator('#studio [data-action="st-voice"][data-voice="beep"]').getAttribute('aria-pressed'), 'false');
+  // the kid's own pick earns it; back to its own sound takes it away
+  await page.click('#studio [data-action="st-voice"][data-voice="strings"]');
+  assert.equal(await clip(page, 0).getAttribute('data-voice'), 'strings');
+  assert.equal(await page.locator('.st-sticker[data-sticker="remixer"]').count(), 1);
+  assert.equal(await clip(page, 0).locator('.st-vicon').count(), 1);
+  await page.click('#studio [data-action="st-voice"][data-voice=""]');
+  assert.equal(await clip(page, 0).getAttribute('data-voice'), 'beep');
+  assert.match(await page.locator('#studio .st-said').textContent(), /Back to its own sound/);
+  assert.equal(await page.locator('.st-sticker[data-sticker="remixer"]').count(), 0);
+  await page.click('#studio [data-action="st-chooser"][data-what="voice"]');
   await page.click('[data-action="st-play"]');
   await playing(page);
   await page.click('[data-action="st-play"]');

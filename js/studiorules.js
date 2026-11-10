@@ -10,7 +10,8 @@
 //
 // Clips: { id, kind: 'part', song, part, start, len, from, total }, { kind: 'backing',
 // pattern, loop, ... }, { kind: 'take', take, lead, ... } or { kind: 'notes', nid, role,
-// notes, key?, follows?, ... } (a take the Note-o-Matic turned into notes: see takeToNotes).
+// notes, key?, follows?, own?, ... } (a take the Note-o-Matic turned into notes: see
+// takeToNotes; `own` is the voice it started in, when that isn't NOTES_VOICE).
 // A clip with notes may have `voice` (a VOICES id) and `shift` (semitones); a clip with drums
 // may have `kit` (a KITS id).
 
@@ -215,11 +216,17 @@ export function setLoop(mix, loop) {
 /** The voice a clip of the kid's own notes plays in when it has none of its own choosing. */
 export const NOTES_VOICE = 'steel';
 
+/** The voice a notes clip started in (`own`), when it is a real voice other than NOTES_VOICE; else null. */
+const notesOwn = (c) => (typeof c.own === 'string' && Object.hasOwn(VOICES, c.own) && c.own !== NOTES_VOICE ? c.own : null);
+
 /**
  * A clip's own voice: absent for a song's part (its own waves), the pattern's for a backing
- * track, the steel drum for the kid's own notes.
+ * track; for the kid's own notes the voice they started in (`own`), else the steel drum.
  */
-const ownVoice = (c) => (c.kind === 'backing' ? BACKING[c.pattern]?.voice || null : c.kind === 'notes' ? NOTES_VOICE : null);
+export const ownVoice = (c) => (c.kind === 'backing' ? BACKING[c.pattern]?.voice || null : c.kind === 'notes' ? notesOwn(c) || NOTES_VOICE : null);
+
+/** The voice a clip of the kid's notes plays in now: the kid's choice, else its own (null for other clips). */
+export const notesVoice = (c) => (c.kind === 'notes' ? (typeof c.voice === 'string' && Object.hasOwn(VOICES, c.voice) ? c.voice : ownVoice(c)) : null);
 
 /** Whether a clip plays in a voice or on a kit of the kid's choosing (not its own sound). */
 export const remixed = (c) => Boolean((c.voice && c.voice !== ownVoice(c)) || (c.kit && c.kit !== 'chip'));
@@ -401,7 +408,8 @@ export function addTake(mix, track, take, beats, at = 0, { lead = 0 } = {}) {
 /**
  * The voices the kid's notes start in, by reading (notomatic.js READINGS) and role: the band
  * version plays its tune on Beep and its band on the Organ, like the game's own music. A
- * reading or role not listed plays in the notes' own voice (NOTES_VOICE).
+ * reading or role not listed plays in NOTES_VOICE. The starting voice is the clip's own
+ * sound (`own`), not a voice of the kid's choosing: it earns no Remixer sticker.
  */
 export const READING_VOICES = { band: { tune: 'beep', band: 'organ' } };
 
@@ -447,8 +455,8 @@ export function takeToNotes(mix, id, reading, key = null) {
     next.next += 1;
     if (goodKey) clip.key = goodKey;
     if (part.follows === true) clip.follows = true;
-    const voice = readingVoice(readingId, role);
-    if (voice && voice !== NOTES_VOICE) clip.voice = voice;
+    const own = readingVoice(readingId, role);
+    if (own && own !== NOTES_VOICE && Object.hasOwn(VOICES, own)) clip.own = own;
     return clip;
   };
   // the tune, in the take's place
@@ -632,8 +640,9 @@ export function keyFits(mixKey, key) {
 
 /**
  * What to play for one time round the loop: [{ id, track, kind, song, part, pattern, loop,
- * voice, kit, shift, take, nid, role, notes, follows, at, offset, dur }] in seconds: when it starts, how far into its
- * part, backing track or take, and for how long, and how it is played.
+ * voice, kit, shift, take, nid, role, notes, follows, own, at, offset, dur }] in seconds: when it
+ * starts, how far into its part, backing track or take, and for how long, and how it is played
+ * (a notes clip's voice is the one it plays in: the kid's, else its own).
  * A take keeps `lead` seconds of sound from before its beat, so a note played a little early
  * keeps its start. Untrimmed, it starts that much before its beat (a clip on the loop's first
  * beat then starts at the end of the loop before). Trimmed at the front, it starts on its beat.
@@ -648,7 +657,9 @@ export function schedule(mix) {
       at: c.start * beat - early, offset: c.from === 0 ? 0 : c.from * beat + lead, dur: c.len * beat + early,
     };
     // the remix kit's fields, when the clip has them
-    for (const k of ['pattern', 'loop', 'voice', 'kit', 'shift', 'nid', 'role', 'notes', 'follows']) if (c[k] !== undefined) e[k] = c[k];
+    for (const k of ['pattern', 'loop', 'voice', 'kit', 'shift', 'nid', 'role', 'notes', 'follows', 'own']) if (c[k] !== undefined) e[k] = c[k];
+    // the kid's notes: the voice they play in now (their own when the kid picked none)
+    if (c.kind === 'notes') e.voice = notesVoice(c);
     return e;
   })).sort((a, b) => a.at - b.at || a.track - b.track);
 }
@@ -738,6 +749,7 @@ function cleanNotesClip(c, base) {
   const clip = { ...base, kind: 'notes', nid: c.nid, role: c.role, notes };
   if (validKey(c.key)) clip.key = c.key;
   if (c.follows === true) clip.follows = true;
+  if (notesOwn(c)) clip.own = c.own; // (a voice equal to it is dropped by cleanMix, as its own)
   return clip;
 }
 

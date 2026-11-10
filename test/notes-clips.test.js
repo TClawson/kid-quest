@@ -9,7 +9,7 @@ import { keyInfo } from '../js/sheetmusic.js';
 import { clipSound, clipEvents, backingKey, shiftKey, sameSig } from '../js/remix.js';
 import {
   newMix, addPart, addTake, addBacking, takeToNotes, findClip, setVoice, shiftClip, moveIntoKey, clipFits, clipKey, copyClip,
-  trimClip, moveClip, setBpm, setBars, removeClip, schedule, badges, cleanMix, takesIn, remixed, clipSwing, backingSwing,
+  trimClip, moveClip, setBpm, setBars, removeClip, schedule, badges, cleanMix, takesIn, remixed, clipSwing, backingSwing, ownVoice, notesVoice,
   readingVoice, validKey, newNid, mixBeats, NOTES_VOICE, MOST_NOTES,
 } from '../js/studiorules.js';
 
@@ -105,18 +105,58 @@ test('the band version: the tune in the take\'s place, the band on the track wit
   assert.equal(b.clip.role, 'band');
   assert.deepEqual([b.clip.start, b.clip.len, b.clip.from, b.clip.total], [4, 10, 0, 10]);
   assert.notEqual(b.clip.nid, t.clip.nid);
-  // the band version's voices
-  assert.equal(t.clip.voice, 'beep');
-  assert.equal(b.clip.voice, 'organ');
+  // the band version's voices are the clips' own sound, not a voice of the kid's choosing
+  assert.deepEqual([t.clip.own, t.clip.voice], ['beep', undefined]);
+  assert.deepEqual([b.clip.own, b.clip.voice], ['organ', undefined]);
+  assert.deepEqual([ownVoice(t.clip), notesVoice(t.clip), ownVoice(b.clip), notesVoice(b.clip)], ['beep', 'beep', 'organ', 'organ']);
   assert.equal(readingVoice('band', 'tune'), 'beep');
   assert.equal(readingVoice('tidy', 'tune'), null);
   assert.equal(readingVoice('heard', 'tune'), null);
-  assert.ok(remixed(t.clip), 'a voice that isn\'t the notes\' own');
+  assert.equal(remixed(t.clip), false);
+  assert.equal(remixed(b.clip), false);
+  // what is played: the voice it plays in
+  const plan = schedule(r.mix);
+  assert.deepEqual([plan.find((e) => e.id === t.clip.id).voice, plan.find((e) => e.id === b.clip.id).voice], ['beep', 'organ']);
+  assert.equal(plan.find((e) => e.id === t.clip.id).own, 'beep');
+  // a copy keeps it
+  const copy = must(copyClip(r.mix, t.clip.id));
+  assert.equal(findClip(copy.mix, copy.id).clip.own, 'beep');
   // the band is cut to the room there
   const full = must(addBacking(mix, 2, 'beat-rock', 'sunny', 7)).mix; // track 2: 3 beats of room at beat 4
   const r2 = must(takeToNotes(full, id, [tune(8), bandPart(10)], 'C'));
   const b2 = findClip(r2.mix, r2.ids[1]);
   assert.deepEqual([b2.track, b2.clip.len], [3, 6], 'track 3 now has the most room: 6 beats');
+});
+
+test('the band version earns no Remixer by itself; the kid\'s own pick of a voice does', () => {
+  const { mix, id } = withTake({ beats: 8 });
+  const r = must(takeToNotes(mix, id, [tune(), bandPart()], 'C'));
+  const [tuneId, bandId] = r.ids;
+  const ids = (m) => badges(m).map((b) => b.id);
+  assert.ok(!ids(r.mix).includes('remixer'));
+  // another voice: Remixer
+  let v = must(setVoice(r.mix, tuneId, 'flute'));
+  assert.equal(findClip(v.mix, tuneId).clip.voice, 'flute');
+  assert.equal(notesVoice(findClip(v.mix, tuneId).clip), 'flute');
+  assert.ok(ids(v.mix).includes('remixer'));
+  // its own voice again: no voice of its own choosing, and no Remixer
+  v = must(setVoice(v.mix, tuneId, 'beep'));
+  assert.equal(findClip(v.mix, tuneId).clip.voice, undefined);
+  assert.equal(findClip(v.mix, tuneId).clip.own, 'beep');
+  assert.ok(!ids(v.mix).includes('remixer'));
+  v = must(setVoice(v.mix, bandId, 'strings'));
+  assert.ok(ids(v.mix).includes('remixer'));
+  v = must(setVoice(v.mix, bandId, null));
+  assert.deepEqual([findClip(v.mix, bandId).clip.voice, notesVoice(findClip(v.mix, bandId).clip)], [undefined, 'organ'], '"Its own sound" is the organ');
+  assert.ok(!ids(v.mix).includes('remixer'));
+  // the steel drum is a voice of the kid's choosing for a clip whose own is Beep
+  v = must(setVoice(r.mix, tuneId, 'steel'));
+  assert.equal(findClip(v.mix, tuneId).clip.voice, 'steel');
+  assert.ok(ids(v.mix).includes('remixer'));
+  // the default voices don't move the notes; the kid's first pick may (as for any clip)
+  assert.equal(findClip(r.mix, tuneId).clip.shift, undefined);
+  const deep = must(setVoice(r.mix, tuneId, 'deep'));
+  assert.ok(findClip(deep.mix, tuneId).clip.shift < 0, 'Deep bass moves it down');
 });
 
 test('the band version needs room on another track; nothing changes without it', () => {
@@ -287,6 +327,7 @@ test('a notes clip is read back from storage as it was', () => {
   assert.deepEqual(noIds(back), noIds(band.mix), 'everything but the ids, which are counted again');
   assert.equal(back.key, 'C');
   assert.equal(back.next, 4);
+  assert.deepEqual(back.tracks.flat().map((c) => [c.own, c.voice]), [[undefined, 'flute'], ['beep', undefined], ['organ', undefined]], 'the voices they started in are kept');
   // a mix with no key takes the notes'
   const nokey = cleanMix({ ...stored, key: null });
   assert.equal(nokey.key, 'Bbm');
@@ -326,6 +367,12 @@ test('bad notes clips in storage are tidied or dropped, and never stop the studi
   assert.equal(one({ ...good, voice: 'kazoo' })[0].voice, undefined);
   assert.equal(one({ ...good, voice: 'steel' })[0].voice, undefined, 'its own voice is no voice');
   assert.equal(one({ ...good, voice: 'organ' })[0].voice, 'organ');
+  // the voice it started in: a real voice other than the steel drum, else dropped
+  assert.equal(one({ ...good, own: 'beep' })[0].own, 'beep');
+  for (const own of ['kazoo', 'steel', 7, '', null, {}]) assert.equal('own' in one({ ...good, own })[0], false, `own ${String(own)}`);
+  assert.deepEqual((({ own, voice }) => [own, voice])(one({ ...good, own: 'beep', voice: 'beep' })[0]), ['beep', undefined], 'a voice equal to its own is no voice');
+  assert.deepEqual((({ own, voice }) => [own, voice])(one({ ...good, own: 'beep', voice: 'steel' })[0]), ['beep', 'steel']);
+  assert.deepEqual((({ own, voice }) => [own, voice])(one({ ...good, own: 'kazoo', voice: 'steel' })[0]), [undefined, undefined], 'a bad own: the steel drum is its own again');
   assert.equal(one({ ...good, shift: 7 })[0].shift, 7);
   assert.equal(one({ ...good, shift: 1000 })[0].shift, 24, 'C4 to C5 can go up 2 octaves');
   assert.equal(one({ ...good, shift: -1000 })[0].shift, -24);

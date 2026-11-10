@@ -26,7 +26,7 @@ import {
   TRACKS, MIX_SLOTS, PART_NAMES, BPM_RANGE, BACKING_BPM, newMix, sourceOf, maxBars, mixBeats, mixSeconds, addPart, addTake, moveClip,
   trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges, shelfSongs,
   addBacking, setLoop, setVoice, setKit, shiftClip, moveIntoKey, clipFits, clipKey, remixed, splitShift, backingBeats, backingSwing,
-  setTrackVolume, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME, takeToNotes, clipSwing, readingVoice, NOTES_VOICE,
+  setTrackVolume, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME, takeToNotes, clipSwing, readingVoice, NOTES_VOICE, ownVoice, notesVoice,
 } from './studiorules.js';
 import { READINGS, readings } from './notomatic.js';
 import { VOICES, KITS, LOOPS, LOOP_IDS, BACKING, BACKING_GROUPS, backingEvents } from './studiokit.js';
@@ -527,7 +527,9 @@ function noteHtml() {
  * octaves higher, or lower when negative) }.
  */
 function clipWords(c, mix = S.mix) {
-  const voice = c.voice && VOICES[c.voice] ? VOICES[c.voice] : null;
+  // the kid's notes show the voice they play in, unless it is the steel drum they all start in
+  const vid = c.kind === 'notes' ? (notesVoice(c) === NOTES_VOICE ? null : notesVoice(c)) : c.voice;
+  const voice = vid && VOICES[vid] ? VOICES[vid] : null;
   const kit = c.kit && KITS[c.kit] ? KITS[c.kit] : null;
   const moved = splitShift(c.shift || 0).octaves;
   if (c.kind === 'notes') {
@@ -616,6 +618,9 @@ function volumeHtml(t) {
     </div>`;
 }
 
+/** The voice a clip is played in, when it is not its song's own sound: the kid's, or a notes clip's own. */
+const playVoice = (c) => (c.kind === 'notes' ? notesVoice(c) : c.voice || '');
+
 function clipHtml(c, beats) {
   const sel = c.id === S.sel;
   const style = `left:${pct(c.start, beats)}%;width:${pct(c.len, beats)}%`;
@@ -632,7 +637,7 @@ function clipHtml(c, beats) {
   const mark = remixed(c) ? `<i class="st-vicon" aria-hidden="true">${(w.voice || w.kit).icon}</i>` : '';
   const how = howWords(w);
   const key = w.key ? `<small class="st-key ${w.fits ? '' : 'no'}">${esc(w.key)}${w.fits ? '' : ' · another key'}</small>` : '';
-  return `<div class="st-clip ${kind} ${sel ? 'sel' : ''}" data-id="${c.id}" ${c.voice ? `data-voice="${esc(c.voice)}"` : ''} ${c.kit ? `data-kit="${esc(c.kit)}"` : ''} ${c.shift ? `data-shift="${c.shift}"` : ''} style="${style}" title="${esc([w.name, w.song, w.key, how].filter(Boolean).join(', '))}">
+  return `<div class="st-clip ${kind} ${sel ? 'sel' : ''}" data-id="${c.id}" ${playVoice(c) ? `data-voice="${esc(playVoice(c))}"` : ''} ${c.kit ? `data-kit="${esc(c.kit)}"` : ''} ${c.shift ? `data-shift="${c.shift}"` : ''} style="${style}" title="${esc([w.name, w.song, w.key, how].filter(Boolean).join(', '))}">
     <b>${mark}${w.icon} ${esc(w.name)}</b><small>${esc(w.song)}</small>${key}${edges}</div>`;
 }
 
@@ -749,7 +754,7 @@ function remixHtml(c) {
         return `<button class="btn ghost small-btn st-choice ${on ? 'on' : ''}" data-action="st-voice" data-voice="${id}" aria-pressed="${on}"><i aria-hidden="true">${v.icon}</i>${esc(v.name)}</button>`;
       }).join('');
       chooser = `<div class="st-chooser" role="group" aria-label="Voices">
-        <button class="btn ghost small-btn st-choice ${own ? 'on' : ''}" data-action="st-voice" data-voice="" aria-pressed="${own}"><i aria-hidden="true">${c.kind === 'backing' ? VOICES[BACKING[c.pattern].voice]?.icon || '🎵' : c.kind === 'notes' ? VOICES[NOTES_VOICE].icon : '🎵'}</i>Its own sound</button>${choices}</div>`;
+        <button class="btn ghost small-btn st-choice ${own ? 'on' : ''}" data-action="st-voice" data-voice="" aria-pressed="${own}"><i aria-hidden="true">${c.kind === 'backing' ? VOICES[BACKING[c.pattern].voice]?.icon || '🎵' : c.kind === 'notes' ? VOICES[ownVoice(c)]?.icon || '🎵' : '🎵'}</i>Its own sound</button>${choices}</div>`;
     }
   } else {
     buttons = toggle('kit', '🥁 Kit');
@@ -1202,7 +1207,8 @@ const outLag = () => (A.ac ? A.ac.outputLatency || A.ac.baseLatency || 0 : 0);
  * with the same sound share one rendering.
  */
 function soundOf(c, mixKey, swing = 0) {
-  const how = { voice: c.voice || '', kit: c.kit || '', shift: c.shift || 0 };
+  // (a notes clip's voice is the one it plays in: the kid's, else its own)
+  const how = { voice: (c.kind === 'notes' ? notesVoice(c) : c.voice) || '', kit: c.kit || '', shift: c.shift || 0 };
   if (c.kind === 'part') return { kind: 'part', song: c.song, part: c.part, ...how };
   // the kid's notes: their name (nid) says which notes, so copies share one rendering
   if (c.kind === 'notes') return { kind: 'notes', nid: c.nid, notes: c.notes, beats: c.total, swing, ...how };
