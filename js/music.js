@@ -181,7 +181,7 @@ function styledVoice(r, v, f, t, dur, vol, dest) {
     else { const lg = ac.createGain(); lg.gain.value = level; o.connect(lg).connect(into); }
     oscs.push(o);
   };
-  // a twin (a copy a few cents off) makes it fuller; the two together stay as loud as one
+  // a twin (a copy a few cents off) makes it fuller (the clip's loudness is set after rendering)
   if (v.twin) { make(0, 0.6); make(v.twin, 0.6); } else make(0, 1);
   const end = t + len + 0.02;
   if (v.vibrato) {
@@ -196,6 +196,7 @@ function styledVoice(r, v, f, t, dur, vol, dest) {
   }
   g.connect(dest);
   for (const o of oscs) { o.start(t); o.stop(end); }
+  r.spent?.push({ end, node: g }); // see renderInSlices
 }
 
 // the game's own drums (studiokit.js KITS.chip is the same kit, for the studio)
@@ -434,23 +435,78 @@ export function partStyle(id, part) {
  * One part of a song, once through, as an AudioBuffer at the studio's speed (bpm). The
  * arpeggio plays from the first bar (in the game it waits a few bars). Peaks at about `peak`.
  */
-export async function renderPart(id, part, bpm, sampleRate = 44100, peak = 0.5) {
+export async function renderPart(id, part, bpm, sampleRate = 44100, peak = 0.5, alive = null) {
   const base = compile(id);
   const song = part === 'arp' && base.arp ? { ...base, arp: { ...base.arp, from: 0 } } : base;
   const step = 60 / bpm / 2;
   const steps = partBars(id, part) * song.beat;
   const off = new OfflineAudioContext(1, Math.ceil((steps * step + (song.echo && (part === 'lead' || part === 'hook') ? 1.5 : 0.3)) * sampleRate), sampleRate);
   const r = rig(off, off.destination, song, step);
-  for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s, s * step, part);
-  return toPeak(await off.startRendering(), peak);
+  const buf = await renderInSlices(off, r, (from, to) => {
+    const last = Math.min(steps, Math.ceil(to / step));
+    for (let s = Math.max(0, Math.ceil(from / step)); s < last; s += 1) scheduleStep(r, song, s, s * step, part);
+  }, alive);
+  return toLevel(buf, peak);
 }
 
-/** Make a rendered sound's loudest sample `peak` (0: leave it as it is). */
-function toPeak(buf, peak) {
+/**
+ * Render an OfflineAudioContext, handing it the notes a second at a time. A note that waits in
+ * the context costs a little on every block of sound until it has played, so a whole song
+ * handed over at once took far longer than its length (four times the notes took twelve times
+ * as long). plan(from, to) schedules everything that starts in [from, to) seconds; it is called
+ * with stretches that follow each other and together cover the whole sound. alive(): once it
+ * says false no more notes are handed over, and the rest renders quickly as silence (for a
+ * sound nobody is waiting for any more). r: the rig; notes put themselves on r.spent to be
+ * taken out of the context after they end.
+ */
+const SLICE = 1;     // seconds of notes handed over at a time
+const AHEAD = 0.05;  // and this long before they sound (a pause lands on a whole block, a few ms late)
+function renderInSlices(off, r, plan, alive = null) {
+  const pauses = [];
+  r.spent = []; // notes that can be taken out of the context once they have sounded: { end, node }
+  if (typeof off.suspend === 'function') {
+    // a pause must fall on a block boundary inside the sound
+    for (let t = SLICE; Math.ceil((t * off.sampleRate) / 128) * 128 < off.length; t += SLICE) pauses.push(t);
+  }
+  const upTo = (i) => (i < pauses.length ? pauses[i] + AHEAD : Infinity);
+  plan(0, upTo(0));
+  pauses.forEach((t, i) => {
+    off.suspend(t).then(() => {
+      try {
+        // a finished note with two oscillators stays in the context (and keeps costing) unless it is taken out
+        r.spent = r.spent.filter(({ end, node }) => {
+          if (end + AHEAD > t) return true;
+          try { node.disconnect(); } catch { /* gone already */ }
+          return false;
+        });
+        if (!alive || alive()) plan(t + AHEAD, upTo(i + 1));
+      } finally { off.resume(); }
+    }, () => { /* this pause was refused: its notes are lost, the rest still plays */ });
+  });
+  return off.startRendering();
+}
+
+/**
+ * Set a rendered sound's loudness (peak 0: leave it as it is). A sound as steady as the game's
+ * square-wave tune gets its loudest sample at `peak`. A sound that is mostly quiet under a few
+ * tall peaks (a plucked voice, drums) would be much softer to the ear at the same peak, so it
+ * gets half of the difference back (in decibels), at most LIFT times: its peaks then stand
+ * above `peak`, which the studio's soft clip has room for.
+ */
+const STEADY = 0.77; // a square-wave tune's average level (RMS) over its loudest sample, as measured
+const LIFT = 1.6;    // about 4 dB
+export function levelGain(top, rms, peak) {
+  if (!(peak > 0) || !(top > 0)) return 1;
+  const lift = rms > 0 ? Math.min(LIFT, Math.max(1, Math.sqrt((STEADY * top) / rms))) : 1;
+  return (peak / top) * lift;
+}
+function toLevel(buf, peak) {
   const data = buf.getChannelData(0);
   let top = 0;
-  for (let i = 0; i < data.length; i += 1) top = Math.max(top, Math.abs(data[i]));
-  if (peak > 0 && top > 0) for (let i = 0; i < data.length; i += 1) data[i] *= peak / top;
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 1) { top = Math.max(top, Math.abs(data[i])); sum += data[i] * data[i]; }
+  const gain = levelGain(top, Math.sqrt(sum / Math.max(1, data.length)), peak);
+  if (gain !== 1) for (let i = 0; i < data.length; i += 1) data[i] *= gain;
   return buf;
 }
 
@@ -460,21 +516,25 @@ function toPeak(buf, peak) {
  * voice: a VOICES id or voice settings, for the notes; kit: a KITS id or kit settings, for the
  * drums (the game's own when absent); shift: semitones every note moves; swing: as in a song
  * (every second eighth comes late); echo: a song's echo; vol: the drums' loudness; peak: as
- * in renderPart (0 leaves it as it comes out).
+ * in renderPart (0 leaves it as it comes out); alive: see renderInSlices.
  */
-export async function renderEvents(events, { bpm, steps, voice: v = 'beep', kit = null, shift = 0, swing = 0, echo = 0, vol = 1, sampleRate = 44100, peak = 0.5 } = {}) {
+export async function renderEvents(events, { bpm, steps, voice: v = 'beep', kit = null, shift = 0, swing = 0, echo = 0, vol = 1, sampleRate = 44100, peak = 0.5, alive = null } = {}) {
   const settings = typeof v === 'string' ? VOICES[v] || VOICES.beep : v;
   const K = typeof kit === 'string' ? KITS[kit] || null : kit;
   const step = 60 / bpm / 2;
   const tail = echo ? 1.5 : 0.3 + (settings.env === 'pluck' ? settings.ring || 0 : 0);
   const off = new OfflineAudioContext(1, Math.ceil((steps * step + tail) * sampleRate), sampleRate);
   const r = rig(off, off.destination, { echo }, step);
-  for (const e of events) {
-    const at = swingAt(e.at, swing) * step;
-    if (e.kind) drum(r, at, e.kind, vol, K);
-    else voice(r, settings, hz(e.midi + shift), at, e.len * step, settings.vol, settings.env, r.lead);
-  }
-  return toPeak(await off.startRendering(), peak);
+  const timed = events.map((e) => ({ e, at: swingAt(e.at, swing) * step })).sort((x, y) => x.at - y.at);
+  let next = 0;
+  const buf = await renderInSlices(off, r, (from, to) => {
+    for (; next < timed.length && timed[next].at < to; next += 1) {
+      const { e, at } = timed[next];
+      if (e.kind) drum(r, at, e.kind, vol, K);
+      else voice(r, settings, hz(e.midi + shift), at, e.len * step, settings.vol, settings.env, r.lead);
+    }
+  }, alive);
+  return toLevel(buf, peak);
 }
 
 // ---------- the sheet music stand (see songbook.js) ----------
