@@ -387,6 +387,20 @@ export function makeTake(recording, { rate, countIn, clicks, from, to, guess, ph
 }
 
 /**
+ * A take with soft ends: it fades in over `inSec` and out over `outSec` seconds, so it never
+ * starts or stops with a click. Returns a new array.
+ */
+export function fadeEnds(samples, rate, inSec = 0.005, outSec = 0.03) {
+  const out = Float32Array.from(samples);
+  const n = out.length;
+  const a = Math.min(Math.round(inSec * rate), n >> 1);
+  const b = Math.min(Math.round(outSec * rate), n - a);
+  for (let i = 0; i < a; i += 1) out[i] *= i / a;
+  for (let i = 0; i < b; i += 1) out[n - 1 - i] *= i / b;
+  return out;
+}
+
+/**
  * The loudest sample of a take away from the metronome's clicks (`times`: seconds into the
  * take where a click arrived), to tell whether anything was played at all.
  */
@@ -462,16 +476,3 @@ export function waveLine(samples, rate, from, len, points = 48) {
   return out;
 }
 
-/**
- * How many of the timing check's clicks were heard: a click counts when something loud
- * starts after it and before the next one. A steady beep that isn't the clicks (another
- * metronome, a clock) only matches some of them, so the check asks for most.
- */
-export function clicksHeard(clicks, heard) {
-  let n = 0;
-  clicks.forEach((c, i) => {
-    const next = clicks[i + 1] ?? c + 0.5;
-    if (heard.some((h) => h >= c - 0.005 && h < next - 0.005)) n += 1;
-  });
-  return n;
-}

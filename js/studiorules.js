@@ -14,7 +14,10 @@ export const MIX_SLOTS = 3; // mixes a kid can keep
 export const PART_NAMES = { lead: 'Tune', arp: 'Sparkle', bass: 'Bass', drums: 'Drums' };
 export const BPM_RANGE = [70, 170];
 
-const songOf = (id) => (id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] : SONGS[id]);
+const songOf = (id) => {
+  const [book, key] = String(id).startsWith('show:') ? [SHOW_SONGS, id.slice(5)] : [SONGS, id];
+  return Object.hasOwn(book, key) ? book[key] : null;
+};
 
 /** A song's parts as sources for clips: { song, name, key, bpm, meter (beats a bar), beats (its length) }. */
 export function sourceOf(songId) {
@@ -54,7 +57,7 @@ export function findClip(mix, id) {
 
 /** Whether beats [start, start + len) are free on a track (leaving out clip `skip`), inside the loop. */
 export function isFree(mix, track, start, len, skip = null) {
-  if (!mix.tracks[track] || start < 0 || len < 1 || start + len > mixBeats(mix)) return false;
+  if (!mix.tracks[track] || !(start >= 0) || !(len >= 1) || !(start + len <= mixBeats(mix))) return false;
   return mix.tracks[track].every((c) => c.id === skip || start >= c.start + c.len || start + len <= c.start);
 }
 
@@ -77,6 +80,26 @@ export function roomAt(mix, track, start, skip = null) {
     if (c.start >= start) end = Math.min(end, c.start);
   }
   return Math.max(0, end - start);
+}
+
+/**
+ * Where new music goes when the kid hasn't picked a spot: the free place with the most room.
+ * An empty track wins, then the longest free stretch; a tie goes to the lower track and the
+ * earlier beat. Returns { track, beat, room }, or null when every track is full.
+ */
+export function bestSpot(mix) {
+  const total = mixBeats(mix);
+  let best = null;
+  for (let t = 0; t < mix.tracks.length; t += 1) {
+    const empty = !mix.tracks[t].length;
+    for (let b = 0; b < total; b += 1) {
+      const room = roomAt(mix, t, b);
+      if (room < 1) continue;
+      if (!best || (empty && !best.empty) || (empty === best.empty && room > best.room)) best = { track: t, beat: b, room, empty };
+      b += room - 1; // the rest of this stretch has less room
+    }
+  }
+  return best && { track: best.track, beat: best.beat, room: best.room };
 }
 
 /**
@@ -111,17 +134,20 @@ export function addPart(mix, track, songId, part, at = 0) {
 /**
  * Put a take (a recording of `beats` beats, kept under take id) on a track at beat `at`. A
  * take longer than the room it has is cut to fit (the rest is still there to trim back).
+ * `lead` is how many seconds of sound the take keeps from before its beat (see schedule).
  * Returns { mix, error, id }.
  */
-export function addTake(mix, track, take, beats, at = 0) {
-  const total = Math.max(1, Math.ceil(beats - 1e-6));
+export function addTake(mix, track, take, beats, at = 0, { lead = 0 } = {}) {
+  const total = Math.max(1, Math.ceil(beats - 1e-3));
   const next = clone(mix);
   const start = Math.round(at);
   const room = roomAt(next, track, start);
   if (start < 0 || room < 1) return no(mix, 'There is no room there. Pick an empty spot on a track.');
   const id = next.next;
   next.next = id + 1;
-  next.tracks[track].push({ id, kind: 'take', take, start, len: Math.min(total, room), from: 0, total });
+  const clip = { id, kind: 'take', take, start, len: Math.min(total, room), from: 0, total };
+  if (lead > 0) clip.lead = lead;
+  next.tracks[track].push(clip);
   next.tracks[track].sort((a, b) => a.start - b.start);
   return { mix: next, error: null, id };
 }
@@ -188,24 +214,31 @@ export function removeClip(mix, id) {
   return ok(next);
 }
 
-/** Make the loop longer or shorter (2 bars to 30 seconds' worth). Clips past the end are cut or dropped. */
+/**
+ * Make the loop longer or shorter (2 bars to 30 seconds' worth). A clip that reaches past
+ * the new end is cut there (the rest is still there to trim back). Music is never thrown
+ * away: when a clip starts past the new end, the loop stays as it is.
+ */
 export function setBars(mix, bars) {
   const next = clone(mix);
   next.bars = Math.max(2, Math.min(maxBars(mix.bpm, mix.meter), Math.round(bars)));
   const end = mixBeats(next);
-  next.tracks = next.tracks.map((t) => t.filter((c) => c.start < end).map((c) => ({ ...c, len: Math.min(c.len, end - c.start) })));
+  if (allClips(next).some((c) => c.start >= end)) return no(mix, 'Move or delete the music in the last bar first.');
+  next.tracks = next.tracks.map((t) => t.map((c) => ({ ...c, len: Math.min(c.len, end - c.start) })));
   return ok(next);
 }
 
 /**
  * Change the speed. Ready-made parts follow any speed; a take was played at the speed it was
- * recorded at, so a mix with a take keeps its speed. The loop is cut to 30 seconds if need be.
+ * recorded at, so a mix with a take keeps its speed. Slower makes the loop longer in seconds:
+ * past 30 seconds it gets fewer bars, but only when no music is in the bars that would go.
  */
 export function setBpm(mix, bpm) {
   if (allClips(mix).some((c) => c.kind === 'take')) return no(mix, 'Your recording was played at this speed, so the speed stays. Take the recording off to change it.');
   const next = clone(mix);
   next.bpm = Math.max(BPM_RANGE[0], Math.min(BPM_RANGE[1], Math.round(bpm)));
-  return setBars(next, Math.min(next.bars, maxBars(next.bpm, next.meter)));
+  const r = setBars(next, Math.min(next.bars, maxBars(next.bpm, next.meter)));
+  return r.error ? no(mix, 'That would make your loop longer than 30 seconds. Make the loop shorter first.') : r;
 }
 
 /** The take ids a mix uses. */
@@ -220,12 +253,20 @@ export function keyFits(mixKey, key) {
 /**
  * What to play for one time round the loop: [{ id, track, kind, song, part, take, at, offset,
  * dur }] in seconds: when it starts, how far into its part or take, and for how long.
+ * A take keeps `lead` seconds of sound from before its beat, so a note played a little early
+ * keeps its start. Untrimmed, it starts that much before its beat (a clip on the loop's first
+ * beat then starts at the end of the loop before). Trimmed at the front, it starts on its beat.
  */
 export function schedule(mix) {
   const beat = 60 / mix.bpm;
-  return mix.tracks.flatMap((clips, track) => clips.map((c) => ({
-    id: c.id, track, kind: c.kind, song: c.song, part: c.part, take: c.take, at: c.start * beat, offset: c.from * beat, dur: c.len * beat,
-  }))).sort((a, b) => a.at - b.at || a.track - b.track);
+  return mix.tracks.flatMap((clips, track) => clips.map((c) => {
+    const lead = c.kind === 'take' ? c.lead || 0 : 0;
+    const early = c.from === 0 ? lead : 0;
+    return {
+      id: c.id, track, kind: c.kind, song: c.song, part: c.part, take: c.take,
+      at: c.start * beat - early, offset: c.from === 0 ? 0 : c.from * beat + lead, dur: c.len * beat + early,
+    };
+  })).sort((a, b) => a.at - b.at || a.track - b.track);
 }
 
 /** The stickers a mix has earned, for its card: [{ id, name, why }]. */
@@ -246,29 +287,18 @@ export function badges(mix) {
   return out;
 }
 
-/**
- * How late the tablet hears itself, from a timing check: the studio plays `clicks` (seconds
- * on the sound's clock) through the speaker while the microphone listens; `heard` are the
- * times loud clicks arrived in the recording. Each heard click is matched to the click before
- * it, and the middle delay wins. Returns seconds (0 to 0.5), or null when it couldn't tell
- * (too quiet, or the delays don't agree).
- */
-export function clickDelay(clicks, heard) {
-  const delays = [];
-  for (const h of heard) {
-    const before = clicks.filter((c) => c <= h + 0.005);
-    if (!before.length) continue;
-    const d = h - before[before.length - 1];
-    if (d >= 0 && d <= 0.5) delays.push(d);
-  }
-  if (delays.length < Math.max(3, Math.ceil(clicks.length / 2))) return null;
-  delays.sort((a, b) => a - b);
-  const mid = delays[Math.floor(delays.length / 2)];
-  const agree = delays.filter((d) => Math.abs(d - mid) <= 0.02).length;
-  return agree >= delays.length * 0.6 ? Math.max(0, mid) : null;
-}
+/** The keys the songs are in: a mix's key is always one of them. */
+let songKeys = null;
+const knownKey = (key) => {
+  songKeys ||= new Set([...Object.keys(SONGS), ...Object.keys(SHOW_SONGS).map((k) => `show:${k}`)].map((id) => sourceOf(id)?.key).filter(Boolean));
+  return typeof key === 'string' && songKeys.has(key);
+};
 
-/** Tidy a mix read back from storage: the right shape, known songs, clips inside the loop. */
+/**
+ * Tidy a mix read back from storage: the right shape, known songs and keys, whole beats,
+ * clips inside the loop that don't overlap, and parts with the mix's beat. Anything odd is
+ * dropped, so a bad save can never stop the studio from opening.
+ */
 export function cleanMix(raw) {
   const base = newMix(typeof raw?.name === 'string' ? raw.name.slice(0, 24) : undefined);
   if (!raw || !Array.isArray(raw.tracks)) return base;
@@ -276,23 +306,33 @@ export function cleanMix(raw) {
     ...base,
     bpm: Math.max(BPM_RANGE[0], Math.min(BPM_RANGE[1], Math.round(Number(raw.bpm) || 120))),
     meter: raw.meter === 3 ? 3 : 4,
-    key: typeof raw.key === 'string' ? raw.key : null,
+    key: knownKey(raw.key) ? raw.key : null,
   };
   mix.bars = Math.max(2, Math.min(maxBars(mix.bpm, mix.meter), Math.round(Number(raw.bars) || 8)));
   let next = 1;
   raw.tracks.slice(0, TRACKS).forEach((clips, t) => {
     for (const c of Array.isArray(clips) ? clips : []) {
-      const part = c?.kind === 'part' && sourceOf(String(c.song)) && PART_NAMES[c.part];
+      const src = c?.kind === 'part' && typeof c.song === 'string' ? sourceOf(c.song) : null;
+      const part = src && typeof c.part === 'string' && Object.hasOwn(PART_NAMES, c.part) && src.meter === mix.meter;
       const take = c?.kind === 'take' && typeof c.take === 'string';
-      const [start, len, from, total] = [c?.start, c?.len, c?.from, c?.total].map((x) => Math.round(Number(x)));
-      if (!(part || take) || !(len >= 1) || !(from >= 0) || !(total >= from + len) || !isFree(mix, t, start, len)) continue;
-      mix.tracks[t].push(part
-        ? { id: next, kind: 'part', song: c.song, part: c.part, start, len, from, total }
-        : { id: next, kind: 'take', take: c.take, start, len, from, total });
+      const [start, len, from, total] = [c?.start, c?.len, c?.from, c?.total];
+      if (!(part || take) || ![start, len, from, total].every(Number.isInteger)) continue;
+      if (!(len >= 1) || !(from >= 0) || !(total >= from + len) || !isFree(mix, t, start, len)) continue;
+      if (part) {
+        // never longer than the song itself
+        const keep = Math.min(len, src.beats - from);
+        if (keep < 1) continue;
+        mix.tracks[t].push({ id: next, kind: 'part', song: c.song, part: c.part, start, len: keep, from, total: src.beats });
+      } else {
+        const clip = { id: next, kind: 'take', take: c.take, start, len, from, total };
+        if (Number.isFinite(c.lead) && c.lead > 0 && c.lead <= 0.2) clip.lead = c.lead;
+        mix.tracks[t].push(clip);
+      }
       next += 1;
     }
     mix.tracks[t].sort((a, b) => a.start - b.start);
   });
+  if (!mix.key) mix.key = sourceOf(mix.tracks.flat().find((c) => c.kind === 'part')?.song || '')?.key || null;
   mix.next = next;
   return mix;
 }

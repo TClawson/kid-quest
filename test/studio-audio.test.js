@@ -4,10 +4,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SILENT, CLICK, clicksHeard, peakOf, normalise, findOnsets, joinBlocks, alignTake, guessDelay, sliceSchedule, pct, beatAt, waveLine,
+  SILENT, CLICK, fadeEnds, peakOf, normalise, findOnsets, joinBlocks, alignTake, guessDelay, sliceSchedule, pct, beatAt, waveLine,
   clickWave, countInDelay, echoDelay, makeTake, peakAway, phonesDelay, softClip, clickPlan,
 } from '../js/studio-audio.js';
-import { clickDelay, schedule, addPart, newMix } from '../js/studiorules.js';
+import { schedule, addPart, addTake, newMix } from '../js/studiorules.js';
 
 const RATE = 48000;
 
@@ -45,9 +45,9 @@ test('the timing check: clicks heard 120 ms late give a delay of 120 ms', () => 
   const clicks = Array.from({ length: 8 }, (_, i) => start + 0.4 + i * 0.5);
   const rec = recording(5, clicks.map((c) => c - start + 0.12));
   const heard = findOnsets(rec, RATE).map((t) => start + t);
-  const delay = clickDelay(clicks, heard);
+  const delay = echoDelay(clicks, heard, { need: clicks.length - 2 });
   assert.ok(Math.abs(delay - 0.12) < 0.005, `delay ${delay}`);
-  assert.equal(clickDelay(clicks, findOnsets(new Float32Array(RATE * 5), RATE)), null, 'nothing heard: no answer');
+  assert.equal(echoDelay(clicks, findOnsets(new Float32Array(RATE * 5), RATE), { need: clicks.length - 2 }), null, 'nothing heard: no answer');
 });
 
 test('blocks from the microphone join up by their frame stamps, with silence for a lost block', () => {
@@ -124,11 +124,49 @@ test('timeline arithmetic: percents, the beat under a tap, and a take\'s little 
 
 test('the timing check wants most clicks heard, so a beep once a second does not fool it', () => {
   const clicks = Array.from({ length: 8 }, (_, i) => 1 + i * 0.5);
-  assert.equal(clicksHeard(clicks, clicks.map((c) => c + 0.1)), 8);
-  const beeps = [1.2, 2.2, 3.2, 4.2];
-  assert.equal(clicksHeard(clicks, beeps), 4);
-  assert.notEqual(clickDelay(clicks, beeps), null, 'the delays alone would agree');
-  assert.equal(clicksHeard(clicks, []), 0);
+  const need = clicks.length - 2;
+  assert.ok(Math.abs(echoDelay(clicks, clicks.map((c) => c + 0.1), { need }) - 0.1) < 1e-9);
+  // a missed click and a stray noise still agree
+  const some = [1.1, 1.6, 2.1, 2.35, 3.1, 3.6, 4.1];
+  assert.ok(Math.abs(echoDelay(clicks, some, { need }) - 0.1) < 1e-9);
+  assert.equal(echoDelay(clicks, [1.2, 2.2, 3.2, 4.2], { need }), null, 'a beep once a second matches only half');
+  assert.equal(echoDelay(clicks, [], { need }), null);
+});
+
+test('a take gets soft ends: a short fade in and a longer fade out', () => {
+  const rate = 1000;
+  const ones = new Float32Array(200).fill(1);
+  const out = fadeEnds(ones, rate, 0.01, 0.05);
+  assert.equal(ones[0], 1, 'the take itself is not changed');
+  assert.equal(out[0], 0);
+  assert.ok(out[5] > 0.4 && out[5] < 0.6, 'half way in');
+  assert.equal(out[10], 1);
+  assert.equal(out[100], 1, 'the middle stays');
+  assert.equal(out[199], 0);
+  assert.ok(Math.abs(out[199 - 25] - 0.5) < 0.05, 'half way out');
+  assert.equal(out[149], 1);
+  // a take shorter than its fades is faded all the way, never made louder
+  const tiny = fadeEnds(new Float32Array(6).fill(1), rate, 0.01, 0.05);
+  assert.ok(tiny.every((v) => v >= 0 && v <= 1));
+  assert.deepEqual([...fadeEnds(new Float32Array(0), rate)], []);
+});
+
+test('a take that keeps sound from before its beat starts early, and is cut on the first time round', () => {
+  const mix = { ...newMix(), bpm: 120 };
+  const beat = 0.5;
+  const made = addTake(addTake(mix, 0, 'a', 4, 0, { lead: 0.06 }).mix, 1, 'b', 4, 4, { lead: 0.06 }).mix;
+  const plan = schedule(made);
+  const a = plan.find((e) => e.take === 'a');
+  // the loop's first beat: the lead is lost the first time round (sliceSchedule from 0)
+  const first = sliceSchedule(plan, 0).find((e) => e.take === 'a');
+  assert.ok(Math.abs(first.at) < 1e-9 && Math.abs(first.offset - 0.06) < 1e-9 && Math.abs(first.dur - 4 * beat) < 1e-9);
+  // later times round it starts before the loop does (at the end of the loop before)
+  const later = sliceSchedule(plan, -Infinity).find((e) => e.take === 'a');
+  assert.deepEqual([later.at, later.offset], [a.at, 0]);
+  assert.ok(Math.abs(later.at + 0.06) < 1e-9);
+  // played from the middle of a clip with a lead, it starts that far into the sound
+  const mid = sliceSchedule(plan, 5 * beat).find((e) => e.take === 'b');
+  assert.ok(Math.abs(mid.at - 5 * beat) < 1e-9 && Math.abs(mid.offset - (0.06 + beat)) < 1e-9);
 });
 
 // ---------- a take: timed from its own count-in, and without the metronome's clicks ----------

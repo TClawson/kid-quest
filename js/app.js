@@ -2658,11 +2658,11 @@ setInterval(() => {
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   // The service worker serves the cached app first, so after a new version is deployed the
   // first open still shows the old one. When the new worker takes over, reload once to show it,
-  // unless a piano timer is on screen (then the next open picks it up).
+  // unless a piano timer or the recording studio is on screen (then the next open picks it up).
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch') return;
+    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio') return;
     reloading = true;
     window.location.reload();
   });

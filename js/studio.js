@@ -18,12 +18,12 @@ import { treasureFound } from './treasure.js';
 import { songParts, renderPart } from './music.js';
 import {
   TRACKS, MIX_SLOTS, PART_NAMES, BPM_RANGE, newMix, sourceOf, maxBars, mixBeats, mixSeconds, addPart, addTake, moveClip,
-  trimClip, copyClip, removeClip, setBars, setBpm, isFree, freeSpot, roomAt, findClip, keyFits, schedule, badges, clickDelay,
+  trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges,
 } from './studiorules.js';
 import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes } from './studio-store.js';
 import {
-  SILENT, CLICK, normalise, findOnsets, joinBlocks, guessDelay, sliceSchedule, pct, beatAt, waveLine, clicksHeard,
-  clickWave, clickPlan, makeTake, peakAway, phonesDelay, softClip,
+  CLICK, normalise, findOnsets, joinBlocks, guessDelay, sliceSchedule, pct, beatAt, waveLine, echoDelay, countInDelay,
+  clickWave, clickPlan, makeTake, fadeEnds, phonesDelay, softClip,
 } from './studio-audio.js';
 
 // ---------- words ----------
@@ -45,7 +45,17 @@ const SAY = {
   checkFail: 'I couldn\'t hear the clicks. Turn the volume up, unplug headphones and try again.',
   emptyPlay: 'Add a part or record yourself first, then press Play.',
   emptySave: 'Add some music to your mix first, then save it.',
+  full: 'All four tracks are full. Delete a clip or make one shorter first.',
+  saveFailed: 'I couldn\'t save that. This tablet may be full.',
+  deleteFailed: 'I couldn\'t delete that. Please try again.',
+  waitRec: 'Wait for the recording to finish first.',
+  waitCheck: 'Wait for the timing check to finish.',
+  waitSave: 'Wait a moment. I\'m keeping your recording.',
+  nothingToUndo: 'There is nothing to undo.',
 };
+
+/** "1 beat", "16 beats". */
+const beatsWord = (n) => `${n} beat${n === 1 ? '' : 's'}`;
 
 const PART_ICONS = { lead: '🎵', arp: '✨', bass: '🎸', drums: '🥁' };
 const STICKER_ICONS = { take: '🎤', duet: '🤝', band: '🎺', remix: '🔀', match: '🎯', solo: '🦸' };
@@ -55,6 +65,9 @@ const PHONES_KEY = 'kidquest.studio.phones';
 const BPM_STEP = 5;
 const MOST_PARTS = 10;  // rendered parts kept ready (each is a whole song of sound)
 const MOST_WAVES = 200; // little pictures of takes kept ready
+const MOST_UNDO = 20;   // mixes Undo can step back through
+const LEAD = 0.06;      // seconds kept from before a take's beat, so an early note keeps its start
+const TOUCH_LAG = 0.08; // how long a finger takes to press Stop after the kid means to
 
 /** A number kept on this tablet (localStorage), or null. */
 function readNumber(key) {
@@ -84,10 +97,11 @@ const S = {
   noteKind: '',
   badges: [],
   pop: '',            // a sticker just earned
-  busy: '',           // 'play', 'mic' or 'check' while getting ready
+  busy: '',           // 'play', 'mic' or 'check' while getting ready, 'save' while a take is kept
+  undo: [],           // the mixes before the last changes of this visit, the newest last
   hearing: '',        // the part being heard on the shelf ('song|part')
   phones: readNumber(PHONES_KEY) === 1,
-  takes: new Map(),   // take id -> { rate, samples }, or null when it is gone
+  takes: new Map(),   // take id -> { rate, samples, lead }, or null when it is gone
   waves: new Map(),   // a take's little picture, by take and stretch
 };
 
@@ -102,7 +116,13 @@ const A = {
   token: 0,            // bumped by every stop, so a start that is still getting ready gives up
   play: null,          // { mix, bufs, plan, loop, beat, origin, k, first }
   rec: null,           // a recording or timing check under way
+  finishing: null,     // a recording that stopped and is being kept
+  bus: null,           // the volume knob for this run of play, faded down when it stops
+  down: null,          // when a finger landed on Record or Stop: { at (audio clock), t }
 };
+
+// the screen stays on while recording, checking the timing or playing
+const W = { lock: null, asking: false, refused: false };
 
 let drag = null;       // a clip being dragged: { pointer, x0, y0, width, track, id, mode, moved, ghost }
 let saveTimer = 0;
@@ -146,29 +166,67 @@ export function mountStudio(root) {
   else paint();
 }
 
-/** The studio closed (another screen, the page hidden): stop the sound and the microphone. */
+/**
+ * The studio closed (another screen): stop the sound and the microphone. A take under way is
+ * kept, and one being kept finishes by itself. Then thrown-away takes are swept up.
+ */
 function leave() {
   S.on = false;
   stopAll();
-  flushSave();
+  const kid = S.kid;
+  S.undo = []; // Undo is for one visit
+  const keep = takeIds(S.mix);
+  flushSave().then(() => (kid ? sweepTakes(kid, { keep }) : 0)).catch(() => {});
   // the parts and takes are big; they are made again quickly when the studio opens
   A.parts.clear();
   A.buffers.clear();
   A.ac?.suspend?.().catch(() => {});
+  updateWake();
 }
 
-/** Stop playing, recording, a timing check and a part being heard. */
+/**
+ * Stop playing, recording, a timing check and a part being heard. A take that is past its
+ * count-in is kept (at once, without waiting for the microphone's last sound); one in its
+ * count-in is cancelled. A take already being kept is never stopped.
+ */
 function stopAll() {
-  if (A.rec) cancelRecording();
-  S.busy = '';
+  if (A.finishing) A.finishing.hurry = true;
+  const r = A.rec;
+  if (r?.kind === 'take' && A.ac.currentTime - outLag() > r.at + 0.05) finishRecording({ hurry: true });
+  else if (r) cancelRecording();
+  if (S.busy !== 'save') S.busy = '';
   stopPlay();
+  updateWake();
+}
+
+/** Keep the screen on while something is under way in the studio, and let it go after. */
+function updateWake() {
+  const want = S.on && document.visibilityState !== 'hidden' && Boolean(A.play || A.rec || A.finishing || S.busy === 'check' || S.busy === 'save');
+  if (want && !W.lock && !W.asking && !W.refused && navigator.wakeLock?.request) {
+    W.asking = true;
+    navigator.wakeLock.request('screen').then((lock) => {
+      W.asking = false;
+      W.lock = lock;
+      lock.addEventListener?.('release', () => { if (W.lock === lock) W.lock = null; });
+      updateWake(); // it may not be needed any more
+    }).catch(() => { W.asking = false; W.refused = true; });
+  } else if (!want && W.lock) {
+    const lock = W.lock;
+    W.lock = null;
+    lock.release?.().catch(() => {});
+  }
+}
+
+/** Throw away this kid's takes that no mix uses (the desk's and Undo's are kept too). */
+function sweep(kid = S.kid) {
+  if (kid) sweepTakes(kid, { keep: [S.mix, ...S.undo].flatMap(takeIds) }).catch(() => {});
 }
 
 /** A new kid at the desk: their draft and saved mixes. */
 async function openDesk(kid) {
   stopAll();
   flushSave();
-  Object.assign(S, { kid, loading: true, mix: newMix(), slots: [], clean: '', sel: null, panel: '', note: '', badges: [], pop: '', spot: { track: 0, beat: 0, picked: false } });
+  Object.assign(S, { kid, loading: true, mix: newMix(), slots: [], clean: '', sel: null, panel: '', note: '', badges: [], pop: '', undo: [], spot: { track: 0, beat: 0, picked: false } });
   S.takes.clear();
   S.waves.clear();
   paint();
@@ -180,9 +238,16 @@ async function openDesk(kid) {
   S.slots = Array.from({ length: MIX_SLOTS }, (_, i) => got.slots[i] || null);
   const same = S.slots.find((m) => m && fingerprint(m) === fingerprint(S.mix));
   S.clean = same ? fingerprint(same) : '';
-  S.badges = badges(S.mix);
-  paint();
+  try {
+    S.badges = badges(S.mix);
+    paint();
+  } catch {
+    // a draft that can't be drawn: an empty desk instead (the saved mixes stay as they are)
+    Object.assign(S, { mix: newMix(), clean: '', badges: [], sel: null });
+    try { paint(); } catch { S.slots = S.slots.map(() => null); paint(); }
+  }
   loadTakes(S.mix);
+  sweep(kid);
 }
 
 /** Fetch the takes a mix uses (for their pictures, and to play them), then draw again. */
@@ -200,9 +265,9 @@ async function loadTakes(mix) {
 /** The takes a mix uses, by id. */
 const takeIds = (mix) => mix.tracks.flat().filter((c) => c.kind === 'take').map((c) => c.take);
 
-/** Forget the sound of takes that neither the desk's mix nor a saved mix uses. */
+/** Forget the sound of takes that neither the desk's mix, a saved mix nor Undo uses. */
 function forgetTakes() {
-  const used = new Set([S.mix, ...S.slots].filter(Boolean).flatMap(takeIds));
+  const used = new Set([S.mix, ...S.slots, ...S.undo].filter(Boolean).flatMap(takeIds));
   for (const id of [...S.takes.keys()]) {
     if (used.has(id)) continue;
     S.takes.delete(id);
@@ -219,17 +284,23 @@ function shelfSongs() {
   return book.filter((p) => p.open && sourceOf(p.id));
 }
 
-/** Where the next part or recording goes: the spot the kid picked, or the first track with room. */
+/**
+ * Where the next part or recording goes: { track, beat, room, picked }. The spot the kid
+ * picked, or else the free place with the most room. Null when every track is full.
+ */
 function currentSpot() {
   const mix = S.mix;
-  const beats = mixBeats(mix);
-  if (S.spot.picked && S.spot.beat < beats && S.spot.track < TRACKS) return S.spot;
-  for (let t = 0; t < TRACKS; t += 1) if (isFree(mix, t, 0, 1)) return { track: t, beat: 0, picked: false };
-  for (let t = 0; t < TRACKS; t += 1) {
-    const at = freeSpot(mix, t, 1, 0);
-    if (at >= 0) return { track: t, beat: at, picked: false };
-  }
-  return { track: 0, beat: 0, picked: false };
+  if (S.spot.picked && S.spot.beat < mixBeats(mix) && S.spot.track < TRACKS) return { ...S.spot, room: roomAt(mix, S.spot.track, S.spot.beat) };
+  const best = bestSpot(mix);
+  return best && { ...best, picked: false };
+}
+
+/** Where new music goes, in kid words. */
+function spotHint() {
+  const spot = currentSpot();
+  if (!spot) return SAY.full;
+  if (spot.room < 1) return 'Something is already on that spot. Tap an empty place on a track.';
+  return `New music goes on track ${spot.track + 1}, beat ${spot.beat + 1}. There is room for ${beatsWord(spot.room)}.`;
 }
 
 /** Draw the whole desk again from what is kept here (not while a clip is being dragged). */
@@ -241,22 +312,41 @@ function paint() {
   el.innerHTML = `${transportHtml()}${S.note ? noteHtml() : ''}${S.panel === 'mixes' ? mixesHtml() : ''}${S.panel === 'help' ? helpHtml() : ''}
     ${timelineHtml()}${toolsHtml()}${stickersHtml()}${shelfHtml()}`;
   S.pop = '';
+  placeEdges();
   if (A.play || A.rec) follow();
+  updateWake();
 }
+
+/**
+ * A narrow picked clip gets its edge handles outside it (where the track has room), so a
+ * finger can still grab its middle to move it.
+ */
+function placeEdges() {
+  const clip = document.querySelector('#studio .st-clip.sel');
+  if (!clip) return;
+  const lane = clip.parentElement.getBoundingClientRect();
+  const r = clip.getBoundingClientRect();
+  const narrow = r.width < 120;
+  clip.classList.toggle('out-left', narrow && r.left - lane.left >= 42);
+  clip.classList.toggle('out-right', narrow && lane.right - r.right >= 42);
+}
+globalThis.addEventListener?.('resize', placeEdges);
 
 function transportHtml() {
   const mix = S.mix;
   const rec = A.rec && A.rec.kind === 'take';
   const playing = Boolean(A.play) || S.busy === 'play';
+  const held = S.busy === 'mic' || S.busy === 'check' || S.busy === 'save';
   const takes = mix.tracks.flat().some((c) => c.kind === 'take');
   const speedWhy = takes ? setBpm(mix, mix.bpm + 1).error : '';
   const secs = Math.round(mixSeconds(mix));
-  const recLabel = S.busy === 'mic' ? 'Getting ready…' : rec ? '■ Stop recording' : '● Record';
+  const recLabel = S.busy === 'mic' ? 'Getting ready…' : S.busy === 'save' ? 'Saving…' : rec ? '■ Stop recording' : '● Record';
   return `
     <div class="st-bar">
       <div class="st-main">
-        <button class="btn st-play ${playing ? 'playing' : ''}" data-action="st-play" ${rec || S.busy === 'mic' || S.busy === 'check' ? 'disabled' : ''}>${playing ? '■ Stop' : '▶ Play'}</button>
-        <button class="btn st-rec ${rec ? 'recording' : ''}" data-action="st-rec" ${S.busy === 'mic' || S.busy === 'check' ? 'disabled' : ''}><span class="st-rec-label">${recLabel}</span></button>
+        <button class="btn st-play ${playing ? 'playing' : ''}" data-action="st-play" ${rec || held ? 'disabled' : ''}>${playing ? '■ Stop' : '▶ Play'}</button>
+        <button class="btn st-rec ${rec ? 'recording' : ''}" data-action="st-rec" ${held ? 'disabled' : ''}><span class="st-rec-label">${recLabel}</span></button>
+        <button class="btn ghost st-undo ${S.undo.length ? '' : 'off'}" data-action="st-undo" ${S.undo.length ? '' : 'aria-disabled="true"'}>↩ Undo</button>
       </div>
       <div class="st-step" role="group" aria-label="Loop length">
         <button class="btn ghost round ${mix.bars <= 2 ? 'off' : ''}" data-action="st-bars" data-d="-1" aria-label="Fewer bars">−</button>
@@ -293,7 +383,7 @@ function timelineHtml() {
   const ruler = Array.from({ length: mix.bars }, (_, i) => `<span style="left:${pct(i * mix.meter, beats)}%">${i + 1}</span>`).join('');
   const lanes = mix.tracks.map((clips, t) => {
     const body = clips.map((c) => clipHtml(c, beats)).join('');
-    const mark = spot.track === t && !A.rec ? `<span class="st-spot ${spot.picked ? '' : 'auto'}" style="left:${pct(spot.beat, beats)}%;width:${pct(1, beats)}%" aria-hidden="true"></span>` : '';
+    const mark = spot && spot.track === t && !A.rec ? `<span class="st-spot ${spot.picked ? '' : 'auto'}" style="left:${pct(spot.beat, beats)}%;width:${pct(1, beats)}%" aria-hidden="true"></span>` : '';
     const recBox = A.rec?.kind === 'take' && A.rec.track === t ? `<span class="st-recbox" style="left:${pct(A.rec.beat, beats)}%;width:0"></span>` : '';
     return `<div class="st-lane" data-track="${t}" aria-label="Track ${t + 1}">${body}${mark}${recBox}</div>`;
   }).join('');
@@ -335,7 +425,8 @@ function waveSvg(c, t) {
   const key = `${c.take}|${c.from}|${c.len}|${S.mix.bpm}`;
   if (!S.waves.has(key)) {
     if (S.waves.size >= MOST_WAVES) S.waves.clear(); // they are drawn again quickly
-    const line = waveLine(t.samples, t.rate, c.from * beat, c.len * beat, 40);
+    // the sound from before the beat isn't drawn: the picture starts on the clip's beat
+    const line = waveLine(t.samples, t.rate, (t.lead || 0) + c.from * beat, c.len * beat, 40);
     const d = line.map((v, i) => `M${i + 0.5} ${(10 - v * 9).toFixed(1)}V${(10 + v * 9).toFixed(1)}`).join('');
     S.waves.set(key, `<svg class="st-wave" viewBox="0 0 40 20" preserveAspectRatio="none" aria-hidden="true"><path d="${d}"/></svg>`);
   }
@@ -344,10 +435,7 @@ function waveSvg(c, t) {
 
 function toolsHtml() {
   const found = S.sel != null && findClip(S.mix, S.sel);
-  if (!found) {
-    const spot = currentSpot();
-    return `<p class="st-hint muted">${spot.picked ? `New music goes on track ${spot.track + 1} at beat ${spot.beat + 1}. ` : ''}Tap an empty place on a track to choose where new music goes. Tap a clip to change it.</p>`;
-  }
+  if (!found) return `<p class="st-hint muted">${esc(spotHint())} Tap an empty place on a track to choose another spot. Tap a clip to change it.</p>`;
   const { clip: c } = found;
   const words = c.kind === 'take' ? '🎤 My take' : (() => { const w = partWords(c); return `${w.icon} ${w.name} from ${w.song}, in ${w.key}`; })();
   const b = (todo, label, aria) => `<button class="btn ghost small-btn" data-action="st-nudge" data-do="${todo}" aria-label="${aria}">${label}</button>`;
@@ -433,7 +521,7 @@ function helpHtml() {
       <h3>The timing</h3>
       <p>The tablet sets the timing by itself. When you record without headphones, it listens to the clicks that count you in.</p>
       <p>Recording with headphones and it sounds late? Unplug them, turn the speaker up and keep the room quiet. Then tap the button, and the tablet plays some clicks and listens to them.</p>
-      <p><button class="btn small-btn" data-action="st-check" ${A.rec || S.busy ? 'disabled' : ''}>${S.busy === 'check' || A.rec?.kind === 'check' ? 'Listening…' : '⏱️ Check the timing'}</button>
+      <p><button class="btn small-btn" data-action="st-check" ${A.rec || A.finishing || S.busy ? 'disabled' : ''}>${S.busy === 'check' || A.rec?.kind === 'check' ? 'Listening…' : '⏱️ Check the timing'}</button>
       <small class="muted">${checked ? 'The timing is set on this tablet.' : 'The timing isn\'t set yet. It sets itself the first time you record without headphones.'}</small></p>
     </section>`;
 }
@@ -447,19 +535,41 @@ function say(text, kind = '') {
 
 // ---------- changing the mix ----------
 
-/** The desk gets a new mix: stickers, the draft saved, and the music carries on from the same place. */
-function commit(mix, { select } = {}) {
+/**
+ * The desk gets a new mix: Undo remembers the one before, stickers, the draft saved, and the
+ * music carries on from the same place. `said` is a toast to show (with a new sticker's).
+ */
+function commit(mix, { select, said = '', undo = true } = {}) {
   const had = new Set(S.badges.map((b) => b.id));
+  if (undo) rememberUndo();
   S.mix = mix;
   if (select !== undefined) S.sel = select;
   if (S.sel != null && !findClip(mix, S.sel)) S.sel = null;
+  if (S.spot.beat >= mixBeats(mix)) S.spot = { track: S.spot.track, beat: 0, picked: false };
   S.badges = badges(mix);
-  const fresh = S.badges.find((b) => !had.has(b.id));
+  const fresh = undo && S.badges.find((b) => !had.has(b.id));
   S.pop = fresh?.id || '';
-  if (fresh) setTimeout(() => toast(`🏅 New sticker: ${fresh.name}! ${fresh.why}`), 50);
+  if (fresh) setTimeout(() => toast(`${said ? `${said} ` : ''}🏅 New sticker: ${fresh.name}! ${fresh.why}`), 50);
+  else if (said) toast(said);
   autosave();
+  forgetTakes();
   if (A.play || S.busy === 'play') restartPlay();
   paint();
+}
+
+/** Undo can go back to the desk's mix as it is now. */
+function rememberUndo() {
+  if (S.undo[S.undo.length - 1] === S.mix) return;
+  S.undo.push(S.mix);
+  if (S.undo.length > MOST_UNDO) S.undo.shift();
+}
+
+/** Step back to the mix before the last change. */
+function undo() {
+  const before = S.undo.pop();
+  if (!before) { toast(SAY.nothingToUndo); return; }
+  commit(before, { undo: false });
+  loadTakes(before);
 }
 
 /** Keep the desk's mix as the draft, a moment after the last change. */
@@ -477,11 +587,17 @@ function flushSave() {
   return p ? saveMix(p.kid, 'draft', p.mix).catch(() => {}) : Promise.resolve();
 }
 
-/** Whether the desk is busy (recording, or getting the microphone), so edits wait. */
+/** Whether the desk is busy (recording, keeping a take, the timing check), so edits wait. */
 function busyNow() {
-  if (A.rec || S.busy === 'mic' || S.busy === 'check') { toast('Wait for the recording to finish first.'); return true; }
-  return false;
+  const why = A.rec?.kind === 'check' || S.busy === 'check' ? SAY.waitCheck
+    : S.busy === 'save' || A.finishing ? SAY.waitSave
+      : A.rec || S.busy === 'mic' ? SAY.waitRec : '';
+  if (why) toast(why);
+  return Boolean(why);
 }
+
+/** Whether edits must wait, without saying so (for a finger on the timeline). */
+const heldNow = () => Boolean(A.rec || A.finishing || S.busy === 'mic' || S.busy === 'check' || S.busy === 'save');
 
 /** Whether the sound is turned off in the family's settings (and say so). */
 function soundOff() {
@@ -524,10 +640,12 @@ function trackAt(y) {
 }
 
 function onDown(e) {
+  // Stop is timed from when the finger lands, not from the tap a moment later
+  if (e.target.closest('[data-action="st-rec"]')) A.down = { at: A.ac?.currentTime, t: performance.now() };
   if (e.button > 0 || drag) return;
   const lane = e.target.closest('.st-lane');
   if (!lane) return;
-  if (A.rec || S.busy === 'mic' || S.busy === 'check') return;
+  if (heldNow()) return;
   const clipEl = e.target.closest('.st-clip');
   const rect = lane.getBoundingClientRect();
   drag = {
@@ -545,7 +663,10 @@ function onMove(e) {
   const d = drag;
   if (!d || e.pointerId !== d.pointer) return;
   const dx = e.clientX - d.x0;
-  if (!d.moved && Math.hypot(dx, e.clientY - d.y0) < 8) return;
+  const dy = e.clientY - d.y0;
+  if (!d.moved && Math.hypot(dx, dy) < 8) return;
+  // a finger that sets off up or down scrolls the page; only sideways moves the clip
+  if (!d.moved && e.pointerType === 'touch' && Math.abs(dy) > Math.abs(dx)) { onCancel(e); return; }
   d.moved = true;
   if (d.id == null) return; // a swipe over an empty place: the page scrolls
   const found = findClip(S.mix, d.id);
@@ -709,9 +830,21 @@ async function buffersFor(mix) {
   return out;
 }
 
-/** Start a sound at `when` (context time), `offset` seconds in, for `dur`, with 5 ms fades. */
-function startSource(buffer, when, offset, dur, dest = A.master) {
+/** A fresh volume knob for one run of play (or one part heard): Stop fades it down. */
+function newBus() {
+  const g = A.ac.createGain();
+  g.connect(A.master);
+  A.bus = g;
+  return g;
+}
+
+/**
+ * Start a sound at `when` (context time), `offset` seconds in, for `dur`, with 5 ms fades.
+ * `sharp`: the very start of a part, where a drum or a note begins, isn't faded in.
+ */
+function startSource(buffer, when, offset, dur, { sharp = false } = {}) {
   const ac = A.ac;
+  if (![when, offset, dur].every(Number.isFinite)) return;
   let w = when;
   let off = offset;
   let len = Math.min(dur, buffer.duration - offset);
@@ -721,11 +854,11 @@ function startSource(buffer, when, offset, dur, dest = A.master) {
   src.buffer = buffer;
   const g = ac.createGain();
   const fade = Math.min(0.005, len / 4);
-  g.gain.setValueAtTime(0, w);
+  g.gain.setValueAtTime(sharp && off === 0 ? 1 : 0, w);
   g.gain.linearRampToValueAtTime(1, w + fade);
   g.gain.setValueAtTime(1, w + len - fade);
   g.gain.linearRampToValueAtTime(0, w + len);
-  src.connect(g).connect(dest);
+  src.connect(g).connect(A.bus || newBus());
   src.start(w, off, len);
   A.sources.add(src);
   src.onended = () => { A.sources.delete(src); try { g.disconnect(); } catch { /* gone */ } };
@@ -758,21 +891,36 @@ function click(frame, hz) {
   src.onended = () => { A.sources.delete(src); try { g.disconnect(); } catch { /* gone */ } };
 }
 
-/** Stop every sound at once. */
+/** Stop every sound: the music fades out over 15 ms (so it doesn't click), then stops. */
 function stopSources() {
-  for (const s of A.sources) {
-    s.onended = null;
-    try { s.stop(); } catch { /* not started yet or done */ }
-    try { s.disconnect(); } catch { /* gone */ }
+  const ac = A.ac;
+  const t = ac ? ac.currentTime : 0;
+  const bus = A.bus;
+  A.bus = null; // the next sound gets a new knob, so this fade never touches it
+  if (bus) {
+    try {
+      bus.gain.cancelScheduledValues(t);
+      bus.gain.setValueAtTime(bus.gain.value, t);
+      bus.gain.linearRampToValueAtTime(0, t + 0.015);
+    } catch { /* gone */ }
   }
+  const gone = [...A.sources];
   A.sources.clear();
+  for (const s of gone) {
+    s.onended = null;
+    try { s.stop(t + 0.02); } catch { /* not started yet or done */ }
+  }
+  setTimeout(() => {
+    for (const s of gone) { try { s.disconnect(); } catch { /* gone */ } }
+    try { bus?.disconnect(); } catch { /* gone */ }
+  }, 120);
 }
 
 // ---------- playing ----------
 
 /** Play the mix round and round, from a beat. */
 async function startPlay(fromBeat = 0) {
-  if (S.busy === 'mic' || S.busy === 'check' || soundOff()) return;
+  if (S.busy === 'mic' || S.busy === 'check' || S.busy === 'save' || A.finishing || soundOff()) return;
   if (!hasClips(S.mix)) { toast(SAY.emptyPlay); return; }
   const ac = audio();
   if (!ac) { say(SAY.noSound, 'bad'); return; }
@@ -792,6 +940,7 @@ async function startPlay(fromBeat = 0) {
   const beat = 60 / mix.bpm;
   const beats = mixBeats(mix);
   const first = (((fromBeat % beats) + beats) % beats) * beat;
+  newBus();
   A.play = { mix, bufs, plan: schedule(mix), loop: mixSeconds(mix), beat, origin: ac.currentTime + 0.08 - first, k: 0, first };
   playTick();
   clearInterval(A.timer);
@@ -806,9 +955,11 @@ function playTick() {
   if (!onScreen()) { leaveIfGone(); return; }
   while (p.origin + p.k * p.loop < A.ac.currentTime + 0.3) {
     const base = p.origin + p.k * p.loop;
-    for (const e of sliceSchedule(p.plan, p.k === 0 ? p.first : 0)) {
+    // after the first time round, a take on the loop's first beat starts its lead at the
+    // very end of the loop before
+    for (const e of sliceSchedule(p.plan, p.k === 0 ? p.first : -Infinity)) {
       const b = p.bufs.get(e.id);
-      if (b) startSource(b, base + e.at, e.offset, e.dur);
+      if (b) startSource(b, base + e.at, e.offset, e.dur, { sharp: e.kind === 'part' && e.offset === 0 });
     }
     p.k += 1;
   }
@@ -847,6 +998,7 @@ function stopPlay(draw = true) {
   stopHearing(false);
   cancelAnimationFrame(A.raf);
   if (draw) paint();
+  else updateWake();
 }
 
 /** Every frame while playing or recording: move the playhead (and the recording's red box). */
@@ -874,7 +1026,8 @@ function headBeat() {
   const heard = A.ac.currentTime - outLag();
   if (A.play) {
     const beats = A.play.loop / A.play.beat;
-    const b = (heard - A.play.origin) / A.play.beat;
+    // before the first sound is heard, the head waits on the beat it starts from
+    const b = Math.max(A.play.first, heard - A.play.origin) / A.play.beat;
     return ((b % beats) + beats) % beats;
   }
   const r = A.rec;
@@ -887,7 +1040,7 @@ async function hear(song, part) {
   const key = `${song}|${part}`;
   if (S.hearing === key) { stopHearing(); return; }
   // not while the microphone gets ready: stopping would quietly cancel the recording
-  if (A.rec || S.busy === 'mic' || S.busy === 'check' || soundOff()) return;
+  if (heldNow() || soundOff()) return;
   const ac = audio();
   if (!ac) { say(SAY.noSound, 'bad'); return; }
   stopPlay(false);
@@ -900,7 +1053,8 @@ async function hear(song, part) {
   if (S.hearing !== key) return;
   if (!b) { S.hearing = ''; say(SAY.partBroken); return; }
   const len = Math.min(b.duration, (4 * src.meter * 60) / bpm);
-  startSource(b, ac.currentTime + 0.05, 0, len);
+  newBus();
+  startSource(b, ac.currentTime + 0.05, 0, len, { sharp: true });
   clearTimeout(A.hearTimer);
   A.hearTimer = setTimeout(() => { if (S.hearing === key) stopHearing(); }, len * 1000 + 150);
 }
@@ -994,12 +1148,16 @@ function keepDelay(delay) {
 
 /** Record onto the chosen spot: a bar of clicks to count in, then until Stop or the room runs out. */
 async function startRecording() {
-  if (A.rec || S.busy) return;
+  if (A.rec || A.finishing) return;
+  if (S.busy === 'play') stopPlay(false); // Play was still getting ready: record instead
+  if (S.busy) return;
   if (soundOff()) return;
   const mix = S.mix;
   const spot = currentSpot();
-  const room = roomAt(mix, spot.track, spot.beat);
+  if (!spot) { say(SAY.full); return; }
+  const room = spot.room;
   if (room < 1) { say(SAY.spotTaken); return; }
+  if (room < 2) { say(`There is only ${beatsWord(room)} of room there. Tap an emptier place first.`); return; }
   const ac = audio();
   if (!ac) { say(SAY.noSound, 'bad'); return; }
   stopPlay(false);
@@ -1027,6 +1185,7 @@ async function startRecording() {
   const end = at + room * beat;
   const origin = at - spot.beat * beat;
   if (bufs) {
+    newBus();
     for (const e of sliceSchedule(schedule(mix), spot.beat * beat, (spot.beat + room) * beat)) {
       const b = bufs.get(e.id);
       if (b) startSource(b, origin + e.at, e.offset, e.dur);
@@ -1049,7 +1208,7 @@ function recTick() {
   if (!r || r.kind !== 'take') return;
   if (!onScreen()) { leaveIfGone(); return; }
   const now = A.ac.currentTime;
-  if (now >= r.end) { finishRecording(); return; }
+  if (now >= r.end) { finishRecording({ byItself: true }); return; }
   const label = document.querySelector('#studio .st-rec-label');
   if (!label) return;
   const heard = now - outLag();
@@ -1057,42 +1216,75 @@ function recTick() {
   label.textContent = heard < r.at ? `Get ready… ${Math.max(1, Math.min(r.meter, left))}` : '■ Stop recording';
 }
 
-/** Stop recording and keep the take: lined up with its beat, made loud enough, put on its track. */
-async function finishRecording() {
+/**
+ * Stop recording and keep the take: lined up with its beat, made loud enough, put on its track.
+ * `down` is when the finger landed on Stop (the audio clock), `byItself` when the room ran
+ * out, `hurry` when the kid left: then it is kept at once with the sound there is so far.
+ * Once it has begun, nothing stops it: the take goes in the kid's draft even if the studio
+ * has closed or another kid sat down meanwhile. Edits wait until it is kept.
+ */
+async function finishRecording({ down = null, byItself = false, hurry = false } = {}) {
   const r = A.rec;
   if (!r || r.kind !== 'take' || r.finishing) return;
   r.finishing = true;
+  r.hurry = hurry;
   clearInterval(A.timer);
   const ac = A.ac;
   const rate = ac.sampleRate;
-  const stopAt = Math.min(ac.currentTime, r.end);
-  const to = Math.round(stopAt * rate);
+  let stopAt = r.end;
+  if (!byItself) {
+    // what the kid heard when the finger landed, less the finger's own delay
+    const heard = Math.min(down ?? ac.currentTime, ac.currentTime) - outLag();
+    if (heard <= r.at + 0.05) { cancelRecording(); say(SAY.stoppedEarly); return; }
+    stopAt = Math.min(r.end, Math.max(heard - TOUCH_LAG, r.at + r.beatSec));
+  }
+  let to = Math.round(stopAt * rate);
   stopSources();
-  if (stopAt <= r.at + 0.05) { r.cap.stop(); A.rec = null; cancelAnimationFrame(A.raf); say(SAY.stoppedEarly); return; }
-  // the microphone hears the last beats a moment later: wait for them (1.5 seconds at most)
-  const need = to + Math.round((r.delay + 0.15) * rate);
-  for (let i = 0; i < 30 && r.cap.lastFrame() < need && A.rec === r; i += 1) await wait(50);
-  r.cap.stop();
-  if (A.rec !== r) return; // cancelled meanwhile
   A.rec = null;
+  A.finishing = r;
+  S.busy = 'save';
   cancelAnimationFrame(A.raf);
-  // line the take up (timed from its own count-in when the clicks were heard) and take the clicks out
-  const made = makeTake(joinBlocks(r.cap.blocks), { rate, countIn: r.countIn, clicks: r.clicks, from: r.from, to, guess: r.delay });
-  if (made.measured && !r.phones) keepDelay(made.delay);
-  // a click left in the take doesn't count as playing
-  const clickTimes = r.clicks.filter((c) => c.frame < to).map((c) => (c.frame - r.from) / rate);
-  if (peakAway(made.samples, rate, clickTimes) < SILENT) { say(SAY.nothingHeard); return; }
-  const { samples } = normalise(made.samples);
   const kid = S.kid;
-  let id;
-  try { id = await saveTake(kid, samples, rate); } catch { say(SAY.keepFailed, 'bad'); return; }
-  if (S.kid !== kid) return; // another kid sat down meanwhile
-  S.takes.set(id, { rate, samples });
-  const res = addTake(S.mix, r.track, id, samples.length / rate / r.beatSec, r.beat);
-  if (res.error) { say(res.error); return; }
-  toast(`Nice playing! Your take is on track ${r.track + 1}.`);
-  S.spot = { ...S.spot, picked: false };
-  commit(res.mix, { select: res.id });
+  paint();
+  try {
+    // the microphone hears the last beats a moment later: wait for them (1.5 seconds at most)
+    const heardLate = countInDelay(joinBlocks(r.cap.blocks), rate, r.countIn.map((c) => c.frame), r.from) ?? r.delay;
+    const need = to + Math.round((heardLate + 0.15) * rate);
+    for (let i = 0; i < 30 && r.cap.lastFrame() < need && !r.hurry; i += 1) await wait(50);
+    r.cap.stop();
+    // in a hurry, the take ends where the microphone's sound ends
+    if (r.cap.lastFrame() < need) to = Math.min(to, r.cap.lastFrame() - Math.round(heardLate * rate));
+    if (to <= r.from + 0.05 * rate) { if (!r.hurry) say(SAY.stoppedEarly); return; }
+    // line the take up (timed from its own count-in when the clicks were heard) and take the clicks out
+    const made = makeTake(joinBlocks(r.cap.blocks), { rate, countIn: r.countIn, clicks: r.clicks, from: r.from, to, guess: r.delay, phones: r.phones, lead: LEAD });
+    if (made.measured && !r.phones) keepDelay(made.delay);
+    if (!made.played) { say(SAY.nothingHeard); return; }
+    const { samples } = normalise(fadeEnds(made.samples, rate));
+    let id;
+    try { id = await saveTake(kid, samples, rate, LEAD); } catch { say(SAY.keepFailed, 'bad'); return; }
+    const beats = (samples.length / rate - LEAD) / r.beatSec;
+    if (S.kid !== kid) {
+      // another kid sat down meanwhile: the take goes in its own kid's draft
+      const { draft } = await loadMixes(kid, true);
+      const res = addTake(draft || newMix(), r.track, id, beats, r.beat, { lead: LEAD });
+      if (!res.error) await saveMix(kid, 'draft', res.mix);
+      return;
+    }
+    S.takes.set(id, { rate, samples, lead: LEAD });
+    const res = addTake(S.mix, r.track, id, beats, r.beat, { lead: LEAD });
+    if (res.error) { say(res.error); return; }
+    S.spot = { ...S.spot, picked: false };
+    commit(res.mix, { select: res.id, said: S.on ? `Nice playing! Your take is on track ${r.track + 1}.` : '' });
+    await flushSave();
+  } catch {
+    say(SAY.keepFailed, 'bad');
+  } finally {
+    r.cap.stop();
+    if (A.finishing === r) A.finishing = null;
+    if (S.busy === 'save') S.busy = '';
+    paint();
+    updateWake();
+  }
 }
 
 /** Stop a recording or a timing check without keeping anything (the kid left). */
@@ -1112,7 +1304,7 @@ function cancelRecording() {
  * microphone listens, find them in the recording, and keep how late they arrived.
  */
 async function timingCheck() {
-  if (A.rec || S.busy) return;
+  if (A.rec || A.finishing || S.busy) return;
   if (soundOff()) return;
   const ac = audio();
   if (!ac) { say(SAY.noSound, 'bad'); return; }
@@ -1127,6 +1319,7 @@ async function timingCheck() {
   for (const t of clicks) loudClick(t);
   A.rec = { kind: 'check', token, cap };
   paint();
+  updateWake();
   const done = t0 + clicks.length * 0.5 + 0.4 + roundTrip();
   for (let i = 0; i < 120 && ac.currentTime < done && A.rec?.token === token; i += 1) await wait(100);
   if (A.rec?.token !== token) { if (S.busy === 'check') { S.busy = ''; paint(); } return; } // the kid left
@@ -1135,8 +1328,8 @@ async function timingCheck() {
   S.busy = '';
   const joined = joinBlocks(cap.blocks);
   const heard = findOnsets(joined.samples, ac.sampleRate).map((t) => joined.first / ac.sampleRate + t);
-  // most clicks must be heard (a beep that isn't ours only matches some of them)
-  const delay = clicksHeard(clicks, heard) >= clicks.length - 2 ? clickDelay(clicks, heard) : null;
+  // most clicks must be heard at the same delay (a beep that isn't ours only matches some)
+  const delay = echoDelay(clicks, heard, { need: clicks.length - 2 });
   if (delay == null) { say(SAY.checkFail, 'bad'); return; }
   keepDelay(delay);
   say(SAY.checkOk, 'good');
@@ -1159,7 +1352,13 @@ function loudClick(when) {
 }
 
 globalThis.document?.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && (A.play || A.rec || S.hearing || S.busy)) { stopAll(); S.busy = ''; paint(); }
+  if (document.visibilityState === 'hidden') {
+    // a take under way is kept; the screen lock goes by itself
+    if (A.play || A.rec || A.finishing || S.hearing || S.busy) { stopAll(); paint(); }
+  } else {
+    W.refused = false;
+    updateWake();
+  }
 });
 
 // ---------- my mixes ----------
@@ -1169,17 +1368,19 @@ function saveSlot(i) {
   if (!hasClips(S.mix)) { toast(SAY.emptySave); return; }
   const there = S.slots[i];
   const go = async () => {
+    const kid = S.kid;
     const name = /^(My mix|Mix \d)$/.test(S.mix.name) ? `Mix ${i + 1}` : S.mix.name;
     const mix = { ...S.mix, name };
     S.mix = mix;
-    pending = { kid: S.kid, mix };
+    pending = { kid, mix };
     await flushSave();
-    await saveMix(S.kid, i, mix);
+    try { await saveMix(kid, i, mix); } catch { toast(SAY.saveFailed); return; }
+    if (S.kid !== kid) return;
     S.slots[i] = mix;
     S.clean = fingerprint(mix);
     paint();
     toast(`Saved! Your mix is kept as ${name}.`);
-    sweepTakes(S.kid).catch(() => {});
+    sweep();
     forgetTakes();
   };
   if (there && fingerprint(there) !== fingerprint(S.mix)) {
@@ -1193,6 +1394,7 @@ function openSlot(i) {
   if (!m) return;
   const go = () => {
     stopPlay(false);
+    rememberUndo();
     S.mix = { ...m, tracks: m.tracks.map((t) => t.map((c) => ({ ...c }))) };
     S.clean = fingerprint(S.mix);
     S.sel = null;
@@ -1219,13 +1421,15 @@ function deleteSlot(i) {
     yes: 'Delete it',
     danger: true,
     onYes: async () => {
+      const kid = S.kid;
       await flushSave();
-      await deleteMix(S.kid, i);
+      try { await deleteMix(kid, i); } catch { toast(SAY.deleteFailed); return; }
+      if (S.kid !== kid) return;
       S.slots[i] = null;
       if (S.clean === fingerprint(m)) S.clean = '';
       forgetTakes();
       paint();
-      sweepTakes(S.kid).catch(() => {});
+      sweep();
     },
   });
 }
@@ -1234,6 +1438,7 @@ function deleteSlot(i) {
 function newDesk() {
   const go = async () => {
     stopPlay(false);
+    rememberUndo();
     S.mix = newMix();
     S.clean = '';
     S.sel = null;
@@ -1244,7 +1449,7 @@ function newDesk() {
     await flushSave();
     forgetTakes();
     paint();
-    sweepTakes(S.kid).catch(() => {});
+    sweep();
   };
   if (dirty()) confirmModal({ title: 'Start a new mix?', text: 'The mix on your desk isn\'t saved yet. It will be gone.', yes: 'Start a new one', danger: true, onYes: go });
   else go();
@@ -1259,9 +1464,12 @@ export const studioActions = {
     else if (!A.rec) startPlay(0);
   },
   'st-rec': () => {
-    if (A.rec?.kind === 'take') finishRecording();
+    const down = A.down && performance.now() - A.down.t < 1500 ? A.down.at : null;
+    A.down = null;
+    if (A.rec?.kind === 'take') finishRecording({ down });
     else startRecording();
   },
+  'st-undo': () => { if (!busyNow()) undo(); },
   'st-bars': (el) => {
     if (busyNow()) return;
     const d = Number(el.dataset.d);
@@ -1269,7 +1477,7 @@ export const studioActions = {
     if (want < 2) { toast('That\'s the shortest loop: 2 bars.'); return; }
     if (want > maxBars(S.mix.bpm, S.mix.meter)) { toast('That\'s the longest loop. A loop can be 30 seconds at most.'); return; }
     const r = setBars(S.mix, want);
-    if (S.spot.beat >= mixBeats(r.mix)) S.spot = { track: S.spot.track, beat: 0, picked: false };
+    if (r.error) { toast(r.error); return; }
     commit(r.mix);
   },
   'st-bpm': (el) => {
@@ -1291,6 +1499,7 @@ export const studioActions = {
   'st-add': (el) => {
     if (busyNow()) return;
     const spot = currentSpot();
+    if (!spot) { toast(SAY.full); return; }
     const r = addPart(S.mix, spot.track, el.dataset.song, el.dataset.part, spot.beat);
     if (r.error) { toast(r.error); return; }
     S.spot = { ...S.spot, picked: false };
@@ -1313,7 +1522,7 @@ export const studioActions = {
   'st-slot-open': (el) => { if (!busyNow()) openSlot(Number(el.dataset.slot)); },
   'st-slot-del': (el) => { if (!busyNow()) deleteSlot(Number(el.dataset.slot)); },
   'st-new': () => { if (!busyNow()) newDesk(); },
-  'st-check': () => timingCheck(),
+  'st-check': () => { if (!busyNow()) timingCheck(); },
 };
 
 /** What the studio's sound is doing (for tests): { playing, recording, sounds }. */
