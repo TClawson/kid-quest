@@ -74,6 +74,7 @@ const SHELL = [
   'js/gardenrules.js',
   'js/gardenart.js',
   'js/garden.js',
+  'js/familygarden.js',
   'js/furniture.js',
   'js/leaderboard.js',
   'js/pixelkit.js',
