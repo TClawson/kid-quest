@@ -454,7 +454,8 @@ export async function renderPart(id, part, bpm, sampleRate = 44100, peak = 0.5, 
  * the context costs a little on every block of sound until it has played, so a whole song
  * handed over at once took far longer than its length (four times the notes took twelve times
  * as long). plan(from, to) schedules everything that starts in [from, to) seconds; it is called
- * with stretches that follow each other and together cover the whole sound. alive(): once it
+ * with stretches that together cover the whole sound, each once (in order, unless a pause is
+ * refused: then its stretch comes early). alive(): once it
  * says false no more notes are handed over, and the rest renders quickly as silence (for a
  * sound nobody is waiting for any more). r: the rig; notes put themselves on r.spent to be
  * taken out of the context after they end.
@@ -481,7 +482,10 @@ function renderInSlices(off, r, plan, alive = null) {
         });
         if (!alive || alive()) plan(t + AHEAD, upTo(i + 1));
       } finally { off.resume(); }
-    }, () => { /* this pause was refused: its notes are lost, the rest still plays */ });
+    }, () => {
+      // this pause was refused: hand its stretch over now, early, so no note is lost
+      if (!alive || alive()) plan(t + AHEAD, upTo(i + 1));
+    });
   });
   return off.startRendering();
 }
