@@ -345,12 +345,14 @@ function takeClicksOut({ first, samples }, rate, clicks, pre) {
  *   clicks:  [{ frame, hz }]  the clicks during the take (equally loud),
  *   from, to: the take's first frame and the frame after its last,
  *   guess: how late the microphone is (seconds) when the count-in can't tell,
- *   phones: the kid wears headphones (the microphone doesn't hear the clicks).
+ *   phones: the kid wears headphones (the microphone doesn't hear the clicks),
+ *   lead: seconds of sound kept from before `from`, so a note played a little early
+ *         keeps its start (the take's beat is then `lead` seconds into the samples).
  * Returns { samples, delay (seconds, the one used), measured (it came from this recording's
  * count-in), cleaned (how many clicks had something taken out), played (whether anything
  * but the clicks is in the take: false means the kid played nothing) }.
  */
-export function makeTake(recording, { rate, countIn, clicks, from, to, guess, phones = false, pre = 0.01, post = 0.15 }) {
+export function makeTake(recording, { rate, countIn, clicks, from, to, guess, phones = false, lead = 0, pre = 0.01, post = 0.15 }) {
   const heard = countInDelay(recording, rate, countIn.map((c) => c.frame), from);
   const measured = heard != null;
   const delay = measured ? heard : guess;
@@ -371,12 +373,13 @@ export function makeTake(recording, { rate, countIn, clicks, from, to, guess, ph
     known = during.length > 0 && list.length === during.length;
     for (const tpl of learned.values()) if (tpl) clickPeak = Math.max(clickPeak, peakOf(tpl));
   }
-  const samples = cutFrames(rec, from + d, to + d);
+  const early = Math.round(lead * rate);
+  const samples = cutFrames(rec, from - early + d, to + d);
   // Was anything played? With headphones there are no clicks in the take, so any sound
   // counts. Otherwise sound away from the clicks counts, and on a click (a short note
   // right on the beat) only when the click was taken out and what is left is still as
   // loud as half a click.
-  const times = during.map((c) => (c.frame - from) / rate);
+  const times = during.map((c) => (c.frame - from + early) / rate);
   let played = peakAway(samples, rate, times) >= SILENT;
   if (!played && phones && !measured) played = peakOf(samples) >= SILENT;
   if (!played && known) played = peakOf(samples) >= Math.max(SILENT, 0.5 * clickPeak);

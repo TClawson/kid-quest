@@ -242,6 +242,11 @@ test('a take is timed from its own count-in', () => {
   assert.equal(got.measured, true);
   assert.ok(Math.abs(got.delay - 0.118) < 0.004, `with a piano: ${got.delay}`);
   assert.equal(got.samples.length, s.want.length);
+  // a little of what came before the beat can be kept, for a note played early
+  const early = makeTake(s.recording, { ...s.plan, lead: 0.05 });
+  assert.equal(early.samples.length, s.want.length + 0.05 * RATE);
+  assert.deepEqual(early.samples.subarray(0.05 * RATE), got.samples, 'the beat is 50 ms into the take');
+  assert.equal(early.played, true);
 });
 
 test('the metronome clicks are taken out of a quiet take', () => {
