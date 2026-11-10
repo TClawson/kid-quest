@@ -696,10 +696,12 @@ export function pianoStreakInfo(state, kid, today) {
   return { streak, best, freezes, perWeek: pianoDaysPerWeek(kid) };
 }
 
-// ---------- exercise streak ----------
+// ---------- strong weeks (the exercise streak) ----------
 
-/** Exercise days a week needs to count toward the exercise streak. */
-export const EXERCISE_DAYS = 5;
+/** Exercise days that make a week a strong week, adding one to the count. */
+export const EXERCISE_DAYS = 4;
+/** Exercise days that keep the count safe without adding to it (one less than a strong week). */
+export const EXERCISE_KEEP_DAYS = EXERCISE_DAYS - 1;
 
 /** Monday of the week a day is in. */
 export function weekStart(key) {
@@ -714,14 +716,17 @@ export function exercisedOn(state, kid, key, today) {
 }
 
 /**
- * The exercise streak counts weeks (Monday to Sunday) in a row with exercise on
- * at least 5 days. A day a parent excuses (sick, travel) counts neither for nor
- * against it: each excused day lowers that week's goal by one, and a week with
- * 5 or more excused days is skipped, keeping the streak without adding to it.
+ * Strong weeks (the exercise streak) counts weeks (Monday to Sunday) with
+ * exercise on at least 4 days: a strong week adds one. A week with exactly 3
+ * days keeps the count safe without adding to it, and a week with fewer takes
+ * one away (never below 0), so one slow week never wipes out a good habit.
+ * A day a parent excuses (sick, travel) counts neither for nor against it: each
+ * excused day lowers both of that week's marks by one, and a week with 4 or
+ * more excused days is skipped, keeping the count without adding to it.
  * Excusing works on past days too, since everything is worked out again from
  * the history. This week adds as soon as its goal is reached, and it can't
- * break the streak until it is over. best is the longest run ever: moves it
- * unlocked are never taken away.
+ * lower the count until it is over. best is the longest run ever: moves it
+ * unlocked are never taken away. goal and keep are this week's marks.
  */
 export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
   const start = kid.startDate && kid.startDate <= today ? kid.startDate : today;
@@ -741,12 +746,17 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
     }
     need = goal - excused;
     if (need <= 0) {
-      // excused nearly all week: the streak waits
+      // excused nearly all week: the count waits
     } else if (days >= need) weeks += 1;
-    else if (wk !== thisWeek) weeks = 0;
+    else if (days >= need - 1) {
+      // one day short: the count is safe but doesn't grow
+    } else if (wk !== thisWeek) weeks = Math.max(0, weeks - 1);
     best = Math.max(best, weeks);
   }
-  return { weeks, best, thisWeek: days, goal: Math.max(0, need), today: exercisedOn(state, kid, today, today) };
+  const goalNow = Math.max(0, need);
+  const keep = Math.max(0, goalNow - 1);
+  const status = days >= goalNow ? 'strong' : days >= keep ? 'safe' : 'short';
+  return { weeks, best, thisWeek: days, goal: goalNow, keep, status, today: exercisedOn(state, kid, today, today) };
 }
 
 // ---------- games with visiting buddies ----------
@@ -758,7 +768,7 @@ export const OLD_GAMES_PER_DAY = 8;
 export const SATURDAY_GAMES = 2;
 export const freeGamesOn = (key) => (dayOfWeek(key) === 6 ? SATURDAY_GAMES : 0);
 
-/** Games a kid may play with visitors in a day: 4, plus 2 for each week of the current exercise streak (up to 3). */
+/** Games a kid may play with visitors in a day: 4, plus 2 for each current strong week (up to 3). */
 export function gamesPerDay(exerciseWeeks = 0) {
   return GAMES_PER_DAY + 2 * Math.min(3, Math.max(0, Math.floor(exerciseWeeks)));
 }
