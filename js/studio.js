@@ -2372,15 +2372,18 @@ export const studioActions = {
   'st-nom-use': () => useNom(),
 };
 
-/** What the studio's sound is doing (for tests): { playing, recording, sounds, hearing, tracks (each track's loudness now, while it plays) }. */
+/** What the studio's sound is doing (for tests): { playing, recording, sounds, tracks (each track's loudness now, while it plays) }. */
 export function studioSound() {
-  return { playing: Boolean(A.play), recording: Boolean(A.rec), sounds: A.sources.size, hearing: S.hearing, ...(A.lanes ? { tracks: A.lanes.map((g) => g.gain.value) } : {}) };
+  return { playing: Boolean(A.play), recording: Boolean(A.rec), sounds: A.sources.size, ...(A.lanes ? { tracks: A.lanes.map((g) => g.gain.value) } : {}) };
 }
 
 /** The Note-o-Matic (for tests): { phase, progress, pick, worker (listening in a Worker) } or null. */
 export function studioNotes() {
   return S.nom && { phase: S.nom.phase, progress: S.nom.progress, pick: S.nom.pick, worker: Boolean(N.worker) };
 }
+
+/** What the studio is hearing on its own (for tests): '' or a key such as 'nom|tidy'. */
+export const studioHearing = () => S.hearing;
 
 /** The clicks of the recording under way (for tests): { rate, from, countIn, clicks } or null. */
 export function studioRec() {
