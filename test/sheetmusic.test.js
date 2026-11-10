@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SONGS, SHOW_SONGS } from '../js/songs.js';
+import { SONGS, SHOW_SONGS, barChords } from '../js/songs.js';
 import {
   keyInfo, keyLabel, chordNotes, chordLabel, splitLength, barEvents, meterOf, parseNote,
   songById, songAbc, melodyShift, SONGBOOK, songbookFor, PIECES_PER_TIER, stars, SWING_MARK,
@@ -132,11 +132,16 @@ for (const p of SONGBOOK) {
         assert.equal(left.length, song.lead.length);
         left.forEach((bar, i) => {
           assert.equal(bar.reduce((n, e) => n + e.len, 0), steps, `left hand bar ${i + 1}`);
-          // the left hand plays the chord named above the bar...
-          const keys = bar.flatMap((e) => e.chord || [e.midi]);
-          const want = chordNotes(song.chords[i]).map((t) => (NATURAL[t.letter] + t.alter + 12) % 12);
+          // the left hand plays the chord named above the bar (each of them, when two share it)...
+          const chords = barChords(song.chords[i], steps);
+          assert.deepEqual(bar.map((e) => e.len), chords.map((c) => c.len), `${hands} bar ${i + 1}: one left-hand chord for each chord name`);
           const sorted = (list) => [...list].sort((x, y) => x - y);
-          assert.deepEqual(sorted(keys.map((m) => m % 12)), sorted(hands === 'roots' ? want.slice(0, 1) : want), `${hands} bar ${i + 1}: ${song.chords[i]}`);
+          chords.forEach((c, k) => {
+            const want = chordNotes(c.name).map((t) => (NATURAL[t.letter] + t.alter + 12) % 12);
+            const played = bar[k].chord || [bar[k].midi];
+            assert.deepEqual(sorted(played.map((m) => m % 12)), sorted(hands === 'roots' ? want.slice(0, 1) : want), `${hands} bar ${i + 1}: ${c.name}`);
+          });
+          const keys = bar.flatMap((e) => e.chord || [e.midi]);
           if (hands === 'chords') assert.ok(Math.min(...keys) >= 40, `chords bar ${i + 1}: no lower than E2 (${keys})`);
           // ...below the right hand, so the hands never play the same keys
           const low = Math.min(...barEvents(song.lead[i]).filter((e) => e.note).map((e) => parseNote(e.note).midi + shift));
@@ -146,6 +151,66 @@ for (const p of SONGBOOK) {
     }
   });
 }
+
+test('two chords can share a bar: both names are written, each on its own note', () => {
+  assert.deepEqual(barChords('F'), [{ name: 'F', pos: 0, len: 8 }]);
+  assert.deepEqual(barChords('F Bb'), [{ name: 'F', pos: 0, len: 4 }, { name: 'Bb', pos: 4, len: 4 }]);
+  assert.deepEqual(barChords('Dm A', 6).map((c) => [c.pos, c.len]), [[0, 3], [3, 3]], 'a waltz bar is shared evenly too');
+  // every chord entry of every song can be read, and its chords start on whole steps
+  for (const s of [...Object.values(SONGS), ...Object.values(SHOW_SONGS)]) {
+    for (const entry of [...s.chords, ...(s.ending ? [s.ending.chord] : [])]) {
+      for (const c of barChords(entry, meterOf(s).steps)) {
+        assert.doesNotThrow(() => chordNotes(c.name), `${s.name}: ${entry}`);
+        assert.ok(Number.isInteger(c.pos) && Number.isInteger(c.len), `${s.name}: ${entry} splits the bar on a step`);
+      }
+    }
+  }
+  // Phoenix Fire, bar 4: F for two beats, then E under the A that falls to G sharp
+  assert.equal(SHOW_SONGS['bg-volcano'].chords[3], 'F E');
+  const bar4 = (abc, voice) => abc.split('\n').filter((l) => l.startsWith(`[V:${voice}]`)).join(' ').replace(/^\[V:\w\]\s*/, '').split('|')[3].trim();
+  const abc = songAbc('show:bg-volcano', { hands: 'chords', perLine: 8 });
+  assert.equal(bar4(abc, 'R'), '"F"c2 B2 "E"A2 ^G2');
+  assert.equal(bar4(abc, 'L'), '[F,A,C]4 [E,^G,B,]4');
+  assert.equal(bar4(songAbc('show:bg-volcano', { hands: 'roots', perLine: 8 }), 'L'), 'F,4 E,4');
+  // Dragon King Fanfare, bar 2: F, then B flat
+  assert.match(songAbc('show:bg-castle', { hands: 'melody', perLine: 8 }).split('|')[1], /^ "F"c2 cc "B♭"d2 B2 $/);
+  // a note held over the chord change is cut there and tied, so the second name has a note to sit on
+  SONGS['test-held'] = { name: 'Held', key: 'C', bpm: 100, lead: ['C5 - - - - - - -', 'E5 - G5 - - - . .'], chords: ['C F', 'C G'] };
+  try {
+    const held = songAbc('test-held', { hands: 'melody' });
+    assert.match(held, /"C"c4- "F"c4 \| "C"e2 g2- "G"g2 z2 \|\]/);
+    assert.deepEqual(readVoice(held, null, 'C').map((bar) => bar.reduce((n, e) => n + e.len, 0)), [8, 8]);
+  } finally {
+    delete SONGS['test-held'];
+  }
+});
+
+test('a loop that ends up in the air gets a closing bar on paper, and only there', () => {
+  const closed = ['bg-ocean', 'bg-space', 'bg-volcano'];
+  for (const p of SONGBOOK) {
+    const raw = p.kind === 'show' ? SHOW_SONGS[p.map] : SONGS[p.map];
+    const song = songById(p.id);
+    assert.equal(Boolean(raw.ending), closed.includes(p.id), `${p.name}: ${raw.ending ? 'has' : 'needs no'} closing bar`);
+    assert.equal(song.lead.length, raw.lead.length + (raw.ending ? 1 : 0));
+    assert.equal(song.chords.length, song.lead.length);
+    assert.equal(p.bars, song.lead.length, 'the songbook counts the bars on the page');
+    // on paper every piece ends at home: on its key's own chord, the melody on a note of it
+    const { tonic, mode } = keyInfo(song.key);
+    const home = `${tonic}${mode === 'minor' || mode === 'dorian' ? 'm' : ''}`;
+    const last = barChords(song.chords[song.chords.length - 1], meterOf(song).steps).pop().name;
+    assert.equal(last, home, `${p.name} ends on ${home}`);
+    if (raw.ending) {
+      assert.equal(barEvents(raw.ending.lead).reduce((n, e) => n + e.len, 0), meterOf(raw).steps, `${p.name}: a whole closing bar`);
+      const [note] = barEvents(raw.ending.lead);
+      assert.equal(note.len, meterOf(raw).steps, 'one long note');
+      assert.equal(parseNote(note.note).midi % 12, (NATURAL[LETTERS.indexOf(tonic[0])] + ({ '#': 1, b: -1 }[tonic[1]] || 0) + 12) % 12, `${p.name} ends on its home note`);
+    }
+  }
+  // the game's own song is untouched: 16 bars that go round
+  assert.equal(SONGS['bg-ocean'].lead.length, 16);
+  const waltz = songAbc('bg-ocean', { hands: 'chords', perLine: 4 });
+  assert.match(waltz.trim().split('\n').filter((l) => l.startsWith('[V:R]')).pop(), /"Dm"D6 \|\]$/);
+});
 
 test('the left hand sits on the bass staff, and the melody mostly on the treble staff', () => {
   for (const p of SONGBOOK) {

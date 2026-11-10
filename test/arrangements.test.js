@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readAbcBar, arrangementNotes, arrangementAbc, hasLevel, LEVELS } from '../js/arrange.js';
 import { ARRANGEMENTS } from '../js/arrangements.js';
 import { SONGBOOK, signature, songById, SWING_MARK } from '../js/sheetmusic.js';
-import { swingAt } from '../js/music.js';
+import { swingAt, stepChords } from '../js/music.js';
 import { checkArrangement, easyDensity } from './helpers/arrangement-check.mjs';
 
 const C = signature('C');
@@ -69,6 +69,36 @@ for (const [id, versions] of Object.entries(ARRANGEMENTS)) {
     }
   });
 }
+
+test('two chords in one bar: each has its name on the page, and the left hand follows both', () => {
+  // Phoenix Fire bar 4 (F, then E) and Dragon King Fanfare bar 2 (F, then B flat)
+  for (const [id, bar, names, tones] of [['show:bg-volcano', 3, ['"F"', '"E"'], [[5, 9, 0], [4, 8, 11]]], ['show:bg-castle', 1, ['"F"', '"B♭"'], [[5, 9, 0], [10, 2, 5]]]]) {
+    for (const level of ['medium', 'hard']) {
+      const abc = arrangementAbc(id, level, { perLine: 8 });
+      const right = abc.split('\n').find((l) => l.startsWith('[V:R]')).split('|')[bar];
+      assert.deepEqual(right.match(/"[^"]+"/g), names, `${id} ${level}: ${right}`);
+      // the second name sits on the note that starts the second half of the bar
+      const half = readAbcBar(right.slice(0, right.indexOf(names[1])), signature(songById(id).key));
+      assert.equal(half.length, 4, `${id} ${level}: the second chord's name is on beat 3`);
+      // and the left hand's notes belong to the chord of their half
+      for (const n of arrangementNotes(id, level).filter((x) => x.hand === 'lh' && Math.floor(x.start / 8) === bar)) {
+        assert.ok(tones[Math.floor((n.start % 8) / 4)].includes(n.midi % 12), `${id} ${level}: left-hand note ${n.midi} at eighth ${(n.start % 8) + 1}`);
+      }
+    }
+  }
+  // a version with nothing starting where the second chord starts is turned down
+  const version = { rh: [...ARRANGEMENTS['show:bg-volcano'].medium.rh], lh: ARRANGEMENTS['show:bg-volcano'].medium.lh };
+  version.rh[3] = '[FAc]2 B6';
+  assert.match(checkArrangement('show:bg-volcano', 'medium', version).errors.join('\n'), /bar 4: nothing starts on eighth 5, where the E chord starts/);
+});
+
+test('the game plays both chords of a shared bar, each for its half', () => {
+  const F = [5, 9, 12];
+  const E = [4, 8, 11];
+  assert.deepEqual(stepChords('F', 8), Array(8).fill(F));
+  assert.deepEqual(stepChords('F E', 8), [F, F, F, F, E, E, E, E]);
+  assert.deepEqual(stepChords('F E', 6), [F, F, F, E, E, E]);
+});
 
 test('levels: easy always, medium and hard where written', () => {
   assert.deepEqual(LEVELS, ['easy', 'medium', 'hard']);

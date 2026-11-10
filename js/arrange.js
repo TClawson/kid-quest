@@ -6,6 +6,7 @@
 
 import { ARRANGEMENTS } from './arrangements.js';
 import { songById, signature, meterOf, chordLabel, SWING_MARK } from './sheetmusic.js';
+import { barChords } from './songs.js';
 
 const LETTERS = 'CDEFGAB';
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
@@ -25,9 +26,9 @@ export const hasLevel = (id, level) => level === 'easy' || Boolean(ARRANGEMENTS[
  * decorations ('!p!', '!f!', '.' staccato) and spaces (beaming) are allowed and skipped.
  * Accidentals hold for the rest of the bar, for the same note on the same line or space, on
  * top of the key signature (sig: an alteration per letter, from signature()).
- * Returns { events: [{ start, len, notes: [{ letter, alter, octave, midi }], tie }] (a rest
- * has no notes), length (eighths), first (where the first note, chord or rest starts in the
- * text), errors: [text] }.
+ * Returns { events: [{ start, len, notes: [{ letter, alter, octave, midi }], tie, col }] (a
+ * rest has no notes; col is where it starts in the text), length (eighths), first (where the
+ * first note, chord or rest starts in the text), errors: [text] }.
  */
 export function readAbcBar(text, sig) {
   const events = [];
@@ -106,7 +107,7 @@ export function readAbcBar(text, sig) {
     if (/^[<>]/.test(s.slice(i))) { errors.push(`broken rhythm (> <) isn't supported: ${s.slice(start, i + 2)}`); i += 1; }
     if (!(len > 0)) errors.push(`a bad length at "${s.slice(start, i)}"`);
     if (first < 0) first = start;
-    events.push({ start: at, len, notes, tie: tie && notes.length > 0 });
+    events.push({ start: at, len, notes, tie: tie && notes.length > 0, col: start });
     at += len;
   }
   return { events, length: at, first: first < 0 ? 0 : first, errors };
@@ -173,8 +174,15 @@ export function arrangementAbc(id, level, o = {}, version = ARRANGEMENTS[id]?.[l
 
   let carried = null; // the top note a tie from the bar before carries on
   const right = arr.rh.map((text, b) => {
-    const { first } = readAbcBar(text, sig);
-    return `${text.slice(0, first)}"${chordLabel(song.chords[b])}"${text.slice(first)}`.trim();
+    const { events } = readAbcBar(text, sig);
+    let out = text;
+    // each chord's name goes on the note (or rest) that starts with it, or the first one after;
+    // from the bar's last chord back, so the places found in the text stay right
+    for (const c of barChords(song.chords[b], meter.steps).reverse()) {
+      const e = events.find((x) => x.start >= c.pos - 1e-6);
+      if (e) out = `${out.slice(0, e.col)}"${chordLabel(c.name)}"${out.slice(e.col)}`;
+    }
+    return out.trim();
   });
   const words = arr.rh.map((text) => {
     const names = [];

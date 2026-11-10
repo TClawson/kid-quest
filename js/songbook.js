@@ -10,6 +10,7 @@
 
 import { ui, state, esc, kidById, render, progressFor, toast, viewKid } from './ctx.js';
 import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars, PIECES_PER_TIER } from './sheetmusic.js';
+import { barChords } from './songs.js';
 import { treasureFound } from './treasure.js';
 import { musicTier, MUSIC_TIERS } from './musicrules.js';
 import { itemById } from './items.js';
@@ -187,7 +188,7 @@ export function leadSheetHtml(id, per = 4) {
   const song = songById(id);
   const bars = song.lead.map((bar, i) => {
     const notes = barEvents(bar).map((e) => (e.note ? e.note.replace(/\d/, '').replace('#', '♯').replace(/^([A-G])b$/, '$1♭') : '·')).join(' ');
-    return `<div class="lead-bar abcjs-mm${i}"><b>${esc(chordLabel(song.chords[i]))}</b><span>${esc(notes)}</span></div>`;
+    return `<div class="lead-bar abcjs-mm${i}"><b>${esc(barChords(song.chords[i]).map((c) => chordLabel(c.name)).join(' '))}</b><span>${esc(notes)}</span></div>`;
   });
   return `<div class="lead-sheet" style="--per:${per}">${bars.join('')}</div>`;
 }

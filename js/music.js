@@ -1,7 +1,7 @@
 // Background music for the quest map: one original 16-bar chiptune loop per map theme,
 // synthesized live with Web Audio (pulse waves, a triangle bass and noise drums, like old
 // consoles). No audio files. A small look-ahead scheduler keeps the timing steady.
-import { SONGS, SHOW_SONGS } from './songs.js';
+import { SONGS, SHOW_SONGS, barChords } from './songs.js';
 
 const VOLUME = 0.07;
 const SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -24,19 +24,41 @@ function chordTones(name) {
   return [root, root + third, root + fifth];
 }
 
-/** Compile a song once: bars of note tokens, chords to pitch classes. */
+/** A bar's chords ('F', or 'F E' for two that share the bar) as the chord's tones at every step. */
+export function stepChords(entry, beat) {
+  const parts = barChords(entry, beat).map((c) => chordTones(c.name));
+  return Array.from({ length: beat }, (_, i) => parts[Math.floor((i * parts.length) / beat)]);
+}
+
+/** Compile a song once: bars of note tokens, and the chord's pitch classes at every step. */
 const compiled = new Map();
 function compile(id) {
   if (compiled.has(id)) return compiled.get(id);
   const s = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] || SHOW_SONGS['bg-meadow'] : SONGS[id] || SONGS['bg-meadow'];
+  const beat = s.beat || 8;
   const song = {
     ...s,
-    beat: s.beat || 8,
+    beat,
     lead: s.lead.map((bar) => bar.split(' ')),
-    chords: s.chords.map(chordTones),
+    chords: s.chords.map((entry) => stepChords(entry, beat)),
   };
   compiled.set(id, song);
   return song;
+}
+
+/**
+ * A song as its sheet music has it: with its closing bar (songs.js: ending) after the loop,
+ * if it has one. loop is how many bars go round in the game.
+ */
+function compilePiece(id) {
+  const song = compile(id);
+  if (!song.ending) return song;
+  return {
+    ...song,
+    loop: song.lead.length,
+    lead: [...song.lead, song.ending.lead.split(' ')],
+    chords: [...song.chords, stepChords(song.ending.chord, song.beat)],
+  };
 }
 
 // ---------- sound sources ----------
@@ -137,25 +159,37 @@ function holdLength(bar, i) {
 
 /**
  * Schedule one step (an eighth note) of a song at time t.
- * Song fields (see songs.js): beat (steps a bar), lead, chords, leadWave, leadVol, leadEnv,
+ * Song fields (see songs.js): beat (steps a bar), lead, chords (compiled: the chord's tones at
+ * every step of every bar), loop (bars that go round, before a closing bar), leadWave, leadVol, leadEnv,
  * arp { wave, from, octave, order, vol }, bass (one [chordToneIndex, octave] or null per step),
  * drums (patterns of k kick, s snare, h hat, o open hat, t tom; split evenly over the 16 bars), swing.
  */
 function scheduleStep(r, song, s, t) {
   const { beat } = song;
-  const bars = song.lead.length;
-  const barIndex = Math.floor(s / beat) % bars;
+  const bars = song.loop || song.lead.length; // the bars that go round
+  const barIndex = Math.floor(s / beat) % song.lead.length;
   const i = s % beat;
   const step = r.seconds;
   // swing pushes every second eighth a little later
   const at = t + (i % 2 ? (song.swing || 0) * step : 0);
   const bar = song.lead[barIndex];
-  const tones = song.chords[barIndex];
+  const tones = song.chords[barIndex][i];
 
   // lead (pulse 1)
   const n = bar[i];
   if (n !== '-' && n !== '.') {
     voice(r, song.leadWave || 'square', hz(midi(n)), at, holdLength(bar, i) * step * 0.95, song.leadVol ?? 0.32, song.leadEnv, r.lead);
+  }
+
+  // the closing bar the sheet music adds after the loop: the band lands on one held chord
+  if (barIndex >= bars) {
+    if (i === 0) {
+      voice(r, 'triangle', hz(tones[0] + 36), at, step * beat * 0.9, 0.55);
+      tones.forEach((tone, k) => voice(r, song.arp?.wave || 'square', hz(tone + 60), at + k * 0.03, step * beat * 0.8, (song.arp?.vol ?? 0.07) * 0.8));
+      drum(r, at, 'k', song.drumVol ?? 1);
+      drum(r, at, 'o', song.drumVol ?? 1);
+    }
+    return;
   }
 
   // arpeggio (pulse 2), two notes per step
@@ -278,7 +312,7 @@ export async function renderSong(theme, loops = 1, sampleRate = 44100) {
 export function playPiece(id, { tempo = 1 } = {}) {
   const a = context();
   if (!a) return null;
-  const song = compile(id);
+  const song = compilePiece(id);
   const step = 60 / song.bpm / 2 / tempo;
   const steps = song.lead.length * song.beat;
   const master = a.createGain();

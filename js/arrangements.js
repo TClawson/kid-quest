@@ -17,13 +17,15 @@ export const ARRANGEMENTS = {
         '!mp! A,3 C [A,CE]4', '[A,F]2 [CE]2 [A,C]3 E', '[EG]3 F [CE]2 C2', '[B,D]6 EG',
         '[CEA]4 [EB]2 [Ac]2', '[FA]3 G [A,F]4', '[B,G]2 [DB]2 [Bd]4', '[GB]6 AB',
         '!mf! [FAc]2 B2 [FA]2 [CF]2', '[Bd]2 c2 [GB]2 [DG]2', '[EAce]4 [Ec]2 [CA]2', '[EB]2 [Ec]2 [Gce]4',
-        '!f! [FAcf]2 [Ee]2 [Cc]2 [A,A]2', '[B,G]2 [DB]2 [GBd]4', '[B,E^G]3 A [EGB]4', '[E^GBe]4 [EAce]4',
+        '!f! [FAcf]2 [Ee]2 [Cc]2 [A,A]2', '[B,G]2 [DB]2 [GBd]4', '[B,E^G]3 A [EGB]4', '[E^GBe]4 [D^GB]4',
+        '!fermata![CEA]8',
       ],
       lh: [
         'A,,E,C,E, A,,E,C,E,', 'F,,C,A,,C, F,,C,A,,C,', 'C,G,E,G, C,G,E,G,', 'G,,D,B,,D, G,F,E,D,',
         'A,,E,C,E, A,,E,A,E,', 'F,,C,F,C, A,,C,F,C,', 'G,,D,G,D, B,,D,G,D,', 'E,,B,,E,B,, G,,B,,E,B,,',
         'F,,C,F,C, A,,C,F,C,', 'G,,D,G,D, B,,D,G,D,', 'A,,E,A,E, A,,E,C,E,', 'C,G,E,G, C,G,E,G,',
-        'F,,F,F,,F, F,,F,F,,F,', 'G,,G,G,,G, G,,G,G,,G,', 'E,,E,E,,E, E,,E,E,,E,', '[E,,B,,E,]4 [A,,E,A,]4',
+        'F,,F,F,,F, F,,F,F,,F,', 'G,,G,G,,G, G,,G,G,,G,', 'E,,E,E,,E, E,,E,E,,E,', '[E,,B,,E,]4 [E,,E,]4',
+        '!fermata![A,,E,A,]8',
       ],
     },
     hard: {
@@ -31,13 +33,15 @@ export const ARRANGEMENTS = {
         '!mp! A,2 (E/A/c/e/) E2 (e/c/A/E/)', '[A,F]2 [CE]2 C2 (F/A/c/A/)', 'G2 (c/e/g/e/) [CE]2 C2', '[B,D]4 (G,/A,/B,/C/ D/E/F/G/)',
         '!mf! [CEA]2 (E/A/c/e/) [EB]2 [EAc]2', '[CFA]2 (F/A/c/A/) [CF]2 (c/A/F/C/)', '[B,DG]2 [DGB]2 [GBd]2 (g/d/B/G/)', '[EGB]3 [EGB]- [EGB]2 AB',
         '!mp! [Ac]F [GB]F [FA]C FC', '[Bd]G [Ac]G [GB]D GD', '[ce]A EA [Ac]E [EA]C', '[GB]E [Gc]E [Gce]2 (G/c/e/g/)',
-        '!f! [Ff]c [Ee]c [Cc]A [A,A]F', '[B,DG]2 [DGB]2 [DGBd]2 (g/d/B/G/)', '[B,E^G]3 [EGB]- [EGB]2 [EGB]2', '[E^GBe]2 (e/d/c/B/) [A,CEA]4',
+        '!f! [Ff]c [Ee]c [Cc]A [A,A]F', '[B,DG]2 [DGB]2 [DGBd]2 (g/d/B/G/)', '[B,E^G]3 [EGB]- [EGB]2 [EGB]2', '[E^GBe]2 (e/d/c/B/) [D^GB]4',
+        '!fermata![A,CEA]8',
       ],
       lh: [
         'A,,E,C,E, A,,E,A,,G,,', 'F,,C,A,,C, F,,C,F,D,', 'C,G,E,G, C,G,E,A,,', 'G,,D,B,,D, G,,D,F,D,',
         'A,,2 [C,E,A,]2 E,,2 [C,E,A,]2', 'F,,2 [C,F,A,]2 C,,2 [C,F,A,]2', 'G,,2 [D,G,B,]2 D,,2 [D,G,B,]2', 'E,,2 [E,G,B,]2 (E,/G,/B,/G,/) E,2',
         'F,,3 [C,F,A,]- [C,F,A,]2 [C,F,A,]2', 'G,,3 [D,G,B,]- [D,G,B,]2 [D,G,B,]2', 'A,,E,A,E, C,E,A,,G,,', 'C,G,E,G, C,E, G,,2',
-        '[F,,F,]2 [C,F,A,]2 [C,,C,]2 [C,F,]2', '[G,,G,]2 [D,G,B,]2 D,,2 [D,G,B,]2', '[E,,E,]2 [^G,,^G,]2 [B,,B,]2 [D,,D,]2', '[E,,E,]2 [E,^G,D]2 [A,,E,]4',
+        '[F,,F,]2 [C,F,A,]2 [C,,C,]2 [C,F,]2', '[G,,G,]2 [D,G,B,]2 D,,2 [D,G,B,]2', '[E,,E,]2 [^G,,^G,]2 [B,,B,]2 [D,,D,]2', '[E,,E,]2 [E,^G,D]2 [E,,B,,E,]4',
+        '!fermata![A,,,E,,A,,]8',
       ],
     },
   },
@@ -110,13 +114,15 @@ export const ARRANGEMENTS = {
         '!p! [FA]2 [Fd]2 [Af]2', '[df]2 [Bd]2 [DB]2', '[FA]2 [Fc]2 [Af]2', '[Gce]4 (g/2e/2c/2e/2)',
         '[Ad]3 f [fa]2', '[dfb]2 [fa]2 [df]2', '!mf! [Bdg]2 [dgb]2 [gbd\']2', '[^cea^c\']4 [cea]2',
         '!mp! [fac\']2 [ca]2 [Af]2', '[cg]2 [ce]2 [Ec]2', '[Fd]2 [Af]2 [fa]c\'', '[dfb]3 (a/2g/2 [df]2)',
-        '!p! [Bg]3 [ca] [db]2', '[^ca]2 [eg]2 [ce]2', '[FAd]4 (A/2d/2f/2a/2)', '[^ce]2 [Ac]2 !fermata![EAce]2',
+        '!p! [Bg]3 [ca] [db]2', '[^ca]2 [eg]2 [ce]2', '[FAd]4 (A/2d/2f/2a/2)', '[^ce]2 [Ac]2 [EAce]2',
+        '!fermata![FAd]6',
       ],
       lh: [
         'D,F, A,D A,F,', 'B,,D, F,B, F,D,', 'F,,C, F,A, F,C,', 'C,E, G,C G,E,',
         'D,F, A,D A,F,', 'B,,D, F,B, F,D,', 'G,,D, G,B, G,D,', 'A,,^C, E,A, E,C,',
         'F,A, CA, F,A,', 'E,G, CG, E,G,', 'D,A, DA, F,A,', 'B,,F, B,F, D,F,',
-        'G,,D, G,D, B,,D,', 'A,,E, A,G, E,^C,', 'D,A, DA, F,A,', 'A,,E, A,E, !fermata![A,,E,A,]2',
+        'G,,D, G,D, B,,D,', 'A,,E, A,G, E,^C,', 'D,A, DA, F,A,', 'A,,E, A,E, [A,,E,A,]2',
+        '!fermata![D,A,]6',
       ],
     },
     hard: {
@@ -124,13 +130,15 @@ export const ARRANGEMENTS = {
         '!p! [FA]2 [Fd]e [Af]2', '[df]2 [Bd]2 (B/A/G/B/)', '[FA]2 [Fc]d/e/ [Af]2', '[Gce]2 (c/e/g/c\'/ e\'/c\'/g/e/)',
         '!mp! [Ad]2 [df]g [fa]2', '[dfb]2 [fa]g [df]2', '!mf! [Bdg]2 [dgb]2 [gbd\']2', '!f! [^cea^c\']2 (c/e/a/c\'/) [cea]2',
         '!mp! [ac\']c [fa]A [cf]F', '[eg]G [ce]E [Gc]C', '[Fd]D [Af]F [fa][ac\']', '[dfb]2 (a/b/a/g/) [df]2',
-        '!mf! [Bdg]2 [da]2 [dgb]2', '[^cea]2 [ceg]f [Ace]2', '!p! [FAd]2 (d/f/a/d\'/ f\'/d\'/a/f/)', '[A^ce]2 [EAc]2 !fermata![Ace]2',
+        '!mf! [Bdg]2 [da]2 [dgb]2', '[^cea]2 [ceg]f [Ace]2', '!p! [FAd]2 (d/f/a/d\'/ f\'/d\'/a/f/)', '[A^ce]2 [EAc]2 [Ace]2',
+        '!fermata![DFAd]6',
       ],
       lh: [
         'D,,A,, F,A, DA,', 'B,,F, DF, B,F,', 'F,,C, F,A, CA,', 'C,,G,, E,G, CG,',
         'D,,2 [F,A,D]2 [F,A,D]2', 'B,,2 [F,B,D]2 [F,B,D]2', '[G,,G,]2 [G,B,D]2 [G,B,D]2', '[A,,A,]2 [E,G,^C]2 A,,G,,',
         'F,,C, A,C, A,C,', 'C,,G,, E,G,, E,G,,', 'D,,A,, F,A,, F,A,,', 'B,,F, DF, DF,',
-        '[G,,G,]2 [D,G,B,]2 [B,,B,]2', '[E,A,^C]2 [A,,A,]2 [E,G,C]2', 'D,,A,, F,A, DA,', 'A,,E, A,^C !fermata![A,,E,A,]2',
+        '[G,,G,]2 [D,G,B,]2 [B,,B,]2', '[E,A,^C]2 [A,,A,]2 [E,G,C]2', 'D,,A,, F,A, DA,', 'A,,E, A,^C [A,,E,A,]2',
+        '!fermata![D,,A,,D,]6',
       ],
     },
   },
@@ -173,12 +181,14 @@ export const ARRANGEMENTS = {
         '[B,E]2 [B,E][EG]- [EG][B,E] [GB]2', '[Ec]2 [GB]2 [Ec]2 [Gce]2', '[Fd]2 [Fc]2 [DB]2 [DA]2', '[^DFB]4 [B,D]2 [B,F]2',
         '!mp! [EG]2 [CE]2 [EG]2 [EGc]2', '[FA]2 [DF]2 [FA]2 [FAd]2', '!mf! [GB]2 [EG]2 [GB]2 [GBe]2', '[Be]2 [Bd]2 [GB]2 G/2A/2B',
         '!f! [CGc]4 [Ece]2 [CGc]2', '[DAd]4 [Fdf]2 [DAd]2', '[^DB^d]4 [DFB]2 [B,DF]2', '[^DFB]2 [DFA]2 [DG]2 [B,DF]2',
+        '!fermata![G,B,E]8',
       ],
       lh: [
         'E,,E,, E,E,, E,,E, B,,E,,', 'C,,C,, C,C,, C,,C, G,,C,,', 'D,,D,, D,D,, D,,D, A,,D,,', 'E,,E,, E,E,, E,,E, B,,B,,',
         'E,,E,, E,E,, E,,E, B,,E,,', 'C,,C,, C,C,, C,,C, G,,C,,', 'D,,D,, D,D,, D,,D, A,,D,,', 'B,,,B,,, B,,B,,, B,,,B,, F,,B,,',
         'C,,G,, C,G,, C,,G,, C,G,,', 'D,,A,, D,A,, D,,A,, D,A,,', 'E,,B,, E,B,, E,,B,, E,B,,', 'G,,D, G,D, G,,D, G,D,',
         'C,,C, C,,C, C,,C, C,,C,', 'D,,D, D,,D, D,,D, D,,D,', 'B,,,B,, B,,,B,, B,,,B,, B,,,B,,', 'B,,,B,, B,,,B,, B,,,B,, [B,,,B,,]2',
+        '!fermata![E,,E,]8',
       ],
     },
     hard: {
@@ -187,12 +197,14 @@ export const ARRANGEMENTS = {
         '!f! [EBe]2 [Ee][GBg]- [GBg][Ee] [Beb]2', '[cc\']g [Bb]g [cc\']g [ege\']2', '[dd\']a [cc\']a [Bb]f [Adfa]2', '[B^db]4 [^DFd]2 [FBf]2',
         '!mp! [EG]C [CE]G, [EG]C [Ec]G', '[FA]D [DF]A, [FA]D [Fd]A', '!mf! [GB]E [EG]B, [GB]E [Ge]B', '[Be]G [Bd]G [GB]D G/2A/2B',
         '!f! [cegc\']3 [cgc\'] [ec\'e\']2 [cgc\']2', '[dfad\']3 [dad\'] [fd\'f\']2 [dad\']2', '[^dfb^d\']3 [dbd\'] [Bdfb]2 [FBdf]2', '[B^dfb]2 [Adfa]2 [GBeg]2 [FBdf]2',
+        '!fermata![EGBe]8',
       ],
       lh: [
         'E,,E, G,,E, B,,E, G,,E,', 'C,,C, E,,C, G,,C, E,,C,', 'D,,D, F,,D, A,,D, F,,D,', 'E,,E, G,,E, [C,,C,]2 [B,,,B,,]2',
         '[E,,E,]2 G,,E, B,,E, G,,E,', '[C,,C,]2 E,,C, G,,C, E,,C,', '[D,,D,]2 F,,D, A,,D, C,,D,', 'B,,,F,, B,,^D, F,D, B,,F,,',
         'C,,G,, E,G,, C,,G,, E,G,,', 'D,,A,, F,A,, D,,A,, F,A,,', 'E,,B,, G,B,, E,,B,, G,B,,', 'G,,D, B,D, G,,D, B,D,',
         'C,,C, E,,E, G,,G, E,,E,', 'D,,D, F,,F, A,,A, F,,F,', 'B,,,B,, ^D,,^D, F,,F, D,,D,', '[B,,B,]2 [A,,A,]2 [G,,G,]2 [B,,,B,,]2',
+        '!fermata![E,,B,,E,]8',
       ],
     },
   },
@@ -316,21 +328,21 @@ export const ARRANGEMENTS = {
   'show:bg-castle': {
     medium: {
       rh: [
-        '!f! [B,DF]2 [B,DF][B,DF] [B,DFB]4', '[FAc]2 [FAc][FAc] [FAd]2 [CFB]2', '[GBe]2 [GBd]2 [EGc]2 [EGB]2', '[FAc]4 [A,CF]2 z F/2A/2',
+        '!f! [B,DF]2 [B,DF][B,DF] [B,DFB]4', '[FAc]2 [FAc][FAc] [FBd]2 [DFB]2', '[GBe]2 [GBd]2 [EGc]2 [EGB]2', '[FAc]4 [A,CF]2 z F/2A/2',
         '[B,DFB]2 [DFBd]2 [FBdf]4',
       ],
       lh: [
-        'B,,,F,, B,,F,, B,,,F,, B,,F,,', 'F,,C, F,C, F,,C, F,C,', 'E,,B,, E,B,, E,,B,, E,B,,', 'F,,C, F,C, E,C, A,,F,,',
+        'B,,,F,, B,,F,, B,,,F,, B,,F,,', 'F,,C, F,C, B,,,F,, B,,F,,', 'E,,B,, E,B,, E,,B,, E,B,,', 'F,,C, F,C, E,C, A,,F,,',
         'B,,,F,, B,,F,, [B,,,B,,]4',
       ],
     },
     hard: {
       rh: [
-        '!f! [FBdf]2 [Fdf][Fdf] [Bdfb]2 f/2g/2a/2b/2', '[cfac\']2 [cac\'][cac\'] [dfad\']2 [Bdfb]2', '!mf! [egbe\']2 [dgbd\']2 [cegc\']2 [Begb]2', '[cfac\']4 [FAcf]2 c/2f/2g/2a/2',
+        '!f! [FBdf]2 [Fdf][Fdf] [Bdfb]2 f/2g/2a/2b/2', '[cfac\']2 [cac\'][cac\'] [dfbd\']2 [Bdfb]2', '!mf! [egbe\']2 [dgbd\']2 [cegc\']2 [Begb]2', '[cfac\']4 [FAcf]2 c/2f/2g/2a/2',
         '!f! [Bdfb]2 [dfbd\']2 [fbd\'f\']4',
       ],
       lh: [
-        '[B,,,B,,]2 [D,F,B,]2 [F,,F,][F,,F,] [B,,,B,,]2', '[F,,F,]2 [F,A,C]2 [A,,A,]2 [F,,C,F,]2', '[E,,E,]2 G,,B,, E,G, B,,G,,', 'F,,/2G,,/2A,,/2B,,/2 C,/2D,/2E,/2F,/2 [F,A,C]2 [F,,F,]2',
+        '[B,,,B,,]2 [D,F,B,]2 [F,,F,][F,,F,] [B,,,B,,]2', '[F,,F,]2 [F,A,C]2 [B,,,B,,]2 [D,F,B,]2', '[E,,E,]2 G,,B,, E,G, B,,G,,', 'F,,/2G,,/2A,,/2B,,/2 C,/2D,/2E,/2F,/2 [F,A,C]2 [F,,F,]2',
         '[B,,,B,,]2 [D,,D,]2 [F,,F,][F,,F,] [B,,,B,,]2',
       ],
     },
@@ -339,21 +351,21 @@ export const ARRANGEMENTS = {
   'show:bg-volcano': {
     medium: {
       rh: [
-        'z4 ecAE', '!mf! [CEA]3 E [CEA]B [EAc]2', '[DGB]3 G [DGB]c [GBd]2', '[FAc]2 B2 [FA]2 ^GB',
+        'z4 ecAE', '!mf! [CEA]3 E [CEA]B [EAc]2', '[DGB]3 G [DGB]c [GBd]2', '[FAc]2 [DFB]2 [EA]2 [E^G]B',
         '!f! [CEA]2 [EAce]2 [Acea]4',
       ],
       lh: [
-        '!mp! [A,,A,]2 [A,,A,]2 [A,,A,]2 [A,,A,][A,,A,]', 'A,,E,A,E, A,,E,A,E,', 'G,,D,G,D, G,,D,G,D,', 'F,,C,F,A,, F,,C,E,,B,,',
+        '!mp! [A,,A,]2 [A,,A,]2 [A,,A,]2 [A,,A,][A,,A,]', 'A,,E,A,E, A,,E,A,E,', 'G,,D,G,D, G,,D,G,D,', 'F,,C,F,C, E,,B,,E,B,,',
         'A,,E,A,E, [A,,E,A,]4',
       ],
     },
     hard: {
       rh: [
-        'z!mp![CEA] z[EAc] z[Ace] [ce][ea]', '!mf! [Acea]2 [Ac]e [Acea]2 [ceac\']2', '[Bdgb]2 [Bd]g [Bdgb]2 [dgbd\']2', '!f! [ceac\']2 [Bdgb]2 [Acfa]2 [^GBe^g]2',
+        'z!mp![CEA] z[EAc] z[Ace] [ce][ea]', '!mf! [Acea]2 [Ac]e [Acea]2 [ceac\']2', '[Bdgb]2 [Bd]g [Bdgb]2 [dgbd\']2', '!f! [cfac\']2 [Bdfb]2 [Aea]2 [^GBe^g]2',
         '[Acea]2 [eac\'e\']2 [ac\'e\'a\']4',
       ],
       lh: [
-        '[A,,A,]2 [E,,E,]2 [A,,A,]2 [E,,E,][E,,E,]', 'A,,E,A,C ECA,E,', 'G,,D,G,B, DB,G,D,', 'F,,F, G,,G, A,,A, E,,E,',
+        '[A,,A,]2 [E,,E,]2 [A,,A,]2 [E,,E,][E,,E,]', 'A,,E,A,C ECA,E,', 'G,,D,G,B, DB,G,D,', 'F,,F, C,F, E,,E, B,,E,',
         'A,,E, A,C [A,,E,A,]2 [A,,,A,,]2',
       ],
     },
