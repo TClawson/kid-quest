@@ -164,8 +164,9 @@ function holdLength(bar, i) {
  * every step of every bar), loop (bars that go round, before a closing bar), leadWave, leadVol, leadEnv,
  * arp { wave, from, octave, order, vol }, bass (one [chordToneIndex, octave] or null per step),
  * drums (patterns of k kick, s snare, h hat, o open hat, t tom; split evenly over the 16 bars), swing.
+ * only: just one part ('lead', 'arp', 'bass' or 'drums'), for the recording studio.
  */
-function scheduleStep(r, song, s, t) {
+function scheduleStep(r, song, s, t, only = null) {
   const { beat } = song;
   const bars = song.loop || song.lead.length; // the bars that go round
   const barIndex = Math.floor(s / beat) % song.lead.length;
@@ -178,7 +179,7 @@ function scheduleStep(r, song, s, t) {
 
   // lead (pulse 1)
   const n = bar[i];
-  if (n !== '-' && n !== '.') {
+  if ((!only || only === 'lead') && n !== '-' && n !== '.') {
     voice(r, song.leadWave || 'square', hz(midi(n)), at, holdLength(bar, i) * step * 0.95, song.leadVol ?? 0.32, song.leadEnv, r.lead);
   }
 
@@ -195,7 +196,7 @@ function scheduleStep(r, song, s, t) {
 
   // arpeggio (pulse 2), two notes per step
   const arp = song.arp;
-  if (arp && barIndex >= (arp.from || 0)) {
+  if (arp && (!only || only === 'arp') && barIndex >= (arp.from || 0)) {
     // four notes to a beat either way, so the pattern keeps the song's beat (three would turn
     // around every dotted eighth and sound like a rhythm of its own)
     const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 2, 1, 2];
@@ -209,9 +210,10 @@ function scheduleStep(r, song, s, t) {
 
   // bass (triangle)
   const b = song.bass[i];
-  if (b) voice(r, 'triangle', hz(tones[b[0]] + (b[1] + 1) * 12), at, step * (b[2] || 0.9), 0.55);
+  if (b && (!only || only === 'bass')) voice(r, 'triangle', hz(tones[b[0]] + (b[1] + 1) * 12), at, step * (b[2] || 0.9), 0.55);
 
   // drums
+  if (only && only !== 'drums') return;
   const sets = song.drums;
   const set = sets[Math.min(sets.length - 1, Math.floor((barIndex * sets.length) / bars))];
   const fill = song.fill && barIndex === bars - 1 ? song.fill : null;
@@ -300,6 +302,34 @@ export async function renderSong(theme, loops = 1, sampleRate = 44100) {
   const r = rig(off, master, song, step);
   for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s % (song.lead.length * song.beat), 0.05 + s * step);
   return off.startRendering();
+}
+
+// ---------- the recording studio (see studio.js) ----------
+
+/** The parts of a song the studio can use on their own: the tune, the arpeggio, the bass, the drums. */
+export function songParts(id) {
+  const song = compile(id);
+  return ['lead', ...(song.arp ? ['arp'] : []), ...(song.bass.some(Boolean) ? ['bass'] : []), ...(song.drums.some((set) => set.some((line) => /[^.]/.test(line))) ? ['drums'] : [])];
+}
+
+/**
+ * One part of a song, once through, as an AudioBuffer at the studio's speed (bpm). The
+ * arpeggio plays from the first bar (in the game it waits a few bars). Peaks at about `peak`.
+ */
+export async function renderPart(id, part, bpm, sampleRate = 44100, peak = 0.5) {
+  const base = compile(id);
+  const song = part === 'arp' && base.arp ? { ...base, arp: { ...base.arp, from: 0 } } : base;
+  const step = 60 / bpm / 2;
+  const steps = song.lead.length * song.beat;
+  const off = new OfflineAudioContext(1, Math.ceil((steps * step + (song.echo && part === 'lead' ? 1.5 : 0.3)) * sampleRate), sampleRate);
+  const r = rig(off, off.destination, song, step);
+  for (let s = 0; s < steps; s += 1) scheduleStep(r, song, s, s * step, part);
+  const buf = await off.startRendering();
+  const data = buf.getChannelData(0);
+  let top = 0;
+  for (let i = 0; i < data.length; i += 1) top = Math.max(top, Math.abs(data[i]));
+  if (top > 0) for (let i = 0; i < data.length; i += 1) data[i] *= peak / top;
+  return buf;
 }
 
 // ---------- the sheet music stand (see songbook.js) ----------
