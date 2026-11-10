@@ -3,9 +3,10 @@
 // plays the melody (moved down an octave or two when it sits high above the staff), the
 // chord names go above it, and an easy left hand (root notes or chords) goes on a bass
 // staff below. Also the songbook itself: which pieces there are, how hard each is, and
-// which unlock with each piano. Pure logic, no DOM.
+// which unlock with each piano (the first piano opens every map song, the upright piano the
+// secret shows' tunes, and a finished treasure map opens its show's tune early). Pure logic, no DOM.
 
-import { SONGS, SHOW_SONGS } from './songs.js';
+import { SONGS, SHOW_SONGS, barChords } from './songs.js';
 
 const LETTERS = 'CDEFGAB';
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
@@ -139,9 +140,17 @@ export function barEvents(bar) {
 
 // ---------- the songbook ----------
 
-/** A piece's song data: 'bg-meadow' is a map song, 'show:bg-meadow' a secret show's tune. */
+const onPaper = new Map();
+/**
+ * A piece's song data as its sheet music has it: 'bg-meadow' is a map song, 'show:bg-meadow' a
+ * secret show's tune. A song with a closing bar (songs.js: ending) has it here as its last
+ * bar; the game's loop never plays it.
+ */
 export function songById(id) {
-  return id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] : SONGS[id];
+  const song = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] : SONGS[id];
+  if (!song?.ending) return song;
+  if (!onPaper.has(id)) onPaper.set(id, { ...song, lead: [...song.lead, song.ending.lead], chords: [...song.chords, song.ending.chord] });
+  return onPaper.get(id);
 }
 
 const BLACK = new Set([1, 3, 6, 8, 10]); // the black keys, as notes in the octave from C
@@ -190,34 +199,31 @@ export function difficulty(song) {
 
 /**
  * Every piece in the songbook: { id, name, key, bars, kind ('map' or 'show'), map (the map's
- * background id), level (difficulty), tier }. The map songs come first, easiest first, a third
- * of them opened by each piano (tier 1-3). Then the secret shows' tunes, easiest first (tier
- * null): each opens with its treasure map, whatever the piano.
+ * background id), level (difficulty), tier (the piano that opens it) }. The map songs come
+ * first, easiest first, all opened by the first piano (tier 1). Then the secret shows' tunes,
+ * easiest first, opened by the upright piano (tier 2). The rock star piano opens nothing new yet.
  */
 export const SONGBOOK = (() => {
   const all = [
     ...Object.entries(SONGS).map(([map, s]) => ({ id: map, map, kind: 'map', song: s })),
     ...Object.entries(SHOW_SONGS).map(([map, s]) => ({ id: `show:${map}`, map, kind: 'show', song: s })),
-  ].map((p) => ({ id: p.id, map: p.map, kind: p.kind, name: p.song.name, key: p.song.key, bars: p.song.lead.length, level: difficulty(p.song) - (FAMILIAR[p.id] || 0) }));
+  ].map((p) => ({ id: p.id, map: p.map, kind: p.kind, name: p.song.name, key: p.song.key, bars: songById(p.id).lead.length, level: difficulty(p.song) - (FAMILIAR[p.id] || 0) }));
   const easiest = (a, b) => a.level - b.level || a.id.localeCompare(b.id);
-  const maps = all.filter((p) => p.kind === 'map').sort(easiest).map((p, i, list) => ({ ...p, tier: 1 + Math.floor((i * 3) / list.length) }));
-  const shows = all.filter((p) => p.kind === 'show').sort(easiest).map((p) => ({ ...p, tier: null }));
+  const maps = all.filter((p) => p.kind === 'map').sort(easiest).map((p) => ({ ...p, tier: 1 }));
+  const shows = all.filter((p) => p.kind === 'show').sort(easiest).map((p) => ({ ...p, tier: 2 }));
   return [...maps, ...shows];
 })();
 
-/** How many map songs the pianos have opened by each tier (1, 2, 3). */
-export const PIECES_PER_TIER = [1, 2, 3].map((t) => SONGBOOK.filter((p) => p.tier && p.tier <= t).length);
-
 /**
- * The songbook for a music house look (tier 1-3) and the maps whose treasure the kid has
- * found (a Set of background ids): every piece, with secret (a show's tune whose show the
- * kid hasn't found yet: its name stays hidden) and open (its piano is here, or its show was
- * found).
+ * The songbook for a music house look (tier 0-3) and the maps whose treasure the kid has
+ * found (a Set of background ids): every piece, with open (its piano is here, or, for a
+ * show's tune, its treasure map is finished) and secret (a show's tune that isn't open: its
+ * name stays hidden).
  */
 export function songbookFor(tier, found = new Set()) {
   return SONGBOOK.map((p) => {
-    const secret = p.kind === 'show' && !found.has(p.map);
-    return { ...p, secret, open: tier >= 1 && (p.kind === 'show' ? !secret : p.tier <= tier) };
+    const open = tier >= 1 && (tier >= p.tier || (p.kind === 'show' && found.has(p.map)));
+    return { ...p, secret: p.kind === 'show' && !open, open };
   });
 }
 
@@ -250,6 +256,25 @@ export function melodyShift(song) {
 
 const lengthText = (len) => (len === 1 ? '' : String(len));
 
+/**
+ * Which bars go on each line: [[from, to), ...], perLine to a line, the last lines shared out
+ * evenly. A long piece's one bar left over (a closing bar) joins the line before it.
+ */
+export function lineRanges(bars, perLine) {
+  const out = [];
+  if (bars % perLine === 1 && bars >= 3 * perLine) {
+    for (let at = 0; at < bars - 1; at += perLine) out.push([at, at + perLine]);
+    out[out.length - 1][1] = bars;
+    return out;
+  }
+  const per = Math.ceil(bars / Math.ceil(bars / perLine));
+  for (let at = 0; at < bars; at += per) out.push([at, Math.min(bars, at + per)]);
+  return out;
+}
+
+/** The mark over a closing bar's last notes: hold them. */
+const FERMATA = '!fermata!';
+
 /** The header line that writes "Swing" over the first bar of a song the game swings. */
 export const SWING_MARK = 'Q:"Swing"';
 
@@ -269,8 +294,6 @@ export function songAbc(id, o = {}) {
   const meter = meterOf(song);
   const sig = signature(song.key);
   const shift = melodyShift(song);
-  const lines = Math.ceil(song.lead.length / perLine);
-  const per = Math.ceil(song.lead.length / lines);
 
   const right = [];
   const words = [];
@@ -280,10 +303,12 @@ export function songAbc(id, o = {}) {
     const held = new Map();
     const tokens = [];
     const names = [];
-    const chord = `"${chordLabel(song.chords[b])}"`;
+    const chords = barChords(song.chords[b], meter.steps);
     let group = -1;
     for (const e of barEvents(bar)) {
-      const parts = splitLength(e.pos, e.len, meter, !e.note);
+      // a note held over a chord change is cut there (and tied), so the new chord's name has a note to sit on
+      const cuts = [e.pos, ...chords.map((c) => c.pos).filter((at) => at > e.pos && at < e.pos + e.len), e.pos + e.len];
+      const parts = cuts.slice(1).flatMap((to, k) => splitLength(cuts[k], to - cuts[k], meter, !e.note));
       let pos = e.pos;
       parts.forEach((len, k) => {
         // beam eighth notes within each half bar (each beat in the waltz)
@@ -303,7 +328,10 @@ export function songAbc(id, o = {}) {
           text = `${abcPitch(n.letter, octave, acc)}${lengthText(len)}${k < parts.length - 1 ? '-' : ''}`;
           names.push(k === 0 ? `${LETTERS[n.letter]}${SIGN[n.alter]}` : '*');
         }
-        if (pos === 0) text = chord + text;
+        const chord = chords.find((c) => c.pos === pos);
+        if (chord) text = `"${chordLabel(chord.name)}"${text}`;
+        // the closing bar's long note is held
+        if (song.ending && b === song.lead.length - 1 && e.note && k === 0) text = FERMATA + text;
         tokens.push({ text: gap + text, len });
         pos += len;
       });
@@ -312,7 +340,9 @@ export function songAbc(id, o = {}) {
     words.push(names.join(' '));
     if (hands !== 'melody') {
       const low = Math.min(...barEvents(bar).filter((e) => e.note).map((e) => parseNote(e.note).midi + 12 * shift));
-      left.push(leftHand(song.chords[b], hands, meter, sig, low));
+      const held = new Map();
+      const hand = chords.map((c) => leftHand(c.name, hands, c.len, sig, low, held)).join(' ');
+      left.push(song.ending && b === song.lead.length - 1 ? FERMATA + hand : hand);
     }
   });
 
@@ -327,8 +357,7 @@ export function songAbc(id, o = {}) {
     hands === 'melody' ? '' : 'V:L clef=bass',
   ].filter(Boolean);
   const body = [];
-  for (let at = 0; at < song.lead.length; at += per) {
-    const end = Math.min(song.lead.length, at + per);
+  for (const [at, end] of lineRanges(song.lead.length, perLine)) {
     const last = end === song.lead.length;
     const bars = (list) => `${list.slice(at, end).join(' | ')} ${last ? '|]' : '|'}`;
     body.push(hands === 'melody' ? bars(right) : `[V:R] ${bars(right)}`);
@@ -339,12 +368,13 @@ export function songAbc(id, o = {}) {
 }
 
 /**
- * The left hand for one bar: the chord's root, or the whole chord, held all bar, on the bass
- * staff and below the bar's lowest melody note (low, as MIDI), so the hands never meet. A
- * chord that would reach the melody turns over (an inversion: the root or the root and third
- * go up an octave, then the whole chord down) before it drops an octave as it is.
+ * The left hand for one chord of a bar: the chord's root, or the whole chord, held for its
+ * steps (all bar, or its share of the bar), on the bass staff and below the bar's lowest
+ * melody note (low, as MIDI), so the hands never meet. A chord that would reach the melody
+ * turns over (an inversion: the root or the root and third go up an octave, then the whole
+ * chord down) before it drops an octave as it is. held: the bar's accidentals so far.
  */
-function leftHand(name, hands, meter, sig, low = Infinity) {
+function leftHand(name, hands, steps, sig, low = Infinity, held = new Map()) {
   const tones = chordNotes(name);
   const root = tones[0];
   const midiOf = ({ t, o }) => (o + 1) * 12 + NATURAL[t.letter] + t.alter;
@@ -364,13 +394,12 @@ function leftHand(name, hands, meter, sig, low = Infinity) {
     if (best) voicing = best;
   }
   while (!fits(voicing) && voicing[0].o > 1) voicing = voicing.map(({ t, o }) => ({ t, o: o - 1 }));
-  const held = new Map();
   const notes = voicing.map(({ t, o }) => {
     const spot = `${t.letter}${o}`;
     const now = held.has(spot) ? held.get(spot) : sig[t.letter];
     held.set(spot, t.alter);
     return abcPitch(t.letter, o, t.alter !== now ? ACC[t.alter] : '');
   });
-  const len = lengthText(meter.steps);
+  const len = lengthText(steps);
   return notes.length === 1 ? `${notes[0]}${len}` : `[${notes.join('')}]${len}`;
 }

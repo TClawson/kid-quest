@@ -5,6 +5,7 @@
 
 import { readAbcBar, arrangementNotes } from '../../js/arrange.js';
 import { songById, signature, meterOf, barEvents, parseNote, chordNotes, melodyShift } from '../../js/sheetmusic.js';
+import { barChords } from '../../js/songs.js';
 
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 
@@ -75,7 +76,19 @@ export function checkArrangement(id, level, version, lower = null) {
       return r;
     });
   }
+  // a bar with two chords: the right hand starts a note (or a rest) where the second one
+  // starts, for its name to sit on
+  song.chords.forEach((entry, b) => {
+    for (const c of barChords(entry, steps).slice(1)) {
+      if (!read.rh[b].events.some((e) => Math.abs(e.start - c.pos) < 1e-6)) errors.push(`${where('rh', b)}: nothing starts on eighth ${c.pos + 1}, where the ${c.name} chord starts`);
+    }
+  });
   if (errors.length) return { errors, notes, stats: {} };
+  /** The chord at a time t (eighths from the start of the piece). */
+  const chordAt = (t) => {
+    const parts = barChords(song.chords[Math.floor(t / steps)], steps);
+    return parts.filter((c) => c.pos <= (t % steps) + 1e-6).pop().name;
+  };
 
   const all = arrangementNotes(id, level, version);
   const rh = all.filter((n) => n.hand === 'rh');
@@ -106,10 +119,10 @@ export function checkArrangement(id, level, version, lower = null) {
   for (const t of times) {
     if (t % 2 > 1e-6) continue;
     const struck = rh.filter((n) => Math.abs(n.start - t) < 1e-6).map((n) => n.midi).sort((a, b) => a - b);
-    const tones = pitchClasses(song.chords[Math.floor(t / steps)]);
+    const tones = pitchClasses(chordAt(t));
     const top = struck[struck.length - 1];
     // (an octave under the top note doubles the melody, so it can pass outside the chord)
-    for (const m of struck.slice(0, -1)) if (m % 12 !== top % 12 && !tones.has(m % 12)) notes.push(`${level} bar ${Math.floor(t / steps) + 1}, eighth ${(t % steps) + 1}: right-hand harmony note ${m} isn't in the ${song.chords[Math.floor(t / steps)]} chord`);
+    for (const m of struck.slice(0, -1)) if (m % 12 !== top % 12 && !tones.has(m % 12)) notes.push(`${level} bar ${Math.floor(t / steps) + 1}, eighth ${(t % steps) + 1}: right-hand harmony note ${m} isn't in the ${chordAt(t)} chord`);
   }
 
   // the melody is there
@@ -143,19 +156,22 @@ export function checkArrangement(id, level, version, lower = null) {
   let on = 0;
   let total = 0;
   for (let b = 0; b < bars; b += 1) {
-    const tones = pitchClasses(song.chords[b]);
     let barOn = 0;
     let barAll = 0;
-    for (const n of lh) {
-      const from = Math.max(n.start, b * steps);
-      const to = Math.min(n.start + n.len, (b + 1) * steps);
-      if (to <= from) continue;
-      barAll += to - from;
-      if (tones.has(n.midi % 12)) barOn += to - from;
+    // (each of a bar's chords for its own share of the bar)
+    for (const c of barChords(song.chords[b], steps)) {
+      const tones = pitchClasses(c.name);
+      for (const n of lh) {
+        const from = Math.max(n.start, b * steps + c.pos);
+        const to = Math.min(n.start + n.len, b * steps + c.pos + c.len);
+        if (to <= from) continue;
+        barAll += to - from;
+        if (tones.has(n.midi % 12)) barOn += to - from;
+      }
     }
     on += barOn;
     total += barAll;
-    if (barAll && barOn / barAll < CHORD_TONES_BAR) notes.push(`${level} lh bar ${b + 1}: mostly notes outside the ${song.chords[b]} chord`);
+    if (barAll && barOn / barAll < CHORD_TONES_BAR) notes.push(`${level} lh bar ${b + 1}: mostly notes outside the ${song.chords[b].replace(' ', ' and ')} chord${song.chords[b].includes(' ') ? 's' : ''}`);
   }
   if (total && on / total < CHORD_TONES) errors.push(`${level}: the left hand is only ${Math.round((on / total) * 100)}% on the chords (needs ${CHORD_TONES * 100}%)`);
   if (!total) errors.push(`${level}: the left hand never plays`);

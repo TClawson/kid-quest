@@ -1,9 +1,25 @@
 // The map songs, one per map theme (keyed by background id). All original 16-bar loops.
 // lead: one bar per line, one token per step (an eighth note). '-' holds, '.' rests.
-// chords: one per bar. bass: [chord tone (0 root, 1 third, 2 fifth), octave] per step, or null.
+// chords: one per bar ('F E': two that share the bar, see barChords). bass: [chord tone (0 root,
+// 1 third, 2 fifth), octave] per step, or null.
 // drums: one or more patterns (k kick, s snare, h hat, o open hat, t tom), split over the bars.
 // key: the key the sheet music is written in ('C', 'Dm', 'Bb', 'Ddor' for D dorian): its key
 // signature, and the key shown on the sheet music stand (sheetmusic.js) and in the studio.
+// ending: { lead, chord }, one closing bar for the sheet music only. A loop that ends up in the
+// air (on the chord that leads back to the start) goes round again in the game; on paper it
+// needs a last bar that comes home.
+
+/**
+ * A bar's chords, from its entry in a song's chords: 'F' is one chord all bar, 'F E' two that
+ * share it evenly. Each gets a whole number of beats, so two can't share a waltz bar (three
+ * can: a beat each). Returns [{ name, pos, len }] in steps (eighth notes).
+ */
+export function barChords(entry, steps = 8) {
+  const names = entry.split(' ');
+  const len = steps / names.length;
+  if (names.length > 1 && len % 2) throw new Error(`the chords "${entry}" can't share a bar of ${steps / 2} beats evenly`);
+  return names.map((name, k) => ({ name, pos: k * len, len }));
+}
 
 const R = 0; // chord root
 const T = 1; // third
@@ -44,7 +60,7 @@ export const SONGS = {
       'Bb5 - A5 G5 D5 - G5 Bb5', 'A5 - G5 E5 C5 - D5 E5', 'F5 - C5 - A4 - C5 -', 'F5 - - - . . . .',
     ],
     chords: ['F', 'Dm', 'Gm', 'C', 'F', 'Dm', 'Bb', 'C', 'Bb', 'C', 'Am', 'Dm', 'Gm', 'C', 'F', 'F'],
-    arp: { from: 8, wave: 'pulse12', vol: 0.05 },
+    arp: { from: 8, wave: 'triangle', env: 'pluck', vol: 0.13 }, // a second steel drum, under the tune
     bass: [[R, 2], null, null, [F, 2], [R, 2], null, [F, 2], null],
     drums: [['k...k...', '...s..s.', 'h.h.h.h.'], ['k...k...', '...s..s.', 'h.hhh.hh'], ['k...k...', '...s..s.', 'h.hhh.hh', '.......t'], ['k...k...', '...s..s.', 'h.hhh.hh', '..t....t']],
     fill: ['k...k...', '...s....', 'h.hh....', '....t.tt'],
@@ -67,6 +83,7 @@ export const SONGS = {
       'G5 - A5 - Bb5 -', 'A5 - G5 - E5 -', 'D5 - - - . .', 'E5 - C#5 - E5 -',
     ],
     chords: ['Dm', 'Bb', 'F', 'C', 'Dm', 'Bb', 'Gm', 'A', 'F', 'C', 'Dm', 'Bb', 'Gm', 'A', 'Dm', 'A'],
+    ending: { lead: 'D5 - - - - -', chord: 'Dm' },
     arp: { from: 4, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.04 },
     bass: [[R, 2, 2.5], null, null, null, [F, 2], null],
     drums: [['k.....', '......', '..h.h.']],
@@ -89,6 +106,7 @@ export const SONGS = {
       'F6 - E6 - C6 - A5 -', 'G5 - B5 - D6 - - -', 'G#5 - - - B5 - - -', 'E6 - - - . . . .',
     ],
     chords: ['Am', 'F', 'C', 'G', 'Am', 'F', 'G', 'Em', 'F', 'G', 'Am', 'C', 'F', 'G', 'E', 'E'],
+    ending: { lead: 'A5 - - - - - - -', chord: 'Am' },
     arp: { from: 4, wave: 'pulse12', octave: 4, vol: 0.06 },
     bass: [[R, 2], [R, 3], [R, 2], [R, 3], [R, 2], [R, 3], [R, 2], [R, 3]],
     drums: [['k.....k.', '........', 'h.h.h.h.'], ['k.....k.', '....s...', 'h.h.h.h.']],
@@ -129,6 +147,7 @@ export const SONGS = {
       'C6 - - - E6 - C6 -', 'D6 - - - F#6 - D6 -', 'D#6 - - - B5 - F#5 -', 'B5 - A5 - G5 - F#5 -',
     ],
     chords: ['Em', 'C', 'D', 'Em', 'Em', 'C', 'D', 'B', 'C', 'D', 'Em', 'G', 'C', 'D', 'B', 'B'],
+    ending: { lead: 'E5 - - - - - - -', chord: 'Em' },
     arp: { from: 8, wave: 'square', octave: 4, vol: 0.05 },
     bass: [[R, 2], [R, 2], [R, 3], [R, 2], [R, 2], [R, 3], [F, 1], [R, 2]],
     drums: [['k..k.k..', '..s...s.', 'h.h.h.h.'], ['k..k.k..', '..s...s.', 'hhhhhhhh'], ['k..k.k..', '..s...s.', 'hhhhhhhh', 't.....t.'], ['k..k.k.k', '..s...s.', 'hhhhhhho', 't..t..t.']],
@@ -196,7 +215,7 @@ export const SONGS = {
       'A5 - C6 - E6 - - -', 'D6 - - - F#6 - A6 -', 'G6 - - - D6 - B5 -', 'G5 - - - . . . .',
     ],
     chords: ['C', 'D', 'C', 'D', 'Em', 'Bm', 'C', 'D', 'C', 'D', 'Bm', 'Em', 'Am', 'D', 'G', 'G'],
-    arp: { wave: 'pulse12', octave: 5, order: 'updown', vol: 0.05 },
+    arp: { from: 4, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.05 }, // the sparkle waits for the tune's second line
     bass: [[R, 2, 3.5], null, null, null, [F, 2, 3.5], null, null, null],
     drums: [['........', '........', '..h...h.'], ['k.......', '........', '..h...h.'], ['k.......', '....s...', '..h...h.'], ['k.....k.', '....s...', '..h.h.h.']],
     fill: ['k.......', '....s...', '..h.....', '......tt'],
@@ -224,6 +243,7 @@ export const SHOW_SONGS = {
     bpm: 150, swing: 0.2,
     lead: ['D5 - A4 D5 F5 - E5 D5', 'C5 - G4 C5 E5 - D5 C5', 'Bb4 - D5 F5 A5 - G5 F5', 'A5 - C#5 E5 A5 - . .', 'D6 - A5 - D5 - - -'],
     chords: ['Dm', 'C', 'Bb', 'A', 'Dm'],
+    arp: { from: 1, wave: 'pulse12', octave: 4, vol: 0.045 },
     bass: [[R, 2], null, [F, 1], [R, 2], null, [F, 1], [R, 2], null],
     drums: [['k..k..k.', '...s...s', 'h.hh.hh.']],
     fill: ['k.k.k...', '....s...', '....o...'],
@@ -256,7 +276,7 @@ export const SHOW_SONGS = {
     name: 'Dragon King Fanfare', key: 'Bb',
     bpm: 132,
     lead: ['F5 - F5 F5 Bb5 - - -', 'C6 - C6 C6 D6 - Bb5 -', 'Eb6 - D6 - C6 - Bb5 -', 'C6 - - - F5 - . .', 'Bb5 - D6 - F6 - - -'],
-    chords: ['Bb', 'F', 'Eb', 'F', 'Bb'],
+    chords: ['Bb', 'F Bb', 'Eb', 'F', 'Bb'],
     arp: { from: 1, octave: 4, vol: 0.06 },
     bass: [[R, 2], null, [R, 2], null, [F, 1], null, [R, 2], null],
     drums: [['k..k....', '....s...', '........'], ['k..k..k.', '....s.ss', 'hhhhhhhh']],
@@ -267,7 +287,7 @@ export const SHOW_SONGS = {
     name: 'Phoenix Fire', key: 'Am',
     bpm: 156,
     lead: ['. . . . . . . .', 'A5 - - E5 A5 - C6 -', 'B5 - - G5 B5 - D6 -', 'C6 - B5 - A5 - G#5 -', 'A5 - E6 - A6 - - -'],
-    chords: ['Am', 'Am', 'G', 'F', 'Am'],
+    chords: ['Am', 'Am', 'G', 'F E', 'Am'],
     arp: { from: 1, octave: 4, vol: 0.06 },
     bass: [[R, 2], [R, 2], null, [R, 2], [R, 3], null, [R, 2], null],
     drums: [['t.t.t.tt', 'k...k...', '........'], ['k.tkk.t.', '..s...s.', 'hhhhhhhh']],

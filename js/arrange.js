@@ -5,7 +5,8 @@
 // Pure logic, no DOM.
 
 import { ARRANGEMENTS } from './arrangements.js';
-import { songById, signature, meterOf, chordLabel, SWING_MARK } from './sheetmusic.js';
+import { songById, signature, meterOf, chordLabel, lineRanges, SWING_MARK } from './sheetmusic.js';
+import { barChords } from './songs.js';
 
 const LETTERS = 'CDEFGAB';
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
@@ -25,9 +26,9 @@ export const hasLevel = (id, level) => level === 'easy' || Boolean(ARRANGEMENTS[
  * decorations ('!p!', '!f!', '.' staccato) and spaces (beaming) are allowed and skipped.
  * Accidentals hold for the rest of the bar, for the same note on the same line or space, on
  * top of the key signature (sig: an alteration per letter, from signature()).
- * Returns { events: [{ start, len, notes: [{ letter, alter, octave, midi }], tie }] (a rest
- * has no notes), length (eighths), first (where the first note, chord or rest starts in the
- * text), errors: [text] }.
+ * Returns { events: [{ start, len, notes: [{ letter, alter, octave, midi }], tie, col }] (a
+ * rest has no notes; col is where it starts in the text), length (eighths), first (where the
+ * first note, chord or rest starts in the text), errors: [text] }.
  */
 export function readAbcBar(text, sig) {
   const events = [];
@@ -106,7 +107,7 @@ export function readAbcBar(text, sig) {
     if (/^[<>]/.test(s.slice(i))) { errors.push(`broken rhythm (> <) isn't supported: ${s.slice(start, i + 2)}`); i += 1; }
     if (!(len > 0)) errors.push(`a bad length at "${s.slice(start, i)}"`);
     if (first < 0) first = start;
-    events.push({ start: at, len, notes, tie: tie && notes.length > 0 });
+    events.push({ start: at, len, notes, tie: tie && notes.length > 0, col: start });
     at += len;
   }
   return { events, length: at, first: first < 0 ? 0 : first, errors };
@@ -168,13 +169,18 @@ export function arrangementAbc(id, level, o = {}, version = ARRANGEMENTS[id]?.[l
   const meter = meterOf(song);
   const sig = signature(song.key);
   const perLine = Math.max(1, o.perLine || 4);
-  const lines = Math.ceil(song.lead.length / perLine);
-  const per = Math.ceil(song.lead.length / lines);
 
   let carried = null; // the top note a tie from the bar before carries on
   const right = arr.rh.map((text, b) => {
-    const { first } = readAbcBar(text, sig);
-    return `${text.slice(0, first)}"${chordLabel(song.chords[b])}"${text.slice(first)}`.trim();
+    const { events } = readAbcBar(text, sig);
+    let out = text;
+    // each chord's name goes on the note (or rest) that starts with it, or the first one after;
+    // from the bar's last chord back, so the places found in the text stay right
+    for (const c of barChords(song.chords[b], meter.steps).reverse()) {
+      const e = events.find((x) => x.start >= c.pos - 1e-6);
+      if (e) out = `${out.slice(0, e.col)}"${chordLabel(c.name)}"${out.slice(e.col)}`;
+    }
+    return out.trim();
   });
   const words = arr.rh.map((text) => {
     const names = [];
@@ -189,8 +195,7 @@ export function arrangementAbc(id, level, o = {}, version = ARRANGEMENTS[id]?.[l
 
   const head = ['X:1', `M:${meter.meter}`, 'L:1/8', ...(song.swing ? [SWING_MARK] : []), `K:${song.key}`, '%%score {(R) | (L)}', 'V:R clef=treble', 'V:L clef=bass'];
   const body = [];
-  for (let at = 0; at < song.lead.length; at += per) {
-    const end = Math.min(song.lead.length, at + per);
+  for (const [at, end] of lineRanges(song.lead.length, perLine)) {
     const close = end === song.lead.length ? '|]' : '|';
     body.push(`[V:R] ${right.slice(at, end).join(' | ')} ${close}`);
     if (o.names) body.push(`w: ${words.slice(at, end).join(' | ')}`);

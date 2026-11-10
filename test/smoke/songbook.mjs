@@ -1,6 +1,6 @@
 // The sheet music stand's songbook (js/songbook.js) in the real app: the little keyboard opens
-// the easiest songs (a secret show's tune only once its treasure map is finished, its name
-// hidden till then); every open song is engraved bar for bar (abcjs) with no warnings, in
+// every map song (a secret show's tune only with the upright piano or once its treasure map
+// is finished, its name hidden till then); every open song is engraved bar for bar (abcjs) with no warnings, in
 // every hand setting; Listen plays it with the bar being played lit up, and a redraw while it
 // plays leaves the page and its scroll alone; phones get 2 bars a line. Saves screenshots too. Run: node test/smoke/songbook.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
@@ -76,23 +76,23 @@ async function litBar(page, n, ms = 8000) {
   return -1;
 }
 
-// 1. tablet, the little keyboard and two treasure maps: the easiest map songs and those two
-// shows' tunes (whatever their difficulty) are open; every one engraves cleanly
+// 1. tablet, the little keyboard and two treasure maps: all nine map songs and those two
+// shows' tunes are open; every one engraves cleanly
 {
   const found = ['bg-meadow', 'bg-galaxy'];
   const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 3, found);
   const open = await page.$$eval('.song-card:not(.locked)', (els) => els.map((e) => e.dataset.id));
   const want = songbookFor(1, new Set(found)).filter((p) => p.open).map((p) => p.id);
-  assert.deepEqual(open, want, 'the easiest map songs, and the found shows');
-  assert.equal(open.length, 5);
+  assert.deepEqual(open, want, 'the map songs, and the found shows');
+  assert.equal(open.length, 11);
   assert.ok(open.includes('show:bg-galaxy') && open.includes('show:bg-meadow') && open.includes('bg-meadow'));
-  assert.equal(await page.locator('.song-card.locked').count(), 13);
-  assert.match(await page.locator('.song-tier.locked .song-card.locked').first().textContent(), /Opens with the upright piano/);
+  assert.equal(await page.locator('.song-card.locked').count(), 7);
+  assert.equal(await page.locator('.song-tier').count(), 2, 'two sections: map songs and show tunes');
+  assert.match(await page.locator('.song-card.locked').first().textContent(), /Opens with the upright piano, or finish the \w[\w ]* treasure map/);
   // the other shows' tunes are secret: no names, and what opens them
   const list = await page.locator('.songbook').textContent();
   assert.equal((list.match(/Secret song/g) || []).length, 7);
   for (const [map, song] of Object.entries(SHOW_SONGS)) if (!found.includes(map)) assert.ok(!list.includes(song.name), `${song.name} stays secret`);
-  assert.match(list, /Finish the \w[\w ]* treasure map/);
   await page.screenshot({ path: `${out}/1-songbook-tablet.png`, fullPage: true });
   for (const id of open) {
     await page.click(`[data-action="song-open"][data-id="${id}"]`);
@@ -161,6 +161,47 @@ async function litBar(page, n, ms = 8000) {
   await page.click('[data-action="songbook-back"]');
   await page.clock.runFor(1500);
   assert.equal(await page.locator('.music-house').count(), 1, 'back in the music house');
+  await ctx.close();
+}
+
+// 1b. tablet, the upright piano and no treasure maps: all 18 open, no secret songs
+{
+  const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 5, []);
+  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18);
+  assert.equal(await page.locator('.song-card.locked').count(), 0);
+  const list = await page.locator('.songbook').textContent();
+  assert.ok(!list.includes('Secret song'));
+  for (const song of Object.values(SHOW_SONGS)) assert.ok(list.includes(song.name), `${song.name} shows its name`);
+  // Phoenix Fire has two chords in bar 4: five bars, six chord names, at every level
+  await page.click('[data-action="song-open"][data-id="show:bg-volcano"]');
+  for (const level of ['easy', 'medium', 'hard']) {
+    await page.click(`[data-action="song-level"][data-val="${level}"]`);
+    await page.waitForSelector(`#sheet.engraved[data-level="${level}"] svg`);
+    const names = await page.locator('#sheet .abcjs-chord').allTextContents();
+    assert.deepEqual(names.map((n) => n.trim()), ['Am', 'Am', 'G', 'F', 'E', 'Am'], `Phoenix Fire ${level}`);
+    assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0');
+  }
+  await page.screenshot({ path: `${out}/5-two-chords.png`, fullPage: true });
+  // the plain lead sheet (shown when the engraver can't load) names both chords too
+  const plain = await page.evaluate(async () => { const m = await import('./js/songbook.js'); return [m.leadSheetHtml('show:bg-volcano'), m.leadSheetHtml('show:bg-castle'), m.leadSheetHtml('bg-ocean')]; });
+  assert.ok(plain[0].includes('<b>F E</b>') && plain[1].includes('<b>F B♭</b>'), 'the lead sheet names both chords of a shared bar');
+  assert.equal(plain[2].split('class="lead-bar').length - 1, 17, 'and has the closing bar');
+  await page.click('[data-action="song-level"][data-val="easy"]');
+  await page.click('[data-action="song-back"]');
+  // Bubble Waltz ends with its closing bar: a 17th bar on D minor
+  await page.click('[data-action="song-open"][data-id="bg-ocean"]');
+  await page.waitForSelector('#sheet.engraved svg');
+  assert.equal(await page.locator('#sheet .abcjs-mm16').count() > 0, true, 'the closing bar is on the page');
+  assert.equal((await page.locator('#sheet .abcjs-chord').allTextContents()).pop().trim(), 'Dm');
+  assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0');
+  for (const level of ['medium', 'hard', 'easy']) {
+    await page.click(`[data-action="song-level"][data-val="${level}"]`);
+    await page.waitForSelector(`#sheet.engraved[data-level="${level}"] svg`);
+    assert.equal(await page.locator('#sheet .abcjs-mm16').count() > 0, true, `${level}: the closing bar`);
+    assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0', `${level}: no warnings`);
+  }
+  await page.locator('#sheet').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${out}/6-closing-bar.png`, fullPage: true });
   await ctx.close();
 }
 

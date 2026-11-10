@@ -150,7 +150,7 @@ for (const [weeks, tier] of [[5, 2], [7, 3]]) {
   await tap(page, '.m-station[data-spot="sheets"]');
   await page.clock.runFor(6000);
   assert.equal(await page.locator('.songbook').count(), 1, `tier ${tier}: the stand opens the songbook`);
-  assert.equal(await page.locator('.song-card:not(.locked)').count(), tier * 3, `tier ${tier}: ${tier * 3} map songs open (show tunes wait for their treasure maps)`);
+  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18, `tier ${tier}: all 18 songs open (map songs and show tunes)`);
   await page.click('[data-action="songbook-back"]');
   await page.clock.runFor(1500);
   assert.ok(await page.evaluate(() => document.querySelector('.m-station[data-spot="sheets"]').classList.contains('near')), 'back by the stand');
