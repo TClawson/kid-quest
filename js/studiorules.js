@@ -694,7 +694,8 @@ export function badges(mix) {
   if (new Set(keyed.map((c) => c.song)).size >= 2 && keyed.every((c) => (c.shift ? clipFits(mix, c) : keyFits(mix.key, sourceOf(c.song)?.key)))) {
     out.push({ id: 'match', name: 'Perfect match', why: 'All the notes fit the key of your mix.' });
   }
-  const yours = mix.tracks.filter((t) => t.some((c) => c.kind === 'take' || c.kind === 'notes')).length;
+  // (a band the Note-o-Matic made for the kid's tune isn't the kid playing)
+  const yours = mix.tracks.filter((t) => t.some((c) => c.kind === 'take' || (c.kind === 'notes' && c.role === 'tune'))).length;
   if (yours >= TRACKS && !parts.length && !clips.some((c) => c.kind === 'backing')) out.push({ id: 'solo', name: 'One-kid band', why: 'Every track is you!' });
   if (clips.some(remixed)) out.push({ id: 'remixer', name: 'Remixer', why: 'You gave the music a new sound.' });
   const groups = new Set(clips.filter((c) => c.kind === 'backing').map((c) => BACKING[c.pattern]?.group));

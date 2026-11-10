@@ -238,6 +238,16 @@ test('stickers: Note-o-Matic for notes, Band leader for a band; your playing cou
   const all = badges(band.mix);
   assert.ok(all.some((b) => b.id === 'leader' && b.name === 'Band leader' && b.why === 'A band played along with your tune.'));
   assert.ok(all.some((b) => b.id === 'notes' && b.name === 'Note-o-Matic' && b.why === 'You turned your playing into notes.'));
+  // every track: one-kid band, but a band made for the tune isn't the kid
+  let solo = { ...newMix(), bpm: 100 };
+  for (let t = 0; t < 4; t += 1) solo = must(addTake(solo, t, `take-${t}`, 4, 0)).mix;
+  assert.ok(badges(solo).some((b) => b.id === 'solo'));
+  const turned = must(takeToNotes(solo, solo.tracks[0][0].id, [tune(4)], 'C'));
+  assert.ok(badges(turned.mix).some((b) => b.id === 'solo'), 'notes of the kid\'s playing count');
+  let three = must(removeClip(solo, solo.tracks[3][0].id)).mix;
+  three = must(takeToNotes(three, three.tracks[0][0].id, [tune(4), bandPart(4)], 'C')).mix;
+  assert.equal(three.tracks[3][0].role, 'band');
+  assert.ok(!badges(three).some((b) => b.id === 'solo'), 'the band isn\'t the kid');
   // played along with a song's part: a duet
   const song = must(addPart(tidy.mix, 2, 'bg-meadow', 'bass'));
   assert.ok(badges(song.mix).some((b) => b.id === 'duet'));
