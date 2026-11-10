@@ -75,3 +75,147 @@
   .song-levels button, .song-hands button { padding: 6px 8px; font-size: 0.9rem; }
   .song-buttons .btn { padding: 8px 10px; font-size: 0.95rem; }
 }
+
+/* ---------- the recording studio (js/studio.js) ----------
+   A mixing desk in the pixel look: thick dark lines, flat colours, the kid's colour for
+   what is picked. Four tracks over a beat grid; clips are coloured by what they are. */
+.studio-screen { max-width: 1180px; }
+.studio { display: grid; gap: 12px; min-width: 0; }
+.studio .st-wait { padding: 24px; text-align: center; }
+.studio h3 { margin: 0 0 6px; font-family: var(--px-font); font-size: 1.3rem; }
+
+/* the transport: play, record, loop length, speed, headphones, my mixes, help */
+.st-bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 10px; background: #3b2a4f; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); color: #fff; }
+.st-main, .st-more { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-more { margin-left: auto; }
+.st-play { min-width: 104px; background: #2f9e44; }
+.st-play.playing { background: #e8590c; }
+.st-rec { min-width: 132px; background: #c92a2a; }
+.st-rec.recording { background: #ff6b6b; color: #2a1838; animation: st-blink 1s steps(1, end) infinite; }
+@keyframes st-blink { 50% { background: #c92a2a; color: #fff; } }
+.st-step { display: flex; align-items: center; gap: 6px; }
+.st-step .btn.round { width: 44px; min-height: 44px; font-size: 1.2rem; }
+.st-step .btn.off { opacity: 0.45; }
+.st-val { display: grid; min-width: 86px; text-align: center; line-height: 1.1; }
+.st-val b { font-family: var(--px-font); font-size: 1.25rem; white-space: nowrap; }
+.st-val small { color: #e5dbff; font-size: 0.78rem; }
+.st-bar .btn.ghost.on { background: var(--kid, var(--brand)); color: #fff; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2), 0 4px 0 var(--px-ink); }
+
+.st-note { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin: 0; padding: 10px 12px; background: #fff3d6; color: var(--px-ink); border: 3px solid var(--px-ink); border-radius: 6px; font-weight: 700; line-height: 1.3; }
+.st-note.bad { background: #ffe3e3; }
+.st-note.good { background: #d3f9d8; }
+.st-note .btn { flex: none; }
+
+/* the timeline: track numbers, a ruler of bars, four lanes over a beat grid */
+.st-desk { background: #fffaf0; border: 3px solid var(--px-ink); border-radius: 6px; padding: 8px 8px 10px; box-shadow: 0 4px 0 var(--px-ink); min-width: 0; }
+.st-mixname { margin: 0 0 6px; font-weight: 700; color: var(--px-ink); overflow-wrap: anywhere; }
+.st-time { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 0 6px; }
+.st-names { display: grid; grid-template-rows: 20px repeat(4, 64px); gap: 4px; }
+.st-names span { display: grid; place-items: center; font: 700 1.1rem var(--px-font); color: var(--px-ink); }
+.st-lanes { position: relative; display: grid; grid-template-rows: 20px repeat(4, 64px); gap: 4px; min-width: 0; }
+.st-ruler { position: relative; border-bottom: 2px solid var(--px-ink); }
+.st-ruler span { position: absolute; bottom: 0; padding-left: 3px; border-left: 2px solid var(--px-ink); font: 700 0.95rem/1.2 var(--px-font); color: var(--px-ink); }
+.st-lane { position: relative; overflow: hidden; border: 2px solid var(--px-ink); border-radius: 4px; touch-action: pan-y; cursor: pointer;
+  background:
+    linear-gradient(90deg, rgba(42, 24, 56, 0.55) 2px, transparent 2px) 0 0 / calc(100% / var(--bars)) 100%,
+    linear-gradient(90deg, rgba(42, 24, 56, 0.14) 1px, transparent 1px) 0 0 / calc(100% / var(--beats)) 100%,
+    #efe7fb; }
+.st-lane:nth-of-type(odd) { background-color: #e6dcf7; }
+.st-clip { position: absolute; top: 3px; bottom: 3px; display: flex; flex-direction: column; justify-content: center; gap: 0; padding: 0 5px; overflow: hidden; border: 2px solid var(--px-ink); border-radius: 4px; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15); color: var(--px-ink); touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; line-height: 1.1; }
+.st-clip b { font: 700 1rem/1.05 var(--px-font); white-space: nowrap; position: relative; }
+.st-clip small { font-size: 0.68rem; white-space: nowrap; position: relative; opacity: 0.85; }
+.st-clip.kind-lead, .st-add.kind-lead { background: #ffd43b; }
+.st-clip.kind-arp, .st-add.kind-arp { background: #d0bfff; }
+.st-clip.kind-bass, .st-add.kind-bass { background: #8ce99a; }
+.st-clip.kind-drums, .st-add.kind-drums { background: #ffa8a8; }
+.st-clip.kind-take { background: #fff; background: color-mix(in srgb, var(--kid, #74c0fc) 45%, #fff); }
+.st-clip.gone { background: #e9ecef; color: var(--muted); }
+.st-clip.sel { outline: 3px solid var(--kid, var(--brand)); outline-offset: 1px; z-index: 2; box-shadow: 0 0 0 5px #fff; overflow: visible; }
+.st-clip.sel { padding: 0 18px; }
+.st-clip.dragging { opacity: 0.4; }
+.st-wave { position: absolute; inset: 2px 0; width: 100%; height: calc(100% - 4px); }
+.st-wave path { stroke: rgba(42, 24, 56, 0.6); stroke-width: 1.5; fill: none; vector-effect: non-scaling-stroke; }
+/* the edges of the picked clip: drag them to trim */
+.st-edge { position: absolute; top: -2px; bottom: -2px; width: 16px; background: var(--kid, var(--brand)); border: 2px solid var(--px-ink); border-radius: 4px; cursor: ew-resize; z-index: 3; }
+.st-edge.left { left: -2px; }
+.st-edge.right { right: -2px; }
+.st-edge::after { content: ''; position: absolute; left: 5px; right: 5px; top: 30%; bottom: 30%; border-left: 2px solid #fff; border-right: 2px solid #fff; }
+.st-spot { position: absolute; top: 2px; bottom: 2px; min-width: 8px; border: 3px dashed var(--kid, var(--brand)); border-radius: 4px; background: color-mix(in srgb, var(--kid, #5b4bdb) 18%, transparent); pointer-events: none; }
+.st-spot.auto { border-style: dotted; opacity: 0.7; }
+.st-ghost { position: absolute; top: 3px; bottom: 3px; border: 3px dashed #2b8a3e; border-radius: 4px; background: rgba(64, 192, 87, 0.3); pointer-events: none; z-index: 4; }
+.st-ghost.bad { border-color: #c92a2a; background: rgba(250, 82, 82, 0.3); }
+.st-recbox { position: absolute; top: 3px; bottom: 3px; background: rgba(250, 82, 82, 0.45); border: 2px solid #c92a2a; border-radius: 4px; pointer-events: none; }
+.st-head { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: #e8590c; box-shadow: 0 0 0 1px #fff; pointer-events: none; z-index: 5; }
+.st-head::before { content: ''; position: absolute; top: 0; left: -5px; border: 6px solid transparent; border-top: 8px solid #e8590c; }
+
+/* the picked clip's buttons */
+.st-hint { margin: 0; }
+.st-tools { display: grid; gap: 8px; padding: 8px 10px; background: #fff; border: 3px solid var(--kid, var(--px-ink)); border-radius: 6px; }
+.st-what { display: grid; margin: 0; }
+.st-what b { font-family: var(--px-font); font-size: 1.15rem; }
+.st-tool-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* stickers the mix has earned */
+.st-stickers { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-stickers.empty p { margin: 0; }
+.st-sticker { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; align-items: center; padding: 6px 10px; background: #fff3bf; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); max-width: 100%; }
+.st-sticker i { grid-row: span 2; font-style: normal; font-size: 1.6rem; }
+.st-sticker b { font-family: var(--px-font); font-size: 1.1rem; line-height: 1; }
+.st-sticker small { color: var(--muted); }
+.st-sticker.pop { animation: st-pop 0.6s steps(4, end); }
+@keyframes st-pop { 0% { transform: scale(0.4); } 50% { transform: scale(1.2) rotate(-4deg); } 100% { transform: none; } }
+
+/* the parts shelf */
+.st-shelf p { margin: 0 0 8px; }
+.st-songs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 10px; }
+.st-song { display: grid; gap: 4px; padding: 8px 10px; background: #fffaf0; border: 2px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); }
+.st-song p { margin: 0; }
+.st-song-name { display: flex; gap: 6px; align-items: center; }
+.st-song-name b { font-family: var(--px-font); font-size: 1.15rem; line-height: 1.1; }
+.st-song-info { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.st-fit { color: #2b8a3e; font-weight: 700; }
+.st-fit.no { color: var(--muted); font-weight: 400; }
+.st-waltz { color: #a8701e; font-weight: 700; }
+.st-parts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.st-part .st-add { flex: 1; min-width: 0; justify-content: flex-start; }
+.st-part { display: inline-flex; }
+.st-part .st-add { color: var(--px-ink); border-radius: 6px 0 0 6px; padding: 6px 10px; }
+.st-part .st-hear { border-radius: 0 6px 6px 0; border-left-width: 0; padding: 6px 8px; min-width: 38px; }
+.st-part .st-hear.on { background: #e8590c; color: #fff; }
+
+/* my mixes and help */
+.st-panel { padding: 10px 12px; background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); }
+.st-panel p { margin: 0 0 8px; }
+.st-panel ul { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 4px; }
+.st-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.st-panel-head h3 { margin: 0; }
+.st-slots { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.st-slot { display: grid; gap: 6px; width: 100%; padding: 8px 10px; border: 2px solid var(--px-ink); border-radius: 6px; background: #fffaf0; color: var(--px-ink); font: inherit; text-align: left; }
+.st-slot.empty { min-height: 88px; border-style: dashed; background: #f8f4ff; font: 700 1.1rem var(--px-font); text-align: center; cursor: pointer; }
+.st-slot p { display: grid; margin: 0; }
+.st-slot p b { font-family: var(--px-font); font-size: 1.15rem; }
+.st-slot-stickers { font-size: 1.2rem; letter-spacing: 2px; }
+.st-slot-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-slot-buttons .btn { padding: 6px 10px; }
+.st-help small { display: inline-block; margin-left: 8px; }
+
+/* phones: tighter, and the transport's extra buttons get their own row */
+@media (max-width: 600px) {
+  .st-bar { gap: 8px; padding: 8px; }
+  .st-main { width: 100%; }
+  .st-main .btn { flex: 1; min-width: 0; }
+  .st-more { margin-left: 0; width: 100%; }
+  .st-more .btn { flex: 1 1 auto; padding: 8px 10px; }
+  .st-step { flex: 1 1 150px; justify-content: space-between; gap: 4px; }
+  .st-step .btn.round { width: 40px; min-height: 40px; }
+  .st-val small { font-size: 0.7rem; }
+  .st-val { min-width: 0; }
+  .st-time { grid-template-columns: 16px minmax(0, 1fr); gap: 0 4px; }
+  .st-names, .st-lanes { grid-template-rows: 20px repeat(4, 58px); }
+  .st-clip { padding: 0 3px; }
+  .st-clip b { font-size: 0.9rem; }
+  .st-tool-buttons .btn { flex: 1 1 auto; padding: 6px 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-rec.recording, .st-sticker.pop { animation: none; }
+}
