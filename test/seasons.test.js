@@ -28,3 +28,17 @@ test('a parent can try a season on this device', () => {
   trySeason(null, s);
   assert.equal(shownSeason('2026-11-10', s), 'autumn');
 });
+
+test('villagers talk about a season only when it is new', async () => {
+  const { isNewSeason, seasonLine } = await import('../js/seasonhints.js');
+  assert.equal(isNewSeason(0.01), true);
+  assert.equal(isNewSeason(0.5), false);
+  assert.equal(isNewSeason(0.5, true), true);
+  let said = 0;
+  for (let i = 0; i < 100; i += 1) {
+    const l = seasonLine('winter', `a|${i}`);
+    if (l) { said += 1; assert.ok(!l.includes('—')); }
+  }
+  assert.ok(said > 10 && said < 70, String(said));
+  assert.equal(seasonLine('nope', 'x'), '');
+});

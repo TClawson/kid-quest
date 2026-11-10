@@ -253,3 +253,6 @@
 /* the family's trees and flowers (js/villagebloom.js): drawn in village pixels, only pictures */
 .v-tree, .v-bloom-life { position: absolute; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
 .v-bloom-life { left: 0; top: 0; }
+
+/* the season's weather: one canvas over the whole village (seasonlife.js) */
+.season-weather { position: absolute; left: 0; top: 0; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
