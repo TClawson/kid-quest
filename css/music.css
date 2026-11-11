@@ -369,6 +369,9 @@
   .st-chooser { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 6px; }
   .st-loops .btn { flex: 1 1 auto; }
   .st-nom-buttons .btn { flex: 1 1 auto; }
+  /* the robot's Keep and Start over stay in reach at the bottom while the readings scroll by */
+  .lab-keep-row { position: sticky; bottom: 0; z-index: 3; margin: 0 -16px; padding: 8px 16px max(8px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 3px solid var(--px-ink); flex-wrap: nowrap; }
+  .lab-keep-row .btn { flex: 1 1 0; min-width: 0; padding: 8px 6px; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   .st-rec.recording, .st-sticker.pop { animation: none; }

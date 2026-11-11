@@ -442,18 +442,20 @@ async function recordToPick(page, name = '', stop = 'limit') {
   await ctx.close();
 }
 
-// 3. a phone: everything fits, and every button is big enough
+// 3. a phone (with a full shelf): everything fits, every button is big enough, and Keep stays in reach
 {
   const { ctx, page } = await start(PHONE, family({ done: true }));
   await page.evaluate(async () => {
     const { saveTune } = await import('./js/studio-store.js');
     const { cleanTune } = await import('./js/tunerules.js');
-    await saveTune('kid_ava', 0, cleanTune({ id: 't0', made: 1, reading: 'band', bpm: 100, meter: 4, key: 'C', voice: 'beep', shift: 0, parts: [{ role: 'tune', beats: 8, notes: [{ at: 0, len: 2, midi: 60 }] }, { role: 'band', beats: 8, notes: [{ at: 0, len: 8, midi: 48 }] }] }));
+    for (let i = 0; i < 6; i += 1) {
+      await saveTune('kid_ava', i, cleanTune({ id: `t${i}`, made: 1, reading: 'band', bpm: 100, meter: 4, key: 'C', voice: 'beep', shift: 0, parts: [{ role: 'tune', beats: 8, notes: [{ at: 0, len: 2, midi: 60 + i }] }, { role: 'band', beats: 8, notes: [{ at: 0, len: 8, midi: 48 }] }] }));
+    }
   });
   await intoHouse(page);
   await station(page, 'lab', '.lab-screen');
   await labModule(page);
-  await waitLab(page, () => window.kqLab.labState().shelf?.[0]);
+  await waitLab(page, () => window.kqLab.labState().shelf?.[5]);
   assert.ok(await noSideScroll(page), 'no sideways scrolling');
   assert.deepEqual(await tooSmall(page, '#lab button, .lab-screen header button'), [], 'buttons at least 44 px');
   await page.click('.lab-slot[data-slot="0"] [data-lab="throw"]');
@@ -465,6 +467,35 @@ async function recordToPick(page, name = '', stop = 'limit') {
   assert.deepEqual(await tooSmall(page, '#lab button, #lab select'), [], 'buttons at least 44 px');
   await shot(page, '13-phone-pick');
   await shot(page, '14-phone-band', '.lab-card[data-reading="band"]');
+  // Keep and Start over sit at the bottom of the screen from the top of the readings on
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 740 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(100);
+    const row = await page.evaluate(() => { const r = document.querySelector('.lab-keep-row').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, h: window.innerHeight }; });
+    assert.ok(row.bottom <= row.h + 1 && row.top < row.h - 44, `${width} px: Keep is on screen at the top of the readings (${JSON.stringify(row)})`);
+    assert.ok(await noSideScroll(page), `${width} px: no sideways scrolling`);
+    // the full shelf under it is never covered by it
+    const covered = await page.evaluate(async () => {
+      const out = [];
+      for (const b of document.querySelectorAll('.lab-shelf .btn')) {
+        b.scrollIntoView({ block: 'end' });
+        await new Promise((r) => { requestAnimationFrame(r); });
+        const r = b.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (!b.contains(hit)) out.push(b.textContent.trim());
+      }
+      return out;
+    });
+    assert.deepEqual(covered, [], `${width} px: the shelf's buttons can be tapped`);
+  }
+  await page.setViewportSize(PHONE);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await shot(page, '15-phone-keep-in-reach');
+  await page.click('[data-lab="keep"]');
+  await waitLab(page, () => /shelf is full/.test(window.kqLab.labState().robot));
+  await page.locator('.lab-shelf').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await page.screenshot({ path: `${out}/16-phone-shelf-under-keep.png` });
   await ctx.close();
 }
 
