@@ -23,8 +23,22 @@ import { TUNE_SLOTS, makeTune, startVoice, shiftFits, tuneName, tuneAbout, freeS
 import { loadTunes, saveTune, deleteTune } from './studio-store.js';
 
 export const LAB_MOST = 30;
-/** The longest recording, in seconds. A test can make it shorter (`LAB.most = 2`). */
-export const LAB = { most: LAB_MOST };
+/** How long a save or a throw-away may take before the kid is told it didn't work (ms). */
+export const KEEP_WAIT = 8000;
+/**
+ * The longest recording, in seconds, and how long to wait for the tablet to keep a tune. A
+ * test can make them shorter (`LAB.most = 2`, `LAB.wait = 500`).
+ */
+export const LAB = { most: LAB_MOST, wait: KEEP_WAIT };
+
+/** Answers a promise's result as { ok }, or LATE when it takes longer than `ms` (it may still land). */
+const LATE = Symbol('late');
+function inTime(p, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => resolve(LATE), ms);
+    p.then((ok) => { clearTimeout(t); resolve({ ok }); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
 
 /** The test desk's id: the same as the test studio's, so its tunes show on that shelf. */
 const TEST_DESK = 'parent-test';
@@ -84,6 +98,7 @@ const L = {
   noteKind: '',
   confirm: -1,      // the slot asking "Throw away?"
   keeping: false,   // a tune on its way to the tablet: nothing may drop it meanwhile
+  late: null,       // a save that took too long and may still land: { desk, res, slot, id }
   throwing: new Set(), // slots on their way out
   run: null,        // a recording: { token, ac, stream, cap, frames, peak, loudAt, heardAt, check }
   token: 0,
@@ -379,22 +394,50 @@ async function keep() {
   if (!res || L.stage !== 'pick' || L.keeping) return;
   const tune = makeTune(res, L.pick, L.how[L.pick]);
   if (!tune) { say(SAY.broken, 'bad'); paint(); return; }
-  const slot = freeSlot(L.shelf || []);
-  if (slot < 0) { L.robot = SAY.full; paint(); return; }
   const desk = L.desk;
   L.keeping = true;
   paint();
-  try {
-    await saveTune(desk, slot, tune);
-  } catch {
-    L.keeping = false;
-    if (L.desk === desk) { say(SAY.cantKeep, 'bad'); paint(); }
+  const cant = () => { L.keeping = false; if (L.desk === desk) { say(SAY.cantKeep, 'bad'); paint(); } };
+  // A save that took too long may have landed since: read the shelf again first (the tablet
+  // answers after that save is done), so the same tune is never kept twice.
+  if (L.late?.desk === desk) {
+    let got;
+    try { got = await inTime(loadTunes(desk), LAB.wait); } catch { got = LATE; }
+    if (got === LATE) { cant(); return; }
+    if (L.desk !== desk) { L.keeping = false; return; }
+    L.shelf = got.ok;
+    const was = L.late;
+    L.late = null;
+    if (was.res === res && got.ok.some((t) => t?.id === was.id)) { L.keeping = false; saved(); return; }
+  }
+  const slot = freeSlot(L.shelf || []);
+  if (slot < 0) { L.keeping = false; L.robot = SAY.full; paint(); return; }
+  const saving = saveTune(desk, slot, tune);
+  let got;
+  try { got = await inTime(saving, LAB.wait); } catch { cant(); return; }
+  if (got === LATE) {
+    // the tablet is slow: the kid may try again or go; if it lands after all, the shelf shows it
+    const late = { desk, res, slot, id: tune.id };
+    L.late = late;
+    saving.then(() => {
+      if (L.late === late) L.late = null;
+      if (L.desk !== desk || !L.shelf || L.keeping) return; // (a new Keep reads the shelf again)
+      L.shelf[slot] = tune;
+      if (L.result === res && L.stage === 'pick') saved();
+      else { if (L.note === SAY.cantKeep) say(''); paint(); }
+    }, () => { if (L.late === late) L.late = null; });
+    cant();
     return;
   }
   L.keeping = false;
   if (L.desk !== desk) return; // (the screen closed: the shelf is read again when it opens)
   if (L.shelf) L.shelf[slot] = tune; // whatever happened meanwhile, the shelf shows what is kept
   if (L.result !== res || L.stage !== 'pick') { paint(); return; }
+  saved();
+}
+
+/** The tune was kept: back to the start, and the robot says so. */
+function saved() {
   stopSound(false);
   forget();
   L.stage = 'ready';
@@ -410,14 +453,16 @@ async function throwAway(slot) {
   L.confirm = -1;
   if (L.hearing === `slot|${slot}`) stopSound(false);
   paint();
-  try {
-    await deleteTune(desk, slot);
-  } catch {
-    L.throwing.delete(slot);
+  const going = deleteTune(desk, slot);
+  let got;
+  try { got = await inTime(going, LAB.wait); } catch { got = null; }
+  L.throwing.delete(slot);
+  if (!got || got === LATE) {
+    // (if it is thrown away after all, the shelf says so then)
+    if (got === LATE) going.then(() => { if (L.desk === desk && L.shelf) { L.shelf[slot] = null; paint(); } }, () => {});
     if (L.desk === desk) { say(SAY.cantThrow, 'bad'); paint(); }
     return;
   }
-  L.throwing.delete(slot);
   if (L.desk !== desk || !L.shelf) return; // (the screen closed or is reading the shelf again)
   L.shelf[slot] = null;
   L.robot = L.stage === 'pick' ? ROBOT.thrownPick : ROBOT.thrown;

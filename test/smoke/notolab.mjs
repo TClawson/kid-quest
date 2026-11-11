@@ -424,14 +424,50 @@ async function recordToPick(page, name = '', stop = 'limit') {
   await labModule(page);
   assert.match(await page.locator('.lab-screen .kid-title').textContent(), /Test desk/);
   await waitLab(page, () => window.kqLab.labState().shelf);
+  // a slow tablet: the tune store held busy by another connection for `ms`
+  await page.evaluate(() => {
+    window.kqLab.LAB.wait = 800;
+    window.kqHold = (ms) => new Promise((ok) => {
+      const req = indexedDB.open('kidquest-studio', 1);
+      req.onsuccess = () => {
+        const tx = req.result.transaction('mixes', 'readwrite');
+        const st = tx.objectStore('mixes');
+        const until = performance.now() + ms;
+        const spin = () => { if (performance.now() < until) st.get('nothing').onsuccess = spin; };
+        spin();
+        ok();
+      };
+    });
+  });
+  const ids = () => page.evaluate(async (desk) => (await (await import('./js/studio-store.js')).loadTunes(desk)).filter(Boolean).map((t) => t.id), TEST_DESK);
+  // a save that takes too long: the kid is told, can go on, and it shows once it lands
   await recordToPick(page);
+  await page.evaluate(() => window.kqHold(3000));
   await page.click('[data-lab="keep"]');
-  await waitLab(page, () => window.kqLab.labState().stage === 'ready');
+  await waitLab(page, () => /couldn't keep it/.test(document.querySelector('.lab-note')?.textContent || ''), null, 5000);
+  assert.equal((await lab(page)).stage, 'pick', 'the readings are still there');
+  assert.equal(await page.locator('[data-lab="keep"]:not([disabled])').count(), 1, 'Keep can be pressed again');
+  assert.equal(await page.locator('[data-lab="over"]:not([disabled])').count(), 1);
+  await waitLab(page, () => window.kqLab.labState().stage === 'ready', null, 10000);
+  assert.equal((await lab(page)).robot, 'Saved! You\'ll find it on the shelf in the recording studio too.', 'it landed after all');
+  assert.match((await lab(page)).shelf[0], /^Tune 1/);
+  // and a second Keep while the first is still on its way never keeps the tune twice
+  await recordToPick(page);
+  await page.evaluate(() => window.kqHold(4000));
+  await page.click('[data-lab="keep"]');
+  await waitLab(page, () => /couldn't keep it/.test(document.querySelector('.lab-note')?.textContent || ''), null, 5000);
+  await page.click('[data-lab="keep"]');
+  await waitLab(page, () => window.kqLab.labState().stage === 'ready', null, 15000);
+  const two = await ids();
+  assert.equal(two.length, 2, `one tune each time (${two})`);
+  assert.equal(new Set(two).size, 2);
+  assert.deepEqual((await lab(page)).shelf.filter(Boolean).length, 2, 'the shelf agrees with the tablet');
+  await page.evaluate(() => { window.kqLab.LAB.wait = 8000; });
   const kept = await page.evaluate(async (ids) => {
     const { loadTunes } = await import('./js/studio-store.js');
     return Promise.all(ids.map(async (id) => (await loadTunes(id)).filter(Boolean).length));
   }, [TEST_DESK, KID]);
-  assert.deepEqual(kept, [1, 0], 'the test desk keeps its own tune; Ava has none');
+  assert.deepEqual(kept, [2, 0], 'the test desk keeps its own tunes; Ava has none');
   await page.click('[data-action="lab-back"]');
   await page.waitForSelector('.tabs [data-tab="settings"].on');
   // the test studio's shelf has it
