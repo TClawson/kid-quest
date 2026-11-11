@@ -23,7 +23,7 @@ import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, ho
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
-import { applyGrants, restoreFromRecord, restoreBackup } from './grants.js';
+import { applyGrants, restoreFromRecord, restoreBackup, mergeBackup } from './grants.js';
 import { furnitureThumb } from './houseart.js';
 import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
 import { seedThumb, decorThumb } from './gardenart.js';
@@ -631,6 +631,18 @@ function kidSummary(kid) {
 }
 
 function viewSetup() {
+  // A family device with no saved copy (new, or its copy couldn't be read) waits for the
+  // family instead: setting up here would send a new PIN and new kids over the family's.
+  if (cloudCfg) {
+    const stuck = cloud.signedOut || cloud.error;
+    return `
+    <div class="screen center setup">
+      <div class="logo">⭐</div>
+      ${waitingForFamily('This device belongs to a family. Its data will appear as soon as it arrives.')}
+      ${stuck ? `<p class="muted small">${cloud.signedOut ? 'This device was signed out of the family.' : `Sync problem: ${esc(cloud.error)}`}</p>
+      <button class="btn ghost" data-action="family-leave">Stop syncing on this device</button>` : ''}
+    </div>`;
+  }
   return `
     <div class="screen center setup">
       <div class="logo">⭐</div>
@@ -1843,6 +1855,15 @@ function rewardReminders() {
     </section>`;
 }
 
+/** A family device still showing its own saved copy: the server's hasn't arrived yet. */
+const familyBehind = () => Boolean(cloudCfg) && !cloud.gotState;
+
+function waitingForFamily(why) {
+  const off = typeof navigator !== 'undefined' && navigator.onLine === false;
+  return `<div class="card waiting-family"><h2>⏳ Getting the family's latest…</h2>
+    <p class="muted small">${esc(why)}${off ? ' This device is offline: connect to the internet to continue.' : ''}</p></div>`;
+}
+
 function viewParent() {
   const pending = pendingApprovals(state, today());
   const tabs = [
@@ -1853,7 +1874,7 @@ function viewParent() {
   ];
   let body = '';
   if (ui.tab === 'approvals') body = parentApprovals(pending);
-  else if (ui.tab === 'kids') body = ui.editKidId ? parentEditKid() : parentKids();
+  else if (ui.tab === 'kids') body = familyBehind() ? waitingForFamily('Kids and tasks open once this phone has the family’s latest copy, so an older list here can’t undo changes made on another phone.') : ui.editKidId ? parentEditKid() : parentKids();
   else if (ui.tab === 'history') body = parentHistory();
   else body = parentSettings();
   return `
@@ -2294,10 +2315,13 @@ function giveLegacyItems(kid) {
  * task list), saved once. The views themselves only read.
  */
 function reconcile() {
+  // On a family device, nothing here is saved until the family's copy has come from the
+  // server: this device's own copy may be days old, and what's worked out from it (today's
+  // pay, the day summaries, a kid who seems never to have had the shop) would be sent to
+  // the family over newer data. The kid's own taps still save as usual.
+  if (cloudCfg && !cloud.gotState) return;
   let changed = stampAllowance();
-  // like the repairs, only on the family's copy from the server: on an old copy saved on this
-  // device a kid can look like they never had the shop, and this would wipe what they own
-  if (!cloudCfg || cloud.gotState) for (const k of state.kids) if (giveLegacyItems(k)) changed = true;
+  for (const k of state.kids) if (giveLegacyItems(k)) changed = true;
   if (shareToday()) changed = true;
   const kid = ui.view === 'kid' && kidById(ui.kidId);
   if (kid) {
@@ -2741,6 +2765,23 @@ function importFile(file) {
     let data;
     try { data = JSON.parse(text); } catch { toast('That file is not a Kid Quest backup.'); return; }
     if (!data || !Array.isArray(data.kids) || !data.settings) { toast('That file is not a Kid Quest backup.'); return; }
+    if (cloudCfg) {
+      // a family device: whatever it saves goes to every device, so only put back what's missing
+      confirmModal({
+        title: 'Put back from backup?',
+        text: 'This device syncs with your family, so the backup only puts back what is missing: things a kid bought and days with no record. Nothing the family has now is removed or changed.',
+        yes: 'Put back',
+        onYes: () => {
+          if (familyBehind()) { toast('Wait for the family’s latest copy first, then try again.'); return; }
+          const got = migrate(data);
+          const r = mergeBackup(state, got);
+          if (r.items || r.days) save();
+          render();
+          toast(r.kids ? `Put back ${r.items} thing${r.items === 1 ? '' : 's'} and ${r.days} day${r.days === 1 ? '' : 's'}` : 'None of the kids in that backup are in this family.');
+        },
+      });
+      return;
+    }
     confirmModal({
       title: 'Restore backup?',
       text: `This replaces everything on this tablet with the backup (${data.kids.length} kids). The parent PIN becomes the one from the backup.`,

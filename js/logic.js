@@ -291,7 +291,9 @@ export function entryFor(state, kidId, key, create = false) {
   }
   if (!state.log[key][kidId]) {
     if (!create) return null;
-    state.log[key][kidId] = { tasks: {}, excused: false };
+    // no excused: false here: a new day merges into the family's copy, where a parent may
+    // already have excused it from another phone (missing means not excused)
+    state.log[key][kidId] = { tasks: {} };
   }
   return state.log[key][kidId];
 }
