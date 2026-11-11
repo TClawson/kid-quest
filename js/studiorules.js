@@ -615,8 +615,10 @@ function cutWords(mix, c) {
  * at half or double the pace of the other tracks: 'half' (every note twice as late and twice
  * as long), 'double' (half as late, half as long), or normal (no field). The notes are kept as
  * they are and only played paced (pacedNotes), so Normal brings the tune back exactly. A paced
- * clip keeps its normal length in `norm` (beats); its `total`, `from` and `len` are in the
- * mix's beats as for every clip, so trimming, copying and moving work as they always have.
+ * clip keeps its normal length in `norm` (beats), and in `back` ({ from, len }, normal beats)
+ * the part of its music it played at normal pace, so Normal gives back that very window. Its
+ * `total`, `from` and `len` are in the mix's beats as for every clip, so trimming, copying
+ * and moving work as they always have.
  */
 export const PACES = { half: 2, double: 0.5 };
 export const paceOf = (c) => (c?.kind === 'notes' && Object.hasOwn(PACES, c.pace) ? c.pace : null);
@@ -627,6 +629,26 @@ function pacedTotal(norm, pace, meter) {
   return Math.max(1, Math.min(mostNotesBeats(meter), Math.ceil(norm * paceFactor(pace) - 1e-9)));
 }
 
+/** A paced clip's `back` window when it can be used: whole beats inside its normal length. */
+function backOf(c, norm) {
+  const b = c.back;
+  if (!b || typeof b !== 'object') return null;
+  const { from, len } = b;
+  if (!Number.isInteger(from) || !Number.isInteger(len) || from < 0 || len < 1 || from + len > norm) return null;
+  return { from, len };
+}
+
+/**
+ * The window (normal beats) a paced clip's paced window [from, end) plays, rounded outward so
+ * nothing that plays is left out, inside its normal length.
+ */
+function outward(from, end, pace, norm) {
+  const f = paceFactor(pace);
+  const a = Math.max(0, Math.min(norm - 1, Math.floor(from / f + 1e-9)));
+  const b = Math.max(a + 1, Math.min(norm, Math.ceil(end / f - 1e-9)));
+  return { from: a, len: b - a };
+}
+
 /** A notes clip's notes as they play (in steps from its start), at its pace. */
 export function pacedNotes(c) {
   const f = paceFactor(paceOf(c));
@@ -635,9 +657,9 @@ export function pacedNotes(c) {
 
 /**
  * Play a clip of the kid's notes at a pace: 'half', 'double', or null (normal). It keeps its
- * start; what it plays scales from `from` (rounded down) to its end (rounded up), so nothing
- * that played is lost, and going back by the same steps lands where it was (half and back
- * exactly; into double, an odd beat rounds outward). When the slower clip doesn't fit (the
+ * start. Leaving Normal, it remembers the window it played (`back`); every pace is worked out
+ * from that window, scaled from its `from` (rounded down) to its end (rounded up) so nothing
+ * that played is lost, and Normal gives that window back exactly. When a clip doesn't fit (the
  * next clip on its track, or the end of the mix) it is cut there and `note` says so; the notes
  * themselves are all kept. The band that came with a tune (the same `pair`, at the same beat,
  * at the same pace) changes with it, so they stay together. Returns { mix, error, note }.
@@ -653,22 +675,24 @@ export function setPace(mix, id, pace) {
   const together = (x) => x.kind === 'notes' && x.id !== c.id && typeof c.pair === 'string' && x.pair === c.pair && x.start === c.start && paceOf(x) === was;
   const ids = [c.id, ...allClips(mix).filter(together).map((x) => x.id)];
   const next = clone(mix);
-  let note = '';
+  const cut = [];
   for (const cid of ids) {
     const { clip: x, track } = findClip(next, cid);
     const norm = was ? x.norm || x.total : x.total;
-    const k = paceFactor(to) / paceFactor(was);
+    const win = !was ? { from: x.from, len: x.len } : backOf(x, norm) || outward(x.from, x.from + x.len, was, norm);
+    const f = paceFactor(to);
     const total = pacedTotal(norm, to, next.meter);
-    const from = Math.min(total - 1, Math.floor(x.from * k + 1e-9));
-    const end = Math.min(total, Math.ceil((x.from + x.len) * k - 1e-9));
+    const from = Math.min(total - 1, Math.floor(win.from * f + 1e-9));
+    const end = Math.min(total, Math.ceil((win.from + win.len) * f - 1e-9));
     const want = Math.max(1, end - from);
     const len = Math.max(1, Math.min(want, roomAt(next, track, x.start, x.id)));
     Object.assign(x, { total, from, len });
-    if (to) Object.assign(x, { pace: to, norm });
-    else { delete x.pace; delete x.norm; }
-    if (cid === c.id && len < want) note = cutWords(next, x);
+    if (to) Object.assign(x, { pace: to, norm, back: win });
+    else { delete x.pace; delete x.norm; delete x.back; }
+    if (len < want) cut.push(x);
   }
-  return { mix: next, error: null, note };
+  const mine = cut.find((x) => x.id === c.id);
+  return { mix: next, error: null, note: mine ? cutWords(next, mine) : '' };
 }
 
 /** Move a clip to a track and a beat (snapped). Turned down when something is in the way. */
@@ -703,7 +727,17 @@ export function trimClip(mix, id, { start, len }) {
   if (len === undefined) l = c.start + c.len - s;
   l = Math.max(1, Math.min(l, c.total - from, roomAt(mix, found.track, s, id)));
   const next = clone(mix);
-  Object.assign(findClip(next, id).clip, { start: s, len: l, from });
+  const x = findClip(next, id).clip;
+  Object.assign(x, { start: s, len: l, from });
+  if (paceOf(c) && (from !== c.from || l !== c.len)) {
+    // a paced clip trimmed: its normal window follows the edge that moved, rounded outward
+    const norm = c.norm || c.total;
+    const old = backOf(c, norm) || outward(c.from, c.from + c.len, c.pace, norm);
+    const near = outward(from, from + l, c.pace, norm);
+    const a = from !== c.from ? near.from : old.from;
+    const b = from + l !== c.from + c.len ? near.from + near.len : old.from + old.len;
+    x.back = { from: Math.min(a, norm - 1), len: Math.max(1, Math.min(norm, b) - Math.min(a, norm - 1)) };
+  }
   return ok(next);
 }
 
@@ -945,6 +979,7 @@ function cleanNotesClip(c, raw, meter) {
   if (c.follows === true) clip.follows = true;
   if (notesOwn(c)) clip.own = c.own; // (a voice equal to it is dropped by cleanMix, as its own)
   if (pace) Object.assign(clip, { pace, norm });
+  if (pace && backOf(c, norm)) clip.back = backOf(c, norm); // (an odd window is dropped, not the clip)
   if (typeof c.pair === 'string' && c.pair && c.pair.length <= 40) clip.pair = c.pair;
   return clip;
 }

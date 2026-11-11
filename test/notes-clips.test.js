@@ -485,6 +485,17 @@ test('a slower clip that doesn\'t fit is cut and says why; trimming works on the
   const hb = must(setPace(blocked, tid, 'half'));
   assert.equal(findClip(hb.mix, tid).clip.len, 10);
   assert.match(hb.note, /^Your tune stops where the next clip on its track starts/);
+  // cut at half speed, then Normal: all of it again, and nothing to say
+  for (const m of [half.mix, hb.mix]) {
+    const n = must(setPace(m, tid, null));
+    assert.equal(findClip(n.mix, tid).clip.len, 8);
+    assert.equal(n.note, '');
+  }
+  // Normal with something now in the way: cut, and said
+  const dbl = must(setPace({ ...r.mix, bars: 8 }, tid, 'double')).mix; // 4 beats
+  const nb = must(setPace(must(addBacking(dbl, 0, 'beat-rock', 'sunny', 5)).mix, tid, null));
+  assert.deepEqual(((c) => [c.from, c.len, c.total])(findClip(nb.mix, tid).clip), [0, 5, 8]);
+  assert.match(nb.note, /^Your tune stops where the next clip on its track starts/);
   // trimmed, then paced: from and len scale with it
   const roomy = { ...r.mix, bars: 8 };
   const trimmed = must(trimClip(roomy, tid, { start: 2, len: 5 })).mix; // from 2, 5 beats
@@ -528,6 +539,68 @@ test('a tune\'s band changes pace with it, while they stay together', () => {
   assert.equal(paceOf(findClip(cpHalf.mix, bid).clip), null);
 });
 
+test('Normal gives back the very window a clip had, whatever was cut on the way', () => {
+  // every window of a 7- and an 8-beat clip, through every pace sequence of up to three steps,
+  // in a roomy mix and with something in the way (the next clip, or the end of the mix)
+  const seqs = [];
+  const grow = (seq) => { if (seq.length) seqs.push(seq); if (seq.length < 3) for (const p of ['half', 'double']) if (seq.at(-1) !== p) grow([...seq, p]); };
+  grow([]);
+  let checked = 0;
+  for (const beats of [7, 8]) {
+    const { mix, id } = withTake({ beats, track: 0, at: 2 });
+    const r = must(takeToNotes({ ...mix, bars: 12 }, id, [tune(beats)], 'C'));
+    const tid = r.ids[0];
+    for (let from = 0; from < beats; from += 1) {
+      for (let len = 1; from + len <= beats; len += 1) {
+        const w = must(trimClip(must(trimClip(r.mix, tid, { start: 2 + from })).mix, tid, { len })).mix;
+        const c0 = findClip(w, tid).clip;
+        assert.deepEqual([c0.start, c0.from, c0.len], [2 + from, from, len]);
+        const ways = [
+          ['roomy', w],
+          ['a clip in the way', must(addBacking(w, 0, 'beat-rock', 'sunny', c0.start + len)).mix],
+          ['the end of the mix', { ...w, bars: Math.ceil((c0.start + len) / 4) }],
+        ];
+        for (const [why, m0] of ways) {
+          for (const seq of seqs) {
+            let m = m0;
+            for (const p of seq) m = must(setPace(m, tid, p)).mix;
+            const c = findClip(must(setPace(m, tid, null)).mix, tid).clip;
+            assert.deepEqual(c, findClip(m0, tid).clip, `${beats} beats, from ${from}, len ${len}, ${why}: ${seq.join(' > ')} > Normal`);
+            checked += 1;
+          }
+        }
+      }
+    }
+  }
+  assert.equal(checked, (28 + 36) * 3 * 6);
+});
+
+test('a paced clip trimmed: its normal window follows the edge that moved', () => {
+  const { mix, id } = withTake({ beats: 8, track: 0, at: 0 });
+  const r = must(takeToNotes({ ...mix, bars: 8 }, id, [tune(8)], 'C'));
+  const tid = r.ids[0];
+  // after a front trim by an odd number of beats, Double and Normal: right where it was
+  const odd = must(trimClip(r.mix, tid, { start: 1 })).mix;
+  const d = findClip(must(setPace(odd, tid, 'double')).mix, tid).clip;
+  assert.deepEqual([d.start, d.from, d.len, d.back], [1, 0, 4, { from: 1, len: 7 }]);
+  const n = findClip(must(setPace(must(setPace(odd, tid, 'double')).mix, tid, null)).mix, tid).clip;
+  assert.deepEqual([n.start, n.from, n.len], [1, 1, 7], 'not a beat late');
+  // trimmed at half speed: the back edge moves, the front stays exactly
+  const half = must(setPace(odd, tid, 'half')).mix; // from 2, len 14
+  const tb = must(trimClip(half, tid, { len: 7 })).mix; // paced beats 2 to 9: normal 1 to 4.5
+  assert.deepEqual(findClip(tb, tid).clip.back, { from: 1, len: 4 }, 'rounded outward');
+  assert.deepEqual(((c) => [c.start, c.from, c.len])(findClip(must(setPace(tb, tid, null)).mix, tid).clip), [1, 1, 4]);
+  // the front edge moves: from it, rounded down, and the end stays
+  const tf = must(trimClip(half, tid, { start: 4 })).mix; // paced from 5: normal 2.5
+  assert.deepEqual(findClip(tf, tid).clip.back, { from: 2, len: 6 });
+  // a trim that changes nothing keeps the window
+  assert.deepEqual(findClip(must(trimClip(half, tid, {})).mix, tid).clip.back, { from: 1, len: 7 });
+  // moving and copying keep it
+  assert.deepEqual(findClip(must(moveClip(tb, tid, 2, 0)).mix, tid).clip.back, { from: 1, len: 4 });
+  const cp = must(copyClip(tb, tid));
+  assert.deepEqual(findClip(cp.mix, cp.id).clip.back, { from: 1, len: 4 });
+});
+
 test('a paced clip is kept as it was, and odd paces are read back as normal', () => {
   const { mix, id } = withTake({ beats: 8, track: 1, at: 4 });
   const r = must(takeToNotes({ ...mix, bars: 8 }, id, [tune(8), bandPart(8)], 'C'));
@@ -544,6 +617,18 @@ test('a paced clip is kept as it was, and odd paces are read back as normal', ()
   const lost = JSON.parse(JSON.stringify(must(setPace(r.mix, r.ids[0], 'half')).mix));
   delete lost.tracks[1][0].norm;
   assert.equal(cleanMix(lost).tracks[1][0].norm, 8, 'a lost normal length is worked out from the paced one');
+  // the remembered window: kept when it fits the normal length, else dropped (not the clip)
+  assert.deepEqual(cleanMix(JSON.parse(JSON.stringify(dbl))).tracks[1][0].back, { from: 0, len: 8 });
+  for (const back of [{ from: 1, len: 8 }, { from: -1, len: 2 }, { from: 0, len: 0 }, { from: 0.5, len: 2 }, { from: '0', len: 2 }, [0, 2], null, 'x']) {
+    const bad = JSON.parse(JSON.stringify(dbl));
+    bad.tracks[1][0].back = back;
+    const c = cleanMix(bad).tracks[1][0];
+    assert.equal(c.back, undefined, JSON.stringify(back));
+    assert.equal(c.pace, 'double', 'the clip stays');
+  }
+  const normal = JSON.parse(JSON.stringify(r.mix));
+  normal.tracks[1][0].back = { from: 0, len: 2 };
+  assert.equal(cleanMix(normal).tracks[1][0].back, undefined, 'only a paced clip has one');
   // a paced clip doesn't swing, and its sound is played paced
   assert.equal(clipSwing({ ...dbl, tracks: dbl.tracks }, d), 0);
   assert.equal(schedule(dbl).find((e) => e.id === d.id).pace, 'double');
