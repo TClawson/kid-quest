@@ -502,6 +502,57 @@ test('bars of three or four for a tune played with one hand: from its rhythm', (
   assert.equal(threeBeat(steps([2, 2, 2])), 0);
 });
 
+test('scales, runs and other plain notes: counted in twos, in bars of four, at their own length', () => {
+  const seconds = (heard) => heard.at(-1).on - heard[0].on;
+  const tidySeconds = (t) => (t.tidy[0].notes.at(-1).at * 30) / t.bpm;
+  // a five-finger exercise, a scale up and down, broken thirds: nothing in them says three
+  const FIVE = line('60 62 64 65 67 65 64 62');
+  const SCALE = line('60 62 64 65 67 69 71 72 71 69 67 65 64 62 60:4');
+  const THIRDS = line('60 64 62 65 64 67 65 69 67 64 65 62 64 60 62 59');
+  for (const bpm of [60, 80, 100, 120]) for (const tune of [FIVE, SCALE, THIRDS]) assert.equal(tuneReadings(playLine(tune, bpm)).meter, 4, `${tune.length} notes at ${bpm}`);
+  // notes all alike say nothing either way, however many there are
+  for (const step of [1, 2]) for (let n = 6; n <= 40; n += 1) {
+    const even = Array.from({ length: n }, (_, i) => ({ at: step * i, len: step }));
+    assert.ok(Math.abs(threeBeat(even)) < 0.45, `${n} notes ${step} apart: ${threeBeat(even)}`);
+  }
+  // a quick run (a note every 0.15 to 0.2 seconds) is as long tidied as it was played
+  for (const gap of [0.15, 0.17, 0.2]) {
+    const r = rng(11);
+    const heard = Array.from({ length: 30 }, (_, i) => { const on = 0.5 + i * gap + r.gauss() * 0.008; return { midi: 60 + (i % 8), on, off: on + 0.1 }; });
+    const t = tuneReadings(heard);
+    assert.ok(Math.abs(tidySeconds(t) / seconds(heard) - 1) < 0.06, `a note every ${gap} s: ${tidySeconds(t)} for ${seconds(heard)} (speed ${t.bpm})`);
+  }
+  // slow half notes keep their length too
+  const HALVES = line('60:2 62:2 64:2 65:2 67:2 65:2 64:2 62:2 60:2 64:2 67:2 72:2 67:2 64:2 60:4');
+  for (const bpm of [50, 60, 72, 100]) {
+    const heard = playLine(HALVES, bpm);
+    const t = tuneReadings(heard);
+    assert.ok(Math.abs(tidySeconds(t) / seconds(heard) - 1) < 0.06, `half notes at ${bpm}: ${tidySeconds(t)} for ${seconds(heard)} (speed ${t.bpm})`);
+    assert.equal(t.meter, 4, `half notes at ${bpm}`);
+  }
+});
+
+test('waltzes: a fast one keeps its rhythm, and a left hand with one note a bar does not hide the three', () => {
+  // long, short, long, short at 160 beats a minute: read at half that, in threes
+  const FAST = line('60:2 64 67:2 64 65:2 62 59:2 62 62:2 65 69:2 65 67:2 64 60:3');
+  for (const bpm of [150, 160, 180]) {
+    const t = tuneReadings(playLine(FAST, bpm));
+    assert.ok(Math.abs(t.bpm - bpm / 2) <= 3, `played at ${bpm}, found ${t.bpm}`);
+    assert.deepEqual(tidyGaps(t), FAST.slice(0, -1).map(([, d]) => d), `at ${bpm}`);
+    assert.equal(t.meter, 3, `at ${bpm}`);
+  }
+  // Amazing Grace, slow and at a walking speed, alone and over one low note a bar
+  const GRACE = line('62 67:2 71:.5 67:.5 71:2 69 67:2 64 62:2 62 67:2 71:.5 67:.5 71:2 69 74:3 74:2 71 74:2 71:.5 67:.5 71:2 69 67:2 64 62:2 62 67:2 71:.5 67:.5 71:2 69 67:3');
+  for (const bpm of [56, 66, 90]) {
+    const right = playLine(GRACE, bpm);
+    const one = tuneReadings(right);
+    assert.ok(Math.abs(one.bpm - bpm) <= 3, `played at ${bpm}, found ${one.bpm}`);
+    assert.equal(one.meter, 3, `one hand at ${bpm}`);
+    const left = Array.from({ length: 16 }, (_, bar) => { const on = 0.5 + ((1 + 3 * bar) * 60) / bpm; return { midi: bar % 4 === 2 ? 48 : 43, on, off: on + 150 / bpm }; });
+    assert.equal(tuneReadings([...right, ...left]).meter, 3, `two hands at ${bpm}`);
+  }
+});
+
 test('a tune recorded on its own: its speed, its bars and its band, for every piece played free', () => {
   let kept = 0; let n = 0; const wrongCount = [];
   for (const id of IDS) for (const level of LEVELS) {

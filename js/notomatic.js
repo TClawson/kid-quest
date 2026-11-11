@@ -622,19 +622,23 @@ const BEAT_FROM = 60 / 144; // seconds: the shortest beat looked for (144 a minu
 const BEAT_TO = 60 / 40; // seconds: and the longest (40 a minute)
 const BEAT_NEAR = 0.03; // seconds: how near a gap must be to a count of beats to speak for it
 const BEAT_FAR = 6; // beats: gaps longer than this say nothing
-const BEAT_SLOW = 0.8; // a slower beat is the kid's own when it fits this share as well as the best
+const BEAT_ALIKE = 0.7; // playing is "plain notes" when this share of its gaps are the usual gap, or twice or half it
+const BEAT_NOTES = 2.2; // a slower beat is at most this many of the usual notes long
+const BEAT_SLOW = 0.7; // a slower beat is the kid's own when it fits this share as well as the best
 const WALTZ_BY = 0.05; // how much better bars of three must fit their chords than bars of four
-const WALTZ_BEAT = 0.5; // how much more a single line's rhythm must speak for bars of three than of four
+const WALTZ_BEAT = 0.45; // how much more a single line's rhythm must speak for bars of three than of four
+const WALTZ_SURE = 1; // and the rhythm of two hands, to say three without the chords
 const WALTZ_NOT = -0.6; // two hands: a rhythm that speaks this much for four overrules the chords
 
 /**
  * The speed of playing that had no clicks to follow, in beats a minute (40 to 144). The gaps
  * between every two strikes (not only neighbours) keep coming back to whole numbers of beats,
- * whatever is played in between: straight or swung eighths, dotted notes, a slip. Of the beat
- * lengths that nearly all gaps agree with, the longest wins: slow playing in plain quarter
- * notes is slow playing, not fast playing in long notes (which would sound the same, but its
- * bars would be half as long and its notes harder to set on their steps). Too little playing
- * to tell gives 100.
+ * whatever is played in between: straight or swung eighths, dotted notes, a slip. The beat
+ * length between 72 and 144 a minute that most gaps agree with is found first; when a beat
+ * two or three times as long fits nearly as well, that one wins: slow playing in plain
+ * quarter notes is slow playing, not fast playing in long notes (which would sound the same,
+ * but its bars would be half as long and its notes harder to set on their steps). Too little
+ * playing to tell gives 100.
  */
 export function speedOf(heard) {
   const on = heard.map((n) => n.on).filter(Number.isFinite).sort((a, b) => a - b);
@@ -665,12 +669,38 @@ export function speedOf(heard) {
     tried.push({ beat, score: (fit / n - chance) / (1 - chance) });
   }
   if (!tried.length) return 100;
-  const top = Math.max(...tried.map((t) => t.score));
-  if (!(top > 0)) return 100;
-  // the longest beat that fits nearly as well as the best one, at the top of its own hill
-  let at = tried.length - 1;
-  while (at > 0 && tried[at].score < BEAT_SLOW * top) at -= 1;
-  while (at > 0 && tried[at - 1].score > tried[at].score) at -= 1;
+  // the best beat of the fastest octave (72 to 144 a minute)
+  const gaps = xs.slice(1).map((x, i) => x - xs[i]).sort((a, b) => a - b);
+  const usual = gaps[gaps.length >> 1];
+  const near = (want) => {
+    let best = -1;
+    tried.forEach((t, i) => { if (Math.abs(t.beat / want - 1) <= 0.03 && (best < 0 || t.score > tried[best].score)) best = i; });
+    return best;
+  };
+  let at = 0;
+  tried.forEach((t, i) => { if (t.beat < 2 * BEAT_FROM && t.score > tried[at].score) at = i; });
+  // Plain notes (nearly all one length, or twice or half it: a scale, a run, slow long notes)
+  // fit a beat of a third or a fifth of them as well as one of a half or a quarter: they are
+  // counted in twos.
+  const twos = (x) => Math.abs(Math.log2(x) - Math.round(Math.log2(x)));
+  if (twos(tried[at].beat / usual) > 0.2 && gaps.filter((g) => twos(g / usual) <= 0.2).length >= BEAT_ALIKE * gaps.length) {
+    let want = usual;
+    while (want < BEAT_FROM) want *= 2;
+    while (want >= 2 * BEAT_FROM) want /= 2;
+    const plain = near(want);
+    if (plain >= 0 && tried[plain].score > 0) at = plain;
+  }
+  const quick = tried[at];
+  if (!(quick.score > 0)) return 100;
+  // Slow playing: a beat two or three times as long that fits nearly as well is the kid's
+  // own, as long as the usual note is not much shorter than half of it (a run of quick even
+  // notes fits every longer beat).
+  for (const times of [2, 3]) {
+    const want = times * quick.beat;
+    if (want > BEAT_TO || want > BEAT_NOTES * usual) continue;
+    const best = near(want);
+    if (best >= 0 && tried[best].score >= BEAT_SLOW * quick.score) at = best;
+  }
   return Math.round(60 / tried[at].beat);
 }
 
@@ -681,17 +711,18 @@ export function speedOf(heard) {
  */
 export function threeBeat(notes) {
   const at = [...new Set(notes.map((n) => n.at))].sort((a, b) => a - b);
-  if (at.length < 4) return 0;
+  if (at.length < 6) return 0;
   const gap = at.map((a, i) => Math.min(8, i + 1 < at.length ? at[i + 1] - a : 4));
   const usual = gap.reduce((x, y) => x + y, 0) / gap.length;
   const span = at[at.length - 1] - at[0];
-  // the longest notes a bar's first beat can be given (at the best place for the bar line)
+  // the longest notes a bar's first beat can be given (at the best place for the bar line),
+  // against the usual note: 1 for notes all alike, wherever the bar line is
   const firsts = (bar) => {
     let best = 0;
-    for (let from = 0; from < bar; from += 1) {
+    for (let from = 0; from < bar && from <= span; from += 1) {
       let sum = 0;
       at.forEach((a, i) => { if (mod(a - at[0] - from, bar) < 0.01) sum += gap[i]; });
-      best = Math.max(best, sum / ((span + bar) / bar) / usual);
+      best = Math.max(best, sum / (Math.floor((span - from) / bar) + 1) / usual);
     }
     return best;
   };
@@ -706,8 +737,14 @@ export function threeBeat(notes) {
     }
     return either ? both / either : 0;
   };
-  return firsts(6) - firsts(8) + firsts(12) - firsts(16)
-    + 0.5 * (again(6) + 2 * again(12) + again(24) - again(8) - 2 * again(16) - again(32));
+  // (a bar length is only judged where the tune is long enough for both: a short tune must
+  // not lean one way because the longer bars fall off its end)
+  let sum = 0;
+  if (span >= 16) sum += firsts(6) - firsts(8) + 0.5 * (again(6) - again(8));
+  if (span >= 24) sum += again(12) - again(16);
+  if (span >= 32) sum += firsts(12) - firsts(16);
+  if (span >= 40) sum += 0.5 * (again(24) - again(32));
+  return sum;
 }
 
 /**
@@ -728,14 +765,15 @@ export function tuneReadings(heard, { meter = 0 } = {}) {
   let result = readings(notes, { bpm, meter: count, lead, beats, own: true });
   // Three beats in a bar or four? With two hands, a waltz's chords change every three beats:
   // its bars of three sit on one chord each clearly better than bars of four do (unless the
-  // rhythm plainly says four). One line has no chords to go by, only its rhythm: long notes
-  // on the first beat, and a rhythm that comes back a bar later.
+  // rhythm plainly says four), or their rhythm plainly says three. One line has no chords to
+  // go by, only its rhythm: long notes on the first beat, and a rhythm that comes back a bar
+  // later.
   if (!meter && result.band) {
     const tidy = result.tidy[0].notes;
     const beat = threeBeat(tidy);
     const three = handSplit(tidy) == null
       ? beat > WALTZ_BEAT
-      : beat > WALTZ_NOT && barFit(tidy, result.key, 6) - barFit(tidy, result.key, 8) > WALTZ_BY;
+      : beat > WALTZ_SURE || (beat > WALTZ_NOT && barFit(tidy, result.key, 6) - barFit(tidy, result.key, 8) > WALTZ_BY);
     if (three) { count = 3; result = readings(notes, { bpm, meter: count, lead, beats, own: true }); }
   }
   return { ...result, bpm, meter: count, beats: Math.max(beats, ...READINGS.flatMap((r) => (result[r.id] || []).map((p) => p.beats))) };
