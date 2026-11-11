@@ -337,6 +337,23 @@ function barStart(notes, key, bar, start, end, split) {
   return best.from;
 }
 
+/** How well bars of `bar` steps each sit on one chord, at the bar start that does it best (0 to about 1). */
+export function barFit(notes, key, bar) {
+  if (!notes.length || !key) return 0;
+  const split = handSplit(notes);
+  const start = Math.min(...notes.map((n) => n.at)); const end = Math.max(...notes.map((n) => n.at + n.len));
+  let best = 0;
+  for (let back = 0; back < bar; back += 2) {
+    let sum = 0; let n = 0;
+    for (let at = start - back; at < end; at += bar) {
+      const c = bestChord(sounding(notes.map((x) => ({ ...x, right: split == null || x.midi >= split })), at, at + bar, split), key);
+      if (c) { sum += c.score; n += 1; }
+    }
+    if (n) best = Math.max(best, sum / n);
+  }
+  return best;
+}
+
 /**
  * A band part for chords: a bass note, then the chord (bass, chord, bass, chord in four; bass,
  * chord, chord in three), with each chord set where the hand has the least to move. The last
@@ -486,13 +503,14 @@ function setNotes(groups, places, grid, split) {
  *   beats   how long the take is, in beats
  *   swing   how much the mix swings (0: it doesn't)
  *   barAt   the beat of the bar the take starts on (0 is the bar's first)
+ *   own     no clicks were playing: the playing is tidied at its own speed, whatever it fits
  * Returns { key, onBeat, heard, tidy, band, chords }: the key the playing is in (null when too
  * little was played), whether it kept to the clicks, and for each reading its parts
  * [{ role: 'tune' | 'band', notes: [{ at, len, midi }] (steps), beats, follows }]; band is
  * null when there is no tune to make a band for (fewer than 4 notes). chords (with a band
  * only) are the band's: [{ at, len (steps), name ('I', 'vi', ...), root (0-11), minor }].
  */
-export function readings(heard, { bpm, meter = 4, lead = 0, beats, swing = 0, barAt = 0 }) {
+export function readings(heard, { bpm, meter = 4, lead = 0, beats, swing = 0, barAt = 0, own = false }) {
   const steps = 2 * beats;
   const raw = inSteps(heard, { bpm, lead }).filter((n) => n.at < steps);
   // As I heard it: a note ends when the key is struck again, and with the take
@@ -508,7 +526,7 @@ export function readings(heard, { bpm, meter = 4, lead = 0, beats, swing = 0, ba
   const groups = strikes(raw, (TOGETHER * bpm) / 30, (SPREAD * bpm) / 30);
   const xs = groups.map((g) => g.at);
   const split = handSplit(raw);
-  const clicks = clickGrid(xs, swing, Math.min(0.4, (LATE * bpm) / 30));
+  const clicks = own ? null : clickGrid(xs, swing, Math.min(0.4, (LATE * bpm) / 30));
   let places; let grid; let follows = true;
   if (clicks) {
     result.onBeat = true;
@@ -555,4 +573,75 @@ export function readings(heard, { bpm, meter = 4, lead = 0, beats, swing = 0, ba
     }
   }
   return result;
+}
+
+// ---------- playing with no mix around it (the Note-o-Matic's own screen) ----------
+
+const BEAT_FROM = 60 / 144; // seconds: the beat is looked for between 72 and 144 a minute
+const BEAT_NEAR = 0.03; // seconds: how near a gap must be to a count of beats to speak for it
+const BEAT_FAR = 6; // beats: gaps longer than this say nothing
+const WALTZ_BY = 0.05; // how much better bars of three must fit their chords than bars of four
+
+/**
+ * The speed of playing that had no clicks to follow, in beats a minute (72 to 144). The gaps
+ * between every two strikes (not only neighbours) keep coming back to whole numbers of beats,
+ * whatever is played in between: straight or swung eighths, dotted notes, a slip. The beat
+ * length that most gaps agree with wins. Playing at 60 comes out as 120 with notes twice as
+ * long, which sounds the same. Too little playing to tell gives 100.
+ */
+export function speedOf(heard) {
+  const on = heard.map((n) => n.on).filter(Number.isFinite).sort((a, b) => a - b);
+  const xs = [];
+  let first = 0; let sum = 0; let count = 0;
+  for (const t of on) {
+    if (count && t - first > SPREAD) { xs.push(sum / count); sum = 0; count = 0; }
+    if (!count) first = t;
+    sum += t; count += 1;
+  }
+  if (count) xs.push(sum / count);
+  if (xs.length < 4) return 100;
+  let best = null;
+  for (let beat = BEAT_FROM; beat < 2 * BEAT_FROM; beat *= 1.006) {
+    let fit = 0; let n = 0;
+    for (let i = 0; i < xs.length; i += 1) {
+      for (let j = i + 1; j < xs.length; j += 1) {
+        const gap = xs[j] - xs[i];
+        if (gap > BEAT_FAR * beat + 0.1) break;
+        if (gap < 0.5 * beat) continue;
+        const off = Math.abs(gap - beat * Math.round(gap / beat));
+        fit += Math.exp(-0.5 * (off / BEAT_NEAR) ** 2); n += 1;
+      }
+    }
+    if (!n) continue;
+    // (what gaps from nowhere would score at this beat length is taken off)
+    const chance = Math.min(1, (BEAT_NEAR * Math.sqrt(2 * Math.PI)) / beat);
+    const score = (fit / n - chance) / (1 - chance);
+    if (!best || score > best.score) best = { score, beat };
+  }
+  return best ? Math.round(60 / best.beat) : 100;
+}
+
+/**
+ * The three readings of playing recorded on its own, with no mix and no clicks (the
+ * Note-o-Matic's own screen): its speed is found from the playing (speedOf), it starts at its
+ * first note and ends with its last. Its beats in a bar (3 or 4) are found too, unless
+ * `meter` says. Returns what readings() does, and { bpm, meter, beats }: the speed its steps
+ * are counted at, the beats in a bar, and how long it is.
+ */
+export function tuneReadings(heard, { meter = 0 } = {}) {
+  const notes = heard.filter((n) => Number.isFinite(n.midi) && Number.isFinite(n.on));
+  if (!notes.length) return { ...readings([], { bpm: 100, meter: meter || 4, beats: 1, own: true }), bpm: 100, meter: meter || 4, beats: 1 };
+  const bpm = speedOf(notes);
+  const lead = Math.min(...notes.map((n) => n.on));
+  const end = Math.max(...notes.map((n) => n.off ?? n.on + 0.2));
+  const beats = Math.max(1, Math.ceil(((end - lead) * bpm) / 60));
+  let count = meter || 4;
+  let result = readings(notes, { bpm, meter: count, lead, beats, own: true });
+  // Three beats in a bar or four? A waltz's chords change every three beats: its bars of
+  // three sit on one chord each clearly better than bars of four do.
+  if (!meter && result.band) {
+    const tidy = result.tidy[0].notes;
+    if (barFit(tidy, result.key, 6) - barFit(tidy, result.key, 8) > WALTZ_BY) { count = 3; result = readings(notes, { bpm, meter: count, lead, beats, own: true }); }
+  }
+  return { ...result, bpm, meter: count, beats: Math.max(beats, ...READINGS.flatMap((r) => (result[r.id] || []).map((p) => p.beats))) };
 }
