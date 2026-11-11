@@ -13,6 +13,11 @@ import { BPM_RANGE, MOST_NOTES, NOTES_VOICE, READING_VOICES, mostNotesBeats, val
 export const TUNE_SLOTS = 6;
 /** A tune keeps its own speed, slow playing too (notomatic.js tuneReadings hears 40 and up). */
 export const TUNE_BPM = [40, 170];
+/** How much Slower and Faster change a tune's speed on the robot's screen (beats a minute). */
+export const TUNE_STEP = 6;
+
+/** A tune's speed one step slower (d -1) or faster (d 1), kept inside TUNE_BPM. */
+export const stepSpeed = (bpm, d) => Math.max(TUNE_BPM[0], Math.min(TUNE_BPM[1], Math.round(bpm) + Math.sign(d) * TUNE_STEP));
 const READING_IDS = READINGS.map((r) => r.id);
 
 /** The voice a reading's tune starts in. */

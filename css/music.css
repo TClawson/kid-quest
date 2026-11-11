@@ -339,6 +339,13 @@
 .lab-count > span { font: 700 1.1rem var(--px-font); }
 .lab-bars { display: flex; gap: 6px; }
 .lab-bars .btn { min-height: 44px; min-width: 96px; padding: 6px 12px; font-variant-numeric: tabular-nums; }
+.lab-speed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; background: #fff; border: 2px solid var(--px-ink); border-radius: 6px; }
+.lab-speed > span:first-child { font: 700 1.1rem var(--px-font); }
+.lab-speed-btn { min-height: 44px; padding: 6px 12px; }
+.lab-speed-btn.off { opacity: 0.45; }
+.lab-speed-val { display: grid; min-width: 96px; text-align: center; line-height: 1.1; }
+.lab-speed-val b { font: 700 1.3rem var(--px-font); }
+.lab-speed-val small { color: var(--muted); font-size: 0.78rem; }
 .lab-bar.on { background: var(--px-ink); color: #fff; }
 .lab-shelf { padding: 10px 12px; background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); }
 .lab-slots { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px; }
@@ -374,6 +381,8 @@
   .st-loops .btn { flex: 1 1 auto; }
   .st-nom-buttons .btn { flex: 1 1 auto; }
   .st-paces > span { flex: 1 1 100%; }
+  .lab-speed > span:first-child { flex: 1 1 100%; }
+  .lab-speed-btn { flex: 1 1 0; min-width: 0; }
   .st-paces .st-pace { flex: 1 1 0; min-width: 0; padding: 6px 4px; line-height: 1.15; }
   /* the robot's Keep and Start over stay in reach at the bottom while the readings scroll by */
   .lab-keep-row { position: sticky; bottom: 0; z-index: 3; margin: 0 -16px; padding: 8px 16px max(8px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 3px solid var(--px-ink); flex-wrap: nowrap; }

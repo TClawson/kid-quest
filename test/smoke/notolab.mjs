@@ -290,6 +290,26 @@ async function recordToPick(page, name = '', stop = 'limit') {
   await waitLab(page, () => window.kqLab.labState().playing?.key === 'band');
   await shot(page, '6-count-in-3s', '.lab-count');
 
+  // Speed: the tune's own speed, a step at a time; a reading that plays goes on at the new speed
+  const found = (await lab(page)).found;
+  assert.equal((await lab(page)).speed, found, 'it starts at the speed the robot found');
+  assert.equal((await page.locator('.lab-speed-val b').textContent()).trim(), String(found));
+  await page.click('[data-lab="speed"][data-d="1"]');
+  await page.click('[data-lab="speed"][data-d="1"]');
+  assert.equal((await lab(page)).speed, Math.min(170, found + 12));
+  await page.click('[data-lab="speed"][data-d="-1"]');
+  const speed = Math.min(170, found + 12) - 6;
+  assert.equal((await lab(page)).speed, speed);
+  assert.equal((await page.locator('.lab-speed-val b').textContent()).trim(), String(speed));
+  await waitLab(page, () => window.kqLab.labState().playing?.key === 'band');
+  // my recording itself keeps its own speed (and Speed doesn't stop it)
+  await page.click('[data-lab="hear"][data-what="raw"]');
+  await waitLab(page, () => window.kqLab.labState().playing?.key === 'raw');
+  await page.click('[data-lab="speed"][data-d="-1"]');
+  await page.click('[data-lab="speed"][data-d="1"]');
+  assert.equal((await lab(page)).playing?.key, 'raw');
+  assert.equal((await lab(page)).speed, speed);
+  await shot(page, '6b-speed', '.lab-speed');
   // keep the tidied one; Start over and Back tapped at once don't drop it
   await page.click('.lab-card[data-reading="tidy"] [data-lab="pick"]');
   const busy = await page.evaluate(() => {
@@ -304,6 +324,7 @@ async function recordToPick(page, name = '', stop = 'limit') {
   st = await lab(page);
   assert.equal(st.robot, 'Saved! You\'ll find it on the shelf in the recording studio too.');
   assert.match(st.shelf[0], /^Tune 1: Tidied, \d+ seconds?$/);
+  assert.equal(await page.evaluate(async () => (await (await import('./js/studio-store.js')).loadTunes('kid_ava'))[0].bpm), speed, 'kept at the speed picked');
   assert.equal(st.playing, null, 'the sound stopped');
   await shot(page, '7-saved');
 

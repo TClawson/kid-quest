@@ -2,7 +2,7 @@
 // storage, their names on the shelf, and putting one in a studio mix (studiorules.js addTune).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TUNE_SLOTS, TUNE_BPM, forMix, cleanTune, makeTune, tuneName, tuneAbout, tuneSeconds, freeSlot, startVoice, shiftFits } from '../js/tunerules.js';
+import { TUNE_SLOTS, TUNE_BPM, TUNE_STEP, stepSpeed, forMix, cleanTune, makeTune, tuneName, tuneAbout, tuneSeconds, freeSlot, startVoice, shiftFits } from '../js/tunerules.js';
 import { newMix, addTune, addTake, mixBeats, setBars, maxBars, findClip, schedule, badges, cleanMix, mostNotesBeats, MOST_NOTES, NOTES_VOICE, notesVoice, ownVoice } from '../js/studiorules.js';
 
 const notes = (n = 4) => Array.from({ length: n }, (_, i) => ({ at: 2 * i, len: 1.9, midi: [60, 64, 67, 72][i % 4] }));
@@ -215,4 +215,15 @@ test('a tune that doesn\'t fit says its end is cut off', () => {
   const bandWaltz = { ...makeTune(result(), 'band'), meter: 3 };
   const both = addTune(setBars(one.mix, 3).mix, 1, bandWaltz, 8);
   assert.equal(both.note, 'The band counts in 3s and this mix counts in 4s, so your tune went in without its band. Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more.');
+});
+
+test('the robot\'s Slower and Faster: steps of 6, inside the speeds a tune can keep', () => {
+  assert.equal(TUNE_STEP, 6);
+  assert.equal(stepSpeed(100, 1), 106);
+  assert.equal(stepSpeed(100, -1), 94);
+  assert.equal(stepSpeed(43, -1), 40, 'never slower than 40');
+  assert.equal(stepSpeed(40, -1), 40);
+  assert.equal(stepSpeed(167, 1), 170, 'never faster than 170');
+  assert.equal(stepSpeed(170, 1), 170);
+  assert.equal(makeTune({ ...result(), bpm: stepSpeed(96, 1) }, 'tidy').bpm, 102, 'what Keep keeps');
 });

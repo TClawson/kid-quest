@@ -19,7 +19,7 @@ import { hearNotes } from './hearnotes.js';
 import { READINGS, tuneReadings } from './notomatic.js';
 import { VOICES, VOICE_IDS } from './studiokit.js';
 import { READING_VOICES, roleLevel } from './studiorules.js';
-import { TUNE_SLOTS, makeTune, startVoice, shiftFits, tuneName, tuneAbout, freeSlot } from './tunerules.js';
+import { TUNE_SLOTS, TUNE_BPM, stepSpeed, makeTune, startVoice, shiftFits, tuneName, tuneAbout, freeSlot } from './tunerules.js';
 import { loadTunes, saveTune, deleteTune } from './studio-store.js';
 
 export const LAB_MOST = 30;
@@ -108,6 +108,7 @@ const L = {
   kept: 0,          // how long the recording kept is, in seconds (for tests)
   heard: null,      // what was heard in it (listener.js notes)
   result: null,     // tuneReadings
+  bpm: 0,           // the tune's speed as the kid wants it (it starts at the speed the robot found)
   pick: 'tidy',
   how: {},          // reading id -> { voice, shift }
   hearing: '',      // what plays: '', 'raw', a reading id, or 'slot|N'
@@ -196,6 +197,7 @@ function forget() {
   L.sound = null;
   L.heard = null;
   L.result = null;
+  L.bpm = 0;
   L.how = {};
   L.made.clear();
 }
@@ -276,10 +278,22 @@ function pickHtml() {
     `<button class="btn ghost lab-bar ${res.meter === m ? 'on' : ''}" data-lab="meter" data-meter="${m}" aria-label="${label}" aria-pressed="${res.meter === m}">${face}</button>`)).join('');
   return `<div class="lab-row">${hearButton('raw', '🎙️ Hear my recording')}</div>
     <div class="lab-count" role="group" aria-labelledby="lab-count-q"><span id="lab-count-q">How does your tune count?</span><div class="lab-bars">${count}</div></div>
+    ${speedHtml()}
     <div class="lab-cards" role="radiogroup" aria-label="How your notes can be written">${cards}</div>
     <div class="lab-row lab-keep-row">
       <button class="btn lab-keep" data-lab="keep" ${L.keeping ? 'disabled aria-busy="true"' : ''}>${L.keeping ? '⏳ Keeping it…' : '✓ Keep this tune'}</button>
       <button class="btn ghost" data-lab="over" ${L.keeping ? 'disabled' : ''}>↺ Start over</button>
+    </div>`;
+}
+
+/** The tune's speed: Slower, the number, Faster (for every reading, and what Keep keeps). */
+function speedHtml() {
+  const bpm = L.bpm;
+  const btn = (d, face, label, end) => `<button class="btn ghost lab-speed-btn ${end ? 'off' : ''}" data-lab="speed" data-d="${d}" aria-label="${label}" ${end ? 'aria-disabled="true"' : ''}>${face}</button>`;
+  return `<div class="lab-speed" role="group" aria-labelledby="lab-speed-name"><span id="lab-speed-name">Speed</span>
+      ${btn(-1, '🐢 Slower', 'Slower', bpm <= TUNE_BPM[0])}
+      <span class="lab-speed-val" aria-live="polite"><b>${bpm}</b><small>beats a minute</small></span>
+      ${btn(1, '🐇 Faster', 'Faster', bpm >= TUNE_BPM[1])}
     </div>`;
 }
 
@@ -341,6 +355,7 @@ function onClick(e) {
   if (what === 'pick') { L.pick = b.dataset.reading; paint(); return; }
   if (what === 'shift') { shift(b.dataset.reading, Number(b.dataset.d)); return; }
   if (what === 'meter') { reread(Number(b.dataset.meter)); return; }
+  if (what === 'speed') { speed(Number(b.dataset.d)); return; }
   if (what === 'keep') { keep(); return; }
   if (what === 'over') { stopSound(false); forget(); L.stage = 'ready'; L.robot = ''; say(''); paint(); return; }
   if (what === 'throw') { stopSound(false); L.confirm = Number(b.dataset.slot); L.robot = ''; say(''); paint(); return; }
@@ -374,6 +389,16 @@ function shift(id, d) {
   replay(id);
 }
 
+/** The tune a step slower or faster: a reading that plays starts again at the new speed. */
+function speed(d) {
+  if (!L.result) return;
+  const to = stepSpeed(L.bpm, d);
+  if (to === L.bpm) return; // (at the end already: the button is off)
+  L.bpm = to;
+  // (my recording itself and a tune on the shelf keep their own speed)
+  if (L.result[L.hearing]) { const key = L.hearing; stopSound(false); hear(key); } else paint();
+}
+
 /** Read the playing again counting in 3s or 4s (the readings all change). */
 function reread(meter) {
   if (!L.heard || L.result?.meter === meter) return;
@@ -392,7 +417,7 @@ function reread(meter) {
 async function keep() {
   const res = L.result;
   if (!res || L.stage !== 'pick' || L.keeping) return;
-  const tune = makeTune(res, L.pick, L.how[L.pick]);
+  const tune = makeTune({ ...res, bpm: L.bpm || res.bpm }, L.pick, L.how[L.pick]);
   if (!tune) { say(SAY.broken, 'bad'); paint(); return; }
   const desk = L.desk;
   L.keeping = true;
@@ -626,6 +651,7 @@ function heardIn(notes) {
   if (!res?.tidy?.length || !res.tidy[0]?.notes?.length) { nothingHeard(); return; }
   L.heard = kept;
   L.result = res;
+  L.bpm = res.bpm;
   L.pick = 'tidy';
   L.how = Object.fromEntries(READINGS.map((r) => [r.id, { voice: startVoice(r.id), shift: 0 }]));
   L.stage = 'pick';
@@ -673,7 +699,7 @@ function tuneOf(key) {
   }
   const parts = L.result?.[key];
   const how = L.how[key];
-  return parts && how && { parts, bpm: L.result.bpm, voice: how.voice, shift: how.shift, id: `${key}|${L.result.meter}` };
+  return parts && how && { parts, bpm: L.bpm || L.result.bpm, voice: how.voice, shift: how.shift, id: `${key}|${L.result.meter}` };
 }
 
 /** The sound's buffers: the tune in its voice and shift, a band under it as in the studio. */
@@ -819,6 +845,8 @@ export function labState() {
     shelf: L.shelf && L.shelf.map((t, i) => (t ? `${tuneName(i)}: ${tuneAbout(t)}` : null)),
     pick: L.pick,
     meter: L.result?.meter || 0,
+    speed: L.bpm,
+    found: L.result?.bpm || 0,
     readings: L.result ? READINGS.filter((r) => L.result[r.id]).map((r) => r.id) : [],
     how: JSON.parse(JSON.stringify(L.how)),
     hearing: L.hearing,
