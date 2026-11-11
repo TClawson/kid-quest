@@ -141,7 +141,7 @@ export const TASKS_RESTORE_ID = 'restore-tasks-2026-11-08';
 /** Adds back the tasks the Nov 10 wipe removed, once per kid. Returns true if it changed the kid. */
 export function restoreTasks(kid, lost = LOST_TASKS_2026_11_08) {
   const was = lost[kid.id];
-  if (!was || (kid.grants || []).includes(TASKS_RESTORE_ID)) return false;
+  if (!was?.length || (kid.grants || []).includes(TASKS_RESTORE_ID)) return false;
   const have = new Set((kid.tasks || []).map((t) => t.id));
   kid.tasks = [...(kid.tasks || []), ...was.filter((t) => !have.has(t.id)).map((t) => structuredClone(t))];
   kid.grants = [...(kid.grants || []), TASKS_RESTORE_ID];
