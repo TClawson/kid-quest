@@ -151,11 +151,15 @@ async function openDesk(id) {
   paint();
 }
 
-/** The screen went away: stop recording, listening and playing; forget the recording. */
+/** The screen went away: stop recording, listening and playing; forget the recording; close the sound. */
 function leave() {
   reset();
   L.on = false;
   L.desk = null;
+  // the sound clock for listening goes too (audio() makes a new one next time)
+  const ac = A.ac;
+  A.ac = null;
+  ac?.close?.().catch(() => {});
 }
 
 /** Back to Ready with nothing under way. */
