@@ -83,6 +83,8 @@ const L = {
   note: '',         // a plain message under the buttons
   noteKind: '',
   confirm: -1,      // the slot asking "Throw away?"
+  keeping: false,   // a tune on its way to the tablet: nothing may drop it meanwhile
+  throwing: new Set(), // slots on their way out
   run: null,        // a recording: { token, ac, stream, cap, frames, peak, loudAt, heardAt, check }
   token: 0,
   job: null,        // the listening (hearnotes.js)
@@ -260,9 +262,9 @@ function pickHtml() {
   }).join('');
   return `<div class="lab-row">${hearButton('raw', '🎙️ Hear my recording')}</div>
     <div class="lab-cards" role="radiogroup" aria-label="How your notes can be written">${cards}</div>
-    <div class="lab-row">
-      <button class="btn lab-keep" data-lab="keep">✓ Keep this tune</button>
-      <button class="btn ghost" data-lab="over">↺ Start over</button>
+    <div class="lab-row lab-keep-row">
+      <button class="btn lab-keep" data-lab="keep" ${L.keeping ? 'disabled aria-busy="true"' : ''}>${L.keeping ? '⏳ Keeping it…' : '✓ Keep this tune'}</button>
+      <button class="btn ghost" data-lab="over" ${L.keeping ? 'disabled' : ''}>↺ Start over</button>
     </div>`;
 }
 
@@ -315,6 +317,8 @@ function onClick(e) {
   const b = e.target.closest('[data-lab]');
   if (!b || b.disabled) return;
   const what = b.dataset.lab;
+  // while a tune is being kept, nothing that would drop it or change it
+  if (L.keeping && !['hear', 'throw-no'].includes(what)) return;
   if (what === 'rec') { startRec().catch(() => { if (L.run) failRec(SAY.micBroken); }); return; }
   if (what === 'stop') { finishRec(true); return; }
   if (what === 'cancel') { stopListening(); L.stage = 'ready'; L.robot = ''; forget(); paint(); updateWake(); return; }
@@ -331,7 +335,7 @@ function onClick(e) {
 
 function onChange(e) {
   const sel = e.target.closest('[data-lab-voice]');
-  if (!sel || !L.result) return;
+  if (!sel || !L.result || L.keeping) return;
   const id = sel.dataset.labVoice;
   if (!L.how[id] || !Object.hasOwn(VOICES, sel.value)) return;
   L.how[id].voice = sel.value;
@@ -372,22 +376,27 @@ function reread(meter) {
 
 async function keep() {
   const res = L.result;
-  if (!res || L.stage !== 'pick') return;
+  if (!res || L.stage !== 'pick' || L.keeping) return;
   const tune = makeTune(res, L.pick, L.how[L.pick]);
   if (!tune) { say(SAY.broken, 'bad'); paint(); return; }
   const slot = freeSlot(L.shelf || []);
   if (slot < 0) { L.robot = SAY.full; paint(); return; }
   const desk = L.desk;
+  L.keeping = true;
+  paint();
   try {
     await saveTune(desk, slot, tune);
   } catch {
+    L.keeping = false;
     if (L.desk === desk) { say(SAY.cantKeep, 'bad'); paint(); }
     return;
   }
-  if (L.desk !== desk || L.result !== res) return;
+  L.keeping = false;
+  if (L.desk !== desk) return; // (the screen closed: the shelf is read again when it opens)
+  if (L.shelf) L.shelf[slot] = tune; // whatever happened meanwhile, the shelf shows what is kept
+  if (L.result !== res || L.stage !== 'pick') { paint(); return; }
   stopSound(false);
   forget();
-  L.shelf[slot] = tune;
   L.stage = 'ready';
   L.robot = ROBOT.saved;
   say('');
@@ -396,15 +405,20 @@ async function keep() {
 
 async function throwAway(slot) {
   const desk = L.desk;
+  if (L.throwing.has(slot) || !L.shelf?.[slot]) return; // (a second tap on Yes)
+  L.throwing.add(slot);
   L.confirm = -1;
   if (L.hearing === `slot|${slot}`) stopSound(false);
+  paint();
   try {
     await deleteTune(desk, slot);
   } catch {
+    L.throwing.delete(slot);
     if (L.desk === desk) { say(SAY.cantThrow, 'bad'); paint(); }
     return;
   }
-  if (L.desk !== desk) return;
+  L.throwing.delete(slot);
+  if (L.desk !== desk || !L.shelf) return; // (the screen closed or is reading the shelf again)
   L.shelf[slot] = null;
   L.robot = L.stage === 'pick' ? ROBOT.thrownPick : ROBOT.thrown;
   paint();
@@ -723,6 +737,7 @@ document.addEventListener('visibilitychange', () => {
 
 export const labActions = {
   'lab-back': () => {
+    if (L.keeping) return; // (a moment: the tune is on its way to the tablet)
     const back = deskOf(deskId())?.back || { view: 'kid' };
     leave();
     Object.assign(ui, back, { labTest: false });

@@ -285,9 +285,16 @@ async function recordToPick(page, name = '', stop = 'limit') {
   await waitLab(page, () => window.kqLab.labState().playing?.key === 'band');
   await shot(page, '6-bars-of-3', '.lab-card[data-reading="band"]');
 
-  // keep the tidied one
+  // keep the tidied one; Start over and Back tapped at once don't drop it
   await page.click('.lab-card[data-reading="tidy"] [data-lab="pick"]');
-  await page.click('[data-lab="keep"]');
+  const busy = await page.evaluate(() => {
+    document.querySelector('[data-lab="keep"]').click();
+    const face = document.querySelector('[data-lab="keep"]').textContent;
+    document.querySelector('[data-lab="over"]').click();
+    document.querySelector('[data-action="lab-back"]').click();
+    return face;
+  });
+  assert.match(busy, /Keeping it/, 'Keep shows it is busy');
   await waitLab(page, () => window.kqLab.labState().stage === 'ready');
   st = await lab(page);
   assert.equal(st.robot, 'Saved! You\'ll find it on the shelf in the recording studio too.');
