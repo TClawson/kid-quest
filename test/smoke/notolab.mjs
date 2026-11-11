@@ -296,9 +296,11 @@ async function recordToPick(page, name = '', stop = 'limit') {
   assert.equal((await page.locator('.lab-speed-val b').textContent()).trim(), String(found));
   await page.click('[data-lab="speed"][data-d="1"]');
   await page.click('[data-lab="speed"][data-d="1"]');
-  assert.equal((await lab(page)).speed, Math.min(170, found + 12));
+  const top = Math.min(170, found + 12);
+  assert.equal((await lab(page)).speed, top);
   await page.click('[data-lab="speed"][data-d="-1"]');
-  const speed = Math.min(170, found + 12) - 6;
+  // (the steps sit on the speed found: from 170, the nearest step down)
+  const speed = top === found + 12 ? found + 6 : found + 6 * Math.floor((169 - found) / 6);
   assert.equal((await lab(page)).speed, speed);
   assert.equal((await page.locator('.lab-speed-val b').textContent()).trim(), String(speed));
   await waitLab(page, () => window.kqLab.labState().playing?.key === 'band');

@@ -16,8 +16,20 @@ export const TUNE_BPM = [40, 170];
 /** How much Slower and Faster change a tune's speed on the robot's screen (beats a minute). */
 export const TUNE_STEP = 6;
 
-/** A tune's speed one step slower (d -1) or faster (d 1), kept inside TUNE_BPM. */
-export const stepSpeed = (bpm, d) => Math.max(TUNE_BPM[0], Math.min(TUNE_BPM[1], Math.round(bpm) + Math.sign(d) * TUNE_STEP));
+/**
+ * A tune's speed one step slower (d -1) or faster (d 1), kept inside TUNE_BPM. The steps sit
+ * on the speed the robot `found` and every TUNE_STEP from it, so the kid can always get back
+ * to it; from an end of TUNE_BPM (a speed off those steps) a tap goes to the nearest step the
+ * other way.
+ */
+export function stepSpeed(bpm, d, found = bpm) {
+  const b = Math.round(bpm);
+  const f = Math.round(found);
+  const s = Math.sign(d);
+  const k = s > 0 ? Math.floor((b - f) / TUNE_STEP) + 1 : s < 0 ? Math.ceil((b - f) / TUNE_STEP) - 1 : (b - f) / TUNE_STEP;
+  const to = s ? f + k * TUNE_STEP : b;
+  return Math.max(TUNE_BPM[0], Math.min(TUNE_BPM[1], to));
+}
 const READING_IDS = READINGS.map((r) => r.id);
 
 /** The voice a reading's tune starts in. */

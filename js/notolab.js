@@ -392,7 +392,7 @@ function shift(id, d) {
 /** The tune a step slower or faster: a reading that plays starts again at the new speed. */
 function speed(d) {
   if (!L.result) return;
-  const to = stepSpeed(L.bpm, d);
+  const to = stepSpeed(L.bpm, d, L.result.bpm);
   if (to === L.bpm) return; // (at the end already: the button is off)
   L.bpm = to;
   // (my recording itself and a tune on the shelf keep their own speed)

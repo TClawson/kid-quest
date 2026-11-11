@@ -225,5 +225,21 @@ test('the robot\'s Slower and Faster: steps of 6, inside the speeds a tune can k
   assert.equal(stepSpeed(40, -1), 40);
   assert.equal(stepSpeed(167, 1), 170, 'never faster than 170');
   assert.equal(stepSpeed(170, 1), 170);
+  // on the steps from the speed the robot found, so it can always be found again
+  assert.equal(stepSpeed(100, 1, 100), 106);
+  assert.equal(stepSpeed(170, -1, 120), 168, 'from the top, the nearest step down');
+  assert.equal(stepSpeed(168, 1, 120), 170, 'and the top again');
+  assert.equal(stepSpeed(40, 1, 120), 42, 'from the bottom, the nearest step up');
+  assert.equal(stepSpeed(42, -1, 120), 40);
+  assert.equal(stepSpeed(0, 0, 120), 40, '(no step: just kept inside)');
+  for (const found of [40, 41, 77, 120, 165, 170]) {
+    const down = [170];
+    while (down.at(-1) > 40) down.push(stepSpeed(down.at(-1), -1, found));
+    assert.ok(down.includes(found), `from 170 down to 40 passes ${found}`);
+    assert.ok(down.slice(1, -1).every((v) => (v - found) % TUNE_STEP === 0), `on the steps from ${found}: ${down}`);
+    const up = [40];
+    while (up.at(-1) < 170) up.push(stepSpeed(up.at(-1), 1, found));
+    assert.deepEqual(up.slice().reverse(), down, 'the same steps up and down');
+  }
   assert.equal(makeTune({ ...result(), bpm: stepSpeed(96, 1) }, 'tidy').bpm, 102, 'what Keep keeps');
 });
