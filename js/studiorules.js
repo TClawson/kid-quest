@@ -601,11 +601,28 @@ export function addTune(mix, track, kept, at = 0) {
   return { mix: next, error: null, ids: r.ids, note };
 }
 
-/** Why a clip of the kid's notes in `mix` is shorter than its music, in kid words. */
-function cutWords(mix, c) {
-  if (c.start + c.len < mixBeats(mix)) return 'Your tune stops where the next clip on its track starts. Move that clip, or put your tune on an empty track.';
-  if (mix.bars < maxBars(mix.bpm, mix.meter)) return 'Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more.';
-  return 'Your tune is longer than a mix can be, so its end is cut off.';
+/** Why a clip of the kid's notes in `mix` is shorter than its music: 'next', 'mix' or 'most'. */
+function cutWhy(mix, c) {
+  if (c.start + c.len < mixBeats(mix)) return 'next';
+  return mix.bars < maxBars(mix.bpm, mix.meter) ? 'mix' : 'most';
+}
+
+/**
+ * Why a clip of the kid's notes is shorter than its music, in kid words. `who` names the clip
+ * ("Your tune", or "The band that goes with your tune") and `it` is how the advice names it.
+ */
+function cutWords(mix, c, who = 'Your tune', it = 'your tune') {
+  const why = cutWhy(mix, c);
+  if (why === 'next') return `${who} stops where the next clip on its track starts. Move that clip, or put ${it} on an empty track.`;
+  if (why === 'mix') return `${who} is longer than this mix, so its end is cut off. Make the mix longer to hear more.`;
+  return `${who} is longer than a mix can be, so its end is cut off.`;
+}
+
+/** The same, for a tune and its band both cut for the same reason. */
+function cutBothWords(why, who) {
+  if (why === 'next') return `${who} stop where the next clips on their tracks start. Move those clips, or put them on empty tracks.`;
+  if (why === 'mix') return `${who} are longer than this mix, so their ends are cut off. Make the mix longer to hear more.`;
+  return `${who} are longer than a mix can be, so their ends are cut off.`;
 }
 
 // ---------- the pace of the kid's notes ----------
@@ -691,8 +708,21 @@ export function setPace(mix, id, pace) {
     else { delete x.pace; delete x.norm; delete x.back; }
     if (len < want) cut.push(x);
   }
-  const mine = cut.find((x) => x.id === c.id);
-  return { mix: next, error: null, note: mine ? cutWords(next, mine) : '' };
+  return { mix: next, error: null, note: paceCutWords(next, c, cut) };
+}
+
+/** What setPace says about the clips it cut: `c` is the clip the kid changed. */
+function paceCutWords(mix, c, cut) {
+  if (!cut.length) return '';
+  const mine = c.role === 'band' ? 'band' : 'tune';
+  const other = mine === 'band' ? 'tune' : 'band';
+  const words = (x) => (x.id === c.id
+    ? cutWords(mix, x, `Your ${mine}`, `your ${mine}`)
+    : cutWords(mix, x, `The ${x.role === 'band' ? 'band' : 'tune'} that goes with your ${mine}`, 'it'));
+  if (cut.length === 2 && cutWhy(mix, cut[0]) === cutWhy(mix, cut[1]) && cut.some((x) => x.id === c.id)) {
+    return cutBothWords(cutWhy(mix, cut[0]), `Your ${mine} and its ${other}`);
+  }
+  return cut.map(words).join(' ');
 }
 
 /** Move a clip to a track and a beat (snapped). Turned down when something is in the way. */

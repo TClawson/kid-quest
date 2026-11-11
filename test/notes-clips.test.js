@@ -539,6 +539,28 @@ test('a tune\'s band changes pace with it, while they stay together', () => {
   assert.equal(paceOf(findClip(cpHalf.mix, bid).clip), null);
 });
 
+test('a band cut at its new pace says so too', () => {
+  const { mix, id } = withTake({ beats: 8, track: 1, at: 0 });
+  const r = must(takeToNotes({ ...mix, bars: 8 }, id, [tune(8), bandPart(8)], 'C'));
+  const [tid, bid] = r.ids;
+  const bt = findClip(r.mix, bid).track;
+  // something after the band only
+  const m1 = must(addBacking(r.mix, bt, 'beat-rock', 'sunny', 12)).mix;
+  const h1 = must(setPace(m1, tid, 'half'));
+  assert.deepEqual([findClip(h1.mix, tid).clip.len, findClip(h1.mix, bid).clip.len], [16, 12]);
+  assert.equal(h1.note, 'The band that goes with your tune stops where the next clip on its track starts. Move that clip, or put it on an empty track.');
+  assert.equal(must(setPace(m1, bid, 'half')).note, 'Your band stops where the next clip on its track starts. Move that clip, or put your band on an empty track.');
+  // something after both
+  const m2 = must(addBacking(m1, 1, 'beat-rock', 'sunny', 12)).mix;
+  assert.equal(must(setPace(m2, tid, 'half')).note, 'Your tune and its band stop where the next clips on their tracks start. Move those clips, or put them on empty tracks.');
+  // both past the end of the mix
+  const m3 = { ...r.mix, bars: 3 };
+  assert.equal(must(setPace(m3, bid, 'half')).note, 'Your band and its tune are longer than this mix, so their ends are cut off. Make the mix longer to hear more.');
+  // the tune at the end, the band by the next clip
+  const m4 = must(addBacking({ ...r.mix, bars: 3 }, bt, 'beat-rock', 'sunny', 10)).mix;
+  assert.equal(must(setPace(m4, tid, 'half')).note, 'Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more. The band that goes with your tune stops where the next clip on its track starts. Move that clip, or put it on an empty track.');
+});
+
 test('Normal gives back the very window a clip had, whatever was cut on the way', () => {
   // every window of a 7- and an 8-beat clip, through every pace sequence of up to three steps,
   // in a roomy mix and with something in the way (the next clip, or the end of the mix)
