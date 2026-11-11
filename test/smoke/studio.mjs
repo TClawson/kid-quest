@@ -928,6 +928,9 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   const sunny = clipOf('.kind-lead');
   assert.match(await sunny.locator('.st-key').textContent(), /F major · another key/);
   assert.equal(await page.locator('[data-action="st-fit"]').textContent(), '🎯 Move into C major');
+  // (the Remix sticker's news comes a moment after the part lands, later still on a busy
+  // machine: it is let through first, so it can't land on top of the toast looked for next)
+  await page.waitForFunction(() => /New sticker: Remix/.test(document.querySelector('.toast')?.textContent || ''));
   await page.click('[data-action="st-fit"]');
   assert.match(await toastText(page), /Moved into C major/);
   assert.equal(await sunny.getAttribute('data-shift'), '-5');
