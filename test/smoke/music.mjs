@@ -154,7 +154,7 @@ for (const [weeks, tier] of [[5, 2], [7, 3]]) {
   await page.click('[data-action="songbook-back"]');
   await page.clock.runFor(1500);
   assert.ok(await page.evaluate(() => document.querySelector('.m-station[data-spot="sheets"]').classList.contains('near')), 'back by the stand');
-  for (const [spot, said] of [['studio', /chores are done: 1 to go/], ['lab', /Note-o-Matic/]]) {
+  for (const [spot, said] of [['studio', /chores are done: 1 to go/], ['lab', /Note-o-Matic wakes up once today's chores are done: 1 to go/]]) {
     await tap(page, `.m-station[data-spot="${spot}"]`);
     await page.clock.runFor(6000);
     const text = await page.locator('.music-house .v-dialog .v-text').textContent();
@@ -186,6 +186,14 @@ for (const [weeks, tier] of [[5, 2], [7, 3]]) {
   assert.equal(await page.locator('.studio-screen').count(), 1, 'the studio opens');
   await page.click('[data-action="studio-back"]');
   await page.clock.runFor(1500);
+  // the Note-o-Matic is awake too (test/smoke/notolab.mjs tries it out)
+  await tap(page, '.m-station[data-spot="lab"]');
+  await page.clock.runFor(6000);
+  assert.equal(await page.locator('.lab-screen').count(), 1, 'the Note-o-Matic opens');
+  assert.match(await page.locator('.lab-bubble').textContent(), /Beep boop/);
+  await page.click('[data-action="lab-back"]');
+  await page.clock.runFor(1500);
+  assert.equal(await page.locator('.music-house').count(), 1, 'back in the music house');
   await tap(page, '.m-station[data-spot="piano"]');
   await page.clock.runFor(6000);
   assert.equal((await page.locator('#watch-goal').textContent()).trim(), 'Goal done ✓');

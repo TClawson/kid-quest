@@ -21,7 +21,7 @@ import { villageHtml, mountVillages, cameOut, cameOutOfMusic } from './village.j
 import { houseHtml, mountHouses, cameIn } from './house.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
-import { musicTier, daysToMusicHouse, studioOpen, tierInfo } from './musicrules.js';
+import { musicTier, daysToMusicHouse, studioOpen, labOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
 import { applyGrants } from './grants.js';
 import { furnitureThumb } from './houseart.js';
@@ -35,6 +35,7 @@ import { startMusic, stopMusic, playShowAudio } from './music.js';
 import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
+import { viewLab, mountLab, labActions, openLab } from './notolab.js';
 import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
@@ -1140,6 +1141,7 @@ function musicView(kid, list, mood, tier) {
     buddy: buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true }),
     tier,
     studio: studioOpen(state, kid, today()),
+    lab: labOpen(state, kid, today()),
     hello: musicHello(kid.id, tier),
     quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
   });
@@ -1149,6 +1151,7 @@ const musicHandlers = {
   onPiano: () => { ui.view = 'watch'; ui.watchSession = 0; ui.watchNote = ''; render(); },
   onSheets: () => openSongbook(),
   onStudio: () => openStudio(),
+  onLab: () => openLab(),
   onExit: () => {
     const kid = kidById(ui.kidId);
     if (!kid) return;
@@ -2104,6 +2107,11 @@ ${gameTestCard()}
       <p class="muted small">Open the recording studio right away to see how it works. This is a test desk: the kids' mixes and stickers are not touched.</p>
       <button class="btn" data-action="studio-test">Open the studio</button>
     </div>
+    <div class="card lab-test">
+      <h2>🤖 Try the Note-o-Matic</h2>
+      <p class="muted small">Play the piano to the robot and see the notes it makes. This is a test desk: its tunes go on the test studio's shelf, and the kids' tunes are not touched.</p>
+      <button class="btn" data-action="lab-test">Open the Note-o-Matic</button>
+    </div>
 ${seasonTestCard()}
     <div class="card">
       <h2>🎹 Piano listening test</h2>
@@ -2251,7 +2259,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, lab: viewLab, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -2308,7 +2316,7 @@ function render() {
   const scrollY = window.scrollY;
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
-  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio';
+  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio' || ui.view === 'lab';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
   const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
   // load the sign-in code early, so a sign-in popup opens straight from the tap
@@ -2331,6 +2339,7 @@ function render() {
   mountSongbook($app);
   mountStudio($app);
   mountTestRec($app);
+  mountLab($app);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
@@ -2798,6 +2807,7 @@ actions.visitor = (el) => {
 // the leaderboard's This week / All time tabs
 Object.assign(actions, songbookActions);
 Object.assign(actions, studioActions);
+Object.assign(actions, labActions);
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
 
 actions['tank-pick'] = (el) => {
@@ -3008,11 +3018,11 @@ setInterval(() => {
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   // The service worker serves the cached app first, so after a new version is deployed the
   // first open still shows the old one. When the new worker takes over, reload once to show it,
-  // unless a piano timer or the recording studio is on screen (then the next open picks it up).
+  // unless a piano timer, the recording studio or the Note-o-Matic is on screen (then the next open picks it up).
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio') return;
+    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio' || ui.view === 'lab') return;
     reloading = true;
     window.location.reload();
   });

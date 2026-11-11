@@ -246,6 +246,8 @@
 .st-loop.on { background: #fff; box-shadow: inset 0 0 0 3px var(--kid, var(--brand)), 0 3px 0 var(--px-ink); font-weight: 700; }
 .st-group { align-content: start; }
 .st-group .st-add { display: grid; justify-items: start; text-align: left; line-height: 1.15; }
+.st-tunes .st-add { display: grid; justify-items: start; text-align: left; line-height: 1.15; }
+.st-tunes .st-add small { font-weight: 400; font-size: 0.8rem; }
 .st-group .st-add .st-waltz { font-size: 0.72rem; }
 .st-waltz-time { margin-top: 14px; padding-top: 10px; border-top: 3px dashed #d9b779; }
 .st-waltz-time h4 { margin: 0 0 4px; font: 700 1.15rem var(--px-font); color: #8a5a00; }
@@ -295,6 +297,49 @@
 .st-reading .st-nom-hear { min-height: 44px; justify-content: center; }
 .st-reading .st-nom-hear.on { background: #e8590c; color: #fff; }
 .st-nom-key { font-weight: 700; line-height: 1.3; }
+
+/* the Note-o-Matic's own screen (notolab.js) */
+.lab-screen { max-width: 860px; }
+.lab { display: grid; gap: 12px; min-width: 0; }
+.lab h3 { margin: 0 0 6px; font-family: var(--px-font); font-size: 1.3rem; }
+.lab-robot { display: flex; align-items: flex-start; gap: 10px; }
+.lab-bot { flex: none; font-size: 3.2rem; line-height: 1; }
+.lab-bubble { position: relative; flex: 1; min-width: 0; margin: 4px 0 0; padding: 10px 12px; background: #fff; border: 3px solid var(--px-ink); border-radius: 10px; box-shadow: 0 3px 0 var(--px-ink); font: 700 1.15rem/1.3 var(--px-font); }
+.lab-bubble::before { content: ''; position: absolute; left: -12px; top: 14px; border: 6px solid transparent; border-right-color: var(--px-ink); border-width: 6px 9px; }
+.lab-go { display: grid; gap: 8px; justify-items: center; }
+.lab-rec { min-width: min(100%, 260px); min-height: 64px; font-size: 1.3rem; }
+.lab-stop { min-height: 48px; }
+.lab-time { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 1.2rem; }
+.lab-meter { width: min(100%, 360px); height: 16px; border: 2px solid var(--px-ink); border-radius: 999px; background: #f8f4ff; overflow: hidden; }
+.lab-meter span { display: block; height: 100%; width: 0; background: #20c997; transition: width 0.08s linear; }
+.lab-warn { margin: 0; color: var(--danger); font-weight: 700; }
+.lab-progress { width: min(100%, 420px); }
+.lab-note { margin: 0; padding: 8px 10px; background: #fff3d6; border: 2px solid var(--px-ink); border-radius: 6px; font-weight: 700; }
+.lab-note.bad { background: #ffe3e3; }
+.lab-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.lab-row .btn, .lab-card .btn, .lab-slot .btn { min-height: 44px; }
+.lab-keep { background: #2f9e44; color: #fff; }
+.lab-hear.on { background: #e8590c; color: #fff; }
+.lab-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 10px; }
+.lab-card { display: grid; gap: 8px; align-content: start; padding: 8px; background: #fffaf0; border: 2px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); }
+.lab-card.on { background: #e6fcf5; box-shadow: inset 0 0 0 3px var(--kid, var(--brand)), 0 3px 0 var(--px-ink); }
+.lab-pick { display: grid; gap: 2px; min-height: 44px; padding: 4px 6px; border: 0; background: none; color: var(--px-ink); font: inherit; text-align: left; cursor: pointer; }
+.lab-pick b { font: 700 1.15rem/1.1 var(--px-font); }
+.lab-pick b::before { content: '○ '; }
+.lab-card.on .lab-pick b::before { content: '● '; }
+.lab-voice { display: grid; gap: 2px; font-weight: 700; }
+.lab-voice select { min-height: 44px; padding: 6px 8px; border: 2px solid var(--px-ink); border-radius: 6px; background: #fff; color: var(--px-ink); font: inherit; }
+.lab-octave, .lab-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.lab-octave .btn, .lab-bars .btn { padding: 6px 8px; min-width: 0; }
+.lab-bar.on { background: var(--px-ink); color: #fff; }
+.lab-shelf { padding: 10px 12px; background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); }
+.lab-slots { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px; }
+.lab-slot { display: grid; gap: 4px; padding: 8px 10px; border: 2px solid var(--px-ink); border-radius: 6px; background: #fffaf0; }
+.lab-slot b { font: 700 1.15rem var(--px-font); }
+.lab-slot.empty { border-style: dashed; background: #f8f4ff; color: var(--muted); }
+.lab-slot-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lab-slot-buttons .btn { flex: 1 1 auto; padding: 6px 10px; }
+.lab-ask { flex: 1 1 100%; font-weight: 700; }
 
 /* phones: tighter, and the transport's extra buttons get their own row */
 @media (max-width: 600px) {

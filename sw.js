@@ -77,6 +77,7 @@ const SHELL = [
   'js/listener-worker.js',
   'js/hearnotes.js',
   'js/tunerules.js',
+  'js/notolab.js',
   'js/notomatic.js',
   'js/arrange.js',
   'js/arrangements.js',
