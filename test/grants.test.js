@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyGrants, GRANTS, restoreFromRecord, restoreBackup, RESTORE_ID } from '../js/grants.js';
+import { applyGrants, GRANTS, restoreFromRecord, restoreBackup, RESTORE_ID, restoreTasks, TASKS_RESTORE_ID } from '../js/grants.js';
 import { itemById } from '../js/items.js';
 
 const G = [{ id: 'g1', kid: 'kid_a', item: 'home-chair-bean-blue-plain' }];
@@ -94,4 +94,24 @@ test('mergeBackup only adds: missing purchases, grants and days come back; nothi
   assert.ok(state.log['2026-11-08'].a, 'a missing day comes back');
   assert.equal(state.kids.length, 1, 'kids the family does not have are not added');
   assert.deepEqual(mergeBackup(state, backup), { kids: 1, items: 0, days: 0 }, 'nothing more the second time');
+});
+
+test('restoreTasks puts back the tasks the Nov 10 wipe took, once, and never doubles one', () => {
+  const lost = { k: [{ id: 'a', name: 'Exercise', period: 'exercise', days: [1], verify: 'parent', minutes: 0 }, { id: 'b', name: 'Shower', period: 'morning', days: [1], verify: 'self', minutes: 0 }] };
+  const kid = { id: 'k', tasks: [{ id: 'b', name: 'Shower (renamed)' }], grants: ['g0'] };
+  assert.equal(restoreTasks(kid, lost), true);
+  assert.deepEqual(kid.tasks.map((t) => t.id), ['b', 'a']);
+  assert.equal(kid.tasks[0].name, 'Shower (renamed)', 'what is there is left alone');
+  assert.deepEqual(kid.grants, ['g0', TASKS_RESTORE_ID]);
+  assert.equal(restoreTasks(kid, lost), false, 'only once');
+  assert.equal(restoreTasks({ id: 'other', tasks: [] }, lost), false);
+});
+
+test('the real task restore brings the Exercise task back for Ayden, Edison and Remington', () => {
+  for (const id of ['kid_mvymcmw11jnn8', 'kid_mvymmw0y1kmwx', 'kid_mvyopilp1bgqr']) {
+    const kid = { id, tasks: [] };
+    assert.equal(restoreTasks(kid), true, id);
+    assert.ok(kid.tasks.some((t) => t.period === 'exercise'), id);
+  }
+  assert.equal(restoreTasks({ id: 'kid_mvzflap11wbyq', tasks: [] }), false, 'Esther lost none');
 });
