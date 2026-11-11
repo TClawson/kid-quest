@@ -87,3 +87,14 @@ export function studioOpen(state, kid, today) {
   const s = dayStatus(state, kid, today, today);
   return { open: s.excused || s.complete, left: Math.max(0, s.total - s.done - s.pending), waiting: s.pending };
 }
+
+/** Whether the Note-o-Matic's own screen waits for today's chores, like the studio. */
+export const LAB_NEEDS_CHORES = true;
+
+/**
+ * Whether the Note-o-Matic robot's screen is open today: what studioOpen says while
+ * LAB_NEEDS_CHORES, always open otherwise. Returns { open, left, waiting }.
+ */
+export function labOpen(state, kid, today, needs = LAB_NEEDS_CHORES) {
+  return needs ? studioOpen(state, kid, today) : { open: true, left: 0, waiting: 0 };
+}

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, defaultTasks, addDays } from '../js/logic.js';
 import { itemById } from '../js/items.js';
-import { MUSIC_TIERS, tierInfo, musicTier, daysToMusicHouse, watchSplit, studioOpen, WATCH_MAX_RUN_MS } from '../js/musicrules.js';
+import { MUSIC_TIERS, tierInfo, musicTier, daysToMusicHouse, watchSplit, studioOpen, labOpen, LAB_NEEDS_CHORES, WATCH_MAX_RUN_MS } from '../js/musicrules.js';
 import { dayEnd } from '../js/practice.js';
 import { villageLayout, VILLAGE_THEMES } from '../js/villagemaps.js';
 
@@ -94,6 +94,19 @@ test('the studio opens once today\'s chores are done and checked', () => {
   s.log[day].k1.tasks = {};
   s.log[day].k1.excused = true;
   assert.equal(studioOpen(s, kid, day).open, true, 'an excused day opens it too');
+});
+
+test('the Note-o-Matic opens when the studio does, or always when it needs no chores', () => {
+  const s = emptyState();
+  const kid = { id: 'k1', name: 'Ava', tasks: defaultTasks(), startDate: addDays(day, -30), owned: [] };
+  s.kids.push(kid);
+  assert.equal(LAB_NEEDS_CHORES, true);
+  assert.deepEqual(labOpen(s, kid, day), studioOpen(s, kid, day));
+  assert.equal(labOpen(s, kid, day).open, false);
+  assert.deepEqual(labOpen(s, kid, day, false), { open: true, left: 0, waiting: 0 });
+  s.log[day] = { k1: { tasks: {} } };
+  for (const t of kid.tasks) s.log[day].k1.tasks[t.id] = { status: 'done' };
+  assert.equal(labOpen(s, kid, day).open, true);
 });
 
 // ---------- the music hall in every village ----------
