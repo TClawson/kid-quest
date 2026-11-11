@@ -4,8 +4,8 @@
 // until today's chores are done, and opens after. A recording shows its seconds and a
 // loudness bar and stops by itself at the limit (made short here); the robot listens in a
 // Worker with a progress bar and offers three readings. Listen plays one at a time and stops;
-// a new voice and Higher change what plays; "Hear my recording" plays the sound itself; Bars
-// of 3 reads it again. Keep puts it on the robot's shelf, which a reload keeps, and on the
+// a new voice and Higher change what plays; "Hear my recording" plays the sound itself; counting
+// in 3s ("How does your tune count?") reads it again. Keep puts it on the robot's shelf, which a reload keeps, and on the
 // studio's shelf, from where it goes into a mix as a notes clip that plays. Throw away needs
 // two taps. A full shelf keeps the screen on the readings. Putting the app away stops a
 // recording and keeps nothing. Settings has a test desk right after the studio's. A phone
@@ -273,17 +273,22 @@ async function recordToPick(page, name = '', stop = 'limit') {
   await page.click('[data-lab="hear"][data-what="raw"]');
   await waitLab(page, () => !window.kqLab.labState().playing);
 
-  // Bars of 3 reads it again
+  // "How does your tune count?" reads it again: 1-2-3 or 1-2-3-4
+  assert.equal(await page.locator('.lab-count').count(), 1, 'one row for every reading');
+  assert.equal(await page.locator('.lab-card [data-lab="meter"]').count(), 0, 'not on a card');
+  assert.match(await page.locator('.lab-count').textContent(), /How does your tune count\?\s*1-2-3\s*1-2-3-4/);
+  assert.deepEqual(await page.locator('.lab-count .btn').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label'))), ['Three beats in a bar', 'Four beats in a bar']);
   const meter = (await lab(page)).meter;
   const other = meter === 3 ? 4 : 3;
-  await page.click(`.lab-card[data-reading="band"] [data-lab="meter"][data-meter="${other}"]`);
+  assert.equal(await page.locator(`.lab-count [data-meter="${meter}"][aria-pressed="true"]`).count(), 1, 'the count heard is on');
+  await page.click(`.lab-count [data-lab="meter"][data-meter="${other}"]`);
   await waitLab(page, (m) => window.kqLab.labState().meter === m, other);
-  assert.equal(await page.locator(`.lab-card[data-reading="band"] [data-meter="${other}"].on`).count(), 1);
-  if (other === 4) { await page.click('.lab-card[data-reading="band"] [data-lab="meter"][data-meter="3"]'); await waitLab(page, () => window.kqLab.labState().meter === 3); }
+  assert.equal(await page.locator(`.lab-count [data-meter="${other}"].on[aria-pressed="true"]`).count(), 1);
+  if (other === 4) { await page.click('.lab-count [data-lab="meter"][data-meter="3"]'); await waitLab(page, () => window.kqLab.labState().meter === 3); }
   assert.equal((await lab(page)).how.tidy.voice, 'flute', 'the voice picked stays');
   await page.click('.lab-card[data-reading="band"] [data-lab="hear"]');
   await waitLab(page, () => window.kqLab.labState().playing?.key === 'band');
-  await shot(page, '6-bars-of-3', '.lab-card[data-reading="band"]');
+  await shot(page, '6-count-in-3s', '.lab-count');
 
   // keep the tidied one; Start over and Back tapped at once don't drop it
   await page.click('.lab-card[data-reading="tidy"] [data-lab="pick"]');

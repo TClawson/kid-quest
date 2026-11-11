@@ -246,9 +246,6 @@ function pickHtml() {
     const on = L.pick === r.id;
     const how = L.how[r.id];
     const voices = VOICE_IDS.map((v) => `<option value="${v}" ${how.voice === v ? 'selected' : ''}>${VOICES[v].icon} ${esc(VOICES[v].name)}</option>`).join('');
-    const bars = r.id === 'band'
-      ? `<div class="lab-bars" role="group" aria-label="Beats in a bar">${[3, 4].map((m) => `<button class="btn ghost lab-bar ${res.meter === m ? 'on' : ''}" data-lab="meter" data-meter="${m}" aria-pressed="${res.meter === m}">Bars of ${m}</button>`).join('')}</div>`
-      : '';
     return `<div class="lab-card ${on ? 'on' : ''}" data-reading="${r.id}">
         <button class="lab-pick" data-lab="pick" data-reading="${r.id}" role="radio" aria-checked="${on}"><b>${esc(r.name)}</b><small>${esc(r.about)}</small></button>
         ${hearButton(r.id, '▶ Listen')}
@@ -257,10 +254,13 @@ function pickHtml() {
           <button class="btn ghost" data-lab="shift" data-reading="${r.id}" data-d="12" aria-label="An octave higher">⬆ Higher</button>
           <button class="btn ghost" data-lab="shift" data-reading="${r.id}" data-d="-12" aria-label="An octave lower">⬇ Lower</button>
         </div>
-        ${bars}
       </div>`;
   }).join('');
+  // 3 or 4 beats in a bar, in kid words: it changes every reading, and is kept with the tune
+  const count = [[3, '1-2-3', 'Three beats in a bar'], [4, '1-2-3-4', 'Four beats in a bar']].map(([m, face, label]) => (
+    `<button class="btn ghost lab-bar ${res.meter === m ? 'on' : ''}" data-lab="meter" data-meter="${m}" aria-label="${label}" aria-pressed="${res.meter === m}">${face}</button>`)).join('');
   return `<div class="lab-row">${hearButton('raw', '🎙️ Hear my recording')}</div>
+    <div class="lab-count" role="group" aria-labelledby="lab-count-q"><span id="lab-count-q">How does your tune count?</span><div class="lab-bars">${count}</div></div>
     <div class="lab-cards" role="radiogroup" aria-label="How your notes can be written">${cards}</div>
     <div class="lab-row lab-keep-row">
       <button class="btn lab-keep" data-lab="keep" ${L.keeping ? 'disabled aria-busy="true"' : ''}>${L.keeping ? '⏳ Keeping it…' : '✓ Keep this tune'}</button>
@@ -359,7 +359,7 @@ function shift(id, d) {
   replay(id);
 }
 
-/** Read the playing again with bars of 3 or 4 (the readings all change). */
+/** Read the playing again counting in 3s or 4s (the readings all change). */
 function reread(meter) {
   if (!L.heard || L.result?.meter === meter) return;
   stopSound(false);

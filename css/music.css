@@ -329,8 +329,12 @@
 .lab-card.on .lab-pick b::before { content: '● '; }
 .lab-voice { display: grid; gap: 2px; font-weight: 700; }
 .lab-voice select { min-height: 44px; padding: 6px 8px; border: 2px solid var(--px-ink); border-radius: 6px; background: #fff; color: var(--px-ink); font: inherit; }
-.lab-octave, .lab-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.lab-octave .btn, .lab-bars .btn { padding: 6px 8px; min-width: 0; }
+.lab-octave { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.lab-octave .btn { padding: 6px 8px; min-width: 0; }
+.lab-count { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 10px; background: #fff; border: 2px solid var(--px-ink); border-radius: 6px; }
+.lab-count > span { font: 700 1.1rem var(--px-font); }
+.lab-bars { display: flex; gap: 6px; }
+.lab-bars .btn { min-height: 44px; min-width: 96px; padding: 6px 12px; font-variant-numeric: tabular-nums; }
 .lab-bar.on { background: var(--px-ink); color: #fff; }
 .lab-shelf { padding: 10px 12px; background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); }
 .lab-slots { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px; }
