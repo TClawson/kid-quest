@@ -26,6 +26,8 @@ const TOGETHER = 0.05; // seconds: a note struck within this of the one before b
 const SPREAD = 0.12; // seconds: but a chord is never spread wider than this
 const LATE = 0.08; // seconds: a kid on the clicks is at most this far behind or ahead of them
 const LONGEST = 8; // steps: no tidied note is held longer than this
+const DOTTED = 0.58; // steps: the short note of a dotted pair is shorter than this (an uneven eighth is longer)
+const WIDE_FROM = 3.4; // steps: playing whose gaps are nearly all this long or longer is slow playing
 const round3 = (x) => Math.round(x * 1000) / 1000;
 const mod = (n, m) => ((n % m) + m) % m;
 const fold = (midi) => { let m = midi; while (m < LOWEST) m += 12; while (m > HIGHEST) m -= 12; return m; };
@@ -138,39 +140,71 @@ export function clickGrid(xs, swing = 0, most = 0.3) {
  * step is found (the one the gaps between strikes are whole numbers of, near the mix's), and
  * followed as the kid speeds up and slows down; each gap becomes a whole number of steps (a
  * half for a quick pair, none for the rest of a chord). Returns each strike's place in steps;
- * the first stays where it is.
+ * the first stays where it is. `from` and `to`: how short and long its step may be, in steps
+ * (nearer 1 when the steps were counted at the playing's own speed).
  */
-export function ownGrid(xs) {
+export function ownGrid(xs, { from = 0.7, to = 1.4 } = {}) {
   if (!xs.length) return [];
   const gaps = xs.slice(1).map((x, i) => x - xs[i]);
   let unit = 1;
   let top = -Infinity;
   let halves = false;
+  let wholeUnit = 1;
+  let topWhole = -Infinity;
   const fit = (u) => { let s = 0; for (const g of gaps) if (g <= 6 * u) s += Math.cos((2 * Math.PI * g) / u); return s / Math.max(1, gaps.length); };
-  for (let u = 0.7; u < 1.4; u *= 1.02) {
+  for (let u = from; u < to; u *= 1.02) {
     // gaps that are whole steps, or (a little less likely) whole and half steps
     const whole = fit(u);
     const half = fit(u / 2) - 0.1;
     // nearer the mix's own speed wins a tie
     const score = Math.max(whole, half) - 0.15 * Math.abs(Math.log2(u));
     if (score > top) { top = score; unit = u; halves = half > whole; }
+    const plain = whole - 0.15 * Math.abs(Math.log2(u));
+    if (plain > topWhole) { topWhole = plain; wholeUnit = u; }
   }
   // half steps (a quick pair of notes) only for playing that clearly has them: an uneven
   // eighth must not be taken for one
-  if (gaps.filter((g) => g / unit > 0.3 && g / unit < 0.68).length < 2) halves = false;
+  // (and then its step is the one that whole steps fit best)
+  if (halves && gaps.filter((g) => g / unit > 0.3 && g / unit < 0.68).length < 2) { halves = false; unit = wholeUnit; }
+  if (halves) {
+    // Swung eighths (long, short, long, short: two to one) look like steps a third longer with
+    // a half step after each: but then every short note stands alone between two whole steps,
+    // which real quick notes seldom do. They are plain eighths, played unevenly.
+    const ks = gaps.map((g) => g / unit);
+    const whole = (k) => k == null || (k >= 0.8 && k <= 1.25);
+    const short = ks.map((k, i) => (k > 0.3 && k < 0.68 ? i : -1)).filter((i) => i >= 0);
+    const alone = short.filter((i) => i > 0 && whole(ks[i - 1]) && whole(ks[i + 1]));
+    if (short.length >= 3 && alone.length >= 0.7 * short.length) { unit *= 0.75; halves = false; }
+  }
   const out = [Math.round(xs[0])];
   let u = unit;
   let held = 0; // the last strike on a step before a squeezed one
+  let owed = 0; // the steps the next gap takes, decided with the gap before it
   gaps.forEach((g, i) => {
     const k = g / u;
     // (a strike right after another is the rest of the same chord: it stays in its place)
     let steps = k < 0.3 ? 0 : halves && k < 0.75 ? 0.5 : Math.max(1, Math.round(k));
-    if (!halves && k >= 0.3) {
+    const part = k - Math.floor(k);
+    const paid = owed > 0; // this gap's steps were settled with the gap before it
+    if (paid) { steps = owed; owed = 0; } else if (halves && k >= 0.75 && part >= 0.25 && part <= 0.75) {
+      // Playing with half steps in it. A long note and the short one after it that together
+      // make whole steps are a dotted pair (a step and a half, then a half) when the short one
+      // is short enough, else two uneven notes, set even. A gap of some steps and a half after
+      // a short note comes back to a whole step. Without this each pair ran half a step long.
+      const next = i + 1 < gaps.length ? gaps[i + 1] / u : Infinity;
+      const both = Math.round(k + next);
+      if (!Number.isInteger(out[i])) steps = Math.floor(k) + 0.5;
+      else if (next >= 0.3 && next < 0.8 && Math.abs(k + next - both) <= 0.3) { owed = next < DOTTED ? 0.5 : 1; steps = both - owed; }
+    }
+    if (!halves && !paid && k >= 0.3) {
       // A strike squeezed in between two steps (a hand that comes in late, a slip of a finger)
       // takes half a step when the strike after it makes the step whole, and what follows is
       // counted from the strike before the squeezed one: it must not push the rest a step late.
       const next = i + 1 < gaps.length ? gaps[i + 1] / u : Infinity;
-      if (!Number.isInteger(out[i])) {
+      if (k >= 1.2 && k <= 1.8 && Number.isInteger(out[i]) && next >= 0.45 && next <= 0.85 && Math.abs(k + next - 2) <= 0.3) {
+        // a long eighth and a short one that make a beat together (swung eighths): two steps
+        steps = 1; owed = 1;
+      } else if (!Number.isInteger(out[i])) {
         const since = (xs[i + 1] - xs[held]) / u;
         steps = since < 0.75 ? 0 : out[held] + Math.max(1, Math.round(since)) - out[i];
       } else if (k < 0.75 && k + next >= 0.7 && k + next <= 1.3) { steps = 0.5; held = i; }
@@ -183,7 +217,7 @@ export function ownGrid(xs) {
     if (k >= 4.5 && between && Number.isInteger(out[i])) steps = (out[i] + lo) % 2 === 0 ? lo : lo + 1;
     out.push(out[i] + steps);
     // follow the kid's speed, a little at a time, and only on gaps that are clear
-    if (steps >= 1 && steps <= 4 && Math.abs(k - steps) <= 0.25) u = Math.max(0.85 * unit, Math.min(1.18 * unit, u + 0.2 * (g / steps - u)));
+    if (!paid && !owed && steps >= 1 && steps <= 4 && Math.abs(k - steps) <= 0.25) u = Math.max(0.85 * unit, Math.min(1.18 * unit, u + 0.2 * (g / steps - u)));
   });
   return out;
 }
@@ -539,7 +573,14 @@ export function readings(heard, { bpm, meter = 4, lead = 0, beats, swing = 0, ba
     } else places = xs.map((x) => Math.round((x - clicks.off) / grid) * grid);
     if (grid < 1) follows = false;
   } else {
-    places = ownGrid(xs);
+    // slow playing (nearly every gap four steps or so: quarter notes at half the mix's speed)
+    // is set on steps twice as long, or steps of a third more would fit it as well
+    const gaps = xs.slice(1).map((x, i) => x - xs[i]).filter((g) => g > 0.3).sort((a, b) => a - b);
+    const slow = gaps.length >= 3 && gaps[Math.floor(0.2 * gaps.length)] >= WIDE_FROM;
+    // (steps counted at the playing's own speed are nearly its own: swung eighths must not
+    // pass for steps a third shorter)
+    const near = own ? { from: 0.8, to: 1.25 } : {};
+    places = slow ? ownGrid(xs.map((x) => x / 2), near).map((p) => 2 * p) : ownGrid(xs, near);
     grid = places.some((p) => p % 1 !== 0) ? 0.5 : 1;
     if (grid < 1) follows = false;
   }
@@ -577,17 +618,23 @@ export function readings(heard, { bpm, meter = 4, lead = 0, beats, swing = 0, ba
 
 // ---------- playing with no mix around it (the Note-o-Matic's own screen) ----------
 
-const BEAT_FROM = 60 / 144; // seconds: the beat is looked for between 72 and 144 a minute
+const BEAT_FROM = 60 / 144; // seconds: the shortest beat looked for (144 a minute)
+const BEAT_TO = 60 / 40; // seconds: and the longest (40 a minute)
 const BEAT_NEAR = 0.03; // seconds: how near a gap must be to a count of beats to speak for it
 const BEAT_FAR = 6; // beats: gaps longer than this say nothing
+const BEAT_SLOW = 0.8; // a slower beat is the kid's own when it fits this share as well as the best
 const WALTZ_BY = 0.05; // how much better bars of three must fit their chords than bars of four
+const WALTZ_BEAT = 0.5; // how much more a single line's rhythm must speak for bars of three than of four
+const WALTZ_NOT = -0.6; // two hands: a rhythm that speaks this much for four overrules the chords
 
 /**
- * The speed of playing that had no clicks to follow, in beats a minute (72 to 144). The gaps
+ * The speed of playing that had no clicks to follow, in beats a minute (40 to 144). The gaps
  * between every two strikes (not only neighbours) keep coming back to whole numbers of beats,
- * whatever is played in between: straight or swung eighths, dotted notes, a slip. The beat
- * length that most gaps agree with wins. Playing at 60 comes out as 120 with notes twice as
- * long, which sounds the same. Too little playing to tell gives 100.
+ * whatever is played in between: straight or swung eighths, dotted notes, a slip. Of the beat
+ * lengths that nearly all gaps agree with, the longest wins: slow playing in plain quarter
+ * notes is slow playing, not fast playing in long notes (which would sound the same, but its
+ * bars would be half as long and its notes harder to set on their steps). Too little playing
+ * to tell gives 100.
  */
 export function speedOf(heard) {
   const on = heard.map((n) => n.on).filter(Number.isFinite).sort((a, b) => a - b);
@@ -600,8 +647,8 @@ export function speedOf(heard) {
   }
   if (count) xs.push(sum / count);
   if (xs.length < 4) return 100;
-  let best = null;
-  for (let beat = BEAT_FROM; beat < 2 * BEAT_FROM; beat *= 1.006) {
+  const tried = [];
+  for (let beat = BEAT_FROM; beat <= BEAT_TO; beat *= 1.006) {
     let fit = 0; let n = 0;
     for (let i = 0; i < xs.length; i += 1) {
       for (let j = i + 1; j < xs.length; j += 1) {
@@ -615,10 +662,52 @@ export function speedOf(heard) {
     if (!n) continue;
     // (what gaps from nowhere would score at this beat length is taken off)
     const chance = Math.min(1, (BEAT_NEAR * Math.sqrt(2 * Math.PI)) / beat);
-    const score = (fit / n - chance) / (1 - chance);
-    if (!best || score > best.score) best = { score, beat };
+    tried.push({ beat, score: (fit / n - chance) / (1 - chance) });
   }
-  return best ? Math.round(60 / best.beat) : 100;
+  if (!tried.length) return 100;
+  const top = Math.max(...tried.map((t) => t.score));
+  if (!(top > 0)) return 100;
+  // the longest beat that fits nearly as well as the best one, at the top of its own hill
+  let at = tried.length - 1;
+  while (at > 0 && tried[at].score < BEAT_SLOW * top) at -= 1;
+  while (at > 0 && tried[at - 1].score > tried[at].score) at -= 1;
+  return Math.round(60 / tried[at].beat);
+}
+
+/**
+ * How much a rhythm speaks for bars of three beats (above 0) or of four (below): long notes
+ * fall on a bar's first beat, and a rhythm comes back a bar or two later. Counted for bars and
+ * pairs of bars (6 and 12 steps against 8 and 16). `notes` are tidied ({ at, len } in steps).
+ */
+export function threeBeat(notes) {
+  const at = [...new Set(notes.map((n) => n.at))].sort((a, b) => a - b);
+  if (at.length < 4) return 0;
+  const gap = at.map((a, i) => Math.min(8, i + 1 < at.length ? at[i + 1] - a : 4));
+  const usual = gap.reduce((x, y) => x + y, 0) / gap.length;
+  const span = at[at.length - 1] - at[0];
+  // the longest notes a bar's first beat can be given (at the best place for the bar line)
+  const firsts = (bar) => {
+    let best = 0;
+    for (let from = 0; from < bar; from += 1) {
+      let sum = 0;
+      at.forEach((a, i) => { if (mod(a - at[0] - from, bar) < 0.01) sum += gap[i]; });
+      best = Math.max(best, sum / ((span + bar) / bar) / usual);
+    }
+    return best;
+  };
+  // the share of strikes that have a strike again `lag` steps on
+  const struck = new Set(at.map((a) => Math.round(2 * a)));
+  const low = Math.round(2 * at[0]); const high = Math.round(2 * at[at.length - 1]);
+  const again = (lag) => {
+    let both = 0; let either = 0;
+    for (let t = low; t + 2 * lag <= high; t += 1) {
+      const a = struck.has(t); const b = struck.has(t + 2 * lag);
+      if (a || b) { either += 1; if (a && b) both += 1; }
+    }
+    return either ? both / either : 0;
+  };
+  return firsts(6) - firsts(8) + firsts(12) - firsts(16)
+    + 0.5 * (again(6) + 2 * again(12) + again(24) - again(8) - 2 * again(16) - again(32));
 }
 
 /**
@@ -637,11 +726,17 @@ export function tuneReadings(heard, { meter = 0 } = {}) {
   const beats = Math.max(1, Math.ceil(((end - lead) * bpm) / 60));
   let count = meter || 4;
   let result = readings(notes, { bpm, meter: count, lead, beats, own: true });
-  // Three beats in a bar or four? A waltz's chords change every three beats: its bars of
-  // three sit on one chord each clearly better than bars of four do.
+  // Three beats in a bar or four? With two hands, a waltz's chords change every three beats:
+  // its bars of three sit on one chord each clearly better than bars of four do (unless the
+  // rhythm plainly says four). One line has no chords to go by, only its rhythm: long notes
+  // on the first beat, and a rhythm that comes back a bar later.
   if (!meter && result.band) {
     const tidy = result.tidy[0].notes;
-    if (barFit(tidy, result.key, 6) - barFit(tidy, result.key, 8) > WALTZ_BY) { count = 3; result = readings(notes, { bpm, meter: count, lead, beats, own: true }); }
+    const beat = threeBeat(tidy);
+    const three = handSplit(tidy) == null
+      ? beat > WALTZ_BEAT
+      : beat > WALTZ_NOT && barFit(tidy, result.key, 6) - barFit(tidy, result.key, 8) > WALTZ_BY;
+    if (three) { count = 3; result = readings(notes, { bpm, meter: count, lead, beats, own: true }); }
   }
   return { ...result, bpm, meter: count, beats: Math.max(beats, ...READINGS.flatMap((r) => (result[r.id] || []).map((p) => p.beats))) };
 }

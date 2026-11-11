@@ -12,7 +12,7 @@ import { sameSig, LOWEST, HIGHEST } from '../js/remix.js';
 import { swingAt } from '../js/music.js';
 import {
   READINGS, readings, inSteps, strikes, swung, gridFit, clickGrid, ownGrid, handSplit, guessKey, chordsFor, bandPart, topLine,
-  speedOf, tuneReadings, barFit,
+  speedOf, tuneReadings, barFit, threeBeat,
 } from '../js/notomatic.js';
 
 const IDS = [...Object.keys(SONGS), ...Object.keys(SHOW_SONGS).map((k) => `show:${k}`)];
@@ -434,11 +434,72 @@ test('the speed of playing with no clicks: straight, swung, slow and too little 
   assert.ok(Math.abs(speedOf(at(132, places)) - 132) <= 4, `${speedOf(at(132, places))}`);
   // swung eighths keep the beat they swing around
   assert.ok(Math.abs(speedOf(at(110, places, 0.33)) - 110) <= 4, `${speedOf(at(110, places, 0.33))}`);
-  // playing at 60 is read at 120, with every note twice as long: the same music
+  // quarters and eighths at 60 are read at 120, with every note twice as long: the same music
   assert.ok(Math.abs(speedOf(at(60, places)) - 120) <= 4, `${speedOf(at(60, places))}`);
   // too little to tell
   assert.equal(speedOf([]), 100);
   assert.equal(speedOf(at(90, [0, 2, 4])), 100);
+});
+
+// a one-hand tune from [midi, beats] pairs, played at `bpm` a little unevenly
+function playLine(line, bpm, seed = 3, uneven = 0.012) {
+  const r = rng(seed);
+  let t = 0.5;
+  return line.map(([midi, beats]) => { const on = t + r.gauss() * uneven; t += (beats * 60) / bpm; return { midi, on, off: on + (beats * 51) / bpm }; });
+}
+const line = (text) => text.trim().split(/\s+/).map((w) => { const [m, d] = w.split(':'); return [Number(m), Number(d || 1)]; });
+const TWINKLE = line('60 60 67 67 69 69 67:2 65 65 64 64 62 62 60:2 67 67 65 65 64 64 62:2 67 67 65 65 64 64 62:2');
+const BIRTHDAY = line('67:.75 67:.25 69 67 72 71:2 67:.75 67:.25 69 67 74 72:2 67:.75 67:.25 79 76 72 71 69:2 77:.75 77:.25 76 72 74 72:3');
+const tidyGaps = (t) => gapsOf(t.tidy[0].notes.map((n) => n.at));
+
+test('slow playing in plain quarter notes keeps its own slow beat, and every note its length', () => {
+  for (const bpm of [50, 60, 66, 72]) {
+    const t = tuneReadings(playLine(TWINKLE, bpm));
+    assert.ok(Math.abs(t.bpm - bpm) <= 3, `played at ${bpm}, found ${t.bpm}`);
+    // a quarter is two steps and a half note four (not three and six: steps a third too long fit slow playing as well)
+    assert.deepEqual(tidyGaps(t), TWINKLE.slice(0, -1).map(([, d]) => 2 * d), `at ${bpm}`);
+    assert.equal(t.meter, 4, `bars at ${bpm}`);
+  }
+  // the same off the clicks in a mix twice as fast: every quarter four of the mix's steps
+  const heard = playLine(TWINKLE, 66);
+  const inMix = readings(heard, { bpm: 120, meter: 4, lead: 0.37, beats: 64 });
+  assert.equal(inMix.onBeat, false);
+  const gaps = gapsOf(inMix.tidy[0].notes.map((n) => n.at));
+  assert.ok(gaps.filter((g, i) => g === 4 * TWINKLE[i][1]).length >= 0.9 * gaps.length, gaps.join(' '));
+});
+
+test('dotted pairs and swung eighths do not make a tune run long or short', () => {
+  // a dotted eighth and a sixteenth, again and again: a step and a half, then a half
+  const dotted = Array.from({ length: 25 }, (_, i) => [60 + (i % 5), i % 2 ? 0.25 : 0.75]);
+  assert.deepEqual(tidyGaps(tuneReadings(playLine(dotted, 90))), dotted.slice(0, -1).map(([, d]) => 2 * d));
+  // the short note first
+  const snap = Array.from({ length: 24 }, (_, i) => [60 + (i % 5), i % 2 ? 0.75 : 0.25]);
+  assert.deepEqual(tidyGaps(tuneReadings(playLine(snap, 90))), snap.slice(0, -1).map(([, d]) => 2 * d));
+  // eighths swung two to one are plain eighths
+  const swung2 = Array.from({ length: 24 }, (_, i) => [60 + (i % 5), i % 2 ? 1 / 3 : 2 / 3]);
+  assert.deepEqual(tidyGaps(tuneReadings(playLine(swung2, 100))), swung2.slice(0, -1).map(() => 1));
+  // Happy Birthday, with its dotted pairs, keeps its length
+  for (const bpm of [70, 100]) {
+    const t = tuneReadings(playLine(BIRTHDAY, bpm));
+    const last = t.tidy[0].notes.at(-1).at;
+    assert.equal(last, 2 * BIRTHDAY.slice(0, -1).reduce((x, [, d]) => x + d, 0), `at ${bpm}`);
+  }
+});
+
+test('bars of three or four for a tune played with one hand: from its rhythm', () => {
+  const MARY = line('64 62 60 62 64 64 64:2 62 62 62:2 64 67 67:2 64 62 60 62 64 64 64 64 62 62 64 62 60:4');
+  const GRACE = line('62 67:2 71:.5 67:.5 71:2 69 67:2 64 62:2 62 67:2 71:.5 67:.5 71:2 69 74:3 74:2 71 74:2 71:.5 67:.5 71:2 69 67:2 64 62:2 62 67:2 71:.5 67:.5 71:2 69 67:3');
+  for (const bpm of [66, 92, 120]) {
+    assert.equal(tuneReadings(playLine(TWINKLE, bpm)).meter, 4, `Twinkle at ${bpm}`);
+    assert.equal(tuneReadings(playLine(MARY, bpm)).meter, 4, `Mary at ${bpm}`);
+    assert.equal(tuneReadings(playLine(BIRTHDAY, bpm)).meter, 3, `Happy Birthday at ${bpm}`);
+    assert.equal(tuneReadings(playLine(GRACE, bpm)).meter, 3, `Amazing Grace at ${bpm}`);
+  }
+  // long notes every three beats speak for three, every four for four; plain quarters say nothing
+  const steps = (gaps) => { let at = 0; return gaps.map((g) => { const n = { at, len: g }; at += g; return n; }); };
+  assert.ok(threeBeat(steps([4, 2, 4, 2, 4, 2, 4, 2, 4, 2, 4, 2])) > 0.5);
+  assert.ok(threeBeat(steps([2, 2, 4, 2, 2, 4, 2, 2, 4, 2, 2, 4])) < -0.5);
+  assert.equal(threeBeat(steps([2, 2, 2])), 0);
 });
 
 test('a tune recorded on its own: its speed, its bars and its band, for every piece played free', () => {
@@ -446,7 +507,7 @@ test('a tune recorded on its own: its speed, its bars and its band, for every pi
   for (const id of IDS) for (const level of LEVELS) {
     const p = perform(id, level, { mode: 'free' });
     const t = tuneReadings(p.heard);
-    assert.ok(t.bpm >= 72 && t.bpm <= 144, `${id} ${level}: speed ${t.bpm}`);
+    assert.ok(t.bpm >= 40 && t.bpm <= 144, `${id} ${level}: speed ${t.bpm}`);
     assert.ok(t.band, `${id} ${level} got no band`);
     assert.equal(t.onBeat, false);
     // it starts at its first note and is as long as its notes
