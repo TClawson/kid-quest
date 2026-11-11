@@ -478,30 +478,41 @@ export function takeToNotes(mix, id, reading, key = null) {
   const found = findClip(mix, id);
   if (!found || found.clip.kind !== 'take') return fail('That recording is gone.');
   const parts = Array.isArray(reading) ? reading : [];
-  const most = mostNotesBeats(mix.meter);
-  if (!parts.length || parts.some((p) => !Array.isArray(p?.notes) || !keptNotes(p.notes, 2 * most).length)) return fail('There were no notes to use.');
-  const take = found.clip;
-  const band = parts.length > 1;
-  const readingId = band ? 'band' : null;
-  const goodKey = typeof key === 'string' && validKey(key) ? key : null;
   const next = clone(mix);
   next.tracks[found.track] = next.tracks[found.track].filter((c) => c.id !== id);
-  const start = take.start;
+  const r = placeNotes(next, found.track, found.clip.start, parts, { key, readingId: parts.length > 1 ? 'band' : null });
+  return r.error ? fail(r.error) : { mix: next, error: null, ids: r.ids };
+}
+
+/**
+ * Put the parts of a reading on the desk (`next`, a copy that is changed in place): the tune
+ * (part 0) on `track` at beat `start`, from its own start, as long as its notes or the room
+ * there; a band part on the track with the most room at that beat. `own`: { tune, band } the
+ * voices the parts start in (else the reading's, READING_VOICES); `shift`: the tune's.
+ * `bandOptional`: with no room for the band, the tune goes in alone (`bandLeft` says so).
+ * Returns { error, ids, bandLeft }.
+ */
+function placeNotes(next, track, start, parts, { key = null, readingId = null, own = null, shift = 0, bandOptional = false } = {}) {
+  const most = mostNotesBeats(next.meter);
+  if (!parts.length || parts.some((p) => !Array.isArray(p?.notes) || !keptNotes(p.notes, 2 * most).length)) return { error: 'There were no notes to use.', ids: [] };
+  const goodKey = typeof key === 'string' && validKey(key) ? key : null;
   const beatsOf = (part) => Math.max(1, Math.min(most, Math.ceil((Number(part.beats) || 1) - 1e-6)));
+  const made = [];
   const make = (part, role, len) => {
     const total = beatsOf(part);
-    const clip = { id: next.next, kind: 'notes', nid: newNid(), role, notes: keptNotes(part.notes, 2 * total), start, len, from: 0, total };
-    next.next += 1;
+    const clip = { id: next.next + made.length, kind: 'notes', nid: newNid(), role, notes: keptNotes(part.notes, 2 * total), start, len, from: 0, total };
+    made.push(clip);
     if (goodKey) clip.key = goodKey;
     if (part.follows === true) clip.follows = true;
-    const own = readingVoice(readingId, role);
-    if (own && own !== NOTES_VOICE && Object.hasOwn(VOICES, own)) clip.own = own;
+    const voice = own?.[role] || readingVoice(readingId, role);
+    if (voice && voice !== NOTES_VOICE && Object.hasOwn(VOICES, voice)) clip.own = voice;
     return clip;
   };
-  // the tune, in the take's place
   const tune = parts[0];
-  const tuneClip = make(tune, 'tune', Math.max(1, Math.min(beatsOf(tune), roomAt(next, found.track, start))));
-  const placed = [[found.track, tuneClip]];
+  const tuneClip = make(tune, 'tune', Math.max(1, Math.min(beatsOf(tune), roomAt(next, track, start))));
+  if (shift) tuneClip.shift = shift;
+  const placed = [[track, tuneClip]];
+  let bandLeft = false;
   // the band, on another track: the one with the most room at that beat
   for (const part of parts.slice(1)) {
     let best = null;
@@ -510,15 +521,51 @@ export function takeToNotes(mix, id, reading, key = null) {
       const room = roomAt(next, t, start);
       if (room >= 1 && (!best || room > best.room)) best = { track: t, room };
     }
-    if (!best) return fail('The band needs an empty spot on another track. Make some room and try again.');
+    if (!best) {
+      if (bandOptional) { bandLeft = true; break; }
+      return { error: 'The band needs an empty spot on another track. Make some room and try again.', ids: [] };
+    }
     const clip = make(part, 'band', Math.min(beatsOf(part), best.room));
     placed.push([best.track, clip]);
     next.tracks[best.track].push(clip); // (so the next band part finds this track taken)
   }
-  next.tracks[found.track].push(tuneClip);
+  next.tracks[track].push(tuneClip);
   for (const [t] of placed) next.tracks[t].sort((a, b) => a.start - b.start);
+  next.next += placed.length;
   if (!next.key && goodKey) next.key = goodKey;
-  return { mix: next, error: null, ids: placed.map(([, c]) => c.id) };
+  return { error: null, ids: placed.map(([, c]) => c.id), bandLeft };
+}
+
+/**
+ * Put a kept tune (tunerules.js, already tidied by cleanTune) on a track at beat `at` (the
+ * first free place from there on), as a clip of the kid's notes: in the tune's voice (its own
+ * sound) and shift, with its key, and for a band tune its band on another track at the same
+ * beat as takeToNotes places one; with no room for the band, the tune goes in alone and
+ * `note` says so. It plays at the mix's speed, like every notes clip. An empty mix takes the
+ * tune's speed, beats in a bar and key; a tune of another beat is turned down. Returns
+ * { mix, error, ids, note }.
+ */
+export function addTune(mix, track, tune, at = 0, name = 'That tune') {
+  const fail = (error) => ({ mix, error, ids: [], note: '' });
+  if (!tune || !Array.isArray(tune.parts) || !tune.parts.length) return fail('That tune is gone.');
+  let next = clone(mix);
+  if (!allClips(next).length) {
+    next.bpm = Math.max(BPM_RANGE[0], Math.min(BPM_RANGE[1], Math.round(tune.bpm) || 100));
+    next.meter = tune.meter === 3 ? 3 : 4;
+    next.key = validKey(tune.key) ? tune.key : null;
+    const beats = Math.max(...tune.parts.map((p) => p.beats || 1));
+    next.bars = Math.max(2, Math.min(maxBars(next.bpm, next.meter), 8, Math.ceil(beats / next.meter)));
+  } else if ((tune.meter === 3 ? 3 : 4) !== next.meter) {
+    return fail(`${name} has ${tune.meter === 3 ? 3 : 4} beats in a bar, and this mix has ${next.meter}. They can't play together.`);
+  }
+  const start = freeSpot(next, track, 1, Math.round(at));
+  if (start < 0) return fail('That track is full.');
+  next = { ...next };
+  const r = placeNotes(next, track, start, tune.parts, {
+    key: tune.key, readingId: tune.reading, own: { tune: tune.voice, band: READING_VOICES.band.band }, shift: tune.shift || 0, bandOptional: true,
+  });
+  if (r.error) return fail(r.error);
+  return { mix: next, error: null, ids: r.ids, note: r.bandLeft ? 'There was no room for the band on another track, so your tune went in alone.' : '' };
 }
 
 /** Move a clip to a track and a beat (snapped). Turned down when something is in the way. */

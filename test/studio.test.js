@@ -326,6 +326,23 @@ test('mixes and takes are kept per kid, and takes no mix uses are swept away', a
   assert.ok(await loadTake(other), 'and another kid\'s take is never touched');
 });
 
+test('Note-o-Matic tunes are kept per kid in six slots, apart from the mixes', async () => {
+  const { loadTunes, saveTune, deleteTune, loadMixes } = await import('../js/studio-store.js');
+  const { cleanTune } = await import('../js/tunerules.js');
+  const empty = [null, null, null, null, null, null];
+  assert.deepEqual(await loadTunes('cal'), empty);
+  const tune = cleanTune({ id: 'tune-a', made: 5, reading: 'tidy', bpm: 100, meter: 4, key: 'C', parts: [{ role: 'tune', notes: [{ at: 0, len: 2, midi: 60 }], beats: 4 }], voice: 'flute', shift: 0 });
+  await saveTune('cal', 2, tune);
+  assert.deepEqual(await loadTunes('cal'), [null, null, tune, null, null, null]);
+  assert.deepEqual(await loadTunes('dee'), empty, 'another kid has their own');
+  assert.deepEqual((await loadMixes('cal')).slots, [null, null, null], 'a tune is not a mix');
+  await assert.rejects(saveTune('cal', 6, tune), 'there are only six slots');
+  await saveTune('cal', 3, { parts: 'junk' });
+  assert.equal((await loadTunes('cal'))[3], null, 'a bad save reads back as an empty slot');
+  await deleteTune('cal', 2);
+  assert.deepEqual(await loadTunes('cal'), empty);
+});
+
 test('a write that fails is never told as kept, and a failed read is just nothing', async () => {
   // a tablet whose storage turns every request down (like a full one)
   const store = { put: () => ({}), get: () => ({}), delete: () => ({}), index: () => ({ openCursor: () => ({}) }) };
@@ -336,6 +353,8 @@ test('a write that fails is never told as kept, and a failed read is just nothin
     await assert.rejects(m.saveTake('ava', Float32Array.of(0.1), 48000));
     await assert.rejects(m.saveMix('ava', 0, newMix()));
     await assert.rejects(m.deleteMix('ava', 0));
+    await assert.rejects(m.saveTune('ava', 0, { parts: [] }));
+    assert.deepEqual(await m.loadTunes('ava'), [null, null, null, null, null, null]);
     assert.deepEqual(await m.loadMixes('ava'), { draft: null, slots: [null, null, null] });
     assert.equal(await m.loadTake('take-a'), null);
     await assert.rejects(m.sweepTakes('ava'), 'when the mixes can\'t be read, no take is thrown away');
