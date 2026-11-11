@@ -2,7 +2,7 @@
 // storage, their names on the shelf, and putting one in a studio mix (studiorules.js addTune).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TUNE_SLOTS, cleanTune, makeTune, tuneName, tuneAbout, tuneSeconds, freeSlot, startVoice, shiftFits } from '../js/tunerules.js';
+import { TUNE_SLOTS, TUNE_BPM, forMix, cleanTune, makeTune, tuneName, tuneAbout, tuneSeconds, freeSlot, startVoice, shiftFits } from '../js/tunerules.js';
 import { newMix, addTune, addTake, mixBeats, setBars, maxBars, findClip, schedule, badges, cleanMix, mostNotesBeats, MOST_NOTES, NOTES_VOICE, notesVoice, ownVoice } from '../js/studiorules.js';
 
 const notes = (n = 4) => Array.from({ length: n }, (_, i) => ({ at: 2 * i, len: 1.9, midi: [60, 64, 67, 72][i % 4] }));
@@ -151,4 +151,38 @@ test('a tune is trimmed to the room, starts at the first free beat, and keeps to
   assert.equal(bw.note, 'The band counts in 3s and this mix counts in 4s, so your tune went in without its band.');
   assert.equal(addTune(addTune(newMix(), 0, bandWaltz, 0).mix, 2, makeTune(result(), 'band'), 0).note, 'The band counts in 4s and this mix counts in 3s, so your tune went in without its band.');
   assert.equal(addTune(first, 1, null).error, 'That tune is gone.');
+});
+
+test('a slow tune keeps its own speed, and goes in a mix twice as fast with notes twice as long', () => {
+  assert.deepEqual(TUNE_BPM, [40, 170]);
+  const slow = cleanTune({ reading: 'band', bpm: 50, meter: 4, key: 'C', voice: 'flute', parts: [part('tune'), part('band')] });
+  assert.equal(slow.bpm, 50, 'kept at 50, not the studio\'s slowest');
+  assert.equal(cleanTune({ ...slow, bpm: 20 }).bpm, 40);
+  assert.equal(forMix(makeTune(result(), 'tidy')).bpm, 96, 'a tune the studio can play as it is stays as it is');
+  const seconds = (beats, bpm) => (beats * 60) / bpm;
+  // into an empty mix
+  const r = addTune(newMix(), 0, slow, 0);
+  assert.equal(r.error, null);
+  assert.equal(r.mix.bpm, 100);
+  assert.equal(r.mix.meter, 4);
+  assert.equal(r.mix.bars, 4, '16 beats at 100');
+  const tune = findClip(r.mix, r.ids[0]).clip;
+  assert.deepEqual(tune.notes, slow.parts[0].notes.map((n) => ({ ...n, at: 2 * n.at, len: 2 * n.len })), 'every note at twice the place and twice as long');
+  assert.equal(tune.total, 16);
+  assert.ok(Math.abs(seconds(tune.total, r.mix.bpm) - seconds(slow.beats, slow.bpm)) <= 60 / r.mix.bpm, 'as many seconds as the tune');
+  const band = findClip(r.mix, r.ids[1]).clip;
+  assert.deepEqual(band.notes, slow.parts[1].notes.map((n) => ({ ...n, at: 2 * n.at, len: 2 * n.len })), 'its band too');
+  // into a mix that has music already: doubled as well
+  const busy = addTune(addTune(newMix(), 0, makeTune(result(), 'tidy'), 0).mix, 1, slow, 0);
+  assert.equal(busy.error, null);
+  assert.equal(busy.mix.bpm, 96, 'the mix keeps its speed');
+  assert.deepEqual(findClip(busy.mix, busy.ids[0]).clip.notes.map((n) => n.at), [0, 4, 8, 12]);
+  assert.deepEqual(slow.parts[0].notes.map((n) => n.at), [0, 2, 4, 6], 'the kept tune itself is not changed');
+  // the slowest tune the robot hears, 30 seconds of it, is not cut short
+  const long = cleanTune({ reading: 'tidy', bpm: 40, meter: 4, parts: [{ role: 'tune', beats: 20, notes: [{ at: 0, len: 2, midi: 60 }, { at: 38, len: 2, midi: 64 }] }] });
+  const lr = addTune(newMix(), 0, long, 0);
+  const lc = findClip(lr.mix, lr.ids[0]).clip;
+  assert.equal(lr.mix.bpm, 80);
+  assert.equal(lc.len, 40);
+  assert.deepEqual(lc.notes, [{ at: 0, len: 4, midi: 60 }, { at: 76, len: 4, midi: 64 }]);
 });

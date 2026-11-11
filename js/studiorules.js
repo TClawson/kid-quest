@@ -537,6 +537,21 @@ function placeNotes(next, track, start, parts, { key = null, readingId = null, o
 }
 
 /**
+ * A kept tune (tunerules.js) as a studio mix can hold it: one slower than the studio goes
+ * (BPM_RANGE) plays twice as fast with every note twice as long, which sounds the same.
+ * Otherwise the tune itself.
+ */
+export function forMix(tune) {
+  if (!tune || !(tune.bpm < BPM_RANGE[0])) return tune;
+  return {
+    ...tune,
+    bpm: tune.bpm * 2,
+    beats: tune.beats * 2,
+    parts: tune.parts.map((p) => ({ ...p, beats: p.beats * 2, notes: p.notes.map((n) => ({ ...n, at: n.at * 2, len: n.len * 2 })) })),
+  };
+}
+
+/**
  * Put a kept tune (tunerules.js, already tidied by cleanTune) on a track at beat `at` (the
  * first free place from there on), as a clip of the kid's notes: in the tune's voice (its own
  * sound) and shift, with its key, and for a band tune its band on another track at the same
@@ -544,12 +559,14 @@ function placeNotes(next, track, start, parts, { key = null, readingId = null, o
  * `note` says so. It plays at the mix's speed, like every notes clip. An empty mix takes the
  * tune's speed, beats in a bar and key. A tune goes in whatever its beats in a bar (its notes
  * are just notes on steps); only its band is made for its count, so in a mix that counts
- * otherwise the tune goes in without its band, and `note` says so. Returns
+ * otherwise the tune goes in without its band, and `note` says so. A tune slower than the
+ * studio goes is put in twice as fast with every note twice as long (tunerules.js forMix). Returns
  * { mix, error, ids, note }.
  */
-export function addTune(mix, track, tune, at = 0) {
+export function addTune(mix, track, kept, at = 0) {
   const fail = (error) => ({ mix, error, ids: [], note: '' });
-  if (!tune || !Array.isArray(tune.parts) || !tune.parts.length) return fail('That tune is gone.');
+  if (!kept || !Array.isArray(kept.parts) || !kept.parts.length) return fail('That tune is gone.');
+  const tune = forMix(kept); // (a tune slower than the studio goes, doubled)
   let next = clone(mix);
   const count = tune.meter === 3 ? 3 : 4;
   let parts = tune.parts;

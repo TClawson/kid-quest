@@ -11,6 +11,8 @@ import { LOWEST, HIGHEST, MOST_SHIFT } from './remix.js';
 import { BPM_RANGE, MOST_NOTES, NOTES_VOICE, READING_VOICES, mostNotesBeats, validKey } from './studiorules.js';
 
 export const TUNE_SLOTS = 6;
+/** A tune keeps its own speed, slow playing too (notomatic.js tuneReadings hears 40 and up). */
+export const TUNE_BPM = [40, 170];
 const READING_IDS = READINGS.map((r) => r.id);
 
 /** The voice a reading's tune starts in. */
@@ -83,7 +85,7 @@ export function cleanTune(raw) {
     id: typeof raw.id === 'string' && raw.id && raw.id.length <= 40 ? raw.id : newTuneId(),
     made: Number.isFinite(raw.made) && raw.made > 0 ? Math.round(raw.made) : 0,
     reading: parts.length > 1 ? 'band' : reading === 'band' ? 'tidy' : reading,
-    bpm: Math.max(BPM_RANGE[0], Math.min(BPM_RANGE[1], Math.round(Number(raw.bpm) || 100))),
+    bpm: Math.max(TUNE_BPM[0], Math.min(TUNE_BPM[1], Math.round(Number(raw.bpm) || 100))),
     meter,
     key: validKey(raw.key) ? raw.key : null,
     beats: Math.max(...parts.map((p) => p.beats)),
@@ -107,6 +109,9 @@ export function makeTune(result, readingId, { voice = startVoice(readingId), shi
     parts: parts.map((p) => ({ role: p.role, notes: p.notes, beats: p.beats, follows: p.follows })), voice, shift,
   });
 }
+
+// (forMix: a kept tune as a studio mix can hold it; it lives with the mix's rules)
+export { forMix } from './studiorules.js';
 
 /** How long a tune plays, in whole seconds (at least 1). */
 export const tuneSeconds = (tune) => Math.max(1, Math.round((tune.beats * 60) / tune.bpm));
