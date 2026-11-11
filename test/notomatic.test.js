@@ -478,6 +478,13 @@ test('dotted pairs and swung eighths do not make a tune run long or short', () =
   // eighths swung two to one are plain eighths
   const swung2 = Array.from({ length: 24 }, (_, i) => [60 + (i % 5), i % 2 ? 1 / 3 : 2 / 3]);
   assert.deepEqual(tidyGaps(tuneReadings(playLine(swung2, 100))), swung2.slice(0, -1).map(() => 1));
+  // and they keep their speed, however evenly or unevenly they are played
+  assert.equal(tuneReadings(playLine(swung2, 100, 3, 0)).bpm, 100);
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const t = tuneReadings(playLine(swung2, 80, seed));
+    assert.equal(t.bpm, 80, `seed ${seed}`);
+    assert.deepEqual(tidyGaps(t), swung2.slice(0, -1).map(() => 1), `seed ${seed}`);
+  }
   // Happy Birthday, with its dotted pairs, keeps its length
   for (const bpm of [70, 100]) {
     const t = tuneReadings(playLine(BIRTHDAY, bpm));

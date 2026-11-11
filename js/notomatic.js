@@ -623,6 +623,7 @@ const BEAT_TO = 60 / 40; // seconds: and the longest (40 a minute)
 const BEAT_NEAR = 0.03; // seconds: how near a gap must be to a count of beats to speak for it
 const BEAT_FAR = 6; // beats: gaps longer than this say nothing
 const BEAT_ALIKE = 0.7; // playing is "plain notes" when this share of its gaps are the usual gap, or twice or half it
+const BEAT_PAIRS = 0.75; // long-short pairs, not plain notes: this share of gaps two strikes apart are no power of two of the usual gap
 const BEAT_NOTES = 2.2; // a slower beat is at most this many of the usual notes long
 const BEAT_SLOW = 0.7; // a slower beat is the kid's own when it fits this share as well as the best
 const WALTZ_BY = 0.05; // how much better bars of three must fit their chords than bars of four
@@ -681,9 +682,12 @@ export function speedOf(heard) {
   tried.forEach((t, i) => { if (t.beat < 2 * BEAT_FROM && t.score > tried[at].score) at = i; });
   // Plain notes (nearly all one length, or twice or half it: a scale, a run, slow long notes)
   // fit a beat of a third or a fifth of them as well as one of a half or a quarter: they are
-  // counted in twos.
+  // counted in twos. Not so long-short pairs all the way (swung eighths): every two of their
+  // gaps make one and a half of the usual, and that is their beat.
   const twos = (x) => Math.abs(Math.log2(x) - Math.round(Math.log2(x)));
-  if (twos(tried[at].beat / usual) > 0.2 && gaps.filter((g) => twos(g / usual) <= 0.2).length >= BEAT_ALIKE * gaps.length) {
+  const two = xs.slice(2).map((x, i) => x - xs[i]);
+  const pairs = two.filter((g) => twos(g / usual) > 0.2).length >= BEAT_PAIRS * two.length;
+  if (!pairs && twos(tried[at].beat / usual) > 0.2 && gaps.filter((g) => twos(g / usual) <= 0.2).length >= BEAT_ALIKE * gaps.length) {
     let want = usual;
     while (want < BEAT_FROM) want *= 2;
     while (want >= 2 * BEAT_FROM) want /= 2;
