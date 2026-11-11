@@ -10,7 +10,7 @@
 //   joinCodes/{code}                { familyId, role, kidId?, expiresAt }
 
 import { firebaseConfig } from './firebase-config.js';
-import { splitState, joinState, nestFields, planWrites, diffDocs, docAt, stableJson, DELETE } from './store.js';
+import { splitState, joinState, nestFields, planWrites, diffDocs, docAt, stableJson, DELETE, AddTo, Increase } from './store.js';
 
 let fb = null;
 let auth = null;
@@ -217,14 +217,22 @@ export function startSync({ familyId, role, kidId }, { onState, onStatus = () =>
   stopSync();
   const parts = { family: null, device: {}, kids: {}, days: {} };
   const ready = { family: false, kids: false, days: false };
+  // Whether each part last came from the server or only from this device's own
+  // copy, which may be days old. One-time repairs wait for the server (see
+  // stampAllowance in app.js), so they never run on an old copy.
+  const fresh = { family: false, kids: false, days: false };
   let timer = 0;
   const emit = () => {
     if (!Object.values(ready).every(Boolean)) return;
     clearTimeout(timer);
-    timer = setTimeout(() => onState(joinState(parts)), 30);
+    timer = setTimeout(() => onState(joinState(parts), { fromServer: Object.values(fresh).every(Boolean) }), 30);
   };
+  const seen = (key, snap) => { fresh[key] = !snap.metadata.fromCache; };
+  // metadata changes too, to hear when a copy from the device is confirmed by the server
+  const META = { includeMetadataChanges: true };
   const fail = (err) => { console.error('Kid Quest sync', err); onStatus({ pending, error: err.code || err.message }); };
   const collect = (key) => (snap) => {
+    seen(key, snap);
     for (const ch of snap.docChanges()) {
       if (ch.type === 'removed') delete parts[key][ch.doc.id];
       else parts[key][ch.doc.id] = ch.doc.data();
@@ -233,21 +241,23 @@ export function startSync({ familyId, role, kidId }, { onState, onStatus = () =>
     emit();
   };
 
-  unsubs.push(fb.onSnapshot(familyRef(familyId), (snap) => {
+  unsubs.push(fb.onSnapshot(familyRef(familyId), META, (snap) => {
+    seen('family', snap);
     parts.family = snap.data() || {};
     ready.family = true;
     emit();
   }, fail));
   if (role === 'kid') {
-    unsubs.push(fb.onSnapshot(fb.doc(kidsCol(familyId), kidId), (snap) => {
+    unsubs.push(fb.onSnapshot(fb.doc(kidsCol(familyId), kidId), META, (snap) => {
+      seen('kids', snap);
       parts.kids = snap.exists() ? { [kidId]: snap.data() } : {};
       ready.kids = true;
       emit();
     }, fail));
-    unsubs.push(fb.onSnapshot(fb.query(daysCol(familyId), fb.where('kidId', '==', kidId)), collect('days'), fail));
+    unsubs.push(fb.onSnapshot(fb.query(daysCol(familyId), fb.where('kidId', '==', kidId)), META, collect('days'), fail));
   } else {
-    unsubs.push(fb.onSnapshot(kidsCol(familyId), collect('kids'), fail));
-    unsubs.push(fb.onSnapshot(daysCol(familyId), collect('days'), fail));
+    unsubs.push(fb.onSnapshot(kidsCol(familyId), META, collect('kids'), fail));
+    unsubs.push(fb.onSnapshot(daysCol(familyId), META, collect('days'), fail));
   }
 }
 
@@ -285,9 +295,16 @@ export function stopSync() {
 // update, since an update can reach the server before the document exists.
 const creating = new Map(); // path -> pending creates
 
-// DELETE markers from nestFields become Firestore deletes.
-const withDeletes = (v) => {
+// DELETE markers from nestFields become Firestore deletes, and AddTo / Increase
+// (purchases, see mergeSafe in store.js) become arrayUnion / increment.
+const sentinel = (v) => {
   if (v === DELETE) return fb.deleteField();
+  if (v instanceof AddTo) return fb.arrayUnion(...v.items);
+  if (v instanceof Increase) return fb.increment(v.by);
+  return v;
+};
+const withDeletes = (v) => {
+  if (v === DELETE || v instanceof AddTo || v instanceof Increase) return sentinel(v);
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return v;
   return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, withDeletes(x)]));
 };
@@ -304,7 +321,7 @@ export function writeChanges(familyId, changes, before, after, onStatus = () => 
       const mergeFields = w.fields.map(([p]) => new fb.FieldPath(...p));
       return (b) => b.set(ref, data, { mergeFields });
     }
-    const args = w.fields.flatMap(([p, v]) => [new fb.FieldPath(...p), v === DELETE ? fb.deleteField() : v]);
+    const args = w.fields.flatMap(([p, v]) => [new fb.FieldPath(...p), sentinel(v)]);
     return (b) => b.update(ref, ...args);
   });
   created.forEach((path) => creating.set(path, (creating.get(path) || 0) + 1));

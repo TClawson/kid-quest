@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyGrants, GRANTS } from '../js/grants.js';
+import { applyGrants, GRANTS, restoreFromRecord } from '../js/grants.js';
 import { itemById } from '../js/items.js';
 
 const G = [{ id: 'g1', kid: 'kid_a', item: 'home-chair-bean-blue-plain' }];
@@ -32,4 +32,19 @@ test('a grant for a kid not on this device does nothing', () => {
 
 test('every real grant names a shop item', () => {
   for (const g of GRANTS) assert.ok(itemById(g.item), g.item);
+});
+
+test('restoreFromRecord gives back bought things the kid still wears, keeps or has placed', () => {
+  // like Ayden, Edison and Remington after their owned lists were wiped on 2026-11-10
+  const kid = {
+    owned: ['bg-rainforest'],
+    buddyOwned: { fox: ['hat-cap'] },
+    buddy: { species: 'fox', outfit: { background: 'bg-sunset', sport: 'sport-rod-regular', hat: 'hat-cowboy', face: 'face-round' }, closet: { cat: { hat: 'hat-beanie' } } },
+    home: { chair: 'home-chair-bean-blue-plain' },
+  };
+  assert.equal(restoreFromRecord(kid), true);
+  // streak prizes (sunset, cowboy hat) aren't bought, so they stay out of the lists
+  assert.deepEqual(kid.owned, ['bg-rainforest', 'sport-rod-regular', 'home-chair-bean-blue-plain']);
+  assert.deepEqual(kid.buddyOwned, { fox: ['hat-cap', 'face-round'], cat: ['hat-beanie'] });
+  assert.equal(restoreFromRecord(kid), false, 'nothing more the second time');
 });

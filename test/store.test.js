@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, defaultTasks, newId } from '../js/logic.js';
-import { migrate, splitState, joinState, diffDocs, diffFields, nestFields, planWrites, DELETE, createStore, localBackend, STORAGE_KEY, packLog, unpackLog } from '../js/store.js';
+import { migrate, splitState, joinState, diffDocs, diffFields, nestFields, planWrites, DELETE, AddTo, Increase, createStore, localBackend, STORAGE_KEY, packLog, unpackLog } from '../js/store.js';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -213,7 +213,7 @@ test('planWrites: merge new documents, update changed fields, patch pending crea
   assert.deepEqual(byPath['days/2026-11-02_k1'].data, { date: '2026-11-02', kidId: 'k1', entry: { tasks: {} } });
   assert.equal(byPath['days/2026-11-01_k1'].op, 'delete');
   assert.equal(byPath['kids/k1'].op, 'update');
-  assert.deepEqual(byPath['kids/k1'].fields, [[['spent'], 5]]);
+  assert.deepEqual(byPath['kids/k1'].fields, [[['spent'], new Increase(5)]], 'spending goes as a change, so an old copy cannot undo another device\'s');
   const pending = planWrites(changes, before, after, new Set(['kids/k1']));
   assert.equal(pending.find((w) => w.path === 'kids/k1').op, 'patch');
   assert.equal(planWrites(changes, null, after).every((w) => w.op === 'merge' || w.op === 'delete'), true);
@@ -235,4 +235,26 @@ test('a kid\'s daily summary (for the family village) survives migrate and split
   next.kids[state.kids[0].id].daily['2026-11-12'] = [3, 5];
   const fields = diffFields(docs.kids[state.kids[0].id], next.kids[state.kids[0].id]);
   assert.deepEqual(fields, [[['daily', '2026-11-12'], [3, 5]]]);
+});
+
+test('purchases sync as additions: a device on an old copy cannot wipe things bought since', () => {
+  const mk = (kid) => splitState(migrate({ kids: [{ id: 'k1', name: 'Ed', tasks: [], ...kid }], log: {} }));
+  // the old copy has the rainforest; the server also has the volcano, bought later elsewhere
+  const before = mk({ owned: ['bg-rainforest'], spent: 300, grants: [], buddyOwned: { fox: ['hat-cap'] } });
+  const after = mk({ owned: ['bg-rainforest', 'song:bg-meadow'], spent: 320, grants: ['g1'], buddyOwned: { fox: ['hat-cap', 'face-round'], cat: ['hat-cap'] } });
+  const plan = planWrites(diffDocs(before, after), before, after);
+  const fields = Object.fromEntries(plan.find((w) => w.path === 'kids/k1').fields.map(([p, v]) => [p.join('.'), v]));
+  assert.deepEqual(fields.owned, new AddTo(['song:bg-meadow']));
+  assert.deepEqual(fields.spent, new Increase(20));
+  assert.deepEqual(fields.grants, new AddTo(['g1']));
+  assert.deepEqual(fields['buddyOwned.fox'], new AddTo(['face-round']));
+  assert.deepEqual(fields['buddyOwned.cat'], new AddTo(['hat-cap']));
+});
+
+test('taking something out of a list still sends the whole list', () => {
+  const mk = (kid) => splitState(migrate({ kids: [{ id: 'k1', name: 'Ed', tasks: [], ...kid }], log: {} }));
+  const before = mk({ owned: ['bg-rainforest', 'bg-ocean'] });
+  const after = mk({ owned: ['bg-rainforest'] });
+  const fields = planWrites(diffDocs(before, after), before, after).find((w) => w.path === 'kids/k1').fields;
+  assert.deepEqual(fields.find(([p]) => p[0] === 'owned')[1], ['bg-rainforest']);
 });
