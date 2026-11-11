@@ -27,7 +27,7 @@ import {
   trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges, shelfSongs,
   addBacking, setLoop, setVoice, setKit, shiftClip, moveIntoKey, clipFits, clipKey, remixed, splitShift, backingBeats, backingSwing,
   setTrackVolume, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME, takeToNotes, clipSwing, readingVoice, roleLevel, NOTES_VOICE, ownVoice, notesVoice,
-  keptHeard, readingOptions, mostNotesBeats, addTune,
+  keptHeard, readingOptions, mostNotesBeats, addTune, setPace, pacedNotes, paceOf,
 } from './studiorules.js';
 import { tuneName, tuneAbout } from './tunerules.js';
 import { READINGS, readings } from './notomatic.js';
@@ -751,6 +751,18 @@ function nomHtml() {
   return `<section class="st-panel st-nom" aria-label="Turn your take into notes">${head}${body}</section>`;
 }
 
+/** Half, normal or double speed, for the kid's notes (studiorules.js setPace). */
+const PACE_CHOICES = [['half', '🐢 Half speed'], ['', 'Normal'], ['double', '🐇 Double speed']];
+function paceHtml(c) {
+  if (c.kind !== 'notes') return '';
+  const now = paceOf(c) || '';
+  const choices = PACE_CHOICES.map(([pace, label]) => {
+    const on = pace === now;
+    return `<button class="btn ghost small-btn st-choice st-pace ${on ? 'on' : ''}" data-action="st-pace" data-pace="${pace}" aria-pressed="${on}">${label}</button>`;
+  }).join('');
+  return `<div class="st-paces" role="group" aria-labelledby="st-pace-name"><span id="st-pace-name">Speed</span>${choices}</div>`;
+}
+
 /**
  * The remix buttons for a picked clip: a voice, higher, lower and moving into the mix's key
  * for music with notes; a kit for drums. With the chooser of voices or kits when it is open.
@@ -766,7 +778,7 @@ function remixHtml(c) {
     const fit = !clipFits(S.mix, c) ? `<button class="btn small-btn st-movekey" data-action="st-fit">🎯 Move into ${esc(keyLabel(S.mix.key))}</button>` : '';
     buttons = `${toggle('voice', '🎨 Voice')}
       <button class="btn ghost small-btn" data-action="st-shift" data-d="12" aria-label="An octave higher">⬆ Higher</button>
-      <button class="btn ghost small-btn" data-action="st-shift" data-d="-12" aria-label="An octave lower">⬇ Lower</button>${fit}`;
+      <button class="btn ghost small-btn" data-action="st-shift" data-d="-12" aria-label="An octave lower">⬇ Lower</button>${fit}${paceHtml(c)}`;
     if (open === 'voice') {
       const own = !c.voice;
       const choices = Object.entries(VOICES).map(([id, v]) => {
@@ -1248,7 +1260,8 @@ function soundOf(c, mixKey, swing = 0) {
   if (c.kind === 'part') return { kind: 'part', song: c.song, part: c.part, ...how };
   // the kid's notes: their name (nid) says which notes, so copies share one rendering
   // (and their role says how loud they play: a band part sits under its tune, studiorules.js roleLevel)
-  if (c.kind === 'notes') return { kind: 'notes', nid: c.nid, notes: c.notes, beats: c.total, role: c.role || '', swing, ...how };
+  // (at its pace: half or double speed plays the same notes later or sooner, setPace)
+  if (c.kind === 'notes') return { kind: 'notes', nid: c.nid, notes: pacedNotes(c), beats: c.total, role: c.role || '', pace: paceOf(c) || '', swing, ...how };
   const notes = clipSound(c) === 'notes';
   const loop = notes ? (LOOPS[c.loop] ? c.loop : 'sunny') : '';
   // a backing track swings with the mix's song parts (studiorules.js backingSwing)
@@ -1259,7 +1272,7 @@ function soundOf(c, mixKey, swing = 0) {
 const mixSound = (c, mix) => soundOf(c, mix.key, clipSwing(mix, c));
 
 /** Where a sound at a speed is kept among the rendered ones. */
-const soundKey = (s, bpm) => [s.kind, s.song || s.pattern || s.nid, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? '', s.swing || 0, s.kind === 'notes' ? `${s.beats}:${s.notes.length}:${s.role || ''}` : ''].join('|');
+const soundKey = (s, bpm) => [s.kind, s.song || s.pattern || s.nid, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? '', s.swing || 0, s.kind === 'notes' ? `${s.beats}:${s.notes.length}:${s.role || ''}:${s.pace || ''}` : ''].join('|');
 
 /** The sounds a mix plays (soundKey), worked out once a mix. */
 const keysMade = new WeakMap();
@@ -2416,6 +2429,17 @@ export const studioActions = {
     if ((before.kit || 'chip') === kit) { hearClip(S.sel); return; }
     remixDone(setKit(S.mix, S.sel, kit), `Now it plays on the ${KITS[kit].name}.`);
     hearClip(S.sel);
+  },
+  'st-pace': (el) => {
+    if (busyNow() || S.sel == null) return;
+    const id = S.sel;
+    const pace = el.dataset.pace || null;
+    const r = setPace(S.mix, id, pace);
+    if (r.error) { toast(r.error); return; }
+    if (r.mix === S.mix) { hearClip(id); return; } // the same speed: just hear it again
+    const said = pace === 'half' ? 'Now it plays at half speed.' : pace === 'double' ? 'Now it plays at double speed.' : 'Back to its own speed.';
+    remixDone(r, r.note ? `${said} ${r.note}` : said);
+    hearClip(id);
   },
   'st-shift': (el) => {
     if (busyNow() || S.sel == null) return;

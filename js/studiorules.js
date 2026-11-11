@@ -530,6 +530,8 @@ function placeNotes(next, track, start, parts, { key = null, readingId = null, o
     next.tracks[best.track].push(clip); // (so the next band part finds this track taken)
   }
   next.tracks[track].push(tuneClip);
+  // a tune and its band belong together (setPace changes them as one)
+  if (placed.length > 1) { const pair = newNid(); for (const [, c] of placed) c.pair = pair; }
   for (const [t] of placed) next.tracks[t].sort((a, b) => a.start - b.start);
   next.next += placed.length;
   if (!next.key && goodKey) next.key = goodKey;
@@ -593,13 +595,80 @@ export function addTune(mix, track, kept, at = 0) {
   // a tune cut short (by the next clip on its track, or the loop's end) is never cut without a word
   const placed = findClip(next, r.ids[0])?.clip;
   if (placed && placed.len < Math.ceil((Number(parts[0].beats) || 1) - 1e-6)) {
-    let cut;
-    if (placed.start + placed.len < mixBeats(next)) cut = 'Your tune stops where the next clip on its track starts. Move that clip, or put your tune on an empty track.';
-    else if (next.bars < maxBars(next.bpm, next.meter)) cut = 'Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more.';
-    else cut = 'Your tune is longer than a mix can be, so its end is cut off.';
+    const cut = cutWords(next, placed);
     note = note ? `${note} ${cut}` : cut;
   }
   return { mix: next, error: null, ids: r.ids, note };
+}
+
+/** Why a clip of the kid's notes in `mix` is shorter than its music, in kid words. */
+function cutWords(mix, c) {
+  if (c.start + c.len < mixBeats(mix)) return 'Your tune stops where the next clip on its track starts. Move that clip, or put your tune on an empty track.';
+  if (mix.bars < maxBars(mix.bpm, mix.meter)) return 'Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more.';
+  return 'Your tune is longer than a mix can be, so its end is cut off.';
+}
+
+// ---------- the pace of the kid's notes ----------
+
+/**
+ * How fast a clip of the kid's notes plays against the mix's beat, for a tune the robot wrote
+ * at half or double the pace of the other tracks: 'half' (every note twice as late and twice
+ * as long), 'double' (half as late, half as long), or normal (no field). The notes are kept as
+ * they are and only played paced (pacedNotes), so Normal brings the tune back exactly. A paced
+ * clip keeps its normal length in `norm` (beats); its `total`, `from` and `len` are in the
+ * mix's beats as for every clip, so trimming, copying and moving work as they always have.
+ */
+export const PACES = { half: 2, double: 0.5 };
+export const paceOf = (c) => (c?.kind === 'notes' && Object.hasOwn(PACES, c.pace) ? c.pace : null);
+const paceFactor = (pace) => (Object.hasOwn(PACES, pace) ? PACES[pace] : 1);
+
+/** A clip's whole length (beats) at `pace`, from its normal length: never past a loop's most. */
+function pacedTotal(norm, pace, meter) {
+  return Math.max(1, Math.min(mostNotesBeats(meter), Math.ceil(norm * paceFactor(pace) - 1e-9)));
+}
+
+/** A notes clip's notes as they play (in steps from its start), at its pace. */
+export function pacedNotes(c) {
+  const f = paceFactor(paceOf(c));
+  return f === 1 ? c.notes : c.notes.map((n) => ({ ...n, at: n.at * f, len: n.len * f }));
+}
+
+/**
+ * Play a clip of the kid's notes at a pace: 'half', 'double', or null (normal). It keeps its
+ * start; what it plays scales from `from` (rounded down) to its end (rounded up), so nothing
+ * that played is lost, and going back by the same steps lands where it was (half and back
+ * exactly; into double, an odd beat rounds outward). When the slower clip doesn't fit (the
+ * next clip on its track, or the end of the mix) it is cut there and `note` says so; the notes
+ * themselves are all kept. The band that came with a tune (the same `pair`, at the same beat,
+ * at the same pace) changes with it, so they stay together. Returns { mix, error, note }.
+ */
+export function setPace(mix, id, pace) {
+  const found = findClip(mix, id);
+  if (!found) return { mix, error: 'That clip is gone.', note: '' };
+  const c = found.clip;
+  if (c.kind !== 'notes') return { mix, error: 'Only notes the Note-o-Matic wrote can change speed.', note: '' };
+  const to = Object.hasOwn(PACES, pace) ? pace : null;
+  const was = paceOf(c);
+  if (to === was) return { mix, error: null, note: '' };
+  const together = (x) => x.kind === 'notes' && x.id !== c.id && typeof c.pair === 'string' && x.pair === c.pair && x.start === c.start && paceOf(x) === was;
+  const ids = [c.id, ...allClips(mix).filter(together).map((x) => x.id)];
+  const next = clone(mix);
+  let note = '';
+  for (const cid of ids) {
+    const { clip: x, track } = findClip(next, cid);
+    const norm = was ? x.norm || x.total : x.total;
+    const k = paceFactor(to) / paceFactor(was);
+    const total = pacedTotal(norm, to, next.meter);
+    const from = Math.min(total - 1, Math.floor(x.from * k + 1e-9));
+    const end = Math.min(total, Math.ceil((x.from + x.len) * k - 1e-9));
+    const want = Math.max(1, end - from);
+    const len = Math.max(1, Math.min(want, roomAt(next, track, x.start, x.id)));
+    Object.assign(x, { total, from, len });
+    if (to) Object.assign(x, { pace: to, norm });
+    else { delete x.pace; delete x.norm; }
+    if (cid === c.id && len < want) note = cutWords(next, x);
+  }
+  return { mix: next, error: null, note };
 }
 
 /** Move a clip to a track and a beat (snapped). Turned down when something is in the way. */
@@ -772,7 +841,7 @@ export function schedule(mix) {
       at: c.start * beat - early, offset: c.from === 0 ? 0 : c.from * beat + lead, dur: c.len * beat + early,
     };
     // the remix kit's fields, when the clip has them
-    for (const k of ['pattern', 'loop', 'voice', 'kit', 'shift', 'nid', 'role', 'notes', 'follows', 'own']) if (c[k] !== undefined) e[k] = c[k];
+    for (const k of ['pattern', 'loop', 'voice', 'kit', 'shift', 'nid', 'role', 'notes', 'follows', 'own', 'pace']) if (c[k] !== undefined) e[k] = c[k];
     // the kid's notes: the voice they play in now (their own when the kid picked none)
     if (c.kind === 'notes') e.voice = notesVoice(c);
     return e;
@@ -795,7 +864,8 @@ export function backingSwing(mix) {
  * eighths (`follows`), else 0.
  */
 export function clipSwing(mix, c) {
-  if (c.kind === 'backing' || (c.kind === 'notes' && c.follows === true)) return backingSwing(mix);
+  // (a clip played at another pace isn't on the mix's eighths: it doesn't swing)
+  if (c.kind === 'backing' || (c.kind === 'notes' && c.follows === true && !paceOf(c))) return backingSwing(mix);
   return 0;
 }
 
@@ -849,13 +919,18 @@ export const MOST_NOTES = 2000;
  */
 function cleanNotesClip(c, raw, meter) {
   if (typeof c.nid !== 'string' || !c.nid || c.nid.length > 40) return null;
+  // its pace (an odd one is normal), and its normal length (the notes are counted in that)
+  const pace = Object.hasOwn(PACES, c.pace) ? c.pace : null;
+  const most = mostNotesBeats(meter);
+  let norm = Math.min(raw.total, most);
+  if (pace) norm = Number.isInteger(c.norm) && c.norm >= 1 ? Math.min(c.norm, most) : Math.max(1, Math.min(most, Math.round(raw.total / paceFactor(pace))));
   // never longer than a loop can be: a stored clip can't ask for a huge render
-  const total = Math.min(raw.total, mostNotesBeats(meter));
+  const total = pace ? Math.min(raw.total, pacedTotal(norm, pace, meter)) : norm;
   if (raw.from >= total) return null;
   const base = { ...raw, total, len: Math.min(raw.len, total - raw.from) };
   if (c.role !== 'tune' && c.role !== 'band') return null;
   if (!Array.isArray(c.notes)) return null;
-  const end = 2 * base.total;
+  const end = 2 * norm;
   const notes = [];
   for (const n of c.notes.slice(0, MOST_NOTES)) {
     if (!n || typeof n !== 'object') continue;
@@ -869,6 +944,8 @@ function cleanNotesClip(c, raw, meter) {
   if (validKey(c.key)) clip.key = c.key;
   if (c.follows === true) clip.follows = true;
   if (notesOwn(c)) clip.own = c.own; // (a voice equal to it is dropped by cleanMix, as its own)
+  if (pace) Object.assign(clip, { pace, norm });
+  if (typeof c.pair === 'string' && c.pair && c.pair.length <= 40) clip.pair = c.pair;
   return clip;
 }
 
