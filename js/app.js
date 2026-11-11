@@ -23,7 +23,7 @@ import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, ho
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
-import { applyGrants, restoreFromRecord, restoreBackup, mergeBackup } from './grants.js';
+import { applyGrants, restoreFromRecord, restoreBackup, restoreTasks, mergeBackup } from './grants.js';
 import { furnitureThumb } from './houseart.js';
 import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
 import { seedThumb, decorThumb } from './gardenart.js';
@@ -2303,6 +2303,7 @@ function stampAllowance() {
   }
   if (applyGrants(state)) changed = true;
   for (const k of state.kids) if (restoreBackup(k, undefined, totalCoins(state, k, today()))) changed = true;
+  for (const k of state.kids) if (restoreTasks(k)) changed = true;
   for (const k of state.kids) if (restoreFromRecord(k)) changed = true;
   return changed;
 }

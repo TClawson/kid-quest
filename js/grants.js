@@ -110,6 +110,44 @@ export function restoreBackup(kid, backup = BACKUP_2026_11_08, earned = Infinity
   return true;
 }
 
+// ---------- the same wipe also took each kid's newest tasks ----------
+// The old copy's task lists were written over the family's too: Shower, the bathroom
+// chores and the bonus Exercise task (the only way to log exercise) vanished for
+// Ayden, Edison and Remington. These are the ones on Taylor's backup of 2026-11-08 that
+// the 2026-11-10 copy lacked. Put back once per kid; a task already there (same id) is left alone.
+const LOST_TASKS_2026_11_08 = {
+  kid_mvymcmw11jnn8: [
+    {"id": "task_mw006j4y1sa26", "name": "Shower", "icon": "🚿", "period": "morning", "days": [0, 1, 2, 3, 4, 5, 6], "verify": "self", "minutes": 0, "coins": 2, "xp": 2},
+    {"id": "task_mw06x753181xg", "name": "Wipe Down Bathroom ", "icon": "🚽", "period": "afternoon", "days": [1, 2, 3, 4], "verify": "self", "minutes": 0},
+    {"id": "task_mw06y0gk249ox", "name": "Bathroom deep clean", "icon": "🚽", "period": "afternoon", "days": [5], "verify": "parent", "minutes": 0},
+    {"id": "task_mw06yqyv36eyx", "name": "Exercise", "icon": "🏃", "period": "exercise", "days": [1, 2, 3, 4, 5, 6], "verify": "parent", "minutes": 0},
+  ],
+  kid_mvymmw0y1kmwx: [
+    {"id": "task_mw008h4n2lvg3", "name": "Shower", "icon": "🚿", "period": "afternoon", "days": [0, 1, 2, 3, 4, 5, 6], "verify": "self", "minutes": 0, "coins": 2, "xp": 2},
+    {"id": "task_mw0703jp4qk6j", "name": "Wipe down bathroom ", "icon": "🚽", "period": "afternoon", "days": [1, 2, 3, 4], "verify": "self", "minutes": 0, "everyOtherWeek": 1},
+    {"id": "task_mw0719ue6gq54", "name": "Deep clean bathroom", "icon": "🚽", "period": "afternoon", "days": [5], "verify": "parent", "minutes": 0, "everyOtherWeek": 1},
+    {"id": "task_mw07270o8qwl3", "name": "Exercise", "icon": "🏃", "period": "exercise", "days": [1, 2, 3, 4, 5, 6], "verify": "parent", "minutes": 0},
+  ],
+  kid_mvyopilp1bgqr: [
+    {"id": "task_mw070uy15t6lt", "name": "Wipe down bathroom ", "icon": "🚽", "period": "afternoon", "days": [1, 2, 3, 4], "verify": "self", "minutes": 0, "everyOtherWeek": 0},
+    {"id": "task_mw071suq7ft8m", "name": "Deep clean bathroom", "icon": "🚽", "period": "afternoon", "days": [5], "verify": "self", "minutes": 0, "everyOtherWeek": 0},
+    {"id": "task_mw0sf3qj1ml7n", "name": "Exercise", "icon": "🏃", "period": "exercise", "days": [1, 2, 3, 4, 5], "verify": "parent", "minutes": 0},
+  ],
+  kid_mvzflap11wbyq: [
+  ],
+};
+export const TASKS_RESTORE_ID = 'restore-tasks-2026-11-08';
+
+/** Adds back the tasks the Nov 10 wipe removed, once per kid. Returns true if it changed the kid. */
+export function restoreTasks(kid, lost = LOST_TASKS_2026_11_08) {
+  const was = lost[kid.id];
+  if (!was || (kid.grants || []).includes(TASKS_RESTORE_ID)) return false;
+  const have = new Set((kid.tasks || []).map((t) => t.id));
+  kid.tasks = [...(kid.tasks || []), ...was.filter((t) => !have.has(t.id)).map((t) => structuredClone(t))];
+  kid.grants = [...(kid.grants || []), TASKS_RESTORE_ID];
+  return true;
+}
+
 /**
  * Restoring a backup on a device that syncs with the family: only put back what's missing,
  * never take anything away or change what's there, because whatever this device saves goes
