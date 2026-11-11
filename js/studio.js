@@ -27,12 +27,14 @@ import {
   trimClip, copyClip, removeClip, setBars, setBpm, isFree, roomAt, bestSpot, findClip, keyFits, schedule, badges, shelfSongs,
   addBacking, setLoop, setVoice, setKit, shiftClip, moveIntoKey, clipFits, clipKey, remixed, splitShift, backingBeats, backingSwing,
   setTrackVolume, trackVolume, trackGain, VOLUME_TOP, USUAL_VOLUME, takeToNotes, clipSwing, readingVoice, roleLevel, NOTES_VOICE, ownVoice, notesVoice,
-  keptHeard, readingOptions, mostNotesBeats,
+  keptHeard, readingOptions, mostNotesBeats, addTune, setPace, pacedNotes, paceOf,
 } from './studiorules.js';
+import { tuneName, tuneAbout } from './tunerules.js';
 import { READINGS, readings } from './notomatic.js';
+import { hearNotes } from './hearnotes.js';
 import { VOICES, KITS, LOOPS, LOOP_IDS, BACKING, BACKING_GROUPS, backingEvents } from './studiokit.js';
 import { partEvents, clipSound, backingKey, keyTonic } from './remix.js';
-import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes } from './studio-store.js';
+import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes, loadTunes } from './studio-store.js';
 import {
   CLICK, normalise, findOnsets, joinBlocks, guessDelay, sliceSchedule, pct, beatAt, waveLine, echoDelay, countInDelay,
   clickWave, clickPlan, makeTake, fadeEnds, phonesDelay, softClip, usableDelay, stopPoint, firstPass, MOST_DELAY,
@@ -185,10 +187,12 @@ const S = {
   waves: new Map(),   // a take's little picture, by take and stretch
   nom: null,          // the Note-o-Matic's panel: { id (the take's clip), take, phase, progress, result, pick, bufs }
   heard: new Map(),   // take id -> the notes heard in it (kept while the app is open, so a take is listened to once)
+  tunes: [],          // the desk's Note-o-Matic tunes (tunerules.js), or null in a slot
+  tuneBufs: new Map(), // a tune's sound, made once: key -> Promise<AudioBuffer[]|null>
 };
 
-// the Note-o-Matic's listening under way: its Worker (null when listening on the screen's own thread)
-const N = { worker: null };
+// the Note-o-Matic's listening under way (hearnotes.js), or null
+const N = { job: null };
 
 // the sound: one AudioContext for playing and recording
 const A = {
@@ -254,7 +258,17 @@ export function mountStudio(root) {
   drag = null;
   el.addEventListener('pointerdown', onDown);
   if (S.kid !== el.dataset.kid) openDesk(el.dataset.kid);
-  else paint();
+  else { paint(); refreshTunes(S.kid); }
+}
+
+/** Read the desk's Note-o-Matic tunes again (one may have been kept on the robot's screen). */
+async function refreshTunes(kid) {
+  let tunes = [];
+  try { tunes = await loadTunes(kid); } catch { tunes = []; }
+  if (S.kid !== kid) return;
+  const was = JSON.stringify(S.tunes);
+  S.tunes = tunes;
+  if (JSON.stringify(tunes) !== was) paint();
 }
 
 /**
@@ -325,7 +339,9 @@ async function openDesk(kid) {
   Object.assign(S, { kid, loading: true, broken: false, mix: newMix(), slots: [], clean: '', sel: null, volTrack: null, unmuteTo: [], panel: '', note: '', badges: [], pop: '', undo: [], redo: [], saveWarned: false, spot: { track: 0, beat: 0, picked: false } });
   S.takes.clear();
   S.waves.clear();
+  S.tunes = [];
   paint();
+  refreshTunes(kid);
   // read strictly: an empty desk after a failed read would be saved over the kid's real draft
   let got = null;
   for (let tries = 0; tries < 2 && !got; tries += 1) {
@@ -735,6 +751,18 @@ function nomHtml() {
   return `<section class="st-panel st-nom" aria-label="Turn your take into notes">${head}${body}</section>`;
 }
 
+/** Half, normal or double speed, for the kid's notes (studiorules.js setPace). */
+const PACE_CHOICES = [['half', '🐢 Half speed'], ['', 'Normal'], ['double', '🐇 Double speed']];
+function paceHtml(c) {
+  if (c.kind !== 'notes') return '';
+  const now = paceOf(c) || '';
+  const choices = PACE_CHOICES.map(([pace, label]) => {
+    const on = pace === now;
+    return `<button class="btn ghost small-btn st-choice st-pace ${on ? 'on' : ''}" data-action="st-pace" data-pace="${pace}" aria-pressed="${on}">${label}</button>`;
+  }).join('');
+  return `<div class="st-paces" role="group" aria-labelledby="st-pace-name"><span id="st-pace-name">Speed</span>${choices}</div>`;
+}
+
 /**
  * The remix buttons for a picked clip: a voice, higher, lower and moving into the mix's key
  * for music with notes; a kit for drums. With the chooser of voices or kits when it is open.
@@ -750,7 +778,7 @@ function remixHtml(c) {
     const fit = !clipFits(S.mix, c) ? `<button class="btn small-btn st-movekey" data-action="st-fit">🎯 Move into ${esc(keyLabel(S.mix.key))}</button>` : '';
     buttons = `${toggle('voice', '🎨 Voice')}
       <button class="btn ghost small-btn" data-action="st-shift" data-d="12" aria-label="An octave higher">⬆ Higher</button>
-      <button class="btn ghost small-btn" data-action="st-shift" data-d="-12" aria-label="An octave lower">⬇ Lower</button>${fit}`;
+      <button class="btn ghost small-btn" data-action="st-shift" data-d="-12" aria-label="An octave lower">⬇ Lower</button>${fit}${paceHtml(c)}`;
     if (open === 'voice') {
       const own = !c.voice;
       const choices = Object.entries(VOICES).map(([id, v]) => {
@@ -809,12 +837,28 @@ function shelfHtml() {
       <p class="st-song-info"><small>${esc(keyLabel(src.key))}</small>${beatNote}${fit}</p>
       <div class="st-parts">${buttons}</div></div>`;
   }).join('');
-  return `
+  return `${tunesHtml()}
     <section class="st-shelf" aria-label="Parts from your songs">
       <h3>Parts from your songs</h3>
       <p class="muted small">Tap a part to put it in your mix. Tap 🔊 to hear it first.</p>
       <div class="st-songs">${cards || '<p class="muted">Your songbook\'s songs show up here.</p>'}</div>
     </section>${backingHtml()}`;
+}
+
+/** The desk's Note-o-Matic tunes, when it has some: tap one to put it in the mix, 🔊 to hear it. */
+function tunesHtml() {
+  const tunes = (S.tunes || []).map((t, i) => t && { t, i }).filter(Boolean);
+  if (!tunes.length) return '';
+  const buttons = tunes.map(({ t, i }) => {
+    const h = hearFace(`tune|${i}`, tuneName(i));
+    return `<span class="st-part"><button class="btn small-btn st-add st-tune" data-action="st-tune-add" data-slot="${i}"><span>🤖 ${esc(tuneName(i))}</span><small>${esc(tuneAbout(t))}</small></button><button class="btn ghost small-btn st-hear ${h.on ? 'on' : ''}" data-action="st-tune-hear" data-slot="${i}" aria-label="${esc(h.label)}">${h.face}</button></span>`;
+  }).join('');
+  return `
+    <section class="st-shelf st-tunes" aria-label="My tunes">
+      <h3>My tunes</h3>
+      <p class="muted small">Tunes the Note-o-Matic made from your playing. Tap one to put it in your mix.</p>
+      <div class="st-parts">${buttons}</div>
+    </section>`;
 }
 
 /** The key the backing tracks play in on this desk: the mix's (none while the desk is empty). */
@@ -1216,7 +1260,8 @@ function soundOf(c, mixKey, swing = 0) {
   if (c.kind === 'part') return { kind: 'part', song: c.song, part: c.part, ...how };
   // the kid's notes: their name (nid) says which notes, so copies share one rendering
   // (and their role says how loud they play: a band part sits under its tune, studiorules.js roleLevel)
-  if (c.kind === 'notes') return { kind: 'notes', nid: c.nid, notes: c.notes, beats: c.total, role: c.role || '', swing, ...how };
+  // (at its pace: half or double speed plays the same notes later or sooner, setPace)
+  if (c.kind === 'notes') return { kind: 'notes', nid: c.nid, notes: pacedNotes(c), beats: c.total, role: c.role || '', pace: paceOf(c) || '', swing, ...how };
   const notes = clipSound(c) === 'notes';
   const loop = notes ? (LOOPS[c.loop] ? c.loop : 'sunny') : '';
   // a backing track swings with the mix's song parts (studiorules.js backingSwing)
@@ -1227,7 +1272,7 @@ function soundOf(c, mixKey, swing = 0) {
 const mixSound = (c, mix) => soundOf(c, mix.key, clipSwing(mix, c));
 
 /** Where a sound at a speed is kept among the rendered ones. */
-const soundKey = (s, bpm) => [s.kind, s.song || s.pattern || s.nid, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? '', s.swing || 0, s.kind === 'notes' ? `${s.beats}:${s.notes.length}:${s.role || ''}` : ''].join('|');
+const soundKey = (s, bpm) => [s.kind, s.song || s.pattern || s.nid, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? '', s.swing || 0, s.kind === 'notes' ? `${s.beats}:${s.notes.length}:${s.role || ''}:${s.pace || ''}` : ''].join('|');
 
 /** The sounds a mix plays (soundKey), worked out once a mix. */
 const keysMade = new WeakMap();
@@ -1980,50 +2025,20 @@ async function openNom() {
  */
 function listenTo(nom, samples, rate, clicks) {
   const done = (notes, failed = false) => {
+    N.job = null;
     if (!failed && Array.isArray(notes)) S.heard.set(nom.take, notes); // (what the whole take holds: kept for the next time)
     if (S.nom !== nom) return; // stopped meanwhile
     if (!nomClip(nom)) { closeNom(); return; } // the take is gone or changed: nothing to say about it
     if (failed || !Array.isArray(notes)) { nom.phase = 'broken'; paint(); updateWake(); return; }
     heardIn(nom, notes);
   };
-  const here = () => {
-    stopListening();
-    setTimeout(async () => {
-      if (S.nom !== nom) return;
-      try {
-        const { listen: hearNotes } = await import('./listener.js');
-        if (S.nom !== nom) return;
-        done(hearNotes(samples, rate, { clicks }));
-      } catch { done(null, true); }
-    }, 60);
-  };
-  let w;
-  try { w = new Worker(new URL('./listener-worker.js', import.meta.url), { type: 'module' }); } catch { here(); return; }
-  N.worker = w;
-  let answered = false;
-  w.onmessage = (e) => {
-    if (N.worker !== w) return;
-    answered = true;
-    const d = e.data || {};
-    if (d.progress != null && !('notes' in d) && !('error' in d)) { nom.progress = d.progress; showProgress(nom); return; }
-    stopListening();
-    done(d.notes, Boolean(d.error));
-  };
-  w.onerror = (e) => {
-    if (N.worker !== w) return;
-    e?.preventDefault?.();
-    if (!answered) here(); // (an old browser that can't run a module Worker)
-    else { stopListening(); done(null, true); }
-  };
-  const copy = samples.slice(); // the take keeps its own sound
-  try { w.postMessage({ samples: copy, rate, clicks }, [copy.buffer]); } catch { here(); }
+  N.job = hearNotes(samples, rate, clicks, { progress: (f) => { nom.progress = f; showProgress(nom); }, done });
 }
 
-/** Stop the Worker that is listening, if one is. */
+/** Stop the listening under way, if there is one. */
 function stopListening() {
-  const w = N.worker;
-  N.worker = null;
-  try { w?.terminate(); } catch { /* gone */ }
+  N.job?.stop();
+  N.job = null;
 }
 
 /** How far the listening got: the bar moves without drawing the whole desk again. */
@@ -2096,6 +2111,45 @@ async function hearReading(id) {
   if (bufs) job.ready = true;
   else nom.bufs.delete(made);
   if (S.hearing !== key || S.nom !== nom) return;
+  const waited = S.hearWait === key;
+  S.hearWait = '';
+  if (!bufs) { S.hearing = ''; say(SAY.partBroken); return; }
+  if (waited) paint();
+  newBus();
+  const when = ac.currentTime + 0.05;
+  let len = 0;
+  for (const b of bufs) { startSource(b, when, 0, b.duration, { sharp: true }); len = Math.max(len, b.duration); }
+  clearTimeout(A.hearTimer);
+  A.hearTimer = setTimeout(() => { if (S.hearing === key) stopHearing(); }, len * 1000 + 150);
+}
+
+/** Hear a tune from the shelf as the robot played it (its band under it), or stop it. */
+async function hearTune(i) {
+  const t = S.tunes?.[i];
+  if (!t) return;
+  const key = `tune|${i}`;
+  if (S.hearing === key) { stopHearing(); return; }
+  if (heldNow() || soundOff()) return;
+  const ac = audio();
+  if (!ac) { say(SAY.noSound, 'bad'); return; }
+  stopPlay(false);
+  S.hearing = key;
+  A.hearKey = '';
+  const made = `${t.id}|${t.voice}|${t.shift}|${ac.sampleRate}`;
+  if (!S.tuneBufs.has(made)) {
+    S.tuneBufs.set(made, Promise.all(t.parts.map((p) => renderEvents(p.notes, {
+      bpm: t.bpm, steps: Math.max(1, p.beats) * 2, voice: p.role === 'band' ? readingVoice('band', 'band') : t.voice,
+      shift: p.role === 'band' ? 0 : t.shift || 0, sampleRate: ac.sampleRate, peak: 0.5 * roleLevel(p.role),
+    }))).catch(() => null));
+  }
+  const job = S.tuneBufs.get(made);
+  S.hearWait = job.ready ? '' : key;
+  paint();
+  try { await ac.resume(); } catch { /* the next tap */ }
+  const bufs = await job;
+  if (bufs) job.ready = true;
+  else S.tuneBufs.delete(made);
+  if (S.hearing !== key) return;
   const waited = S.hearWait === key;
   S.hearWait = '';
   if (!bufs) { S.hearing = ''; say(SAY.partBroken); return; }
@@ -2292,6 +2346,20 @@ export const studioActions = {
     commit(r.mix, { select: r.id });
   },
   'st-back-hear': (el) => hearBacking(el.dataset.pattern),
+  'st-tune-add': (el) => {
+    if (busyNow()) return;
+    const i = Number(el.dataset.slot);
+    const tune = S.tunes?.[i];
+    if (!tune) return;
+    const spot = currentSpot();
+    if (!spot) { toast(SAY.full); return; }
+    const r = addTune(S.mix, spot.track, tune, spot.beat);
+    if (r.error) { toast(r.error); return; }
+    S.spot = { ...S.spot, picked: false };
+    commit(r.mix, { select: r.ids[0], quiet: Boolean(r.note) });
+    if (r.note) setTimeout(() => toast(r.note), 50);
+  },
+  'st-tune-hear': (el) => hearTune(Number(el.dataset.slot)),
   'st-loop': (el) => {
     const loop = el.dataset.loop;
     if (!LOOPS[loop] || busyNow()) return;
@@ -2362,6 +2430,17 @@ export const studioActions = {
     remixDone(setKit(S.mix, S.sel, kit), `Now it plays on the ${KITS[kit].name}.`);
     hearClip(S.sel);
   },
+  'st-pace': (el) => {
+    if (busyNow() || S.sel == null) return;
+    const id = S.sel;
+    const pace = el.dataset.pace || null;
+    const r = setPace(S.mix, id, pace);
+    if (r.error) { toast(r.error); return; }
+    if (r.mix === S.mix) { hearClip(id); return; } // the same speed: just hear it again
+    const said = pace === 'half' ? 'Now it plays at half speed.' : pace === 'double' ? 'Now it plays at double speed.' : 'Back to its own speed.';
+    remixDone(r, r.note ? `${said} ${r.note}` : said);
+    hearClip(id);
+  },
   'st-shift': (el) => {
     if (busyNow() || S.sel == null) return;
     const by = Number(el.dataset.d);
@@ -2413,7 +2492,7 @@ export function studioSound() {
 
 /** The Note-o-Matic (for tests): { phase, progress, pick, worker (listening in a Worker) } or null. */
 export function studioNotes() {
-  return S.nom && { phase: S.nom.phase, progress: S.nom.progress, pick: S.nom.pick, worker: Boolean(N.worker) };
+  return S.nom && { phase: S.nom.phase, progress: S.nom.progress, pick: S.nom.pick, worker: Boolean(N.job?.worker) };
 }
 
 /** What the studio is hearing on its own (for tests): '' or a key such as 'nom|tidy'. */

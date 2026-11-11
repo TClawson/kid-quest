@@ -478,30 +478,41 @@ export function takeToNotes(mix, id, reading, key = null) {
   const found = findClip(mix, id);
   if (!found || found.clip.kind !== 'take') return fail('That recording is gone.');
   const parts = Array.isArray(reading) ? reading : [];
-  const most = mostNotesBeats(mix.meter);
-  if (!parts.length || parts.some((p) => !Array.isArray(p?.notes) || !keptNotes(p.notes, 2 * most).length)) return fail('There were no notes to use.');
-  const take = found.clip;
-  const band = parts.length > 1;
-  const readingId = band ? 'band' : null;
-  const goodKey = typeof key === 'string' && validKey(key) ? key : null;
   const next = clone(mix);
   next.tracks[found.track] = next.tracks[found.track].filter((c) => c.id !== id);
-  const start = take.start;
+  const r = placeNotes(next, found.track, found.clip.start, parts, { key, readingId: parts.length > 1 ? 'band' : null });
+  return r.error ? fail(r.error) : { mix: next, error: null, ids: r.ids };
+}
+
+/**
+ * Put the parts of a reading on the desk (`next`, a copy that is changed in place): the tune
+ * (part 0) on `track` at beat `start`, from its own start, as long as its notes or the room
+ * there; a band part on the track with the most room at that beat. `own`: { tune, band } the
+ * voices the parts start in (else the reading's, READING_VOICES); `shift`: the tune's.
+ * `bandOptional`: with no room for the band, the tune goes in alone (`bandLeft` says so).
+ * Returns { error, ids, bandLeft }.
+ */
+function placeNotes(next, track, start, parts, { key = null, readingId = null, own = null, shift = 0, bandOptional = false } = {}) {
+  const most = mostNotesBeats(next.meter);
+  if (!parts.length || parts.some((p) => !Array.isArray(p?.notes) || !keptNotes(p.notes, 2 * most).length)) return { error: 'There were no notes to use.', ids: [] };
+  const goodKey = typeof key === 'string' && validKey(key) ? key : null;
   const beatsOf = (part) => Math.max(1, Math.min(most, Math.ceil((Number(part.beats) || 1) - 1e-6)));
+  const made = [];
   const make = (part, role, len) => {
     const total = beatsOf(part);
-    const clip = { id: next.next, kind: 'notes', nid: newNid(), role, notes: keptNotes(part.notes, 2 * total), start, len, from: 0, total };
-    next.next += 1;
+    const clip = { id: next.next + made.length, kind: 'notes', nid: newNid(), role, notes: keptNotes(part.notes, 2 * total), start, len, from: 0, total };
+    made.push(clip);
     if (goodKey) clip.key = goodKey;
     if (part.follows === true) clip.follows = true;
-    const own = readingVoice(readingId, role);
-    if (own && own !== NOTES_VOICE && Object.hasOwn(VOICES, own)) clip.own = own;
+    const voice = own?.[role] || readingVoice(readingId, role);
+    if (voice && voice !== NOTES_VOICE && Object.hasOwn(VOICES, voice)) clip.own = voice;
     return clip;
   };
-  // the tune, in the take's place
   const tune = parts[0];
-  const tuneClip = make(tune, 'tune', Math.max(1, Math.min(beatsOf(tune), roomAt(next, found.track, start))));
-  const placed = [[found.track, tuneClip]];
+  const tuneClip = make(tune, 'tune', Math.max(1, Math.min(beatsOf(tune), roomAt(next, track, start))));
+  if (shift) tuneClip.shift = shift;
+  const placed = [[track, tuneClip]];
+  let bandLeft = false;
   // the band, on another track: the one with the most room at that beat
   for (const part of parts.slice(1)) {
     let best = null;
@@ -510,15 +521,208 @@ export function takeToNotes(mix, id, reading, key = null) {
       const room = roomAt(next, t, start);
       if (room >= 1 && (!best || room > best.room)) best = { track: t, room };
     }
-    if (!best) return fail('The band needs an empty spot on another track. Make some room and try again.');
+    if (!best) {
+      if (bandOptional) { bandLeft = true; break; }
+      return { error: 'The band needs an empty spot on another track. Make some room and try again.', ids: [] };
+    }
     const clip = make(part, 'band', Math.min(beatsOf(part), best.room));
     placed.push([best.track, clip]);
     next.tracks[best.track].push(clip); // (so the next band part finds this track taken)
   }
-  next.tracks[found.track].push(tuneClip);
+  next.tracks[track].push(tuneClip);
+  // a tune and its band belong together (setPace changes them as one)
+  if (placed.length > 1) { const pair = newNid(); for (const [, c] of placed) c.pair = pair; }
   for (const [t] of placed) next.tracks[t].sort((a, b) => a.start - b.start);
+  next.next += placed.length;
   if (!next.key && goodKey) next.key = goodKey;
-  return { mix: next, error: null, ids: placed.map(([, c]) => c.id) };
+  return { error: null, ids: placed.map(([, c]) => c.id), bandLeft };
+}
+
+/**
+ * A kept tune (tunerules.js) as a studio mix can hold it: one slower than the studio goes
+ * (BPM_RANGE) plays twice as fast with every note twice as long, which sounds the same.
+ * Otherwise the tune itself.
+ */
+export function forMix(tune) {
+  if (!tune || !(tune.bpm < BPM_RANGE[0])) return tune;
+  return {
+    ...tune,
+    bpm: tune.bpm * 2,
+    beats: tune.beats * 2,
+    parts: tune.parts.map((p) => ({ ...p, beats: p.beats * 2, notes: p.notes.map((n) => ({ ...n, at: n.at * 2, len: n.len * 2 })) })),
+  };
+}
+
+/**
+ * Put a kept tune (tunerules.js, already tidied by cleanTune) on a track at beat `at` (the
+ * first free place from there on), as a clip of the kid's notes: in the tune's voice (its own
+ * sound) and shift, with its key, and for a band tune its band on another track at the same
+ * beat as takeToNotes places one; with no room for the band, the tune goes in alone and
+ * `note` says so. It plays at the mix's speed, like every notes clip. An empty mix takes the
+ * tune's speed, beats in a bar and key. A tune goes in whatever its beats in a bar (its notes
+ * are just notes on steps); only its band is made for its count, so in a mix that counts
+ * otherwise the tune goes in without its band, and `note` says so. A tune slower than the
+ * studio goes is put in twice as fast with every note twice as long (tunerules.js forMix). A
+ * tune cut short by the room it has says so in `note` too. Returns
+ * { mix, error, ids, note }.
+ */
+export function addTune(mix, track, kept, at = 0) {
+  const fail = (error) => ({ mix, error, ids: [], note: '' });
+  if (!kept || !Array.isArray(kept.parts) || !kept.parts.length) return fail('That tune is gone.');
+  const tune = forMix(kept); // (a tune slower than the studio goes, doubled)
+  let next = clone(mix);
+  const count = tune.meter === 3 ? 3 : 4;
+  let parts = tune.parts;
+  let note = '';
+  if (!allClips(next).length) {
+    next.bpm = Math.max(BPM_RANGE[0], Math.min(BPM_RANGE[1], Math.round(tune.bpm) || 100));
+    next.meter = tune.meter === 3 ? 3 : 4;
+    next.key = validKey(tune.key) ? tune.key : null;
+    const beats = Math.max(...tune.parts.map((p) => p.beats || 1));
+    next.bars = Math.max(2, Math.min(maxBars(next.bpm, next.meter), Math.ceil(beats / next.meter)));
+  } else if (count !== next.meter && parts.length > 1) {
+    parts = parts.slice(0, 1);
+    note = `The band counts in ${count}s and this mix counts in ${next.meter}s, so your tune went in without its band.`;
+  }
+  const start = freeSpot(next, track, 1, Math.round(at));
+  if (start < 0) return fail('That track is full.');
+  next = { ...next };
+  const r = placeNotes(next, track, start, parts, {
+    key: tune.key, readingId: tune.reading, own: { tune: tune.voice, band: READING_VOICES.band.band }, shift: tune.shift || 0, bandOptional: true,
+  });
+  if (r.error) return fail(r.error);
+  if (r.bandLeft) note = 'There was no room for the band on another track, so your tune went in alone.';
+  // a tune cut short (by the next clip on its track, or the loop's end) is never cut without a word
+  const placed = findClip(next, r.ids[0])?.clip;
+  if (placed && placed.len < Math.ceil((Number(parts[0].beats) || 1) - 1e-6)) {
+    const cut = cutWords(next, placed);
+    note = note ? `${note} ${cut}` : cut;
+  }
+  return { mix: next, error: null, ids: r.ids, note };
+}
+
+/** Why a clip of the kid's notes in `mix` is shorter than its music: 'next', 'mix' or 'most'. */
+function cutWhy(mix, c) {
+  if (c.start + c.len < mixBeats(mix)) return 'next';
+  return mix.bars < maxBars(mix.bpm, mix.meter) ? 'mix' : 'most';
+}
+
+/**
+ * Why a clip of the kid's notes is shorter than its music, in kid words. `who` names the clip
+ * ("Your tune", or "The band that goes with your tune") and `it` is how the advice names it.
+ */
+function cutWords(mix, c, who = 'Your tune', it = 'your tune') {
+  const why = cutWhy(mix, c);
+  if (why === 'next') return `${who} stops where the next clip on its track starts. Move that clip, or put ${it} on an empty track.`;
+  if (why === 'mix') return `${who} is longer than this mix, so its end is cut off. Make the mix longer to hear more.`;
+  return `${who} is longer than a mix can be, so its end is cut off.`;
+}
+
+/** The same, for a tune and its band both cut for the same reason. */
+function cutBothWords(why, who) {
+  if (why === 'next') return `${who} stop where the next clips on their tracks start. Move those clips, or put them on empty tracks.`;
+  if (why === 'mix') return `${who} are longer than this mix, so their ends are cut off. Make the mix longer to hear more.`;
+  return `${who} are longer than a mix can be, so their ends are cut off.`;
+}
+
+// ---------- the pace of the kid's notes ----------
+
+/**
+ * How fast a clip of the kid's notes plays against the mix's beat, for a tune the robot wrote
+ * at half or double the pace of the other tracks: 'half' (every note twice as late and twice
+ * as long), 'double' (half as late, half as long), or normal (no field). The notes are kept as
+ * they are and only played paced (pacedNotes), so Normal brings the tune back exactly. A paced
+ * clip keeps its normal length in `norm` (beats), and in `back` ({ from, len }, normal beats)
+ * the part of its music it played at normal pace, so Normal gives back that very window. Its
+ * `total`, `from` and `len` are in the mix's beats as for every clip, so trimming, copying
+ * and moving work as they always have.
+ */
+export const PACES = { half: 2, double: 0.5 };
+export const paceOf = (c) => (c?.kind === 'notes' && Object.hasOwn(PACES, c.pace) ? c.pace : null);
+const paceFactor = (pace) => (Object.hasOwn(PACES, pace) ? PACES[pace] : 1);
+
+/** A clip's whole length (beats) at `pace`, from its normal length: never past a loop's most. */
+function pacedTotal(norm, pace, meter) {
+  return Math.max(1, Math.min(mostNotesBeats(meter), Math.ceil(norm * paceFactor(pace) - 1e-9)));
+}
+
+/** A paced clip's `back` window when it can be used: whole beats inside its normal length. */
+function backOf(c, norm) {
+  const b = c.back;
+  if (!b || typeof b !== 'object') return null;
+  const { from, len } = b;
+  if (!Number.isInteger(from) || !Number.isInteger(len) || from < 0 || len < 1 || from + len > norm) return null;
+  return { from, len };
+}
+
+/**
+ * The window (normal beats) a paced clip's paced window [from, end) plays, rounded outward so
+ * nothing that plays is left out, inside its normal length.
+ */
+function outward(from, end, pace, norm) {
+  const f = paceFactor(pace);
+  const a = Math.max(0, Math.min(norm - 1, Math.floor(from / f + 1e-9)));
+  const b = Math.max(a + 1, Math.min(norm, Math.ceil(end / f - 1e-9)));
+  return { from: a, len: b - a };
+}
+
+/** A notes clip's notes as they play (in steps from its start), at its pace. */
+export function pacedNotes(c) {
+  const f = paceFactor(paceOf(c));
+  return f === 1 ? c.notes : c.notes.map((n) => ({ ...n, at: n.at * f, len: n.len * f }));
+}
+
+/**
+ * Play a clip of the kid's notes at a pace: 'half', 'double', or null (normal). It keeps its
+ * start. Leaving Normal, it remembers the window it played (`back`); every pace is worked out
+ * from that window, scaled from its `from` (rounded down) to its end (rounded up) so nothing
+ * that played is lost, and Normal gives that window back exactly. When a clip doesn't fit (the
+ * next clip on its track, or the end of the mix) it is cut there and `note` says so; the notes
+ * themselves are all kept. The band that came with a tune (the same `pair`, at the same pace)
+ * changes with it wherever it is, so they stay together. Returns { mix, error, note }.
+ */
+export function setPace(mix, id, pace) {
+  const found = findClip(mix, id);
+  if (!found) return { mix, error: 'That clip is gone.', note: '' };
+  const c = found.clip;
+  if (c.kind !== 'notes') return { mix, error: 'Only notes the Note-o-Matic wrote can change speed.', note: '' };
+  const to = Object.hasOwn(PACES, pace) ? pace : null;
+  const was = paceOf(c);
+  if (to === was) return { mix, error: null, note: '' };
+  const together = (x) => x.kind === 'notes' && x.id !== c.id && typeof c.pair === 'string' && x.pair === c.pair && paceOf(x) === was;
+  const ids = [c.id, ...allClips(mix).filter(together).map((x) => x.id)];
+  const next = clone(mix);
+  const cut = [];
+  for (const cid of ids) {
+    const { clip: x, track } = findClip(next, cid);
+    const norm = was ? x.norm || x.total : x.total;
+    const win = !was ? { from: x.from, len: x.len } : backOf(x, norm) || outward(x.from, x.from + x.len, was, norm);
+    const f = paceFactor(to);
+    const total = pacedTotal(norm, to, next.meter);
+    const from = Math.min(total - 1, Math.floor(win.from * f + 1e-9));
+    const end = Math.min(total, Math.ceil((win.from + win.len) * f - 1e-9));
+    const want = Math.max(1, end - from);
+    const len = Math.max(1, Math.min(want, roomAt(next, track, x.start, x.id)));
+    Object.assign(x, { total, from, len });
+    if (to) Object.assign(x, { pace: to, norm, back: win });
+    else { delete x.pace; delete x.norm; delete x.back; }
+    if (len < want) cut.push(x);
+  }
+  return { mix: next, error: null, note: paceCutWords(next, c, cut) };
+}
+
+/** What setPace says about the clips it cut: `c` is the clip the kid changed. */
+function paceCutWords(mix, c, cut) {
+  if (!cut.length) return '';
+  const mine = c.role === 'band' ? 'band' : 'tune';
+  const other = mine === 'band' ? 'tune' : 'band';
+  const words = (x) => (x.id === c.id
+    ? cutWords(mix, x, `Your ${mine}`, `your ${mine}`)
+    : cutWords(mix, x, `The ${x.role === 'band' ? 'band' : 'tune'} that goes with your ${mine}`, 'it'));
+  if (cut.length === 2 && cutWhy(mix, cut[0]) === cutWhy(mix, cut[1]) && cut.some((x) => x.id === c.id)) {
+    return cutBothWords(cutWhy(mix, cut[0]), `Your ${mine} and its ${other}`);
+  }
+  return cut.map(words).join(' ');
 }
 
 /** Move a clip to a track and a beat (snapped). Turned down when something is in the way. */
@@ -553,11 +757,24 @@ export function trimClip(mix, id, { start, len }) {
   if (len === undefined) l = c.start + c.len - s;
   l = Math.max(1, Math.min(l, c.total - from, roomAt(mix, found.track, s, id)));
   const next = clone(mix);
-  Object.assign(findClip(next, id).clip, { start: s, len: l, from });
+  const x = findClip(next, id).clip;
+  Object.assign(x, { start: s, len: l, from });
+  if (paceOf(c) && (from !== c.from || l !== c.len)) {
+    // a paced clip trimmed: its normal window follows the edge that moved, rounded outward
+    const norm = c.norm || c.total;
+    const old = backOf(c, norm) || outward(c.from, c.from + c.len, c.pace, norm);
+    const near = outward(from, from + l, c.pace, norm);
+    const a = from !== c.from ? near.from : old.from;
+    const b = from + l !== c.from + c.len ? near.from + near.len : old.from + old.len;
+    x.back = { from: Math.min(a, norm - 1), len: Math.max(1, Math.min(norm, b) - Math.min(a, norm - 1)) };
+  }
   return ok(next);
 }
 
-/** Copy a clip: right after itself when there is room, else the first free place on any track. */
+/**
+ * Copy a clip: right after itself when there is room, else the first free place on any track.
+ * A copy of the kid's notes keeps its pace but not its `pair`: it changes speed on its own.
+ */
 export function copyClip(mix, id) {
   const found = findClip(mix, id);
   if (!found) return no(mix, 'That clip is gone.');
@@ -569,7 +786,8 @@ export function copyClip(mix, id) {
     const next = clone(mix);
     const copy = next.next;
     next.next = copy + 1;
-    next.tracks[track].push({ ...clip, id: copy, start });
+    const { pair, ...same } = clip; // (a copy is its own: it no longer changes speed with the band)
+    next.tracks[track].push({ ...same, id: copy, start });
     next.tracks[track].sort((a, b) => a.start - b.start);
     return { mix: next, error: null, id: copy };
   }
@@ -691,7 +909,7 @@ export function schedule(mix) {
       at: c.start * beat - early, offset: c.from === 0 ? 0 : c.from * beat + lead, dur: c.len * beat + early,
     };
     // the remix kit's fields, when the clip has them
-    for (const k of ['pattern', 'loop', 'voice', 'kit', 'shift', 'nid', 'role', 'notes', 'follows', 'own']) if (c[k] !== undefined) e[k] = c[k];
+    for (const k of ['pattern', 'loop', 'voice', 'kit', 'shift', 'nid', 'role', 'notes', 'follows', 'own', 'pace']) if (c[k] !== undefined) e[k] = c[k];
     // the kid's notes: the voice they play in now (their own when the kid picked none)
     if (c.kind === 'notes') e.voice = notesVoice(c);
     return e;
@@ -714,7 +932,8 @@ export function backingSwing(mix) {
  * eighths (`follows`), else 0.
  */
 export function clipSwing(mix, c) {
-  if (c.kind === 'backing' || (c.kind === 'notes' && c.follows === true)) return backingSwing(mix);
+  // (a clip played at another pace isn't on the mix's eighths: it doesn't swing)
+  if (c.kind === 'backing' || (c.kind === 'notes' && c.follows === true && !paceOf(c))) return backingSwing(mix);
   return 0;
 }
 
@@ -768,13 +987,18 @@ export const MOST_NOTES = 2000;
  */
 function cleanNotesClip(c, raw, meter) {
   if (typeof c.nid !== 'string' || !c.nid || c.nid.length > 40) return null;
+  // its pace (an odd one is normal), and its normal length (the notes are counted in that)
+  const pace = Object.hasOwn(PACES, c.pace) ? c.pace : null;
+  const most = mostNotesBeats(meter);
+  let norm = Math.min(raw.total, most);
+  if (pace) norm = Number.isInteger(c.norm) && c.norm >= 1 ? Math.min(c.norm, most) : Math.max(1, Math.min(most, Math.round(raw.total / paceFactor(pace))));
   // never longer than a loop can be: a stored clip can't ask for a huge render
-  const total = Math.min(raw.total, mostNotesBeats(meter));
+  const total = pace ? Math.min(raw.total, pacedTotal(norm, pace, meter)) : norm;
   if (raw.from >= total) return null;
   const base = { ...raw, total, len: Math.min(raw.len, total - raw.from) };
   if (c.role !== 'tune' && c.role !== 'band') return null;
   if (!Array.isArray(c.notes)) return null;
-  const end = 2 * base.total;
+  const end = 2 * norm;
   const notes = [];
   for (const n of c.notes.slice(0, MOST_NOTES)) {
     if (!n || typeof n !== 'object') continue;
@@ -788,6 +1012,9 @@ function cleanNotesClip(c, raw, meter) {
   if (validKey(c.key)) clip.key = c.key;
   if (c.follows === true) clip.follows = true;
   if (notesOwn(c)) clip.own = c.own; // (a voice equal to it is dropped by cleanMix, as its own)
+  if (pace) Object.assign(clip, { pace, norm });
+  if (pace && backOf(c, norm)) clip.back = backOf(c, norm); // (an odd window is dropped, not the clip)
+  if (typeof c.pair === 'string' && c.pair && c.pair.length <= 40) clip.pair = c.pair;
   return clip;
 }
 

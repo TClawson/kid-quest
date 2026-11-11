@@ -1,10 +1,11 @@
-// Where the recording studio keeps a kid's mixes and takes: on this tablet only (IndexedDB),
+// Where the recording studio keeps a kid's mixes, takes and Note-o-Matic tunes: on this tablet only (IndexedDB),
 // since a recording is big and private. Each kid has MIX_SLOTS saved mixes and one draft (the
 // mix on the desk, slot 'draft'). A take is the kid's own recording: one channel of sound as
 // 16-bit numbers, with its sample rate. Without IndexedDB (a private window) everything is
 // kept in memory until the page closes, so the studio still works.
 
 import { MIX_SLOTS, cleanMix, takesIn } from './studiorules.js';
+import { TUNE_SLOTS, cleanTune } from './tunerules.js';
 
 const DB = 'kidquest-studio';
 const memory = { mixes: new Map(), takes: new Map() };
@@ -92,6 +93,31 @@ export function saveMix(kid, slot, mix) {
 /** Empty a slot. */
 export function deleteMix(kid, slot) {
   return run('mixes', 'readwrite', (s) => (s ? s.delete(mixKey(kid, slot)) : void memory.mixes.delete(mixKey(kid, slot))));
+}
+
+// The Note-o-Matic's tunes (tunerules.js) sit with the mixes, under keys of their own.
+const tuneKey = (kid, slot) => `${kid}|tune|${slot}`;
+
+/** A kid's tune shelf: [tune|null × TUNE_SLOTS], tidied. */
+export async function loadTunes(kid) {
+  const shelf = [];
+  for (let i = 0; i < TUNE_SLOTS; i += 1) {
+    const row = await run('mixes', 'readonly', (s) => (s ? s.get(tuneKey(kid, i)) : memory.mixes.get(tuneKey(kid, i))));
+    shelf.push(row?.tune ? cleanTune(row.tune) : null);
+  }
+  return shelf;
+}
+
+/** Keep a tune in a slot (0 to TUNE_SLOTS - 1). Rejects when it couldn't be kept. */
+export function saveTune(kid, slot, tune) {
+  if (!Number.isInteger(slot) || slot < 0 || slot >= TUNE_SLOTS) return Promise.reject(new Error('no such slot'));
+  const row = { kid, slot, tune, at: Date.now() };
+  return run('mixes', 'readwrite', (s) => (s ? s.put(row, tuneKey(kid, slot)) : void memory.mixes.set(tuneKey(kid, slot), row)));
+}
+
+/** Empty a tune slot. */
+export function deleteTune(kid, slot) {
+  return run('mixes', 'readwrite', (s) => (s ? s.delete(tuneKey(kid, slot)) : void memory.mixes.delete(tuneKey(kid, slot))));
 }
 
 /**

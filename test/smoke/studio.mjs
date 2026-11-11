@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
-import { sourceOf, newMix, addPart, addTake, shelfSongs } from '../../js/studiorules.js';
+import { sourceOf, newMix, addPart, addTake, shelfSongs, takeToNotes } from '../../js/studiorules.js';
 import { MUSIC_TIERS } from '../../js/musicrules.js';
 import { CLICK } from '../../js/studio-audio.js';
 
@@ -928,6 +928,9 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   const sunny = clipOf('.kind-lead');
   assert.match(await sunny.locator('.st-key').textContent(), /F major · another key/);
   assert.equal(await page.locator('[data-action="st-fit"]').textContent(), '🎯 Move into C major');
+  // (the Remix sticker's news comes a moment after the part lands, later still on a busy
+  // machine: it is let through first, so it can't land on top of the toast looked for next)
+  await page.waitForFunction(() => /New sticker: Remix/.test(document.querySelector('.toast')?.textContent || ''));
   await page.click('[data-action="st-fit"]');
   assert.match(await toastText(page), /Moved into C major/);
   assert.equal(await sunny.getAttribute('data-shift'), '-5');
@@ -1156,6 +1159,60 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   assert.deepEqual(await tooSmall(page, '#studio .st-vol, #studio .st-volpanel .btn'), []);
   await page.locator('#studio .st-desk').evaluate((el) => el.scrollIntoView({ block: 'start' }));
   await page.screenshot({ path: `${out}/track-volume-phone.png` });
+  await ctx.close();
+}
+
+// 12. the kid's notes at half or double speed: the clip's Speed choices, on a tablet and a phone
+for (const [viewport, name] of [[TABLET, 'tablet'], [{ width: 390, height: 844 }, 'phone']]) {
+  const { ctx, page } = await start(viewport, false, firstDay());
+  // the test desk's draft: a tune the Note-o-Matic wrote (C E G C, a note a beat) and its band, 8 beats
+  const tuneNotes = [60, 64, 67, 72, 67, 64, 60, 64].map((midi, i) => ({ at: 2 * i, len: 1.9, midi }));
+  const take = addTake({ ...newMix(), bpm: 100 }, 0, 'take-x', 8, 0);
+  const notes = takeToNotes(take.mix, take.id, [{ role: 'tune', notes: tuneNotes, beats: 8 }, { role: 'band', notes: [{ at: 0, len: 8, midi: 48 }, { at: 8, len: 8, midi: 43 }], beats: 8 }], 'C');
+  assert.equal(notes.error, null);
+  await page.goto(site.url);
+  await seedStudio(page, [['parent-test|draft', { kid: 'parent-test', slot: 'draft', mix: notes.mix, at: 1 }]], []);
+  await page.reload();
+  await toSettings(page);
+  await page.click('[data-action="studio-test"]');
+  await page.waitForSelector('#studio .st-lane[data-track="0"] .st-clip');
+  const tuneClip = clips(page, 0).first();
+  const bandTrack = notes.mix.tracks.findIndex((t) => t.some((c) => c.role === 'band'));
+  const bandClip = clips(page, bandTrack).first();
+  const w = (await place(tuneClip)).width;
+  const bw = (await place(bandClip)).width;
+  await tuneClip.click();
+  await page.waitForSelector('#studio .st-paces');
+  const on = () => page.locator('#studio .st-pace[aria-pressed="true"]').textContent();
+  assert.equal((await on()).trim(), 'Normal', 'Normal is marked');
+  assert.deepEqual((await page.locator('#studio .st-pace').allTextContents()).map((t) => t.trim()), ['🐢 Half speed', 'Normal', '🐇 Double speed']);
+  await page.click('[data-action="st-pace"][data-pace="half"]');
+  await wait(page, 300);
+  assert.equal((await on()).trim(), '🐢 Half speed');
+  near((await place(clips(page, 0).first())).width, 2 * w, 'half speed: twice as long');
+  near((await place(clips(page, bandTrack).first())).width, 2 * bw, 'and its band with it');
+  assert.match(await toastText(page), /half speed/);
+  assert.deepEqual(await tooSmall(page, '#studio .st-pace'), []);
+  assert.ok(await noSideScroll(page));
+  await page.locator('#studio .st-tools').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: `${out}/pace-${name}.png` });
+  await page.click('[data-action="st-pace"][data-pace="double"]');
+  await wait(page, 300);
+  assert.equal((await on()).trim(), '🐇 Double speed');
+  near((await place(clips(page, 0).first())).width, w / 2, 'double speed: half as long');
+  await page.click('[data-action="st-pace"][data-pace=""]');
+  await wait(page, 300);
+  near((await place(clips(page, 0).first())).width, w, 'Normal: as it was');
+  // kept as it is, and played at its pace
+  await page.click('[data-action="st-pace"][data-pace="half"]');
+  await wait(page, 300);
+  await page.click('[data-action="st-undo"]');
+  await wait(page, 300);
+  near((await place(clips(page, 0).first())).width, w, 'Undo brings back its speed');
+  await page.click('[data-action="st-redo"]');
+  await wait(page, 1500);
+  const kept = await page.evaluate(async () => (await (await import('./js/studio-store.js')).loadMixes('parent-test')).draft.tracks[0][0]);
+  assert.deepEqual([kept.pace, kept.len, kept.norm], ['half', 16, 8], 'the draft keeps its speed');
   await ctx.close();
 }
 

@@ -24,12 +24,13 @@ export const STATIONS = {
  * The music house for a kid. m: {
  *   kidId, kidName, color, buddy: live buddy markup, tier: 1-3 (which look),
  *   studio: { open, left, waiting }: whether today's chores are done (the studio waits for them),
+ *   lab: { open, left, waiting }: the same for the Note-o-Matic's screen (musicrules.js labOpen),
  *   hello: a line to say on the way in (a new look), or '',
  *   quests: quests left outside (for the door sign),
  * }
  */
 export function musicHouseHtml(m) {
-  const data = { kid: m.kidId, name: m.kidName, color: m.color, tier: m.tier, studio: m.studio || { open: false, left: 0 }, hello: m.hello || '' };
+  const data = { kid: m.kidId, name: m.kidName, color: m.color, tier: m.tier, studio: m.studio || { open: false, left: 0 }, lab: m.lab || { open: false, left: 0 }, hello: m.hello || '' };
   const info = tierInfo(m.tier);
   return `
     <section class="house music-house tier-${m.tier}" data-kid="${esc(m.kidId)}" data-m="${esc(JSON.stringify(data))}">
@@ -75,11 +76,6 @@ function room(doc, data) {
   }
   return roomCache;
 }
-
-// what a station says while it's still being built (it gets its own screen soon)
-const SOON = {
-  lab: () => 'Beep boop! The Note-o-Matic will turn your piano playing into other instruments. It\'s nearly finished!',
-};
 
 function mount(section, handlers) {
   section.dataset.live = '1';
@@ -140,20 +136,21 @@ function mount(section, handlers) {
     closeDialog();
   });
 
-  // a station: the piano always works; the others have their own screens (the studio waits
-  // for today's chores)
+  // a station: the piano always works; the others have their own screens (the studio and the
+  // Note-o-Matic wait for today's chores)
+  const toGo = ({ left = 0, waiting = 0 }) => (left ? `: ${left} to go` : waiting ? ` and checked: ${waiting} waiting for a parent` : '');
   const useStation = (id) => {
     const name = STATIONS[id]?.name || '';
     if (id === 'piano') { handlers.onPiano?.(); return; }
     if (id === 'studio' && !data.studio.open) {
-      const { left = 0, waiting = 0 } = data.studio;
-      const why = left ? `: ${left} to go` : waiting ? ` and checked: ${waiting} waiting for a parent` : '';
-      say(name, `The studio opens once today's chores are done${why}. The piano and the sheet music are open any time!`);
+      say(name, `The studio opens once today's chores are done${toGo(data.studio)}. The piano and the sheet music are open any time!`);
       return;
     }
-    const open = { sheets: handlers.onSheets, studio: handlers.onStudio, lab: handlers.onLab }[id];
-    if (open) { open(); return; }
-    say(name, SOON[id]?.(data.name) || '');
+    if (id === 'lab' && !data.lab.open) {
+      say(name, `Beep boop! The Note-o-Matic wakes up once today's chores are done${toGo(data.lab)}. The piano and the sheet music are open any time!`);
+      return;
+    }
+    ({ sheets: handlers.onSheets, studio: handlers.onStudio, lab: handlers.onLab })[id]?.();
   };
 
   const mem = memory.get(data.kid) || {};
