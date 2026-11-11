@@ -678,8 +678,8 @@ export function pacedNotes(c) {
  * from that window, scaled from its `from` (rounded down) to its end (rounded up) so nothing
  * that played is lost, and Normal gives that window back exactly. When a clip doesn't fit (the
  * next clip on its track, or the end of the mix) it is cut there and `note` says so; the notes
- * themselves are all kept. The band that came with a tune (the same `pair`, at the same beat,
- * at the same pace) changes with it, so they stay together. Returns { mix, error, note }.
+ * themselves are all kept. The band that came with a tune (the same `pair`, at the same pace)
+ * changes with it wherever it is, so they stay together. Returns { mix, error, note }.
  */
 export function setPace(mix, id, pace) {
   const found = findClip(mix, id);
@@ -689,7 +689,7 @@ export function setPace(mix, id, pace) {
   const to = Object.hasOwn(PACES, pace) ? pace : null;
   const was = paceOf(c);
   if (to === was) return { mix, error: null, note: '' };
-  const together = (x) => x.kind === 'notes' && x.id !== c.id && typeof c.pair === 'string' && x.pair === c.pair && x.start === c.start && paceOf(x) === was;
+  const together = (x) => x.kind === 'notes' && x.id !== c.id && typeof c.pair === 'string' && x.pair === c.pair && paceOf(x) === was;
   const ids = [c.id, ...allClips(mix).filter(together).map((x) => x.id)];
   const next = clone(mix);
   const cut = [];
@@ -771,7 +771,10 @@ export function trimClip(mix, id, { start, len }) {
   return ok(next);
 }
 
-/** Copy a clip: right after itself when there is room, else the first free place on any track. */
+/**
+ * Copy a clip: right after itself when there is room, else the first free place on any track.
+ * A copy of the kid's notes keeps its pace but not its `pair`: it changes speed on its own.
+ */
 export function copyClip(mix, id) {
   const found = findClip(mix, id);
   if (!found) return no(mix, 'That clip is gone.');
@@ -783,7 +786,8 @@ export function copyClip(mix, id) {
     const next = clone(mix);
     const copy = next.next;
     next.next = copy + 1;
-    next.tracks[track].push({ ...clip, id: copy, start });
+    const { pair, ...same } = clip; // (a copy is its own: it no longer changes speed with the band)
+    next.tracks[track].push({ ...same, id: copy, start });
     next.tracks[track].sort((a, b) => a.start - b.start);
     return { mix: next, error: null, id: copy };
   }

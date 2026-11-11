@@ -517,7 +517,7 @@ test('a slower clip that doesn\'t fit is cut and says why; trimming works on the
   assert.equal(findClip(mv.mix, tid).clip.pace, 'half');
 });
 
-test('a tune\'s band changes pace with it, while they stay together', () => {
+test('a tune\'s band changes pace with it, wherever it is', () => {
   const { mix, id } = withTake({ beats: 8, track: 1, at: 4 });
   const r = must(takeToNotes({ ...mix, bars: 8 }, id, [tune(8), bandPart(8)], 'C'));
   const [tid, bid] = r.ids;
@@ -529,14 +529,28 @@ test('a tune\'s band changes pace with it, while they stay together', () => {
   const back = must(setPace(half.mix, bid, null));
   assert.equal(paceOf(findClip(back.mix, tid).clip), null);
   assert.deepEqual(back.mix.tracks, r.mix.tracks);
-  // a band moved away is on its own
-  const moved = must(moveClip(r.mix, bid, findClip(r.mix, bid).track, 0)).mix;
-  const alone = must(setPace(moved, tid, 'half'));
-  assert.equal(paceOf(findClip(alone.mix, bid).clip), null);
-  // a copy of the tune isn't the band's partner
+  // a band moved (or trimmed at its front) still goes with its tune, wherever it starts
+  const moved = must(moveClip(r.mix, bid, 3, 0)).mix;
+  const both = must(setPace(moved, tid, 'half'));
+  assert.equal(paceOf(findClip(both.mix, bid).clip), 'half');
+  assert.equal(findClip(both.mix, bid).clip.start, 0, 'each keeps its own start');
+  const front = must(trimClip(r.mix, bid, { start: 6 })).mix;
+  assert.equal(paceOf(findClip(must(setPace(front, tid, 'double')).mix, bid).clip), 'double');
+  // only clips at the same pace: a band already at another pace stays as it is
+  const apart = structuredClone(half.mix);
+  Object.assign(findClip(apart, bid).clip, { len: 8, total: 8 });
+  for (const k of ['pace', 'norm', 'back']) delete findClip(apart, bid).clip[k];
+  const dbl = must(setPace(apart, tid, 'double')).mix;
+  assert.deepEqual([paceOf(findClip(dbl, tid).clip), paceOf(findClip(dbl, bid).clip)], ['double', null]);
+  assert.deepEqual(findClip(dbl, bid).clip, findClip(apart, bid).clip);
+  // a copy of the tune isn't the band's partner: it has no pair, and changes on its own
   const cp = must(copyClip(r.mix, tid));
+  assert.equal(findClip(cp.mix, cp.id).clip.pair, undefined, 'the copy drops the pair');
+  assert.ok(findClip(cp.mix, tid).clip.pair, 'the tune keeps it');
   const cpHalf = must(setPace(cp.mix, cp.id, 'half'));
   assert.equal(paceOf(findClip(cpHalf.mix, bid).clip), null);
+  assert.equal(paceOf(findClip(cpHalf.mix, tid).clip), null);
+  assert.equal(paceOf(findClip(must(setPace(cp.mix, tid, 'half')).mix, cp.id).clip), null, 'nor does it change with them');
 });
 
 test('a band cut at its new pace says so too', () => {
