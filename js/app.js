@@ -23,7 +23,7 @@ import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, ho
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
-import { applyGrants } from './grants.js';
+import { applyGrants, restoreFromRecord, restoreBackup } from './grants.js';
 import { furnitureThumb } from './houseart.js';
 import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
 import { seedThumb, decorThumb } from './gardenart.js';
@@ -304,7 +304,7 @@ function closeModal() {
   const cb = modalOnClose;
   modalOnClose = null;
   cb?.();
-  if (pendingRemote && $modal.hidden) { const next = pendingRemote; setPendingRemote(null); applyRemote(next); }
+  if (pendingRemote && $modal.hidden) { const next = pendingRemote; setPendingRemote(null); applyRemote(next, { fromServer: false }); } // its gotState was settled when it arrived
 }
 
 $modal.addEventListener('click', (e) => {
@@ -2273,6 +2273,8 @@ function stampAllowance() {
     changed = true;
   }
   if (applyGrants(state)) changed = true;
+  for (const k of state.kids) if (restoreBackup(k, undefined, totalCoins(state, k, today()))) changed = true;
+  for (const k of state.kids) if (restoreFromRecord(k)) changed = true;
   return changed;
 }
 
@@ -2293,7 +2295,9 @@ function giveLegacyItems(kid) {
  */
 function reconcile() {
   let changed = stampAllowance();
-  for (const k of state.kids) if (giveLegacyItems(k)) changed = true;
+  // like the repairs, only on the family's copy from the server: on an old copy saved on this
+  // device a kid can look like they never had the shop, and this would wipe what they own
+  if (!cloudCfg || cloud.gotState) for (const k of state.kids) if (giveLegacyItems(k)) changed = true;
   if (shareToday()) changed = true;
   const kid = ui.view === 'kid' && kidById(ui.kidId);
   if (kid) {

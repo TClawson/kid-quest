@@ -216,6 +216,34 @@ export function nestFields(fields) {
 //   { path, op: 'delete' }
 // fields are diffFields pairs. creating holds the paths still being created.
 // 'device' never leaves this device, and the family document is never deleted.
+// Purchases and what they cost are sent as "add these" and "change by this
+// much", never as the whole list or total. A device that starts on an old copy
+// of a kid (a phone not opened for days shows its saved copy until the server
+// answers) could otherwise write that old list back and wipe out everything
+// bought since: a kid lost a map they had bought this way (2026-11-10).
+// ADD_TO: [items], only when the list only grew; INCREASE: the change in a count.
+export class AddTo { constructor(items) { this.items = items; } }
+export class Increase { constructor(by) { this.by = by; } }
+const KID_LISTS = new Set(['owned', 'grants', 'seenUnlocks']);
+const KID_COUNTS = new Set(['spent', 'gemsSpent']);
+const isList = (p) => (p.length === 1 && KID_LISTS.has(p[0])) || (p.length === 2 && p[0] === 'buddyOwned');
+const isCount = (p) => p.length === 1 && KID_COUNTS.has(p[0]);
+
+/** Kid document fields from diffFields, with purchase lists and spending made safe to merge (see AddTo). */
+export function mergeSafe(fields, was) {
+  return fields.map(([p, v]) => {
+    const old = p.reduce((o, k) => (o == null ? undefined : o[k]), was);
+    if (isList(p) && Array.isArray(v) && (old === undefined || Array.isArray(old))) {
+      const had = new Set((old || []).map((x) => JSON.stringify(x)));
+      const now = new Set(v.map((x) => JSON.stringify(x)));
+      // only additions: send just those; anything taken away sends the whole list as before
+      if ([...had].every((x) => now.has(x))) return [p, new AddTo(v.filter((x) => !had.has(JSON.stringify(x))))];
+    }
+    if (isCount(p) && typeof v === 'number' && typeof old === 'number') return [p, new Increase(v - old)];
+    return [p, v];
+  });
+}
+
 export function planWrites(changes, before, after, creating = new Set()) {
   const plan = [];
   const json = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
@@ -227,8 +255,9 @@ export function planWrites(changes, before, after, creating = new Set()) {
       plan.push({ path, op: 'merge', data: now });
       continue;
     }
-    const fields = diffFields(json(was), now);
+    let fields = diffFields(json(was), now);
     if (!fields.length) continue;
+    if (path.startsWith('kids/')) fields = mergeSafe(fields, json(was));
     plan.push({ path, op: creating.has(path) && path !== 'family' ? 'patch' : 'update', fields });
   }
   for (const path of changes.removed) {

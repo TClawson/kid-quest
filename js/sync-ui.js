@@ -63,13 +63,20 @@ export async function startCloud() {
 }
 
 // A newer state from the family (another device, or this one's writes coming back).
-export function applyRemote(next) {
-  cloud.gotState = true;
+// fromServer: false while it is only this device's own copy of the family (it
+// may be days old); one-time repairs wait for the server's copy.
+export function applyRemote(next, { fromServer = true } = {}) {
+  const firstFresh = fromServer && !cloud.gotState;
+  if (fromServer) cloud.gotState = true;
   for (const k of DEVICE_SETTINGS) {
     if (k in state.settings) next.settings[k] = state.settings[k];
     else delete next.settings[k];
   }
-  if (stableJson(next) === stableJson(state)) return;
+  if (stableJson(next) === stableJson(state)) {
+    // the server agrees with what's on screen: let the waiting repairs run now
+    if (firstFresh && $modal.hidden && !timerOnScreen()) render();
+    return;
+  }
   // don't swap the data under an open dialog; apply it when the dialog closes
   if (!$modal.hidden) { pendingRemote = next; return; }
   setState(next);
