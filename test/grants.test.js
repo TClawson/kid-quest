@@ -70,3 +70,28 @@ test('the real Nov 8 restore covers all four kids', () => {
   assert.ok(ayden.owned.includes('bg-volcano'));
   assert.equal(ayden.spent, 528, 'he keeps both maps without owing coins');
 });
+
+test('mergeBackup only adds: missing purchases, grants and days come back; nothing is removed or changed', async () => {
+  const { mergeBackup } = await import('../js/grants.js');
+  const state = {
+    kids: [{ id: 'a', owned: ['bg-rainforest'], buddyOwned: { fox: ['hat-cap'] }, spent: 300, grants: ['g1'] }],
+    log: { '2026-11-10': { a: { tasks: { t: { status: 'done' } } } } },
+  };
+  const backup = {
+    kids: [
+      { id: 'a', owned: ['bg-volcano'], buddyOwned: { fox: ['hat-cap-green'], cat: ['hat-beanie'] }, spent: 0, grants: ['g0'] },
+      { id: 'gone', owned: ['bg-ocean'] },
+    ],
+    log: { '2026-11-08': { a: { tasks: { t: { status: 'done' } } } }, '2026-11-10': { a: { tasks: {} } } },
+  };
+  assert.deepEqual(mergeBackup(state, backup), { kids: 1, items: 3, days: 1 });
+  const a = state.kids[0];
+  assert.deepEqual(a.owned, ['bg-rainforest', 'bg-volcano']);
+  assert.deepEqual(a.buddyOwned, { fox: ['hat-cap', 'hat-cap-green'], cat: ['hat-beanie'] });
+  assert.equal(a.spent, 300, 'coins left alone');
+  assert.deepEqual(a.grants, ['g1', 'g0']);
+  assert.deepEqual(state.log['2026-11-10'].a.tasks, { t: { status: 'done' } }, 'a day the family has stays as it is');
+  assert.ok(state.log['2026-11-08'].a, 'a missing day comes back');
+  assert.equal(state.kids.length, 1, 'kids the family does not have are not added');
+  assert.deepEqual(mergeBackup(state, backup), { kids: 1, items: 0, days: 0 }, 'nothing more the second time');
+});

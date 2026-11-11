@@ -109,3 +109,38 @@ export function restoreBackup(kid, backup = BACKUP_2026_11_08, earned = Infinity
   kid.grants = [...(kid.grants || []), RESTORE_ID];
   return true;
 }
+
+/**
+ * Restoring a backup on a device that syncs with the family: only put back what's missing,
+ * never take anything away or change what's there, because whatever this device saves goes
+ * to every device. For each kid in both: bought things (owned, buddyOwned) and one-time
+ * repairs already given (grants) are added to, and days the family has no record of for
+ * that kid are added. Kids the family doesn't have, settings and coins are left alone.
+ * Returns { kids, items, days }: how many kids matched, things put back, days put back.
+ */
+export function mergeBackup(state, backup) {
+  const out = { kids: 0, items: 0, days: 0 };
+  const union = (have = [], add = []) => {
+    const next = [...have];
+    for (const id of add) if (!next.includes(id)) { next.push(id); out.items += 1; }
+    return next;
+  };
+  for (const old of backup?.kids || []) {
+    const kid = state.kids.find((k) => k.id === old.id);
+    if (!kid) continue;
+    out.kids += 1;
+    if ((old.owned || []).some((id) => !(kid.owned || []).includes(id))) kid.owned = union(kid.owned, old.owned);
+    for (const [sp, ids] of Object.entries(old.buddyOwned || {})) {
+      if (ids.some((id) => !(kid.buddyOwned?.[sp] || []).includes(id))) kid.buddyOwned = { ...(kid.buddyOwned || {}), [sp]: union(kid.buddyOwned?.[sp], ids) };
+    }
+    const grants = (old.grants || []).filter((g) => !(kid.grants || []).includes(g));
+    if (grants.length) kid.grants = [...(kid.grants || []), ...grants];
+    for (const [date, byKid] of Object.entries(backup.log || {})) {
+      const entry = byKid?.[old.id];
+      if (!entry || state.log?.[date]?.[old.id]) continue;
+      state.log[date] = { ...(state.log[date] || {}), [old.id]: structuredClone(entry) };
+      out.days += 1;
+    }
+  }
+  return out;
+}
