@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TUNE_SLOTS, cleanTune, makeTune, tuneName, tuneAbout, tuneSeconds, freeSlot, startVoice, shiftFits } from '../js/tunerules.js';
-import { newMix, addTune, addTake, mixBeats, setBars, findClip, schedule, badges, cleanMix, mostNotesBeats, MOST_NOTES, NOTES_VOICE, notesVoice, ownVoice } from '../js/studiorules.js';
+import { newMix, addTune, addTake, mixBeats, setBars, maxBars, findClip, schedule, badges, cleanMix, mostNotesBeats, MOST_NOTES, NOTES_VOICE, notesVoice, ownVoice } from '../js/studiorules.js';
 
 const notes = (n = 4) => Array.from({ length: n }, (_, i) => ({ at: 2 * i, len: 1.9, midi: [60, 64, 67, 72][i % 4] }));
 const part = (role, beats = 8, extra = {}) => ({ role, notes: role === 'tune' ? notes() : [{ at: 0, len: 4, midi: 48 }, { at: 4, len: 4, midi: 43 }], beats, follows: true, ...extra });
@@ -119,6 +119,13 @@ test('a tune is trimmed to the room, starts at the first free beat, and keeps to
   assert.equal(findClip(second.mix, second.ids[0]).clip.start, 8, 'after the first one');
   assert.equal(findClip(second.mix, second.ids[0]).clip.len, 8);
   const short = addTune(setBars(one, 3).mix, 0, t, 0);
+  // a long tune keeps its whole length in an empty mix (as long as a loop can be at its speed)
+  const long = cleanTune({ reading: 'tidy', bpm: 100, meter: 4, parts: [{ role: 'tune', beats: 44, notes: [{ at: 0, len: 2, midi: 60 }, { at: 86, len: 2, midi: 64 }] }] });
+  const r = addTune(newMix(), 0, long, 0);
+  assert.equal(r.mix.bars, 11, '44 beats is 11 bars, not cut to 8');
+  assert.equal(findClip(r.mix, r.ids[0]).clip.len, 44);
+  const fast = cleanTune({ reading: 'tidy', bpm: 170, meter: 4, parts: [{ role: 'tune', beats: 84, notes: [{ at: 0, len: 2, midi: 60 }] }] });
+  assert.equal(addTune(newMix(), 0, fast, 0).mix.bars, maxBars(170, 4), 'never more bars than a loop may have');
   assert.equal(findClip(short.mix, short.ids[0]).clip.len, 4, 'trimmed to the room left');
   const waltz = { ...t, meter: 3 };
   assert.match(addTune(first, 1, waltz, 0, 'Tune 2').error, /^Tune 2 has 3 beats in a bar, and this mix has 4/);

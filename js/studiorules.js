@@ -554,7 +554,7 @@ export function addTune(mix, track, tune, at = 0, name = 'That tune') {
     next.meter = tune.meter === 3 ? 3 : 4;
     next.key = validKey(tune.key) ? tune.key : null;
     const beats = Math.max(...tune.parts.map((p) => p.beats || 1));
-    next.bars = Math.max(2, Math.min(maxBars(next.bpm, next.meter), 8, Math.ceil(beats / next.meter)));
+    next.bars = Math.max(2, Math.min(maxBars(next.bpm, next.meter), Math.ceil(beats / next.meter)));
   } else if ((tune.meter === 3 ? 3 : 4) !== next.meter) {
     return fail(`${name} has ${tune.meter === 3 ? 3 : 4} beats in a bar, and this mix has ${next.meter}. They can't play together.`);
   }
