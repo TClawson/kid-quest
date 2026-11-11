@@ -542,30 +542,37 @@ function placeNotes(next, track, start, parts, { key = null, readingId = null, o
  * sound) and shift, with its key, and for a band tune its band on another track at the same
  * beat as takeToNotes places one; with no room for the band, the tune goes in alone and
  * `note` says so. It plays at the mix's speed, like every notes clip. An empty mix takes the
- * tune's speed, beats in a bar and key; a tune of another beat is turned down. Returns
+ * tune's speed, beats in a bar and key. A tune goes in whatever its beats in a bar (its notes
+ * are just notes on steps); only its band is made for its count, so in a mix that counts
+ * otherwise the tune goes in without its band, and `note` says so. Returns
  * { mix, error, ids, note }.
  */
-export function addTune(mix, track, tune, at = 0, name = 'That tune') {
+export function addTune(mix, track, tune, at = 0) {
   const fail = (error) => ({ mix, error, ids: [], note: '' });
   if (!tune || !Array.isArray(tune.parts) || !tune.parts.length) return fail('That tune is gone.');
   let next = clone(mix);
+  const count = tune.meter === 3 ? 3 : 4;
+  let parts = tune.parts;
+  let note = '';
   if (!allClips(next).length) {
     next.bpm = Math.max(BPM_RANGE[0], Math.min(BPM_RANGE[1], Math.round(tune.bpm) || 100));
     next.meter = tune.meter === 3 ? 3 : 4;
     next.key = validKey(tune.key) ? tune.key : null;
     const beats = Math.max(...tune.parts.map((p) => p.beats || 1));
     next.bars = Math.max(2, Math.min(maxBars(next.bpm, next.meter), Math.ceil(beats / next.meter)));
-  } else if ((tune.meter === 3 ? 3 : 4) !== next.meter) {
-    return fail(`${name} has ${tune.meter === 3 ? 3 : 4} beats in a bar, and this mix has ${next.meter}. They can't play together.`);
+  } else if (count !== next.meter && parts.length > 1) {
+    parts = parts.slice(0, 1);
+    note = `The band counts in ${count}s and this mix counts in ${next.meter}s, so your tune went in without its band.`;
   }
   const start = freeSpot(next, track, 1, Math.round(at));
   if (start < 0) return fail('That track is full.');
   next = { ...next };
-  const r = placeNotes(next, track, start, tune.parts, {
+  const r = placeNotes(next, track, start, parts, {
     key: tune.key, readingId: tune.reading, own: { tune: tune.voice, band: READING_VOICES.band.band }, shift: tune.shift || 0, bandOptional: true,
   });
   if (r.error) return fail(r.error);
-  return { mix: next, error: null, ids: r.ids, note: r.bandLeft ? 'There was no room for the band on another track, so your tune went in alone.' : '' };
+  if (r.bandLeft) note = 'There was no room for the band on another track, so your tune went in alone.';
+  return { mix: next, error: null, ids: r.ids, note };
 }
 
 /** Move a clip to a track and a beat (snapped). Turned down when something is in the way. */

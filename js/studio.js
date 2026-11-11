@@ -2340,7 +2340,7 @@ export const studioActions = {
     if (!tune) return;
     const spot = currentSpot();
     if (!spot) { toast(SAY.full); return; }
-    const r = addTune(S.mix, spot.track, tune, spot.beat, tuneName(i));
+    const r = addTune(S.mix, spot.track, tune, spot.beat);
     if (r.error) { toast(r.error); return; }
     S.spot = { ...S.spot, picked: false };
     commit(r.mix, { select: r.ids[0], quiet: Boolean(r.note) });

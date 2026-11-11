@@ -136,7 +136,19 @@ test('a tune is trimmed to the room, starts at the first free beat, and keeps to
   const fast = cleanTune({ reading: 'tidy', bpm: 170, meter: 4, parts: [{ role: 'tune', beats: 84, notes: [{ at: 0, len: 2, midi: 60 }] }] });
   assert.equal(addTune(newMix(), 0, fast, 0).mix.bars, maxBars(170, 4), 'never more bars than a loop may have');
   assert.equal(findClip(short.mix, short.ids[0]).clip.len, 4, 'trimmed to the room left');
+  // a tune of another count goes in all the same; only its band stays out
   const waltz = { ...t, meter: 3 };
-  assert.match(addTune(first, 1, waltz, 0, 'Tune 2').error, /^Tune 2 has 3 beats in a bar, and this mix has 4/);
+  const w = addTune(first, 1, waltz, 0);
+  assert.equal(w.error, null);
+  assert.equal(w.note, '', 'a tune with no band: nothing to say');
+  assert.equal(w.mix.meter, 4, 'the mix keeps its count');
+  assert.deepEqual(findClip(w.mix, w.ids[0]).clip.notes, t.parts[0].notes);
+  const bandWaltz = { ...makeTune(result(), 'band'), meter: 3 };
+  const bw = addTune(first, 1, bandWaltz, 0);
+  assert.equal(bw.error, null);
+  assert.equal(bw.ids.length, 1, 'the tune alone');
+  assert.equal(findClip(bw.mix, bw.ids[0]).clip.role, 'tune');
+  assert.equal(bw.note, 'The band counts in 3s and this mix counts in 4s, so your tune went in without its band.');
+  assert.equal(addTune(addTune(newMix(), 0, bandWaltz, 0).mix, 2, makeTune(result(), 'band'), 0).note, 'The band counts in 4s and this mix counts in 3s, so your tune went in without its band.');
   assert.equal(addTune(first, 1, null).error, 'That tune is gone.');
 });
