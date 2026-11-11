@@ -168,6 +168,7 @@ function reset() {
   L.robot = '';
   L.confirm = -1;
   say('');
+  updateWake(); // (nothing under way: the screen may sleep)
 }
 
 function forget() {
@@ -705,7 +706,11 @@ function letSleep() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'hidden') return;
+  if (document.visibilityState !== 'hidden') {
+    // the browser let the wake lock go while the app was away: ask again if still listening
+    if (L.on) { letSleep(); updateWake(); }
+    return;
+  }
   if (L.run) failRec(SAY.hidden);
   if (L.hearing) stopSound();
 });
@@ -716,7 +721,6 @@ export const labActions = {
   'lab-back': () => {
     const back = deskOf(deskId())?.back || { view: 'kid' };
     leave();
-    letSleep();
     Object.assign(ui, back, { labTest: false });
     render();
   },
