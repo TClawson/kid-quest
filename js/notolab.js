@@ -44,6 +44,8 @@ const ROBOT = {
   nothing: 'I couldn\'t hear piano notes in that. Try again a bit closer to the piano.',
   saved: 'Saved! You\'ll find it on the shelf in the recording studio too.',
   thrown: 'Okay, it\'s gone.',
+  thrownPick: 'Okay, it\'s gone. Now you can keep your tune.',
+  full: 'Beep boop! My tune shelf is full. You can still play to me, and throw a tune away to keep a new one.',
 };
 
 const SAY = {
@@ -186,13 +188,21 @@ const body = () => document.querySelector('#lab');
 function paint() {
   const el = body();
   if (!el) return;
-  const line = L.robot || ROBOT[L.stage];
+  const line = robotLine();
   el.innerHTML = `
     <div class="lab-robot"><span class="lab-bot" aria-hidden="true">🤖</span><p class="lab-bubble" role="status">${esc(line)}</p></div>
     ${{ ready: readyHtml, rec: recHtml, listen: listenHtml, pick: pickHtml }[L.stage]()}
     ${L.note ? `<p class="lab-note ${L.noteKind}" role="alert">${esc(L.note)}</p>` : ''}
-    ${L.stage === 'ready' ? shelfHtml() : ''}`;
+    ${L.stage === 'ready' || (L.stage === 'pick' && shelfFull()) ? shelfHtml() : ''}`;
   if (L.stage === 'rec') live();
+}
+
+const shelfFull = () => Boolean(L.shelf) && freeSlot(L.shelf) < 0;
+
+/** What the robot says: news, else the stage's line (on Ready with a full shelf, that it is full). */
+function robotLine() {
+  if (L.robot) return L.robot;
+  return L.stage === 'ready' && shelfFull() ? ROBOT.full : ROBOT[L.stage];
 }
 
 function readyHtml() {
@@ -391,7 +401,7 @@ async function throwAway(slot) {
   }
   if (L.desk !== desk) return;
   L.shelf[slot] = null;
-  L.robot = ROBOT.thrown;
+  L.robot = L.stage === 'pick' ? ROBOT.thrownPick : ROBOT.thrown;
   paint();
 }
 
@@ -729,7 +739,7 @@ export function openLab({ test = false } = {}) {
 export function labState() {
   return {
     stage: L.stage,
-    robot: L.robot || ROBOT[L.stage],
+    robot: robotLine(),
     shelf: L.shelf && L.shelf.map((t, i) => (t ? `${tuneName(i)}: ${tuneAbout(t)}` : null)),
     pick: L.pick,
     meter: L.result?.meter || 0,

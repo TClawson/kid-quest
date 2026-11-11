@@ -367,15 +367,32 @@ async function recordToPick(page, name = '', stop = 'limit') {
   await station(page, 'lab', '.lab-screen');
   await labModule(page);
   await waitLab(page, () => window.kqLab.labState().shelf?.every(Boolean));
+  assert.equal(await page.locator('.lab-bubble').textContent(), 'Beep boop! My tune shelf is full. You can still play to me, and throw a tune away to keep a new one.');
+  assert.equal(await page.locator('.lab-shelf').count(), 1);
   await recordToPick(page, '', 'finger');
+  assert.equal(await page.locator('.lab-shelf').count(), 1, 'a full shelf shows under the readings at once');
   await page.click('[data-lab="keep"]');
   await waitLab(page, () => /shelf is full/.test(window.kqLab.labState().robot));
   st = await lab(page);
   assert.equal(st.robot, 'Your tune shelf is full. Throw one away to keep a new one.');
   assert.equal(st.stage, 'pick', 'nothing is lost');
-  await shot(page, '10-shelf-full');
-  await page.click('[data-lab="over"]');
-  assert.equal((await lab(page)).stage, 'ready');
+  // the shelf shows under the readings, and works there
+  assert.equal(await page.locator('.lab-shelf .lab-slot:not(.empty)').count(), 6, 'the full shelf, under the readings');
+  assert.equal(await page.locator('.lab-cards').count(), 1, 'the readings are still there');
+  await shot(page, '10-shelf-full', '.lab-shelf');
+  await page.click('.lab-slot[data-slot="3"] [data-lab="hear"]');
+  await waitLab(page, () => window.kqLab.labState().playing?.key === 'slot|3');
+  await page.click('.lab-slot[data-slot="3"] [data-lab="throw"]');
+  await page.click('.lab-slot[data-slot="3"] [data-lab="throw-yes"]');
+  await waitLab(page, () => !window.kqLab.labState().shelf[3]);
+  st = await lab(page);
+  assert.equal(st.robot, 'Okay, it\'s gone. Now you can keep your tune.');
+  assert.equal(st.stage, 'pick');
+  await page.click('[data-lab="keep"]');
+  await waitLab(page, () => window.kqLab.labState().stage === 'ready');
+  st = await lab(page);
+  assert.match(st.shelf[3], /^Tune 4: Tidied/, 'kept in the slot that was freed');
+  assert.equal(st.robot, 'Saved! You\'ll find it on the shelf in the recording studio too.');
   await ctx.close();
 }
 
