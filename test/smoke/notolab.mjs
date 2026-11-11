@@ -145,20 +145,46 @@ const noSideScroll = (page) => page.evaluate(() => document.documentElement.scro
 const tooSmall = (page, sel) => page.evaluate((sel) => [...document.querySelectorAll(sel)].map((el) => { const r = el.getBoundingClientRect(); return [el.textContent.trim().slice(0, 30), Math.round(r.width), Math.round(r.height)]; }).filter(([, w, h]) => w < 44 || h < 44), sel);
 const micsOpen = (page) => page.evaluate(() => window.kqStreams.flatMap((st) => st.getTracks()).filter((t) => t.readyState !== 'ended').length);
 
-/** Record (stops by itself at LAB.most) and wait for the readings. */
-async function recordToPick(page, name = '') {
+/**
+ * Record and wait for the readings. `stop`: 'limit' (it stops by itself at LAB.most, 5 s
+ * here), 'finger' (a finger lands on Stop at 3 s and lets go a moment later) or 'keys' (Stop
+ * pressed with no finger, as with a keyboard). The kid's Stop keeps the recording up to 0.1 s
+ * before the finger landed (or the press), so the tap on Stop is not in it.
+ */
+async function recordToPick(page, name = '', stop = 'limit') {
+  await page.evaluate((most) => { window.kqLab.LAB.most = most; }, stop === 'limit' ? 5 : 30);
   await page.click('#lab [data-lab="rec"]');
   await waitLab(page, () => window.kqLab.labState().recording && /0:0[1-9]/.test(document.querySelector('.lab-time')?.textContent || ''), null, 15000);
   const st = await lab(page);
   assert.equal(st.stage, 'rec');
   assert.match(st.robot, /I'm listening… Press Stop when you're done\./);
-  assert.match(await page.locator('.lab-time').textContent(), /of 0:05/);
+  assert.match(await page.locator('.lab-time').textContent(), stop === 'limit' ? /of 0:05/ : /of 0:30/);
   assert.equal(await page.locator('.lab-meter').count(), 1, 'a loudness bar');
   await waitLab(page, () => parseFloat(document.querySelector('.lab-meter span')?.style.width) > 0, null, 5000).catch(async () => {
     throw new Error(`the loudness bar never moved (${await page.evaluate(() => document.querySelector('.lab-meter span')?.style.width)}, ${await page.locator('.lab-time').textContent()})`);
   });
   if (name) await shot(page, `${name}-recording`);
+  let want = stop === 'limit' ? 5 : 0;
+  if (stop !== 'limit') {
+    await waitLab(page, () => window.kqLab.labState().seconds >= 3, null, 15000);
+    if (stop === 'finger') {
+      // (a click here would be a finger landing again: the press is made without one)
+      const down = await page.evaluate(() => {
+        const s = window.kqLab.labState().seconds;
+        document.querySelector('#lab [data-lab="stop"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        return s;
+      });
+      await page.waitForTimeout(300);
+      const up = await page.evaluate(() => { const s = window.kqLab.labState().seconds; document.querySelector('#lab [data-lab="stop"]').click(); return s; });
+      assert.ok(up - down > 0.2, 'the finger stayed down a moment');
+      want = down - 0.1;
+    } else {
+      want = await page.evaluate(() => { const s = window.kqLab.labState().seconds; document.querySelector('#lab [data-lab="stop"]').click(); return s; }) - 0.1;
+    }
+  }
   await waitLab(page, () => window.kqLab.labState().stage !== 'rec', null, 15000);
+  const kept = (await lab(page)).kept;
+  assert.ok(Math.abs(kept - want) < 0.005, `${stop}: the recording kept is ${kept.toFixed(3)} s, not ${want.toFixed(3)} s`);
   assert.equal(await micsOpen(page), 0, 'the microphone is let go');
   await waitLab(page, () => window.kqLab.labState().stage !== 'listen', null, 60000);
   const after = await lab(page);
@@ -341,7 +367,7 @@ async function recordToPick(page, name = '') {
   await station(page, 'lab', '.lab-screen');
   await labModule(page);
   await waitLab(page, () => window.kqLab.labState().shelf?.every(Boolean));
-  await recordToPick(page);
+  await recordToPick(page, '', 'finger');
   await page.click('[data-lab="keep"]');
   await waitLab(page, () => /shelf is full/.test(window.kqLab.labState().robot));
   st = await lab(page);
@@ -405,7 +431,7 @@ async function recordToPick(page, name = '') {
   assert.deepEqual(await tooSmall(page, '#lab button'), [], 'Yes and No too');
   await shot(page, '11-phone-ready');
   await page.click('.lab-slot[data-slot="0"] [data-lab="throw-no"]');
-  await recordToPick(page, '12-phone');
+  await recordToPick(page, '12-phone', 'keys');
   assert.ok(await noSideScroll(page), 'the readings fit');
   assert.deepEqual(await tooSmall(page, '#lab button, #lab select'), [], 'buttons at least 44 px');
   await shot(page, '13-phone-pick');

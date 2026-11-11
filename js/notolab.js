@@ -29,6 +29,12 @@ export const LAB = { most: LAB_MOST };
 /** The test desk's id: the same as the test studio's, so its tunes show on that shelf. */
 const TEST_DESK = 'parent-test';
 const LEAST_NOTES = 3;
+// Seconds cut from the end of a recording the kid stopped, counted back from the finger landing
+// on Stop: the tablet sits on the piano, so that tap is a knock in the recording (heard as a last
+// note), and the microphone hears it a moment late.
+const STOP_CUT = 0.1;
+const DOWN_FRESH = 1500; // ms: a finger that landed longer ago than this isn't the one pressing Stop
+const SHORTEST = 0.3;    // seconds: a recording shorter than this has nothing to hear
 
 const ROBOT = {
   ready: 'Beep boop! Play me something on the piano and I\'ll turn it into notes.',
@@ -80,6 +86,7 @@ const L = {
   job: null,        // the listening (hearnotes.js)
   progress: 0,
   sound: null,      // the recording: { samples, rate } (in memory only)
+  kept: 0,          // how long the recording kept is, in seconds (for tests)
   heard: null,      // what was heard in it (listener.js notes)
   result: null,     // tuneReadings
   pick: 'tidy',
@@ -124,6 +131,7 @@ export function mountLab(root) {
   if (el.dataset.live) return;
   el.dataset.live = '1';
   L.on = true;
+  el.addEventListener('pointerdown', onDown);
   el.addEventListener('click', onClick);
   el.addEventListener('change', onChange);
   if (L.desk !== el.dataset.desk) openDesk(el.dataset.desk);
@@ -283,12 +291,17 @@ function clock(seconds) {
 
 // ---------- taps ----------
 
+/** A finger landing on Stop: the recording ends there (see STOP_CUT), not when the tap is done. */
+function onDown(e) {
+  if (L.run && e.target.closest('[data-lab="stop"]')) L.run.down = { frames: L.run.frames, t: performance.now() };
+}
+
 function onClick(e) {
   const b = e.target.closest('[data-lab]');
   if (!b || b.disabled) return;
   const what = b.dataset.lab;
   if (what === 'rec') { startRec().catch(() => { if (L.run) failRec(SAY.micBroken); }); return; }
-  if (what === 'stop') { finishRec(); return; }
+  if (what === 'stop') { finishRec(true); return; }
   if (what === 'cancel') { stopListening(); L.stage = 'ready'; L.robot = ''; forget(); paint(); updateWake(); return; }
   if (what === 'hear') { hear(b.dataset.what); return; }
   if (what === 'pick') { L.pick = b.dataset.reading; paint(); return; }
@@ -450,27 +463,31 @@ function heardBlock(run, block) {
     if (a > run.peak) run.peak = a;
     if (a >= FULL) run.loudAt = before + i;
   }
-  if (run.frames >= LAB.most * run.ac.sampleRate) { finishRec(); return; }
+  if (run.frames >= LAB.most * run.ac.sampleRate) { finishRec(false); return; }
   if (Math.floor(run.frames / (run.ac.sampleRate / 10)) !== Math.floor(before / (run.ac.sampleRate / 10))) live();
 }
 
-/** Stop and listen to it (Stop, or the limit reached). */
-function finishRec() {
+/** Stop and listen to it (`byKid`: Stop was pressed; else the limit was reached). */
+function finishRec(byKid = false) {
   const run = L.run;
   if (!run) return;
   if (!run.cap) { stopRec(''); L.stage = 'ready'; paint(); updateWake(); return; } // the microphone wasn't open yet
   const rate = run.ac.sampleRate;
   const blocks = run.cap.blocks;
+  // the kid's Stop: from the finger landing on it (or the tap, without one), less the knock
+  const down = run.down && performance.now() - run.down.t < DOWN_FRESH ? run.down.frames : run.frames;
+  const end = byKid ? Math.max(0, down - Math.round(STOP_CUT * rate)) : Infinity;
   stopRec('');
   let samples;
   try {
     samples = joinBlocks(blocks).samples;
-    const most = Math.round(LAB.most * rate);
+    const most = Math.min(end, Math.round(LAB.most * rate));
     if (samples.length > most) samples = samples.slice(0, most);
   } catch {
     L.stage = 'ready'; say(SAY.broken, 'bad'); paint(); updateWake(); return;
   }
-  if (peakOf(samples) < SILENT) { nothingHeard(); return; }
+  L.kept = samples.length / rate;
+  if (samples.length < SHORTEST * rate || peakOf(samples) < SILENT) { nothingHeard(); return; }
   L.sound = { samples: normalise(samples).samples, rate };
   listenTo(L.sound);
 }
@@ -707,7 +724,7 @@ export function openLab({ test = false } = {}) {
 /**
  * What the screen shows (for tests): { stage, robot, shelf (names and abouts, or null),
  * pick, meter, how, hearing, playing: { key, sig } (what is sounding), progress, worker,
- * recording }.
+ * recording, seconds (recorded so far), kept (seconds of the last recording kept) }.
  */
 export function labState() {
   return {
@@ -723,5 +740,7 @@ export function labState() {
     progress: L.progress,
     worker: Boolean(L.job?.worker),
     recording: Boolean(L.run),
+    seconds: L.run?.ac ? L.run.frames / L.run.ac.sampleRate : 0,
+    kept: L.kept,
   };
 }
