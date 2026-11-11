@@ -462,12 +462,22 @@ async function recordToPick(page, name = '', stop = 'limit') {
   assert.equal(two.length, 2, `one tune each time (${two})`);
   assert.equal(new Set(two).size, 2);
   assert.deepEqual((await lab(page)).shelf.filter(Boolean).length, 2, 'the shelf agrees with the tablet');
+  // a throw-away that takes too long says so, and once it lands that is put right
+  await page.evaluate(() => window.kqHold(2500));
+  await page.click('.lab-slot[data-slot="1"] [data-lab="throw"]');
+  await page.click('.lab-slot[data-slot="1"] [data-lab="throw-yes"]');
+  await waitLab(page, () => /couldn't throw it away/.test(document.querySelector('.lab-note')?.textContent || ''), null, 5000);
+  assert.ok((await lab(page)).shelf[1], 'still on the shelf meanwhile');
+  await waitLab(page, () => !window.kqLab.labState().shelf[1], null, 10000);
+  assert.equal(await page.locator('.lab-note').count(), 0, 'the old message is gone');
+  assert.equal((await lab(page)).robot, 'Okay, it\'s gone.');
+  assert.equal((await ids()).length, 1);
   await page.evaluate(() => { window.kqLab.LAB.wait = 8000; });
   const kept = await page.evaluate(async (ids) => {
     const { loadTunes } = await import('./js/studio-store.js');
     return Promise.all(ids.map(async (id) => (await loadTunes(id)).filter(Boolean).length));
   }, [TEST_DESK, KID]);
-  assert.deepEqual(kept, [2, 0], 'the test desk keeps its own tunes; Ava has none');
+  assert.deepEqual(kept, [1, 0], 'the test desk keeps its own tunes; Ava has none');
   await page.click('[data-action="lab-back"]');
   await page.waitForSelector('.tabs [data-tab="settings"].on');
   // the test studio's shelf has it

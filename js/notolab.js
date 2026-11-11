@@ -459,7 +459,15 @@ async function throwAway(slot) {
   L.throwing.delete(slot);
   if (!got || got === LATE) {
     // (if it is thrown away after all, the shelf says so then)
-    if (got === LATE) going.then(() => { if (L.desk === desk && L.shelf) { L.shelf[slot] = null; paint(); } }, () => {});
+    if (got === LATE) {
+      going.then(() => {
+        if (L.desk !== desk || !L.shelf) return;
+        L.shelf[slot] = null;
+        // (the "couldn't throw it away" said meanwhile is no longer true)
+        if (L.note === SAY.cantThrow) { say(''); L.robot = L.stage === 'pick' ? ROBOT.thrownPick : ROBOT.thrown; }
+        paint();
+      }, () => {});
+    }
     if (L.desk === desk) { say(SAY.cantThrow, 'bad'); paint(); }
     return;
   }
