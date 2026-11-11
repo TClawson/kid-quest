@@ -30,6 +30,7 @@ import {
   keptHeard, readingOptions, mostNotesBeats,
 } from './studiorules.js';
 import { READINGS, readings } from './notomatic.js';
+import { hearNotes } from './hearnotes.js';
 import { VOICES, KITS, LOOPS, LOOP_IDS, BACKING, BACKING_GROUPS, backingEvents } from './studiokit.js';
 import { partEvents, clipSound, backingKey, keyTonic } from './remix.js';
 import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes } from './studio-store.js';
@@ -187,8 +188,8 @@ const S = {
   heard: new Map(),   // take id -> the notes heard in it (kept while the app is open, so a take is listened to once)
 };
 
-// the Note-o-Matic's listening under way: its Worker (null when listening on the screen's own thread)
-const N = { worker: null };
+// the Note-o-Matic's listening under way (hearnotes.js), or null
+const N = { job: null };
 
 // the sound: one AudioContext for playing and recording
 const A = {
@@ -1980,50 +1981,20 @@ async function openNom() {
  */
 function listenTo(nom, samples, rate, clicks) {
   const done = (notes, failed = false) => {
+    N.job = null;
     if (!failed && Array.isArray(notes)) S.heard.set(nom.take, notes); // (what the whole take holds: kept for the next time)
     if (S.nom !== nom) return; // stopped meanwhile
     if (!nomClip(nom)) { closeNom(); return; } // the take is gone or changed: nothing to say about it
     if (failed || !Array.isArray(notes)) { nom.phase = 'broken'; paint(); updateWake(); return; }
     heardIn(nom, notes);
   };
-  const here = () => {
-    stopListening();
-    setTimeout(async () => {
-      if (S.nom !== nom) return;
-      try {
-        const { listen: hearNotes } = await import('./listener.js');
-        if (S.nom !== nom) return;
-        done(hearNotes(samples, rate, { clicks }));
-      } catch { done(null, true); }
-    }, 60);
-  };
-  let w;
-  try { w = new Worker(new URL('./listener-worker.js', import.meta.url), { type: 'module' }); } catch { here(); return; }
-  N.worker = w;
-  let answered = false;
-  w.onmessage = (e) => {
-    if (N.worker !== w) return;
-    answered = true;
-    const d = e.data || {};
-    if (d.progress != null && !('notes' in d) && !('error' in d)) { nom.progress = d.progress; showProgress(nom); return; }
-    stopListening();
-    done(d.notes, Boolean(d.error));
-  };
-  w.onerror = (e) => {
-    if (N.worker !== w) return;
-    e?.preventDefault?.();
-    if (!answered) here(); // (an old browser that can't run a module Worker)
-    else { stopListening(); done(null, true); }
-  };
-  const copy = samples.slice(); // the take keeps its own sound
-  try { w.postMessage({ samples: copy, rate, clicks }, [copy.buffer]); } catch { here(); }
+  N.job = hearNotes(samples, rate, clicks, { progress: (f) => { nom.progress = f; showProgress(nom); }, done });
 }
 
-/** Stop the Worker that is listening, if one is. */
+/** Stop the listening under way, if there is one. */
 function stopListening() {
-  const w = N.worker;
-  N.worker = null;
-  try { w?.terminate(); } catch { /* gone */ }
+  N.job?.stop();
+  N.job = null;
 }
 
 /** How far the listening got: the bar moves without drawing the whole desk again. */
@@ -2413,7 +2384,7 @@ export function studioSound() {
 
 /** The Note-o-Matic (for tests): { phase, progress, pick, worker (listening in a Worker) } or null. */
 export function studioNotes() {
-  return S.nom && { phase: S.nom.phase, progress: S.nom.progress, pick: S.nom.pick, worker: Boolean(N.worker) };
+  return S.nom && { phase: S.nom.phase, progress: S.nom.progress, pick: S.nom.pick, worker: Boolean(N.job?.worker) };
 }
 
 /** What the studio is hearing on its own (for tests): '' or a key such as 'nom|tidy'. */
