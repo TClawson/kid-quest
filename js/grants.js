@@ -9,10 +9,6 @@ export const GRANTS = [
   // 2026-11-08: Edison bought the blue beanbag, then bought more right away, and the
   // second purchase wrote over the first (fixed in save(), js/app.js).
   { id: 'lost-beanbag-2026-11-08', kid: 'kid_mvymmw0y1kmwx', item: 'home-chair-bean-blue-plain' },
-  // 2026-11-10: a device that opened on a very old copy of the family reset every kid's
-  // owned list and coins spent (see giveLegacyItems in js/app.js). Ayden's Volcano island
-  // isn't on his record anywhere else, so it comes back here; restoreFromRecord finds the rest.
-  { id: 'lost-volcano-2026-11-10', kid: 'kid_mvymcmw11jnn8', item: 'bg-volcano' },
 ];
 
 /**
@@ -65,4 +61,51 @@ export function restoreFromRecord(kid) {
   for (const id of Object.values(kid.home || {})) give(id);
   for (const id of Object.values(kid.gardenDecor || {})) give(id);
   return changed;
+}
+
+// ---------- 2026-11-10: a phone opened on a copy of the family from about Nov 3 ----------
+// Its first save failed, and the fallback (in js/cloud.js) then wrote its whole old copy
+// of each kid over the server's: every kid's owned list, coins spent, outfit and
+// Edison's fox hats went back to Nov 3. Ayden lost Volcano island and his rod, Remington
+// his football, Esther the ocean, Edison his hockey stick, paintings and green cap.
+// What each kid had on Taylor's backup of 2026-11-08, to put back once per kid:
+const BACKUP_2026_11_08 = {
+  kid_mvymcmw11jnn8: { owned: ['bg-volcano', 'sport-rod-regular'], buddyOwned: {}, spent: 300 }, // Ayden
+  kid_mvymmw0y1kmwx: { owned: ['sport-hockey-regular', 'home-art-sunset', 'home-art-rainbow', 'home-art-fish'], buddyOwned: {'fox': ['hat-cap', 'hat-cap-green'], 'turtle': ['hat-cap', 'neck-bowtie-purple']}, spent: 290 }, // Edison
+  kid_mvyopilp1bgqr: { owned: ['bg-ocean', 'sport-football-regular'], buddyOwned: {'panda': ['hat-beanie-pink', 'hat-cap-yellow'], 'fox': ['hat-cap-black'], 'dino': ['hat-beanie']}, spent: 340 }, // Remington
+  kid_mvzflap11wbyq: { owned: ['bg-ocean'], buddyOwned: {'puppy': ['neck-bowtie-pink', 'hat-cap-purple']}, spent: 170 }, // Esther
+};
+export const RESTORE_ID = 'restore-2026-11-08-backup';
+
+/** A shop price in coins of an id in kid.owned (a song is SONG_PRICE; gear costs gems, not coins). */
+const coinPrice = (id) => (typeof id === 'string' && id.startsWith('song:') ? 20 : itemById(id)?.price || 0);
+
+/**
+ * Put back everything a kid had on the Nov 8 backup (lists only grow), and their coins
+ * spent: what they had spent then, plus anything bought since that they own now, but
+ * never more than earned (all the coins they have earned so far). Runs
+ * once per kid (RESTORE_ID in kid.grants). Returns true if it changed the kid.
+ */
+export function restoreBackup(kid, backup = BACKUP_2026_11_08, earned = Infinity) {
+  const was = backup[kid.id];
+  if (!was || (kid.grants || []).includes(RESTORE_ID)) return false;
+  const before = new Set(was.owned);
+  const owned = [...(kid.owned || [])];
+  for (const id of was.owned) if (!owned.includes(id)) owned.push(id);
+  const buddyOwned = { ...(kid.buddyOwned || {}) };
+  for (const [sp, ids] of Object.entries(was.buddyOwned)) {
+    const mine = [...(buddyOwned[sp] || [])];
+    for (const id of ids) if (!mine.includes(id)) mine.push(id);
+    buddyOwned[sp] = mine;
+  }
+  let since = 0;
+  for (const id of kid.owned || []) if (!before.has(id)) since += coinPrice(id);
+  for (const [sp, ids] of Object.entries(kid.buddyOwned || {})) for (const id of ids) if (!(was.buddyOwned[sp] || []).includes(id)) since += coinPrice(id);
+  kid.owned = owned;
+  kid.buddyOwned = buddyOwned;
+  // never more than the kid has earned: Ayden spent the coins the wipe gave back on the
+  // rainforest, and he keeps it without owing coins for it
+  kid.spent = Math.max(kid.spent || 0, Math.min(was.spent + since, earned));
+  kid.grants = [...(kid.grants || []), RESTORE_ID];
+  return true;
 }

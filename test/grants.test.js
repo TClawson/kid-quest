@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyGrants, GRANTS, restoreFromRecord } from '../js/grants.js';
+import { applyGrants, GRANTS, restoreFromRecord, restoreBackup, RESTORE_ID } from '../js/grants.js';
 import { itemById } from '../js/items.js';
 
 const G = [{ id: 'g1', kid: 'kid_a', item: 'home-chair-bean-blue-plain' }];
@@ -35,7 +35,7 @@ test('every real grant names a shop item', () => {
 });
 
 test('restoreFromRecord gives back bought things the kid still wears, keeps or has placed', () => {
-  // like Ayden, Edison and Remington after their owned lists were wiped on 2026-11-10
+  // like Ayden, Remington and Edison after the wipe of 2026-11-10
   const kid = {
     owned: ['bg-rainforest'],
     buddyOwned: { fox: ['hat-cap'] },
@@ -47,4 +47,26 @@ test('restoreFromRecord gives back bought things the kid still wears, keeps or h
   assert.deepEqual(kid.owned, ['bg-rainforest', 'sport-rod-regular', 'home-chair-bean-blue-plain']);
   assert.deepEqual(kid.buddyOwned, { fox: ['hat-cap', 'face-round'], cat: ['hat-beanie'] });
   assert.equal(restoreFromRecord(kid), false, 'nothing more the second time');
+});
+
+test('restoreBackup puts back the Nov 8 lists once and charges what was spent then plus since', () => {
+  const backup = { k: { owned: ['bg-volcano', 'sport-rod-regular'], buddyOwned: { fox: ['hat-cap', 'hat-cap-green'] }, spent: 300 } };
+  // after the wipe: lists back to early November, then the rainforest bought again
+  const kid = { id: 'k', owned: ['bg-rainforest'], buddyOwned: { fox: ['hat-cap'] }, spent: 300, grants: ['g0'] };
+  assert.equal(restoreBackup(kid, backup), true);
+  assert.deepEqual(kid.owned, ['bg-rainforest', 'bg-volcano', 'sport-rod-regular']);
+  assert.deepEqual(kid.buddyOwned, { fox: ['hat-cap', 'hat-cap-green'] });
+  assert.equal(kid.spent, 600, 'Nov 8 spending plus the rainforest');
+  assert.deepEqual(kid.grants, ['g0', RESTORE_ID]);
+  assert.equal(restoreBackup(kid, backup), false, 'only once');
+  assert.equal(restoreBackup({ id: 'other', owned: [] }, backup), false);
+});
+
+test('the real Nov 8 restore covers all four kids', () => {
+  const ids = ['kid_mvymcmw11jnn8', 'kid_mvymmw0y1kmwx', 'kid_mvyopilp1bgqr', 'kid_mvzflap11wbyq'];
+  for (const id of ids) assert.equal(restoreBackup({ id, owned: [] }), true, id);
+  const ayden = { id: ids[0], owned: ['bg-rainforest'], spent: 300 };
+  restoreBackup(ayden, undefined, 528);
+  assert.ok(ayden.owned.includes('bg-volcano'));
+  assert.equal(ayden.spent, 528, 'he keeps both maps without owing coins');
 });

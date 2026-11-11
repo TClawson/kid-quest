@@ -312,18 +312,19 @@ const withDeletes = (v) => {
 export function writeChanges(familyId, changes, before, after, onStatus = () => {}) {
   const plan = planWrites(changes, before, after, new Set(creating.keys()));
   const created = plan.filter((w) => w.op === 'merge' && w.path !== 'family').map((w) => w.path);
-  const ops = plan.map((w) => {
+  const opFor = (w, op = w.op) => {
     const ref = refFor(familyId, w.path);
-    if (w.op === 'merge') return (b) => b.set(ref, w.data, { merge: true });
-    if (w.op === 'delete') return (b) => b.delete(ref);
-    if (w.op === 'patch') {
+    if (op === 'merge') return (b) => b.set(ref, w.data, { merge: true });
+    if (op === 'delete') return (b) => b.delete(ref);
+    if (op === 'patch') {
       const data = withDeletes(nestFields(w.fields));
       const mergeFields = w.fields.map(([p]) => new fb.FieldPath(...p));
       return (b) => b.set(ref, data, { mergeFields });
     }
     const args = w.fields.flatMap(([p, v]) => [new fb.FieldPath(...p), sentinel(v)]);
     return (b) => b.update(ref, ...args);
-  });
+  };
+  const ops = plan.map((w) => opFor(w));
   created.forEach((path) => creating.set(path, (creating.get(path) || 0) + 1));
   const done = () => created.forEach((path) => { const n = (creating.get(path) || 1) - 1; if (n > 0) creating.set(path, n); else creating.delete(path); });
   for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
@@ -336,13 +337,13 @@ export function writeChanges(familyId, changes, before, after, onStatus = () => 
     commit
       .catch((err) => {
         // An update fails if another device removed that document meanwhile:
-        // fall back to writing the changed documents whole.
+        // send the same changed fields again as a merging set, which works
+        // either way. Never the whole document: this device's copy may be days
+        // old, and writing all of it once put every kid's purchases back to
+        // early November (2026-11-10).
         console.error('Kid Quest save', err);
         const again = fb.writeBatch(db);
-        for (const path of changes.changed) {
-          if (path === 'device') continue;
-          again.set(refFor(familyId, path), clean(docAt(after, path)), { merge: true });
-        }
+        for (const w of plan.slice(i, i + BATCH_LIMIT)) opFor(w, w.op === 'update' ? 'patch' : w.op)(again);
         return again.commit();
       })
       .catch((err) => onStatus({ pending, error: err.code || err.message }))
