@@ -198,7 +198,13 @@ test('a tune that doesn\'t fit says its end is cut off', () => {
   // room on the track runs out before the loop does: still the mix can grow
   const blocked = addTune(addTune(setBars(one.mix, 4).mix, 1, t, 4).mix, 1, t, 0);
   assert.equal(findClip(blocked.mix, blocked.ids[0]).clip.len, 4);
-  assert.match(blocked.note, /Make the mix longer/);
+  assert.equal(blocked.note, 'Your tune stops where the next clip on its track starts. Move that clip, or put your tune on an empty track.', 'a longer mix wouldn\'t help there');
+  // a 24-beat tune on a 48-beat mix's track with a clip at beat 16
+  const big = cleanTune({ reading: 'tidy', bpm: 96, meter: 4, parts: [{ role: 'tune', beats: 24, notes: [{ at: 0, len: 2, midi: 60 }, { at: 46, len: 2, midi: 64 }] }] });
+  const roomy = addTune(setBars(one.mix, 12).mix, 1, t, 16).mix;
+  const hit = addTune(roomy, 1, big, 0);
+  assert.equal(findClip(hit.mix, hit.ids[0]).clip.len, 16);
+  assert.match(hit.note, /^Your tune stops where the next clip on its track starts\./);
   // an empty mix as long as a mix can be at that speed (maxBars rounds down): no longer
   const long = cleanTune({ reading: 'tidy', bpm: 100, meter: 4, parts: [{ role: 'tune', beats: 50, notes: [{ at: 0, len: 2, midi: 60 }, { at: 98, len: 2, midi: 64 }] }] });
   const l = addTune(newMix(), 0, long, 0);

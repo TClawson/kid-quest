@@ -590,12 +590,13 @@ export function addTune(mix, track, kept, at = 0) {
   });
   if (r.error) return fail(r.error);
   if (r.bandLeft) note = 'There was no room for the band on another track, so your tune went in alone.';
-  // a tune cut short (by the room on its track, or the loop's end) is never cut without a word
+  // a tune cut short (by the next clip on its track, or the loop's end) is never cut without a word
   const placed = findClip(next, r.ids[0])?.clip;
   if (placed && placed.len < Math.ceil((Number(parts[0].beats) || 1) - 1e-6)) {
-    const cut = next.bars < maxBars(next.bpm, next.meter)
-      ? 'Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more.'
-      : 'Your tune is longer than a mix can be, so its end is cut off.';
+    let cut;
+    if (placed.start + placed.len < mixBeats(next)) cut = 'Your tune stops where the next clip on its track starts. Move that clip, or put your tune on an empty track.';
+    else if (next.bars < maxBars(next.bpm, next.meter)) cut = 'Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more.';
+    else cut = 'Your tune is longer than a mix can be, so its end is cut off.';
     note = note ? `${note} ${cut}` : cut;
   }
   return { mix: next, error: null, ids: r.ids, note };
