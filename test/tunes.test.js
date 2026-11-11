@@ -186,3 +186,27 @@ test('a slow tune keeps its own speed, and goes in a mix twice as fast with note
   assert.equal(lc.len, 40);
   assert.deepEqual(lc.notes, [{ at: 0, len: 4, midi: 60 }, { at: 76, len: 4, midi: 64 }]);
 });
+
+test('a tune that doesn\'t fit says its end is cut off', () => {
+  const t = makeTune(result(), 'tidy'); // 8 beats at 96
+  const one = addTune(newMix(), 0, t, 0);
+  assert.equal(one.note, '', 'it fits: nothing to say');
+  // a mix that could grow
+  const short = addTune(setBars(one.mix, 3).mix, 1, t, 8);
+  assert.equal(findClip(short.mix, short.ids[0]).clip.len, 4);
+  assert.equal(short.note, 'Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more.');
+  // room on the track runs out before the loop does: still the mix can grow
+  const blocked = addTune(addTune(setBars(one.mix, 4).mix, 1, t, 4).mix, 1, t, 0);
+  assert.equal(findClip(blocked.mix, blocked.ids[0]).clip.len, 4);
+  assert.match(blocked.note, /Make the mix longer/);
+  // an empty mix as long as a mix can be at that speed (maxBars rounds down): no longer
+  const long = cleanTune({ reading: 'tidy', bpm: 100, meter: 4, parts: [{ role: 'tune', beats: 50, notes: [{ at: 0, len: 2, midi: 60 }, { at: 98, len: 2, midi: 64 }] }] });
+  const l = addTune(newMix(), 0, long, 0);
+  assert.equal(l.mix.bars, maxBars(100, 4));
+  assert.equal(findClip(l.mix, l.ids[0]).clip.len, 48);
+  assert.equal(l.note, 'Your tune is longer than a mix can be, so its end is cut off.');
+  // with the band note too
+  const bandWaltz = { ...makeTune(result(), 'band'), meter: 3 };
+  const both = addTune(setBars(one.mix, 3).mix, 1, bandWaltz, 8);
+  assert.equal(both.note, 'The band counts in 3s and this mix counts in 4s, so your tune went in without its band. Your tune is longer than this mix, so its end is cut off. Make the mix longer to hear more.');
+});
