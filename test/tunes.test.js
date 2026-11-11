@@ -67,6 +67,15 @@ test('a tune read back from storage is tidied, capped, or dropped', () => {
   const band = cleanTune({ ...good, parts: [good.parts[0], { role: 'band', notes: [] }] });
   assert.equal(band.reading, 'tidy', 'a band tune whose band is lost is just the tune');
   assert.equal(cleanTune({ ...good, shift: 60 }).shift, 0, 'a shift out of range is dropped');
+  // a part that doesn't say how long it is lasts as long as its notes
+  const notes4 = [{ at: 0, len: 2, midi: 60 }, { at: 6, len: 3, midi: 64 }]; // the last one ends on step 9: 5 beats
+  for (const beats of [undefined, null, NaN, Infinity, 'x', 0, -2]) {
+    const t = cleanTune({ reading: 'tidy', parts: [{ role: 'tune', notes: notes4, beats }] });
+    assert.equal(t.parts[0].beats, 5, `beats ${String(beats)}`);
+    assert.deepEqual(t.parts[0].notes, notes4, `beats ${String(beats)}: every note kept`);
+  }
+  const huge = cleanTune({ reading: 'tidy', meter: 4, parts: [{ role: 'tune', notes: [{ at: 0, len: 1, midi: 60 }, { at: 400, len: 4, midi: 62 }] }] });
+  assert.equal(huge.parts[0].beats, mostNotesBeats(4), 'and still no longer than a notes clip may be');
 });
 
 test('a tune goes in a mix as a notes clip in its voice, shift and key', () => {

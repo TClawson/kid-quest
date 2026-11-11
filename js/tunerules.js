@@ -34,7 +34,15 @@ export function shiftFits(parts, shift) {
 
 const cleanPart = (p, most) => {
   if (!p || typeof p !== 'object' || (p.role !== 'tune' && p.role !== 'band') || !Array.isArray(p.notes)) return null;
-  const beats = Math.max(1, Math.min(most, Math.ceil(Number(p.beats) || 0)));
+  // how long it is: as stored, or else as long as its notes (steps are eighths: two a beat)
+  let given = p.beats === null || p.beats === undefined || p.beats === '' ? NaN : Number(p.beats);
+  if (!Number.isFinite(given) || given <= 0) {
+    given = 0;
+    for (const n of p.notes.slice(0, MOST_NOTES)) {
+      if (n && Number.isFinite(n.at) && n.at >= 0 && Number.isFinite(n.len) && n.len > 0) given = Math.max(given, Math.ceil((n.at + n.len) / 2));
+    }
+  }
+  const beats = Math.max(1, Math.min(most, Math.ceil(given)));
   const end = 2 * beats;
   const notes = [];
   for (const n of p.notes.slice(0, MOST_NOTES)) {
