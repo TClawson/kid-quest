@@ -21,7 +21,7 @@ export const PRINT_PER_LINE = 4;
 const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
 
 /** A name as a file name: 'Bubble Waltz: The Dive' → 'bubble-waltz-the-dive'. */
-export const slug = (name) => String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+export const slug = (name) => String(name).toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 const mapName = (map) => itemById(map)?.name || 'map';
 

@@ -17,7 +17,7 @@ test('every piece has a sheet at every level, each with its own file', () => {
   for (const p of SONGBOOK) for (const l of ['easy', 'medium', 'hard']) assert.ok(sheetFor(p.id, l), `${p.id} ${l}`);
   for (const p of CONCERT) for (const l of longLevels(p.id)) assert.ok(sheetFor(p.id, l), `${p.id} ${l}`);
   assert.equal(new Set(sheets.map((s) => s.file)).size, sheets.length);
-  assert.equal(slug('Bubble Waltz: The Dive'), 'bubble-waltz-the-dive');
+  assert.equal(slug("Bubble Waltz/Mermaid's Lullaby"), 'bubble-waltz-mermaids-lullaby');
 });
 
 test('the print has a title, level, composer and speed', () => {

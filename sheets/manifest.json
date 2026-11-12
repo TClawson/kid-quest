@@ -382,23 +382,23 @@
   {
    "id": "long:bg-ocean",
    "level": "easy",
-   "name": "Bubble Waltz: The Dive",
-   "file": "sheets/bubble-waltz-the-dive-easy.pdf",
-   "fingerprint": "1d6d2097"
+   "name": "Bubble Waltz/Mermaid's Lullaby",
+   "file": "sheets/bubble-waltz-mermaids-lullaby-easy.pdf",
+   "fingerprint": "76b8abf7"
   },
   {
    "id": "long:bg-ocean",
    "level": "medium",
-   "name": "Bubble Waltz: The Dive",
-   "file": "sheets/bubble-waltz-the-dive-medium.pdf",
-   "fingerprint": "fd6f842e"
+   "name": "Bubble Waltz/Mermaid's Lullaby",
+   "file": "sheets/bubble-waltz-mermaids-lullaby-medium.pdf",
+   "fingerprint": "daca928e"
   },
   {
    "id": "long:bg-ocean",
    "level": "hard",
-   "name": "Bubble Waltz: The Dive",
-   "file": "sheets/bubble-waltz-the-dive-hard.pdf",
-   "fingerprint": "62038d09"
+   "name": "Bubble Waltz/Mermaid's Lullaby",
+   "file": "sheets/bubble-waltz-mermaids-lullaby-hard.pdf",
+   "fingerprint": "43eec069"
   }
  ]
 }
