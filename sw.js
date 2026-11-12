@@ -81,6 +81,8 @@ const SHELL = [
   'js/notomatic.js',
   'js/arrange.js',
   'js/arrangements.js',
+  'js/concert.js',
+  'js/longpieces.js',
   'js/houseart.js',
   'js/houserules.js',
   'js/gardenrules.js',

@@ -26,14 +26,20 @@ export const hasLevel = (id, level) => level === 'easy' || Boolean(ARRANGEMENTS[
  * decorations ('!p!', '!f!', '.' staccato) and spaces (beaming) are allowed and skipped.
  * Accidentals hold for the rest of the bar, for the same note on the same line or space, on
  * top of the key signature (sig: an alteration per letter, from signature()).
- * Returns { events: [{ start, len, notes: [{ letter, alter, octave, midi }], tie, col }] (a
- * rest has no notes; col is where it starts in the text), length (eighths), first (where the
- * first note, chord or rest starts in the text), errors: [text] }.
+ * A hand can play two voices in one bar (the concert pieces, longpieces.js): '&' starts the
+ * next voice, which counts again from the start of the bar; 'x' is a rest that isn't printed
+ * (a voice that waits). Accidentals don't carry from one voice to the other.
+ * Returns { events: [{ start, len, notes: [{ letter, alter, octave, midi }], tie, col, voice,
+ * hidden }] (a rest has no notes, and hidden when it's an x; col is where it starts in the
+ * text; voice 0 is the first), length (eighths: the longest voice), lengths (each voice's),
+ * first (where the first note, chord or rest starts in the text), errors: [text] }.
  */
 export function readAbcBar(text, sig) {
   const events = [];
   const errors = [];
-  const held = new Map();
+  let held = new Map();
+  const lengths = [];
+  let voice = 0;
   let at = 0;
   let first = -1;
   let i = 0;
@@ -79,9 +85,19 @@ export function readAbcBar(text, sig) {
       i = end + 1;
       continue;
     }
+    if (c === '&') {
+      // the next voice: from the start of the bar again, with its own accidentals
+      lengths.push(at);
+      voice += 1;
+      at = 0;
+      held = new Map();
+      i += 1;
+      continue;
+    }
     const start = i;
     let notes = null;
-    if (c === 'z') {
+    const hidden = c === 'x';
+    if (c === 'z' || c === 'x') {
       i += 1;
       notes = [];
     } else if (c === '[') {
@@ -107,10 +123,13 @@ export function readAbcBar(text, sig) {
     if (/^[<>]/.test(s.slice(i))) { errors.push(`broken rhythm (> <) isn't supported: ${s.slice(start, i + 2)}`); i += 1; }
     if (!(len > 0)) errors.push(`a bad length at "${s.slice(start, i)}"`);
     if (first < 0) first = start;
-    events.push({ start: at, len, notes, tie: tie && notes.length > 0, col: start });
+    const event = { start: at, len, notes, tie: tie && notes.length > 0, col: start, voice };
+    if (hidden) event.hidden = true;
+    events.push(event);
     at += len;
   }
-  return { events, length: at, first: first < 0 ? 0 : first, errors };
+  lengths.push(at);
+  return { events, length: Math.max(...lengths), lengths, first: first < 0 ? 0 : first, errors };
 }
 
 /**

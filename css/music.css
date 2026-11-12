@@ -70,6 +70,9 @@
 .lead-bar { display: grid; gap: 4px; padding: 8px; border-left: 2px solid #ccc; font-size: 1.1rem; }
 .lead-bar b { color: #5f3dc4; }
 .lead-bar.now { background: #fff3bf; }
+/* a concert piece: what it's about, and (without abcjs) each part's name across the page */
+.song-story { margin: 4px 0 2px; font-size: 1.05rem; }
+.lead-part { grid-column: 1 / -1; margin: 12px 8px 4px; font-family: var(--px-font); }
 /* a phone on its side: smaller buttons, so the music has room */
 @media (max-height: 500px) {
   .songbook.piece .song-tools { padding: 4px 8px; gap: 4px 8px; }
