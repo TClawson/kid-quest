@@ -160,6 +160,11 @@ async function litBar(page, n, ms = 8000) {
   assert.ok(await page.locator('#sheet .abcjs-lyric').count() > 10, 'note names under the notes');
   assert.ok(await page.locator('#sheet .abcjs-chord').count() >= songById(close).lead.length, 'a chord name on every bar');
   await page.screenshot({ path: `${out}/2-piece-tablet.png`, fullPage: true });
+  // Print opens the piece's PDF at the level on screen, and the file is there
+  const print = await page.locator('.song-print').getAttribute('href');
+  assert.match(print, /^sheets\/moon-base-(easy|medium|hard)\.pdf$/);
+  const pdf = await page.request.get(new URL(print, page.url()).href);
+  assert.ok(pdf.ok() && (await pdf.body()).subarray(0, 5).toString() === '%PDF-', `${print} is served`);
   await page.click('[data-action="song-play"]');
   assert.match(await page.locator('[data-action="song-play"]').textContent(), /Stop/);
   const first = await litBar(page, 0);

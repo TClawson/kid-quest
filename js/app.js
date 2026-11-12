@@ -32,7 +32,7 @@ import { leaderboard, weekOf } from './leaderboard.js';
 import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
-import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
+import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHtml } from './songbook.js';
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
 import { viewLab, mountLab, labActions, openLab } from './notolab.js';
@@ -2123,6 +2123,7 @@ function parentSettings() {
     </div>
 ${allowanceCard()}
 ${gameTestCard()}
+${printCardHtml()}
     <div class="card studio-test">
       <h2>🎚️ Try the recording studio</h2>
       <p class="muted small">Open the recording studio right away to see how it works. This is a test desk: the kids' mixes and stickers are not touched.</p>

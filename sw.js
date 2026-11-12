@@ -118,6 +118,8 @@ const SHELL = [
   'js/firebase-config.js',
   'js/vendor/firebase.js',
   'js/vendor/abcjs.js',
+  'js/composer.js',
+  'js/printsheets.js',
   'js/fishbook.js',
   'js/grants.js',
   'js/meter.js',

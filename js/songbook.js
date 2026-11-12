@@ -23,6 +23,7 @@ import { itemById } from './items.js';
 import { playPiece, playNotes, playTimeline } from './music.js';
 import { sounds, confetti } from './fx.js';
 import { LEVELS, hasLevel, arrangementAbc, arrangementNotes } from './arrange.js';
+import { sheetFor, printSheets } from './printsheets.js';
 import { concertBookFor, isLongPiece, longLevels, longLevel, longAbc, longTimeline, longFacts, longSeconds, longLeadSheet } from './concert.js';
 
 // ---------- settings (this device) ----------
@@ -156,6 +157,7 @@ function pieceHtml(kid, p) {
           <button class="btn ghost ${o.names ? 'on' : ''}" data-action="song-names" aria-pressed="${o.names}">🔤 Note names</button>
           <button class="btn ghost ${o.slow ? 'on' : ''}" data-action="song-slow" aria-pressed="${o.slow}">🐢 Slow</button>
           <button class="btn song-play" data-action="song-play">▶ Listen</button>
+          ${printLink(p.id, level)}
         </div>
       </div>
       <div class="sheet" id="sheet" data-id="${esc(p.id)}" data-hands="${o.hands}" data-level="${level}" data-names="${o.names ? 1 : 0}" aria-label="Sheet music for ${esc(p.name)}"><p class="muted sheet-wait">Getting the music ready…</p></div>
@@ -186,10 +188,36 @@ function longPieceHtml(kid, p) {
           <button class="btn ghost ${o.names ? 'on' : ''}" data-action="song-names" aria-pressed="${o.names}">🔤 Note names</button>
           <button class="btn ghost ${o.slow ? 'on' : ''}" data-action="song-slow" aria-pressed="${o.slow}">🐢 Slow</button>
           <button class="btn song-play" data-action="song-play">▶ Listen</button>
+          ${printLink(p.id, level)}
         </div>
       </div>
       <div class="sheet" id="sheet" data-id="${esc(p.id)}" data-level="${level}" data-names="${o.names ? 1 : 0}" aria-label="Sheet music for ${esc(p.name)}"><p class="muted sheet-wait">Getting the music ready…</p></div>
       <p class="muted small song-tip">Both hands, written out: the top line is your right hand, the bottom line your left. Each part starts on a new line, with its name and speed.</p>
+    </div>`;
+}
+
+/** A piece's Print button: its PDF at the level on screen (sheets/, printsheets.js). */
+function printLink(id, level) {
+  const sheet = sheetFor(id, level);
+  return sheet ? `<a class="btn ghost song-print" href="${esc(sheet.file)}" target="_blank" rel="noopener">🖨️ Print</a>` : '';
+}
+
+/**
+ * The parent area's sheet music card: every piece's PDF at every level, whether or not a kid
+ * has it, to print at home.
+ */
+export function printCardHtml() {
+  const rows = new Map();
+  for (const s of printSheets()) {
+    if (!rows.has(s.id)) rows.set(s.id, { name: s.name, kind: s.kind, links: [] });
+    rows.get(s.id).links.push(`<a href="${esc(s.file)}" target="_blank" rel="noopener">${LEVEL_NAMES[s.level]}</a>`);
+  }
+  const list = [...rows.values()].map((r) => `<li><span>${ICONS[r.kind] || '🎵'} ${esc(r.name)}</span><span class="print-levels">${r.links.join(' ')}</span></li>`).join('');
+  return `
+    <div class="card print-sheets">
+      <h2>🖨️ Sheet music to print</h2>
+      <p class="muted small">Every song in the sheet music room as a PDF, at each level, to print or save. Kids can print the songs they have bought from the song's page too.</p>
+      <details><summary>All ${rows.size} pieces</summary><ul class="print-list">${list}</ul></details>
     </div>`;
 }
 
