@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
-import { openKid, openOldMap } from '../helpers/open-kid.mjs';
+import { openKid, openOldMap, tapInVillage } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 const mode = process.argv[3] || 'still';
@@ -111,12 +111,11 @@ try {
       }, s);
       await page.reload();
       await openKid(page, '[data-action="open-kid"]');
-      await openOldMap(page); // the old map, from the Menu
       await page.waitForTimeout(500);
       while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
-      await page.waitForSelector('.map-visitor');
+      await page.waitForSelector('.village .v-visitor');
       await page.waitForTimeout(900);
-      await page.click('.map-visitor');
+      await tapInVillage(page, '.v-visitor'); // the village's visitor, by the pond
       await page.click('.game-pick [data-kind="fishing"]');
       await page.waitForSelector('.playground');
       await page.waitForTimeout(6000);

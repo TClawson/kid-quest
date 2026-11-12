@@ -1,4 +1,4 @@
-// Browser test: once the quest is done, tapping a visiting buddy opens a game.
+// Browser test: once the quest is done, tapping a visiting buddy in the village opens a game.
 // A visitor with a soccer ball plays keepy-uppy, one without plays tag, and a
 // new best score is kept on the kid.
 // Run: node test/smoke/play.mjs
@@ -7,17 +7,19 @@ import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash, freeGamesOn } from '../../js/logic.js';
 import { seenSaturday } from '../helpers/seed.mjs';
-import { openKid, openParents, openOldMap } from '../helpers/open-kid.mjs';
+import { openKid, openParents, tapInVillage } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
 const shots = process.env.SHOTS;
 
-// which family buddies visit is random per day: point the first visitor at the one we want.
+// Tap a visitor in the village: the buddy walks over, then the game (or its menu) opens.
+// Which family buddies visit is random per day: when the one we want isn't here, the first
+// visitor stands in (it answers to their name by the time the buddy gets there).
 // With more than one game to play, a menu asks which: pick `kind`.
 async function visit(page, id, kind) {
-  await page.evaluate((v) => { if (!document.querySelector(`.map-visitor[data-id="${v}"]`)) document.querySelector('.map-visitor').dataset.id = v; }, id);
-  await page.click(`.map-visitor[data-id="${id}"]`);
+  const here = await page.locator(`.village .v-visitor[data-id="${id}"]`).count();
+  await tapInVillage(page, here ? `.v-visitor[data-id="${id}"]` : '.v-visitor', { then: here ? null : `el.dataset.id = ${JSON.stringify(id)};` });
   if (kind) {
     await page.waitForSelector('.game-pick');
     await page.click(`.game-pick [data-kind="${kind}"]`);
@@ -33,7 +35,7 @@ async function open(device, done, played = 0, held = null, tweak = null) {
   const s = emptyState();
   s.settings.pinHash = 'sha256:test';
   s.settings.sound = false;
-  s.settings.questView = 'map'; // chose the old map once: the village opens, and the map is in the Menu
+  s.settings.questView = 'map'; // chose the old map once: the village opens all the same
   const tasks = defaultTasks();
   s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: ['sport-shoes-regular'], buddy: { species: 'fox', outfit: { background: 'bg-meadow', hat: 'hat-cap' } } });
   // Saturday's free games would change every count below, so use them up first
@@ -57,8 +59,7 @@ async function open(device, done, played = 0, held = null, tweak = null) {
   await openKid(page, '[data-action="open-kid"]');
   await page.waitForTimeout(500);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
-  await openOldMap(page); // these games are the old map's visitors'
-  await page.waitForSelector('.map-visitor');
+  await page.waitForSelector('.village .v-visitor');
   await page.waitForTimeout(900);
   return { page, ctx, errors };
 }
@@ -70,7 +71,7 @@ try {
     await visit(page, 'kid_ava');
     await page.waitForTimeout(300);
     assert.equal(await page.locator('.playground').count(), 0, 'no game before the quest is done');
-    assert.match(await page.locator('.map-visitor[data-id="kid_ava"] .visitor-bubble').innerText(), /Finish your quest and let's play! \d+ to go/);
+    assert.match(await page.locator('.v-visitor[data-id="kid_ava"] .visitor-bubble').innerText(), /Finish your quest and let's play! \d+ to go/);
     assert.deepEqual(errors, []);
     await ctx.close();
   }
@@ -84,7 +85,7 @@ try {
       s.log[y] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false, chest: { tier: 'wood', kind: 'games', games: 2 } } };
     };
     const { page, ctx, errors } = await open(devices['Galaxy Tab S4'], false, 0, null, tweak);
-    assert.match(await page.locator('.map-visitor').first().locator('.visitor-bubble').innerText(), /2 treasure games left from yesterday/);
+    assert.match(await page.locator('.v-visitor').first().locator('.visitor-bubble').innerText(), /2 treasure games left from yesterday/);
     if (shots) await page.screenshot({ path: `${shots}/play-early.png` });
     for (const left of [/1 game left today/, /0 games left today/]) {
       await visit(page, 'kid_max');
@@ -99,7 +100,7 @@ try {
     await visit(page, 'kid_max');
     await page.waitForTimeout(300);
     assert.equal(await page.locator('.playground').count(), 0, 'the normal games wait for chores');
-    assert.match(await page.locator('.map-visitor[data-id="kid_max"] .visitor-bubble').innerText(), /Finish your quest and let's play!/);
+    assert.match(await page.locator('.v-visitor[data-id="kid_max"] .visitor-bubble').innerText(), /Finish your quest and let's play!/);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud.cache')));
     assert.equal(saved.kids[0].playLog.n, 2);
     assert.deepEqual(errors, []);
@@ -112,7 +113,7 @@ try {
     await visit(page, 'kid_max');
     await page.waitForTimeout(300);
     assert.equal(await page.locator('.playground').count(), 0, 'no game after 4 today');
-    assert.match(await page.locator('.map-visitor[data-id="kid_max"] .visitor-bubble').innerText(), /That's all our games today/);
+    assert.match(await page.locator('.v-visitor[data-id="kid_max"] .visitor-bubble').innerText(), /That's all our games today/);
     assert.deepEqual(errors, []);
     await ctx.close();
   }
@@ -121,8 +122,7 @@ try {
     const { page, ctx, errors } = await open(device, true);
 
     // soccer with Ava's cat (her ball, or tag)
-    await page.evaluate(() => { if (!document.querySelector('.map-visitor[data-id="kid_ava"]')) document.querySelector('.map-visitor').dataset.id = 'kid_ava'; });
-    await page.click('.map-visitor[data-id="kid_ava"]');
+    await visit(page, 'kid_ava');
     await page.waitForSelector('.game-pick');
     assert.deepEqual(await page.locator('.game-pick .btn').allInnerTexts(), ["Keepy-uppy\nWith Ava's ball", 'Tag\nNo gear needed']);
     if (shots) await page.screenshot({ path: `${shots}/play-menu-${name}.png` });
@@ -189,20 +189,19 @@ try {
     assert.deepEqual(errors, []);
     await ctx.close();
   }
-  // holding a hockey stick: a rink waits on the map, tapping it plays hockey,
+  // holding a hockey stick: a rink waits on the village green, tapping it plays hockey,
   // and every visitor offers hockey first
   {
     const { page, ctx, errors } = await open({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, hasTouch: true }, true, 0, 'sport-hockey-regular');
-    assert.ok(await page.locator('.map-game.host-field.game-hockey').count(), 'a rink for the kid');
+    assert.ok(await page.locator('.village .v-area-hockey.tap[data-pick="hockey"]').count(), 'a rink for the kid');
     if (shots) await page.screenshot({ path: `${shots}/play-host-field.png` });
     await visit(page, 'kid_max');
     await page.waitForSelector('.game-pick');
     assert.deepEqual(await page.locator('.game-pick .btn').allInnerTexts(), ['Hockey\nWith your stick', 'Tag\nNo gear needed']);
     await page.click('#modal [data-action="modal-close"]');
-    // the rink itself has no height (the map draws it): tap the middle of it
-    const rink = await page.locator('.map-game.host-field').boundingBox();
-    assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('.map-game')?.classList.contains('host-field'), [rink.x + rink.width / 2, rink.y]), true, 'the rink is tappable');
-    await page.mouse.click(rink.x + rink.width / 2, rink.y);
+    // the rink takes taps (the buddy walks over to it, then the game starts)
+    assert.equal(await page.locator('.village .v-area-hockey.tap').evaluate((el) => getComputedStyle(el).pointerEvents), 'auto', 'the rink is tappable');
+    await tapInVillage(page, '.v-area-hockey.tap');
     await page.waitForSelector('.playground');
     assert.match(await page.locator('.play-top').innerText(), /^Hockey with /);
     await page.click('.play-close');
@@ -219,7 +218,7 @@ try {
     const s = emptyState();
     s.settings.pinHash = fallbackHash('kidquest:1234');
     s.settings.sound = false;
-    s.settings.questView = 'map'; // chose the old map once: the village opens, and the map is in the Menu
+    s.settings.questView = 'map'; // chose the old map once: the village opens all the same
     s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: {} } });
     s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'cat', outfit: {} }, playLog: { day: dateKey(), n: 99 } });
     await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), seenSaturday(s));

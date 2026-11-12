@@ -200,8 +200,10 @@ function visitorsMarkup(visit, L) {
       const ox = 12 - sp.x; const oy = 23 - sp.y;
       line = `<span class="v-line" style="left:${tip.x + ox}px;top:${tip.y + oy}px;width:${len.toFixed(1)}px;transform:rotate(${ang.toFixed(1)}deg)"></span><span class="v-bobber" style="left:${bob.x + ox}px;top:${bob.y + oy}px"></span><span class="v-catch" style="left:${12 + sp.face * 26 - 9}px"></span>`;
     }
+    // one facing left is flipped with scale, not transform: the party's hop animates transform, and
+    // halfway between a flip and a hop the buddy would be squashed to nothing
     return `<div class="v-visitor role-${sp.role} ${v.news || ''} ${i === 0 || v.news ? 'talking' : ''} ${sp.role === 'fish' ? 'fishing' : ''}" data-id="${esc(v.id)}" data-rod="${v.rod || 1}" style="left:${sp.x}px;top:${sp.y}px;z-index:${sp.y};--kid:${esc(v.color || '#4dabf7')}">
-        <div class="v-vbuddy" style="${sp.face < 0 ? 'transform:scaleX(-1)' : ''}">${v.html}</div>
+        <div class="v-vbuddy" style="${sp.face < 0 ? 'scale:-1 1' : ''}">${v.html}</div>
         ${line}
         <div class="visitor-name">${esc(v.name)}</div>
         <div class="visitor-bubble">${esc(v.line)}${v.news === 'news' ? `<button class="cheer-btn" data-action="send-cheer" data-id="${esc(v.id)}">🎉 Cheer</button>` : ''}</div>
@@ -615,6 +617,40 @@ export function arrowSpots(list, vw, vh, hud = null, m = 30, gap = 50) {
   return out;
 }
 
+/** How far in from the view's edges the arrows reach (an arrow's middle, its half and its pulse): bubbles stay inside it. */
+export const ARROW_BAND = 60;
+
+/**
+ * Where a visitor's speech bubble goes, in screen pixels: over the visitor's head if it fits,
+ * else moved up (or sideways) a little, else under the visitor's feet; never past `safe`
+ * ({ l, t, r, b }: inside the arrows along the edges and under the HUD's top row) and never on
+ * a HUD button (`avoid`: [{ x, y, w, h }]). b: { cx: the visitor's middle, top: the bubble's top
+ * when over the head, below: its top when under the feet, w, h }; most: how far it may move up or
+ * down. Returns { x, y, below } (the bubble's top left), or null when it fits nowhere.
+ */
+export function bubbleSpot(b, safe, avoid = [], most = 60) {
+  const hit = (x, y) => avoid.some((a) => x < a.x + a.w && x + b.w > a.x && y < a.y + a.h && y + b.h > a.y);
+  const clampX = (x) => Math.max(safe.l, Math.min(safe.r - b.w, x));
+  const x0 = clampX(b.cx - b.w / 2);
+  const xs = [x0, ...avoid.flatMap((a) => [clampX(a.x - b.w), clampX(a.x + a.w)])];
+  let best = null;
+  for (const [base, below] of [[b.top, false], [b.below, true]]) {
+    // over the head it may only go up, under the feet only down (never onto the visitor)
+    const ys = below ? [base, safe.t, ...avoid.map((a) => a.y + a.h)].filter((y) => y >= base)
+      : [base, safe.b - b.h, ...avoid.map((a) => a.y - b.h)].filter((y) => y <= base);
+    for (const y of ys) {
+      if (Math.abs(y - base) > most || y < safe.t || y + b.h > safe.b) continue;
+      for (const x of xs) {
+        // the tail still has to reach the visitor
+        if (x + b.w < b.cx + 6 || x > b.cx - 6 || x + b.w > safe.r + 0.5 || x < safe.l - 0.5 || hit(x, y)) continue;
+        const cost = Math.abs(x - (b.cx - b.w / 2)) + Math.abs(y - base) + (below ? 40 : 0);
+        if (!best || cost < best.cost) best = { x, y, below, cost };
+      }
+    }
+  }
+  return best && { x: best.x, y: best.y, below: best.below };
+}
+
 /**
  * The HUD's corners over a full-screen view (hud.js), in screen pixels from the view's edges:
  * { top, bottom, bl: { w, h }, br: { w, h }, boxes } (bl and br: the bottom corners' buttons, or null;
@@ -783,7 +819,7 @@ function mount(section, handlers) {
     [L.chest.y - 16, L.chest.y + 2],
     [L.home.y + L.home.h - 34, L.home.y + L.home.h + 2],
     ...(L.music ? [[L.music.y + L.music.h - 34, L.music.y + L.music.h + 2]] : []),
-    ...[...section.querySelectorAll('.v-label.period, .v-garden')].map((el) => { const y = parseFloat(el.style.top) || 0; return [y - 2, y + 20]; }),
+    ...[...section.querySelectorAll('.v-label.period, .v-label.home-label, .v-garden')].map((el) => { const y = parseFloat(el.style.top) || 0; return [y - 2, y + 20]; }),
   ];
   const keyTop = Math.min(...needed.map((n) => n[0]));
   const keyBottom = Math.max(...needed.map((n) => n[1]));
@@ -1223,11 +1259,44 @@ function mount(section, handlers) {
       shown.add(q.id);
     }
     for (const [id, el] of arrowEls) if (!shown.has(id)) { el.remove(); arrowEls.delete(id); }
-    // a visitor right at the bottom edge keeps quiet, so its bubble isn't under the arrows and the Today button
+    placeBubbles();
+  };
+
+  // ---- the visitors' speech bubbles: never under the HUD or the arrows ----
+  // Each bubble stays inside the arrows' band along the edges and under the HUD's top row, and off
+  // the HUD's buttons: over the visitor's head, nudged up or sideways, or else under its feet. A
+  // bubble that fits nowhere (or whose visitor is off screen) keeps quiet for now. Its size is
+  // measured once per text (no layout per frame); the arrows never come inside that band.
+  const bubbleSize = new WeakMap();
+  const sizeOf = (bub) => {
+    const text = bub.textContent;
+    let z = bubbleSize.get(bub);
+    if (!z || z.text !== text) { z = { text, w: bub.offsetWidth, h: bub.offsetHeight }; bubbleSize.set(bub, z); }
+    return z;
+  };
+  const placeBubbles = () => {
+    if (!visitors.length || !vw) return;
+    const safe = { l: ARROW_BAND, r: vw - ARROW_BAND, t: Math.max(ARROW_BAND, bands.top + ARROW_BAND), b: vh - ARROW_BAND };
     for (const el of visitors) {
       const sp = data.spots[el.dataset.id];
-      const low = Boolean(sp) && (sp.y - cam.y) * S > vh - Math.max(70, bands.bottom);
-      if (el.classList.contains('hush') !== low) el.classList.toggle('hush', low);
+      const bub = el.querySelector('.visitor-bubble');
+      if (!sp || !bub) continue;
+      const { w, h } = sizeOf(bub);
+      // in village pixels: the bubble's left and top over the head (see .v-visitor in village.css), and under the name
+      const left = sp.x - w / 2; const top = sp.y - 23 - 3 - h; const under = sp.y + 10;
+      const sx = (sp.x - cam.x) * S; const head = (sp.y - 14 - cam.y) * S;
+      const seen = sx > 0 && sx < vw && head > 0 && head < vh;
+      const at = seen && w ? bubbleSpot({ cx: sx, top: (top - cam.y) * S, below: (under - cam.y) * S, w: w * S, h: h * S }, safe, bands.boxes, Math.max(60, h * S * 1.5)) : null;
+      if (el.classList.contains('hush') !== !at) el.classList.toggle('hush', !at);
+      if (!at) continue;
+      if (el.classList.contains('below') !== at.below) el.classList.toggle('below', at.below);
+      const dx = Math.round(at.x) / S + cam.x - left;
+      const dy = Math.round(at.y) / S + cam.y - top;
+      const tail = Math.max(3, Math.min(w - 3, sp.x - (left + dx)));
+      const tr = `${dx.toFixed(2)}px ${dy.toFixed(2)}px`;
+      if (bub.kqAt !== tr) { bub.kqAt = tr; bub.style.translate = tr; }
+      const tv = `${tail.toFixed(1)}px`;
+      if (bub.kqTail !== tv) { bub.kqTail = tv; bub.style.setProperty('--tail', tv); }
     }
   };
 

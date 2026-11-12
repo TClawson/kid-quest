@@ -1,5 +1,5 @@
 // Preview of the secret shows (js/mapshow.js): for each map, a kid with that map's treasure
-// map finished taps the landmark. Saves screenshots (and videos with VIDEO=1) to SHOTS_DIR.
+// map finished taps the landmark in the village. Saves screenshots (and videos with VIDEO=1) to SHOTS_DIR.
 // Run: SHOTS_DIR=/tmp/shows node test/smoke/shows-preview.mjs [bg-meadow ...]
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +9,7 @@ import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, tasksForDay, fallbackHash } from '../../js/logic.js';
 import { SECRETS } from '../../js/treasure-art.js';
 import { SHOWS } from '../../js/mapshow.js';
-import { openKid, openOldMap } from '../helpers/open-kid.mjs';
+import { openKid, tapInVillage } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR || '/tmp/shows';
 const TODAY = '2026-11-12';
@@ -48,18 +48,13 @@ try {
     await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), family(theme));
     await page.reload();
     await openKid(page, '[data-action="open-kid"]');
-    await openOldMap(page); // the old map, from the Menu
-    await page.waitForSelector('.map-secret');
+    await page.waitForSelector('.village .v-landmark');
     await page.waitForTimeout(900);
     while (await page.isVisible('#modal:not([hidden]) [data-action="modal-close"]')) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(400); }
-    // look at the bottom part of the map, with the landmark near the bottom of the screen
-    await page.evaluate(() => { const el = document.querySelector('.map-secret'); window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - window.innerHeight + el.offsetHeight + 40); });
-    await page.waitForTimeout(600);
     await page.screenshot({ path: `${shots}/${theme}-0.png` });
+    // tap the landmark: the buddy walks over, it says something and its show plays over the view
+    await tapInVillage(page, '.v-landmark');
     const clickAt = (Date.now() - born) / 1000;
-    // tap it where it is, without scrolling the page
-    const box = await page.locator('.map-secret .secret-svg').boundingBox();
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     for (const [i, ms] of [[1, 1200], [2, 1600], [3, 1600], [4, 1600]]) {
       await page.waitForTimeout(ms);
       await page.screenshot({ path: `${shots}/${theme}-${i}.png` });

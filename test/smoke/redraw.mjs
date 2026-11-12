@@ -1,12 +1,12 @@
-// Browser test: family sync redraws the screen often. Redraws must not replay the
-// visiting buddies' arrival, restart the fish, or scroll side rows back to the start.
+// Browser test: family sync redraws the screen often. Redraws must not move or lose the
+// visiting buddies, restart the fish, or scroll side rows back to the start.
 // Run: node test/smoke/redraw.mjs
 import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
-import { openKid, closePops, openMenu } from '../helpers/open-kid.mjs';
+import { openKid, closePops } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -37,57 +37,50 @@ try {
   await page.waitForSelector('.village[data-live] .k-hud');
 
   // the village: a redraw with nothing changed leaves it alone (the same live section, not
-  // started again). The redraws come from the old view switch's action (its button is gone from
-  // the page, so the test keeps its own outside it), which redraws whatever is on screen.
+  // started again). The redraws come from the app coming back to the front (visibilitychange),
+  // which redraws whatever is on screen, as a family update does.
   await page.evaluate(() => {
-    for (const mode of ['village', 'map']) {
-      const b = document.createElement('button');
-      b.hidden = true;
-      b.id = `redraw-${mode}`;
-      Object.assign(b.dataset, { action: 'quest-mode', mode });
-      document.body.append(b);
-    }
+    window.__redraw = () => document.dispatchEvent(new Event('visibilitychange'));
     window.__village = document.querySelector('.village');
   });
-  for (let i = 0; i < 4; i += 1) { await page.evaluate(() => document.getElementById('redraw-village').click()); await page.waitForTimeout(200); }
+  for (let i = 0; i < 4; i += 1) { await page.evaluate(() => window.__redraw()); await page.waitForTimeout(200); }
   assert.ok(await page.evaluate(() => window.__village === document.querySelector('.village')), 'the village is not drawn again when nothing changed');
   assert.ok(await page.locator('.village .k-hud').isVisible());
 
-  // the old map (from the Menu) and its visitors
-  await openMenu(page);
-  await page.click('#modal [data-action="old-map"]');
-  await page.waitForSelector('.map-visitor');
-  await page.waitForTimeout(300);
-
-  // redraw every 0.7 s, half of them with something on screen changing
+  // the village redrawn every 0.7 s, half of the times with something on screen changing (so the
+  // section is drawn again): the visitors stay where they are, and the sea's fish keep swimming
+  await page.waitForSelector('.village .v-visitor');
+  const spots = () => page.evaluate(() => [...document.querySelectorAll('.village .v-visitor')].map((v) => `${v.dataset.id}@${v.style.left},${v.style.top}`).join(' '));
+  const stood = await spots();
   await page.evaluate(() => {
-    window.__arrivals = 0;
-    new MutationObserver((ms) => {
-      for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1 && n.querySelector?.('.map-visitors.arrive')) window.__arrivals += 1;
-    }).observe(document.getElementById('app'), { childList: true });
     window.__fish = 0;
+    window.__gone = 0;
+    window.__drawn = 0;
     setInterval(() => {
-      const c = document.querySelector('canvas.map-life');
+      if (!document.querySelector('.village .v-visitor')) window.__gone += 1;
+      const c = document.querySelector('.village canvas.v-life');
       if (!c) return; // the test moves on to the wardrobe while this still runs
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       for (let i = 3; i < d.length; i += 4) if (d[i]) { window.__fish += 1; break; }
     }, 200);
     let n = 0;
+    const first = document.querySelector('.village');
     window.__redraws = setInterval(() => {
       n += 1;
       if (n % 2) window.kidQuest.state.kids[0].name = `Sam${n}`;
-      document.getElementById('redraw-map').click();
+      window.__redraw();
+      if (document.querySelector('.village') !== first) window.__drawn += 1;
     }, 700);
   });
   await page.waitForTimeout(6000);
-  const seen = await page.evaluate(() => { clearInterval(window.__redraws); return { arrivals: window.__arrivals, fish: window.__fish }; });
-  assert.equal(seen.arrivals, 0, 'visitors do not walk in again on a redraw');
+  const seen = await page.evaluate(() => { clearInterval(window.__redraws); return { fish: window.__fish, gone: window.__gone, drawn: window.__drawn }; });
+  assert.ok(seen.drawn > 0, 'the village was drawn again (the name on the HUD changed)');
+  assert.equal(seen.gone, 0, 'the visitors never leave on a redraw');
+  assert.equal(await spots(), stood, 'and stand where they stood');
   assert.ok(seen.fish > 5, `fish keep swimming through redraws (seen in ${seen.fish} checks)`);
 
   // side scrollers keep their scroll place when the screen is redrawn. The slot tabs now
   // wrap onto two lines on a phone, so make them a side scroller here to test it.
-  await page.click('[data-action="old-map-back"]');
-  await page.waitForSelector('.village .k-hud');
   await page.click('.k-hud [data-action="wardrobe"]');
   // the shop's tab rows scroll sideways when they don't fit; make sure the first one doesn't fit here
   await page.addStyleTag({ content: '.tabs { flex-wrap: nowrap !important; overflow-x: auto !important; display: flex !important; } .tabs button { min-width: 160px !important; flex: none !important; }' });

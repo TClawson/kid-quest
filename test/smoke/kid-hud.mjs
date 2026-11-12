@@ -2,7 +2,10 @@
 // - the village fills the screen at 1280x800, 800x1280 and 412x915, and the page doesn't scroll
 // - the buddy plate and the coins pill open Status, the Menu button the Menu, Today the list;
 //   the family pill tells how the family is doing; the locked shop says why it's shut
-// - every Status tab shows its part (Me, This week, Habits, Trophies), and its links work
+// - every Status tab shows its part (Me, This week, Habits, Trophies), and its links work; Me's
+//   buddy is live (it moves untouched) and goes with the pop-up
+// - a visitor arriving while a pop-up is open is in the village as soon as the pop-up closes
+// - visitors' speech bubbles never sit under the HUD or the arrows (walking round, three sizes)
 // - the Menu: music and sounds switch, the old map opens and comes back, Switch kid only with
 //   more than one kid, Parents asks for the PIN
 // - a tap on the ground lands where it was tapped, and a tap on a villager walks there and talks
@@ -91,6 +94,42 @@ async function fullScreen(page, sel, what) {
   assert.ok(r.tall <= r.w[1], `${what}: nothing below the view`);
   assert.ok(r.full, `${what}: full-screen mode`);
 }
+/**
+ * Walks the buddy round the village (taps on the ground, top to bottom) and, at every stop,
+ * checks that no visitor's speech bubble that shows is off screen, under an arrow or under a HUD
+ * button. Returns how many bubbles showed along the way.
+ */
+async function bubblesClear(page, tag) {
+  const { W, H } = await page.evaluate(() => { const w = document.querySelector('.village-world'); return { W: w.offsetWidth, H: w.offsetHeight }; });
+  let shown = 0;
+  for (const fy of [0.2, 0.5, 0.75, 0.95]) {
+    for (const fx of [0.2, 0.5, 0.8]) {
+      await page.evaluate(([x, y]) => {
+        const view = document.querySelector('.village-view'); const r = document.querySelector('.village-world').getBoundingClientRect();
+        const S = r.width / document.querySelector('.village-world').offsetWidth;
+        view.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + x * S, clientY: r.top + y * S }));
+      }, [W * fx, H * fy]);
+      for (let k = 0; k < 40 && await page.locator('.village .v-buddy.walking').count(); k += 1) await page.clock.runFor(250);
+      await page.clock.runFor(1200);
+      const res = await page.evaluate(() => {
+        const ov = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        const bubs = [...document.querySelectorAll('.village .v-visitor .visitor-bubble')].filter((b) => Number(getComputedStyle(b).opacity) > 0.5).map((b) => ({ r: b.getBoundingClientRect(), t: b.textContent }));
+        const arrows = [...document.querySelectorAll('.village .v-arrow')].map((a) => a.getBoundingClientRect());
+        const hud = [...document.querySelectorAll('.village > .k-hud button, .village > .k-hud .v-hud')].filter((h) => h.getClientRects().length).map((h) => h.getBoundingClientRect());
+        const bad = [];
+        for (const b of bubs) {
+          if (b.r.left < 0 || b.r.right > innerWidth || b.r.top < 0 || b.r.bottom > innerHeight) bad.push(`off screen: ${b.t}`);
+          if (arrows.some((a) => ov(a, b.r))) bad.push(`under an arrow: ${b.t}`);
+          if (hud.some((a) => ov(a, b.r))) bad.push(`under the HUD: ${b.t}`);
+        }
+        return { bad, n: bubs.length };
+      });
+      assert.deepEqual(res.bad, [], `${tag}, walked to ${fx},${fy}: bubbles clear of the HUD and the arrows`);
+      shown += res.n;
+    }
+  }
+  return shown;
+}
 /** The world's scale (screen pixels a game pixel), from its transform. */
 const worldScale = (page, sel) => page.locator(`${sel} .village-world`).evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
 
@@ -112,6 +151,7 @@ try {
     // the old page's chrome is gone
     for (const sel of ['.kid-head', '.buddy-panel', '.exercise', '.view-toggle', '.music-toggle', '.family-banner', '.garden-line', '.habits', '.week']) assert.equal(await page.locator(`#app ${sel}`).count(), 0, `no ${sel} around the village`);
     await shot(page, `village-${tag}`);
+    assert.ok(await bubblesClear(page, tag) > 0, `visitors talk somewhere along the way at ${tag}`);
     await ctx.close();
   }
 
@@ -143,7 +183,11 @@ try {
     assert.match(await me.innerText(), /Family: 20 of 29/, 'the family line');
     assert.ok(await me.locator('.garden-line').count(), 'the village plants line');
     assert.ok(await me.locator('.s-say').innerText(), "the buddy's line");
-    assert.ok(await me.locator('.s-big svg').count(), 'the big buddy');
+    // the big buddy is the live one (as on the old buddy panel): it moves on its own, blinking and looking about
+    assert.equal(await me.locator('.s-big canvas.live-buddy').count(), 1, 'the big buddy is live');
+    const frames = new Set();
+    for (let i = 0; i < 12; i += 1) { frames.add(await me.locator('.s-big canvas.live-buddy').evaluate((c) => c.toDataURL())); await page.clock.runFor(500); }
+    assert.ok(frames.size > 1, `it moves without being tapped (${frames.size} different frames in 6 s)`);
     await shot(page, 'status-me');
     await page.click('.p-tabs [data-tab="week"]');
     const week = page.locator('.status-pop .p-body');
@@ -340,6 +384,22 @@ try {
     await page.waitForSelector('.quest-map');
     await page.click('[data-action="old-map-back"]');
     await page.waitForSelector('.village .k-hud');
+
+    // the live buddy in Status goes when Status closes, so nothing moves behind the village
+    await page.click('.k-plate');
+    await page.waitForSelector('.status-pop .s-big canvas.live-buddy');
+    // a visiting buddy arrives (the family's buddies change) while Status is open: the village
+    // waits under the pop-up, and the visitor is there as soon as it closes
+    assert.equal(await page.locator('.village .v-visitor').count(), 0, 'no visitors yet');
+    await page.evaluate(async () => {
+      const { buddiesChanged } = await import('./js/sync-ui.js');
+      buddiesChanged([{ id: 'kid_ayden', name: 'Ayden', color: '#4dabf7', owned: [], buddy: { species: 'dino', outfit: {} } }]);
+    });
+    await page.clock.runFor(300);
+    assert.equal(await page.locator('.village .v-visitor').count(), 0, 'not drawn under the pop-up');
+    await closeModals(page);
+    assert.equal(await page.locator('.village .v-visitor[data-id="kid_ayden"]').count(), 1, 'the visitor is there once Status closes');
+    assert.equal(await page.locator('canvas.live-buddy').evaluateAll((cs) => cs.filter((c) => c.closest('#modal')).length), 0, 'no live buddy left in the pop-up');
     await ctx.close();
   }
 

@@ -313,6 +313,9 @@ function closeModal() {
   modalOnClose = null;
   cb?.();
   if (pendingRemote && $modal.hidden) { const next = pendingRemote; setPendingRemote(null); applyRemote(next, { fromServer: false }); } // its gotState was settled when it arrived
+  // a family update (the visiting buddies, the first word from the server) held back while the
+  // pop-up was open: draw the screen again now, so the visitors arrive without waiting for the next change
+  if (family.held && $modal.hidden) { family.held = false; if (!timerOnScreen()) render(); }
 }
 
 $modal.addEventListener('click', (e) => {
@@ -1683,7 +1686,7 @@ function openToday(kid) {
 
 const daysText = (n) => `${n} ${n === 1 ? 'day' : 'days'}`;
 
-/** Status, Me: the big buddy, the numbers, and how the week is going. */
+/** Status, Me: the big live buddy, the numbers, and how the week is going. */
 function statusMe(kid) {
   const t = today();
   const prog = progressFor(kid);
@@ -1700,7 +1703,7 @@ function statusMe(kid) {
   return `
       <div class="s-me">
         <div class="s-left">
-          <button class="s-big buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, mood, 'xl')}</button>
+          <button class="s-big buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, mood, 'xl', { live: true, idle: true })}</button>
           <button class="btn ghost s-outfit" data-action="status-outfit">👕 Change outfit${shop.open ? '' : ' 🔒'}</button>
         </div>
         <div class="s-main">
@@ -1757,9 +1760,14 @@ function openStatus(kid, tab = 'me') {
   const html = statusHtml({ kidId: kid.id, name: kid.name, sub: `Level ${lv.level} · ${100 - lv.into} XP to level ${lv.level + 1}`, tab: ui.statusTab, body: withMemo(() => STATUS_BODIES[ui.statusTab](kid)) });
   // already open: change the tab in place, so it doesn't pop in again
   const open = !$modal.hidden && $modal.querySelector('.modal-card > .status-pop');
-  if (open) { open.outerHTML = html; return; }
-  openModal(html);
-  $modal.querySelector('.modal-card')?.classList.add('status-card');
+  if (open) open.outerHTML = html;
+  else {
+    openModal(html);
+    $modal.querySelector('.modal-card')?.classList.add('status-card');
+  }
+  // Me has the live buddy (the same one as in the village): it blinks and looks about while the
+  // pop-up is open, and goes with it when it closes (live.js only draws canvases on the page)
+  liveStart();
 }
 
 function openMenu(kid) {

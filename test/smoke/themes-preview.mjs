@@ -1,10 +1,10 @@
-// Renders each map theme (screenshots) and each map song (WAV) for previews.
+// Renders each map theme's village (screenshots) and each map song (WAV) for previews.
 // Run: node test/smoke/themes-preview.mjs <outDir>
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
-import { openKid, openOldMap } from '../helpers/open-kid.mjs';
+import { openKid, closePops } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 fs.mkdirSync(out, { recursive: true });
@@ -21,20 +21,20 @@ try {
       const saved = emptyState();
       saved.settings.pinHash = 'sha256:test';
       saved.settings.sound = false;
-      saved.settings.questView = 'map'; // chose the old map once: the village opens, and the map is in the Menu
+      saved.settings.questView = 'village';
       const tasks = defaultTasks();
       const mk = (id, name, color, species) => ({ id, name, color, tasks, startDate: dateKey(), buddy: { species, outfit: { background: theme } } });
       saved.kids.push(mk('kid_ava', 'Ava', '#ff6b6b', 'fox'), mk('kid_ben', 'Ben', '#4dabf7', 'bear'), mk('kid_cy', 'Cy', '#69db7c', 'panda'));
-      // two tasks done so the walked road shows
+      // two tasks done
       const t = dateKey();
       saved.log = { [t]: { kid_ava: { tasks: { [tasks[0].id]: { status: 'done' }, [tasks[1].id]: { status: 'done' } } } } };
       await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
       await page.reload();
       await openKid(page, '[data-action="open-kid"]');
-      await openOldMap(page); // the old map, from the Menu
+      await page.waitForTimeout(800);
+      await closePops(page);
       await page.waitForTimeout(400);
-      const map = page.locator('.quest-map');
-      await map.screenshot({ path: `${out}/map-${theme.slice(3)}-${label}.png` });
+      await page.screenshot({ path: `${out}/village-${theme.slice(3)}-${label}.png` });
     }
     if (errors.length) console.log(label, errors);
     if (label === 'tablet') {
