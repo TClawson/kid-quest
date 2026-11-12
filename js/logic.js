@@ -720,6 +720,98 @@ export function pendingApprovals(state, today, daysBack = 14) {
   return out;
 }
 
+/**
+ * One kid's day for the parents' Today view:
+ * - segments: one per quest chore today, 'done', 'waiting' or 'todo' (the bar)
+ * - done / waitingToday / toGo / total / complete / excused: today's quest chores
+ * - waiting: [{ key, task, record }] every chore waiting for a parent, today's
+ *   first, then earlier days (the same days pendingApprovals looks at)
+ * - todo: [{ task, record }] today's chores not done and not waiting, bonus exercise included
+ * - doneTasks: [{ task, record }] today's chores done, bonus exercise included
+ */
+export function kidToday(state, kid, today, daysBack = 14) {
+  const s = dayStatus(state, kid, today, today);
+  const entry = entryFor(state, kid.id, today);
+  const rec = (t) => entry?.tasks?.[t.id] || null;
+  const segments = s.tasks.map((t) => {
+    const st = rec(t)?.status;
+    return st === 'done' ? 'done' : st === 'pending' ? 'waiting' : 'todo';
+  });
+  const waiting = [];
+  for (let i = 0; i <= daysBack; i += 1) {
+    const key = addDays(today, -i);
+    for (const t of tasksForDay(state, kid, key, today)) {
+      const r = taskStatus(state, kid.id, key, t.id);
+      if (r?.status === 'pending') waiting.push({ key, task: t, record: r });
+    }
+  }
+  const todo = [];
+  const doneTasks = [];
+  for (const t of tasksForDay(state, kid, today, today)) {
+    const st = rec(t)?.status;
+    if (st === 'done') doneTasks.push({ task: t, record: rec(t) });
+    else if (st !== 'pending') todo.push({ task: t, record: rec(t) });
+  }
+  return {
+    segments,
+    total: s.total,
+    done: s.done,
+    waitingToday: s.pending,
+    toGo: s.total - s.done - s.pending,
+    complete: s.complete,
+    excused: s.excused,
+    waiting,
+    todo,
+    doneTasks,
+  };
+}
+
+const copy = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Sets one chore's record on a day, the way every tick, approval and send-back
+ * does: value merges into the record, null removes it. Returns what is needed
+ * to undo exactly this change: { kidId, key, taskId, before, after }.
+ */
+export function applyTaskChange(state, kidId, key, taskId, value) {
+  const entry = entryFor(state, kidId, key, true);
+  entry.tasks ||= {};
+  const before = copy(entry.tasks[taskId]) ?? null;
+  if (value === null) delete entry.tasks[taskId];
+  else entry.tasks[taskId] = { ...(entry.tasks[taskId] || {}), ...value };
+  return { kidId, key, taskId, before, after: copy(entry.tasks[taskId]) ?? null };
+}
+
+/**
+ * Undoes changes made by applyTaskChange, newest first. Each field the change
+ * touched goes back to what it was, unless something else (another phone, the
+ * kid's timer) has changed the chore's status since: then that chore is left
+ * alone. Fields the change didn't touch (timer seconds that kept counting) stay.
+ * Returns how many chores were put back.
+ */
+export function undoTaskChanges(state, changes) {
+  let undone = 0;
+  for (const c of [...changes].reverse()) {
+    const entry = entryFor(state, c.kidId, c.key);
+    const now = entry?.tasks?.[c.taskId];
+    if ((now?.status ?? null) !== (c.after?.status ?? null)) continue;
+    const before = c.before || {};
+    const after = c.after || {};
+    const out = { ...(now || {}) };
+    for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      if (same(before[k], after[k]) || !same(out[k], after[k])) continue;
+      if (before[k] === undefined) delete out[k];
+      else out[k] = copy(before[k]);
+    }
+    if (!entry) continue;
+    if (c.before === null && !Object.keys(out).length) delete entry.tasks[c.taskId];
+    else entry.tasks[c.taskId] = out;
+    undone += 1;
+  }
+  return undone;
+}
+
 /** Simple non-cryptographic fallback hash, used only if WebCrypto is unavailable. */
 export function fallbackHash(text) {
   let h = 5381;
