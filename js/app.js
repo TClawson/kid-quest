@@ -34,7 +34,7 @@ import { leaderboard, weekOf } from './leaderboard.js';
 import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
-import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
+import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHtml } from './songbook.js';
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
 import { viewLab, mountLab, labActions, openLab } from './notolab.js';
@@ -2475,6 +2475,7 @@ function parentSettings() {
       <label class="row"><input type="checkbox" data-setting-bool="sound" ${st.sound ? 'checked' : ''}> Sounds on</label>
     </div>
 ${allowanceCard()}
+${printCardHtml()}
     <div class="card">
       <h2>Parent PIN</h2>
       ${parentDevice() ? '<p class="muted small">This phone is signed in to the family as a parent, so it opens Parents without the PIN. Kids’ devices still ask for it.</p>' : ''}

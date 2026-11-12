@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
 import { openKid } from '../helpers/open-kid.mjs';
+import { CONCERT } from '../../js/concert.js';
 
 const out = (process.argv[2] || 'previews/music').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -151,7 +152,7 @@ for (const [weeks, tier] of [[5, 2], [7, 3]]) {
   await tap(page, '.m-station[data-spot="sheets"]');
   await page.clock.runFor(6000);
   assert.equal(await page.locator('.songbook').count(), 1, `tier ${tier}: the stand opens the songbook`);
-  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18, `tier ${tier}: all 18 songs open (map songs and show tunes)`);
+  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18 + CONCERT.length, `tier ${tier}: every song open (the 18 map songs and show tunes, and the concert pieces)`);
   await page.click('[data-action="songbook-back"]');
   await page.clock.runFor(1500);
   assert.ok(await page.evaluate(() => document.querySelector('.m-station[data-spot="sheets"]').classList.contains('near')), 'back by the stand');

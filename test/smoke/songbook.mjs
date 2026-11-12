@@ -3,7 +3,9 @@
 // is finished, its name hidden till then); an open song is bought with 20 coins before its music
 // shows (once for every level, it stays bought after a reload, too few coins says how many more);
 // every bought song is engraved bar for bar (abcjs) with no warnings, in every hand setting; Listen plays it with the bar being played lit up, and a redraw while it
-// plays leaves the page and its scroll alone; phones get 2 bars a line. Saves screenshots too. Run: node test/smoke/songbook.mjs [outDir]
+// plays leaves the page and its scroll alone; phones get 2 bars a line. The upright piano opens
+// the concert pieces (concert.js): bought the same way, engraved as one score part by part with
+// no warnings at every level written, and Listen lights their bars too. Saves screenshots too. Run: node test/smoke/songbook.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -14,6 +16,7 @@ import { SONGBOOK, songById, songbookFor, songItemId } from '../../js/sheetmusic
 import { SHOW_SONGS } from '../../js/songs.js';
 import { hasLevel } from '../../js/arrange.js';
 import { openKid } from '../helpers/open-kid.mjs';
+import { CONCERT, longLevels, longLevel, longBars, longSections, longFacts } from '../../js/concert.js';
 
 const out = (process.argv[2] || 'previews/songbook').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -92,8 +95,10 @@ async function litBar(page, n, ms = 8000) {
   assert.deepEqual(open, want, 'the map songs, and the found shows');
   assert.equal(open.length, 11);
   assert.ok(open.includes('show:bg-galaxy') && open.includes('show:bg-meadow') && open.includes('bg-meadow'));
-  assert.equal(await page.locator('.song-card.locked').count(), 7);
-  assert.equal(await page.locator('.song-tier').count(), 2, 'two sections: map songs and show tunes');
+  assert.equal(await page.locator('.song-card.locked').count(), 7 + CONCERT.length, 'the other shows, and the concert pieces');
+  assert.equal(await page.locator('.song-tier').count(), 3, 'three sections: map songs, show tunes and concert pieces');
+  assert.match(await page.locator('.song-tier').nth(2).textContent(), /🎹 Concert pieces/);
+  for (const p of CONCERT) assert.match(await page.locator('.song-tier').nth(2).textContent(), new RegExp(`${p.name}.*Opens with the upright piano`), 'its name shows, and the piano that opens it');
   // nothing bought yet: every open song shows its price, none opens
   assert.equal(await page.locator('.song-card.buy').count(), 11, 'every open song is for sale');
   assert.equal(await page.locator('[data-action="song-open"]').count(), 0, 'nothing to open before buying');
@@ -156,6 +161,11 @@ async function litBar(page, n, ms = 8000) {
   assert.ok(await page.locator('#sheet .abcjs-lyric').count() > 10, 'note names under the notes');
   assert.ok(await page.locator('#sheet .abcjs-chord').count() >= songById(close).lead.length, 'a chord name on every bar');
   await page.screenshot({ path: `${out}/2-piece-tablet.png`, fullPage: true });
+  // Print opens the piece's PDF at the level on screen, and the file is there
+  const print = await page.locator('.song-print').getAttribute('href');
+  assert.match(print, /^sheets\/moon-base-(easy|medium|hard)\.pdf$/);
+  const pdf = await page.request.get(new URL(print, page.url()).href);
+  assert.ok(pdf.ok() && (await pdf.body()).subarray(0, 5).toString() === '%PDF-', `${print} is served`);
   await page.click('[data-action="song-play"]');
   assert.match(await page.locator('[data-action="song-play"]').textContent(), /Stop/);
   const first = await litBar(page, 0);
@@ -192,7 +202,7 @@ async function litBar(page, n, ms = 8000) {
 // 1b. tablet, the upright piano and no treasure maps, every song bought: all 18 open, no secret songs
 {
   const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 5, [], { songs: ALL });
-  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18);
+  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18 + CONCERT.length);
   assert.equal(await page.locator('.song-card.locked').count(), 0);
   const list = await page.locator('.songbook').textContent();
   assert.ok(!list.includes('Secret song'));
@@ -234,7 +244,7 @@ async function litBar(page, n, ms = 8000) {
 // redraw while a piece plays (family sync does that) leaves the music and the scroll alone
 {
   const { ctx, page } = await openSongbook({ width: 412, height: 915 }, 7, Object.keys(SHOW_SONGS), { songs: ALL });
-  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18);
+  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18 + CONCERT.length);
   await page.screenshot({ path: `${out}/4-songbook-phone.png`, fullPage: true });
   const id = 'bg-meadow';
   await page.click(`[data-action="song-open"][data-id="${id}"]`);
@@ -312,7 +322,7 @@ for (const [name, viewport] of [['tablet', { width: 1024, height: 768 }], ['phon
   const { ctx, page } = await openSongbook(viewport, 3, [], { songs: ['bg-meadow'], spent: 1320 - 25 });
   assert.equal(await page.locator('[data-action="song-open"]').count(), 1, 'the one bought song opens');
   assert.equal(await page.locator('.song-card.buy').count(), 8, 'the other map songs are for sale');
-  assert.equal(await page.locator('.song-card.locked').count(), 9, 'the show songs stay locked');
+  assert.equal(await page.locator('.song-card.locked').count(), 9 + CONCERT.length, 'the show songs and the concert pieces stay locked');
   assert.equal(await page.locator('.song-card.buy .song-price.can').count(), 8, '25 coins: they can be bought');
   assert.equal(await coinChip(page), 25);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: no sideways scrolling`);
@@ -366,6 +376,75 @@ for (const [name, viewport] of [['tablet', { width: 1024, height: 768 }], ['phon
   assert.deepEqual((await page.$$eval('[data-action="song-open"]', (els) => els.map((e) => e.dataset.id))).sort(), ['bg-meadow', id].sort(), 'still bought after a reload');
   await page.click(`[data-action="song-open"][data-id="${id}"]`);
   await page.waitForSelector(`#sheet.engraved[data-id="${id}"] svg`);
+  await ctx.close();
+}
+
+// 4. the concert pieces, with the upright piano: for sale once it's here, bought like a song,
+// then engraved as one score (each part's name, key and speed on a new line) with no warnings
+// at every level written, the bar being played lit up; on a tablet and a phone.
+for (const [name, viewport] of [['tablet', { width: 1280, height: 800 }], ['phone', { width: 390, height: 844 }]]) {
+  const { ctx, page } = await openSongbook(viewport, 5, [], { songs: ALL });
+  const { id } = CONCERT[0];
+  const top = longLevels(id).at(-1);
+  assert.match(await page.locator('.song-intro').textContent(), /the long concert pieces/);
+  assert.match(await page.locator('.kid-title small').textContent(), new RegExp(`18 of ${18 + CONCERT.length} songs yours`));
+  const card = page.locator(`[data-action="song-buy"][data-id="${id}"]`);
+  assert.match(await card.textContent(), /🪙 20/, 'for sale');
+  await card.click();
+  const ask = await page.locator('#modal:not([hidden])').textContent();
+  assert.ok(ask.includes(`Buy ${CONCERT[0].name}?`));
+  assert.ok(ask.includes(`It opens the ${longLevels(id).length === 3 ? 'easy, medium and hard' : longLevels(id).join(' and ')} music, for every buddy`), ask);
+  await page.click('#modal [data-action="song-buy-confirm"]');
+  await page.waitForSelector(`#sheet[data-id="${id}"]`);
+  assert.match(await page.locator('.kid-title small').textContent(), /\d+ parts · about \d+ min · From the Under the sea map song/);
+  assert.match(await page.locator('.song-story').textContent(), /eight parts/);
+  assert.equal(await page.locator('.song-hands').count(), 0, 'every level has both hands: no hands to pick');
+  assert.equal(await page.locator('[data-action="song-level"]').count(), longLevels(id).length, 'a tab for each level written, and no more');
+  for (const level of longLevels(id)) {
+    await page.click(`[data-action="song-level"][data-val="${level}"]`);
+    await page.waitForSelector(`#sheet.engraved[data-level="${level}"] svg`);
+    const bars = longBars(id, level).length;
+    assert.ok(await page.locator(`#sheet .abcjs-mm${bars - 1}`).count() > 0, `${level}: every bar is there`);
+    assert.equal(await page.locator(`#sheet .abcjs-mm${bars}`).count(), 0, `${level}: no extra bars`);
+    assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0', `${level}: abcjs had no warnings`);
+    assert.equal(await page.getAttribute('#sheet', 'data-per'), name === 'phone' ? '2' : '4');
+    const text = await page.locator('#sheet').textContent();
+    for (const s of longSections(id, level)) assert.ok(text.includes(s.name), `${level}: ${s.name} is named`);
+    assert.ok(await page.locator('#sheet .abcjs-chord').count() >= bars, `${level}: a chord name on every bar`);
+    if (name === 'tablet' && level !== top) await page.screenshot({ path: `${out}/8-concert-${level}-${name}.png`, fullPage: true });
+  }
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: no sideways scrolling`);
+  // the remembered level is the one shown; one not written yet shows the easiest written
+  assert.equal(await page.getAttribute('#sheet', 'data-level'), top);
+  await page.clock.runFor(8000); // the "is yours!" toast and the confetti go
+  await page.screenshot({ path: `${out}/8-concert-${top}-${name}.png`, fullPage: true });
+  await page.click('[data-action="song-names"]');
+  await page.waitForSelector('#sheet.engraved .abcjs-lyric');
+  assert.ok(await page.locator('#sheet .abcjs-lyric').count() > 50, 'note names under the right hand');
+  assert.equal(await page.getAttribute('#sheet', 'data-warnings'), '0', 'note names: no warnings');
+  await page.screenshot({ path: `${out}/8-concert-${top}-${name}-names.png`, fullPage: true });
+  await page.click('[data-action="song-names"]');
+  await page.waitForSelector('#sheet.engraved svg');
+  await page.click('[data-action="song-play"]');
+  assert.match(await page.locator('[data-action="song-play"]').textContent(), /Stop/);
+  assert.equal(await litBar(page, 0), 0, 'the first bar lights up');
+  assert.ok(await litBar(page, 1) >= 1, 'and then the next');
+  if (name === 'tablet') await page.screenshot({ path: `${out}/9-concert-listening.png` });
+  await page.click('[data-action="song-play"]');
+  assert.equal(await page.locator('#sheet .now').count(), 0, 'stopped: nothing lit');
+  // a level the piece doesn't have yet falls back to its easiest
+  await page.evaluate((p) => localStorage.setItem('kidquest.songbook', JSON.stringify({ ...JSON.parse(localStorage.getItem('kidquest.songbook')), level: p })), 'medium');
+  await page.evaluate(async () => (await import('./js/ctx.js')).render());
+  await page.click('[data-action="song-back"]');
+  assert.match(await page.locator(`[data-action="song-open"][data-id="${id}"]`).textContent(), new RegExp(longFacts(id, longLevel(id, 'medium'))));
+  await page.click(`[data-action="song-open"][data-id="${id}"]`);
+  await page.waitForSelector('#sheet.engraved svg');
+  assert.equal(await page.getAttribute('#sheet', 'data-level'), longLevel(id, 'medium'));
+  const kid = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids[0]);
+  assert.ok(kid.owned.includes(songItemId(id)), 'kept with the kid');
+  // without abcjs: the plain lead sheet, part by part
+  const plain = await page.evaluate(async ([i, l]) => (await import('./js/songbook.js')).longLeadSheetHtml(i, l), [id, top]);
+  assert.equal(plain.split('class="lead-part"').length - 1, longSections(id, longLevels(id)[0]).length);
   await ctx.close();
 }
 

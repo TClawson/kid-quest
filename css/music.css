@@ -57,6 +57,13 @@
 .song-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .song-buttons .btn.on { background: var(--brand); color: #fff; }
 .song-play.playing { background: #e8590c; }
+.song-buttons a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+/* the parent area's list of printable sheet music */
+.print-sheets summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
+.print-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.print-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 6px 0; border-top: 1px solid #eee4f5; }
+.print-levels { display: flex; gap: 14px; }
+.print-levels a { font-weight: 700; }
 .sheet { background: #fffdf7; border: 2px solid var(--px-ink, #2b2238); border-radius: 6px; padding: 6px 4px; min-height: 240px; color: #111; }
 .sheet svg { display: block; }
 .sheet .abcjs-chord { font-weight: 700; fill: #5f3dc4; }
@@ -70,6 +77,9 @@
 .lead-bar { display: grid; gap: 4px; padding: 8px; border-left: 2px solid #ccc; font-size: 1.1rem; }
 .lead-bar b { color: #5f3dc4; }
 .lead-bar.now { background: #fff3bf; }
+/* a concert piece: what it's about, and (without abcjs) each part's name across the page */
+.song-story { margin: 4px 0 2px; font-size: 1.05rem; }
+.lead-part { grid-column: 1 / -1; margin: 12px 8px 4px; font-family: var(--px-font); }
 /* a phone on its side: smaller buttons, so the music has room */
 @media (max-height: 500px) {
   .songbook.piece .song-tools { padding: 4px 8px; gap: 4px 8px; }
