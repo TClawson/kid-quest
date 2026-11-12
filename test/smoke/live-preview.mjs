@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
-import { openKid, openOldMap } from '../helpers/open-kid.mjs';
+import { openKid, closePops, doChore } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 mkdirSync(out, { recursive: true });
@@ -41,10 +41,14 @@ const caption = (text) => page.evaluate((t) => {
 await caption('Every buddy on the home screen is alive');
 await wait(3000);
 await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
-await openOldMap(page); // the old map, from the Menu
+await wait(800);
+await closePops(page);
+// the big buddy in Status (Me), the one the old buddy panel had
+await page.click('.k-hud .k-plate');
+await page.waitForSelector('.status-pop .s-big canvas.live-buddy');
 await caption('Ava\'s fox: blinks, looks around, wags');
 await wait(3000);
-const box = await page.locator('.buddy-panel canvas.live-buddy').boundingBox();
+const box = await page.locator('.status-pop .s-big canvas.live-buddy').boundingBox();
 const at = (x, y) => [box.x + (box.width * x) / 24, box.y + (box.height * y) / 24];
 await caption('Pat the head: happy eyes and hearts');
 await page.mouse.click(...at(12, 7));
@@ -61,13 +65,15 @@ await wait(800);
 await caption('Lots of quick taps: dizzy and giggly');
 for (let i = 0; i < 6; i += 1) { await page.mouse.click(...at(12, 18)); await wait(120); }
 await wait(2200);
+await closePops(page);
 await caption('Finish a task: a cheer');
-await page.click('[data-action="task"] >> nth=0');
+const first = saved.kids[0].tasks[0]; // brushing teeth, in the house
+await doChore(page, first.id);
 await wait(3200);
 while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await wait(300); }
 await caption('Piano timer: dancing on the kid\'s beat');
 const piano = saved.kids[0].tasks.find((t) => /piano/i.test(t.name));
-await page.click(`[data-action="task"][data-id="${piano.id}"]`);
+await doChore(page, piano.id);
 await wait(800);
 // pretend the beat follower found a beat at 100 a minute
 await page.evaluate(() => import('./js/live.js').then((m) => {

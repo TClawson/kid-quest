@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { villageLayout, VILLAGE_THEMES } from '../js/villagemaps.js';
-import { placeVillagers, folkCaps, activeQuest, makeGrid, findPath, standSpot, visitorSpots, landmarkBlock, arrowSpots, labelSpot } from '../js/village.js';
+import { placeVillagers, folkCaps, activeQuest, makeGrid, findPath, standSpot, visitorSpots, landmarkBlock, arrowSpots, labelSpot, bubbleSpot, ARROW_BAND } from '../js/village.js';
 import { VILLAGER_KINDS, headRows, villagerGrid } from '../js/villageart.js';
 import { secretSize } from '../js/treasure-art.js';
 import { MAP_THEMES } from '../js/maparts.js';
@@ -133,6 +133,33 @@ test('arrows to quests off screen sit on the edges, apart, and out of the Today 
   for (let i = 1; i < bottom.length; i += 1) assert.ok(bottom[i].left - bottom[i - 1].left >= 50, 'and of each other');
   for (const a of out) assert.ok(a.left >= 0 && a.left <= vw && a.top >= 0 && a.top <= vh, `${a.id} is on screen`);
   assert.equal(out.find((a) => a.id === 'up').edge, 'top');
+});
+
+test('a visitor\'s speech bubble stays clear of the arrows along the edges and the HUD', () => {
+  const vw = 412; const vh = 915;
+  const safe = { l: ARROW_BAND, r: vw - ARROW_BAND, t: 110 + ARROW_BAND, b: vh - ARROW_BAND };
+  const hud = [{ x: 4, y: 820, w: 180, h: 95 }, { x: 330, y: 830, w: 80, h: 85 }];
+  const inside = (r) => r.x >= safe.l && r.x + 140 <= safe.r && r.y >= safe.t && r.y + 40 <= safe.b;
+  const clear = (r) => !hud.some((a) => r.x < a.x + a.w && r.x + 140 > a.x && r.y < a.y + a.h && r.y + 40 > a.y);
+  // room over the head: it stays there
+  assert.deepEqual(bubbleSpot({ cx: 200, top: 400, below: 520, w: 140, h: 40 }, safe, hud), { x: 130, y: 400, below: false });
+  // too low (in the arrows' band at the bottom): it moves up just enough
+  const low = bubbleSpot({ cx: 260, top: 830, below: 950, w: 140, h: 40 }, safe, hud);
+  assert.deepEqual(low, { x: 190, y: vh - ARROW_BAND - 40, below: false });
+  // and higher still where it would sit on the Today button
+  const lowLeft = bubbleSpot({ cx: 200, top: 830, below: 950, w: 140, h: 40 }, safe, hud);
+  assert.ok(lowLeft && !lowLeft.below && inside(lowLeft) && clear(lowLeft), JSON.stringify(lowLeft));
+  // under the HUD's top row: it goes under the visitor's feet instead
+  const high = bubbleSpot({ cx: 200, top: 100, below: 220, w: 140, h: 40 }, safe, hud);
+  assert.ok(high?.below && high.y === 220, JSON.stringify(high));
+  // near a side edge: it slides in, and its tail still reaches the visitor
+  const side = bubbleSpot({ cx: 80, top: 400, below: 520, w: 140, h: 40 }, safe, hud);
+  assert.ok(side.x === ARROW_BAND && side.x <= 80 - 6, JSON.stringify(side));
+  // over a HUD button: it steps up or sideways off it
+  const hudHit = bubbleSpot({ cx: 100, top: 790, below: 900, w: 140, h: 40 }, safe, hud);
+  assert.ok(hudHit && inside(hudHit) && clear(hudHit), JSON.stringify(hudHit));
+  // nowhere to go (a visitor in the corner, under the arrows): none, so it keeps quiet
+  assert.equal(bubbleSpot({ cx: 20, top: 880, below: 1000, w: 140, h: 40 }, safe, hud), null);
 });
 
 test('a quest-time sign moves out from under a speech bubble', () => {

@@ -63,13 +63,19 @@ export async function startCloud() {
   cloud.ready = true;
   mod.startSync(cloudCfg, { onState: applyRemote, onStatus: onCloudStatus });
   if (cloudCfg.role === 'kid') {
-    mod.watchBuddies(cloudCfg.familyId, (list) => {
-      if (stableJson(list) === stableJson(family.buddies)) return;
-      family.buddies = list;
-      try { localStorage.setItem(BUDDIES_KEY, JSON.stringify(list)); } catch { /* only a cache */ }
-      if (ui.view === 'kid' && $modal.hidden) render();
-    });
+    mod.watchBuddies(cloudCfg.familyId, buddiesChanged);
   }
+}
+
+/**
+ * The other kids' buddies changed (a kid's device: who visits, what they wear, their news).
+ * Under a pop-up the village waits, and is drawn again when the pop-up closes (closeModal).
+ */
+export function buddiesChanged(list) {
+  if (stableJson(list) === stableJson(family.buddies)) return;
+  family.buddies = list;
+  try { localStorage.setItem(BUDDIES_KEY, JSON.stringify(list)); } catch { /* only a cache */ }
+  if (ui.view === 'kid') { if ($modal.hidden) render(); else family.held = true; }
 }
 
 // A newer state from the family (another device, or this one's writes coming back).
@@ -84,7 +90,7 @@ export function applyRemote(next, { fromServer = true } = {}) {
   }
   if (stableJson(next) === stableJson(state)) {
     // the server agrees with what's on screen: let the waiting repairs run now
-    if (firstFresh && $modal.hidden && !timerOnScreen()) render();
+    if (firstFresh && !timerOnScreen()) { if ($modal.hidden) render(); else family.held = true; }
     return;
   }
   // don't swap the data under an open dialog; apply it when the dialog closes

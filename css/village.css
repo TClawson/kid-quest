@@ -135,7 +135,10 @@
   top: auto; bottom: 100%; margin: 0 0 3px; max-width: 70px; font: 700 5px/1.25 var(--px-text); padding: 1.5px 2.5px;
   border-width: 1px; border-radius: 2px; box-shadow: 1px 1px 0 var(--px-ink); transform: translateX(-50%) scale(0.6); transform-origin: 50% 100%;
 }
-.v-visitor .visitor-bubble::before { top: auto; bottom: -3px; margin-left: -2px; border: 2px solid transparent; border-top-color: var(--px-ink); border-bottom: 0; }
+.v-visitor .visitor-bubble::before { top: auto; bottom: -3px; left: var(--tail, 50%); margin-left: -2px; border: 2px solid transparent; border-top-color: var(--px-ink); border-bottom: 0; }
+/* a bubble moved under its visitor's feet (village.js keeps bubbles clear of the HUD and the arrows) */
+.v-visitor.below .visitor-bubble { transform-origin: 50% 0; }
+.v-visitor.below .visitor-bubble::before { top: -3px; bottom: auto; border: 2px solid transparent; border-bottom-color: var(--px-ink); border-top: 0; }
 .v-visitor.talking .visitor-bubble { opacity: 1; transform: translateX(-50%) scale(1); }
 .v-visitor.talking .cheer-btn { pointer-events: auto; }
 .v-visitor .cheer-btn { display: block; margin: 1.5px auto 0; font: 700 5px/1 var(--px-font); padding: 1.5px 3px; border: 1px solid var(--px-ink); border-radius: 2px; background: #ffd43b; color: var(--px-ink); }
@@ -263,5 +266,5 @@
 /* tapping your own buddy plays one of its moves */
 .village .v-buddy { pointer-events: auto; cursor: pointer; }
 .village .v-buddy.walking { pointer-events: none; }
-/* a visitor right at the bottom edge keeps its bubble to itself, so it can't sit under the Today button or the arrows */
-.v-visitor.hush:not(.news) .visitor-bubble { opacity: 0; pointer-events: none; }
+/* a bubble with nowhere to go clear of the HUD and the arrows (or a visitor off screen) keeps quiet for now */
+.v-visitor.hush .visitor-bubble, .v-visitor.hush .cheer-btn { opacity: 0; pointer-events: none; }

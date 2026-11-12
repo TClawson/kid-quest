@@ -1,5 +1,5 @@
 // Screenshots and videos of the sports feature for previews: bonus exercise,
-// the sports shop and moves, and fishing visitors at every map's pond.
+// the sports shop and moves, and fishing visitors at every village's pond.
 // Run: node test/smoke/sports-preview.mjs <outDir> [part]
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -7,7 +7,7 @@ import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, newId, fallbackHash } from '../../js/logic.js';
 import { pickVisitors, planVisits } from '../../js/visits.js';
 import { bestGear } from '../../js/items.js';
-import { openKid, openOldMap } from '../helpers/open-kid.mjs';
+import { openKid, tapInVillage } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 const part = process.argv[3] || 'all';
@@ -23,7 +23,7 @@ function family(theme, gear = null) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
-  s.settings.questView = 'map'; // chose the old map once: the village opens, and the map is in the Menu
+  s.settings.questView = 'village';
   const start = addDays(day, -50);
   const mk = (id, name, color, species, extra) => {
     const tasks = defaultTasks();
@@ -70,6 +70,13 @@ async function open(viewport, theme, video, gear = null) {
   return { ctx, page };
 }
 const closeModal = async (page) => { while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(400); } };
+// walk the buddy over to the visitors on the green (a fisher if there is one), so the view shows them;
+// the game menu that opens then is closed again
+const toGreen = async (page, clock) => {
+  await closeModal(page);
+  await tapInVillage(page, (await page.locator('.village .v-visitor.fishing').count()) ? '.v-visitor.fishing' : '.v-visitor', { clock });
+  await closeModal(page);
+};
 
 try {
   if (part === 'all' || part === 'screens') {
@@ -78,9 +85,8 @@ try {
     await page.clock.runFor(1500);
     await page.screenshot({ path: `${out}/new-moves.png` });
     await closeModal(page);
-    await openOldMap(page); // the old map, from the Menu
     await page.screenshot({ path: `${out}/kid-screen-tablet.png` });
-    await page.click('[data-action="wardrobe"]');
+    await page.click('.k-hud [data-action="wardrobe"]');
     await page.click('[data-action="wardrobe-slot"][data-slot="sport"]');
     await page.clock.runFor(500);
     await page.screenshot({ path: `${out}/sports-shop-tablet.png`, fullPage: true });
@@ -91,13 +97,10 @@ try {
       for (const theme of THEMES) {
         const { ctx, page } = await open(viewport, theme);
         await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
-        await openOldMap(page); // the old map, from the Menu
         await page.clock.runFor(1500);
-        await closeModal(page);
+        await toGreen(page, true);
         await page.clock.runFor(1000);
-        const map = page.locator('.quest-map');
-        const box = await map.boundingBox();
-        await page.screenshot({ path: `${out}/pond-${theme.slice(3)}-${label}.png`, clip: { x: box.x, y: box.y, width: box.width, height: 300 }, fullPage: true });
+        await page.screenshot({ path: `${out}/pond-${theme.slice(3)}-${label}.png` });
         await ctx.close();
       }
     }
@@ -113,18 +116,15 @@ try {
     fs.renameSync(await page.video().path(), `${out}/raw/moves-all.webm`);
     // visitors fishing (and showing off when tapped) on a few maps
     for (const theme of ['bg-volcano', 'bg-castle', 'bg-space', 'bg-meadow']) {
-      const vp = { width: 800, height: 340 };
+      const vp = { width: 800, height: 600 };
       const { ctx: c2, page: p2 } = await open(vp, theme, true);
       await p2.clock.resume();
       await openKid(p2, '[data-action="open-kid"][data-id="kid_ava"]');
-      await openOldMap(p2); // the old map, from the Menu
       await p2.waitForTimeout(800);
-      await closeModal(p2);
-      const box = await p2.locator('.quest-map').boundingBox();
-      await p2.evaluate((y) => window.scrollTo(0, y + window.scrollY - 4), box.y);
+      await toGreen(p2, false);
       await p2.waitForTimeout(2500);
       for (const id of ['kid_dee', 'kid_ben', 'kid_cy']) {
-        await p2.click(`.map-visitor[data-id="${id}"]`);
+        if (await p2.locator(`.village .v-visitor[data-id="${id}"]`).count()) await tapInVillage(p2, `.v-visitor[data-id="${id}"]`);
         await p2.waitForTimeout(2600);
       }
       await p2.waitForTimeout(9000);
@@ -148,27 +148,22 @@ try {
         const plan = planVisits('kid_ava', vis.map((v) => ({ id: v.id, gear: bestGear(gear[v.id] || []) })), day);
         if (want.every((k) => plan.areas.some((a) => a.kind === k))) break;
       }
-      const vp = { width: 800, height: 340 };
+      const vp = { width: 800, height: 600 };
       const { ctx, page } = await open(vp, theme, true, gear);
       await page.clock.resume();
       await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
-      await openOldMap(page); // the old map, from the Menu
       await page.waitForTimeout(800);
-      await closeModal(page);
-      const box = await page.locator('.quest-map').boundingBox();
-      await page.evaluate((y) => window.scrollTo(0, y + window.scrollY - 4), box.y);
+      await toGreen(page, false);
       await page.waitForTimeout(12000);
       await ctx.close();
       fs.renameSync(await page.video().path(), `${out}/raw/games-${name}.webm`);
       // and a still on a phone
       const { ctx: c2, page: p2 } = await open({ width: 412, height: 915 }, theme, false, gear);
       await openKid(p2, '[data-action="open-kid"][data-id="kid_ava"]');
-      await openOldMap(p2); // the old map, from the Menu
       await p2.clock.runFor(1500);
-      await closeModal(p2);
+      await toGreen(p2, true);
       await p2.clock.runFor(1200);
-      const b2 = await p2.locator('.quest-map').boundingBox();
-      await p2.screenshot({ path: `${out}/games-${name}-phone.png`, clip: { x: b2.x, y: b2.y, width: b2.width, height: 300 }, fullPage: true });
+      await p2.screenshot({ path: `${out}/games-${name}-phone.png` });
       await c2.close();
     }
     day = keep;

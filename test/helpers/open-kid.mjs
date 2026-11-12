@@ -59,8 +59,24 @@ export async function doChore(page, id, { clock = false } = {}) {
 }
 
 /**
+ * Taps something in the village (a visitor, a play patch, the landmark) and waits while the buddy
+ * walks over: what it does there (a game, the game menu, a bubble) has happened when this returns.
+ * The tap goes to the thing itself, so it works wherever the view is looking. Start-of-day
+ * pop-ups are closed first. clock: the page's clock is installed, so time is run forward.
+ * then(el): runs in the page right after the tap (before the walk), with the tapped element.
+ */
+export async function tapInVillage(page, sel, { clock = false, then = null } = {}) {
+  await closePops(page);
+  await page.locator(`.village ${sel}`).first().evaluate((el, fn) => { el.click(); if (fn) new Function('el', fn)(el); }, then);
+  for (let i = 0; i < 120 && await page.locator('.village .v-buddy.walking').count(); i += 1) {
+    if (clock) await page.clock.runFor(250); else await page.waitForTimeout(250);
+  }
+  if (clock) await page.clock.runFor(300); else await page.waitForTimeout(300);
+}
+
+/**
  * The old map, from the kid's Menu (there for one release while kids get used to the village).
- * For tests about the map itself: its visitors' games, its chest, its quest stops.
+ * Only for tests of the old map itself (they go when it goes).
  */
 export async function openOldMap(page) {
   await openMenu(page);

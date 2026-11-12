@@ -189,9 +189,9 @@ const TANK = { species: 'meadow-trout', nickname: 'Sir Goldie' };
 // 6. fishing: the catch card says when a fish is new for the book, or bigger than the record
 {
   const { ctx, page } = await open(TABLET, family({ records: false }), { cloud: true });
-  await page.waitForSelector('.map-visitor, .v-visitor', { timeout: 10000 });
+  await page.waitForSelector('.v-visitor', { timeout: 10000 });
   await page.clock.runFor(1000);
-  await page.locator('.map-visitor, .v-visitor').first().click();
+  await page.locator('.v-visitor').first().click();
   await page.clock.runFor(800);
   await page.click('.game-pick [data-kind="fishing"]');
   await page.waitForSelector('.playground');
