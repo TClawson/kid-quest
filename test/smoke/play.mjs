@@ -7,7 +7,7 @@ import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash, freeGamesOn } from '../../js/logic.js';
 import { seenSaturday } from '../helpers/seed.mjs';
-import { openKid, openParents, tapInVillage } from '../helpers/open-kid.mjs';
+import { openKid, openParents, tapInVillage, visitorsHere } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -57,6 +57,7 @@ async function open(device, done, played = 0, held = null, tweak = null) {
   }, s);
   await page.reload();
   await openKid(page, '[data-action="open-kid"]');
+  await visitorsHere(page); // visitors walk in first (the first time today); their bubbles show once they arrive
   await page.waitForTimeout(500);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
   await page.waitForSelector('.village .v-visitor');
