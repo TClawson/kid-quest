@@ -18,6 +18,7 @@ test('every piece has a sheet at every level, each with its own file', () => {
   for (const p of CONCERT) for (const l of longLevels(p.id)) assert.ok(sheetFor(p.id, l), `${p.id} ${l}`);
   assert.equal(new Set(sheets.map((s) => s.file)).size, sheets.length);
   assert.equal(slug("Bubble Waltz/Mermaid's Lullaby"), 'bubble-waltz-mermaids-lullaby');
+  assert.equal(sheetFor('long:bg-meadow', 'hard').file, 'sheets/forest-village-the-walk-to-the-oak-hard.pdf', 'apart from the map song\'s forest-village sheets');
 });
 
 test('the print has a title, level, composer and speed', () => {
