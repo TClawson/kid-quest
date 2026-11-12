@@ -399,6 +399,13 @@
    "name": "Bubble Waltz/Mermaid's Lullaby",
    "file": "sheets/bubble-waltz-mermaids-lullaby-hard.pdf",
    "fingerprint": "43eec069"
+  },
+  {
+   "id": "long:bg-meadow",
+   "level": "hard",
+   "name": "Forest Village/The Walk to the Oak",
+   "file": "sheets/forest-village-the-walk-to-the-oak-hard.pdf",
+   "fingerprint": "1087e9b6"
   }
  ]
 }

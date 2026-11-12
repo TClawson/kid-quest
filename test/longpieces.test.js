@@ -146,6 +146,48 @@ test('the Bubble Waltz concert piece: eight parts, about three minutes at hard',
   assert.ok(keys.has('Dm') && keys.has('Fm') && keys.has('Gm'));
 });
 
+test('the Forest Village concert piece: seven parts, 90 bars at hard, in 4/4 and 6/8', () => {
+  const id = 'long:bg-meadow';
+  const p = LONG_PIECES[id];
+  assert.equal(p.name, 'Forest Village/The Walk to the Oak');
+  assert.equal(p.map, 'bg-meadow');
+  assert.match(p.story, /^A long piece in seven parts: /);
+  assert.deepEqual(CONCERT.map((x) => x.id), ['long:bg-ocean', id], 'the second concert piece, after the Bubble Waltz');
+  assert.equal(CONCERT[1].parts, 7);
+  assert.equal(CONCERT[1].tier, CONCERT_TIER);
+  assert.ok(longLevels(id).includes('hard'));
+  const sections = longSections(id, 'hard');
+  assert.deepEqual(sections.map((s) => s.name), ['Before Sunrise', 'Forest Village', 'The Path into the Woods', 'The Great Oak', 'Fireflies', 'Dance of the Lights', 'Home by Starlight']);
+  assert.deepEqual(sections.map((s) => s.rh.length), [9, 16, 6, 16, 10, 20, 13]);
+  assert.equal(longBars(id, 'hard').length, 90);
+  assert.deepEqual(sections.map(sectionMeter), ['4/4', '4/4', '4/4', '6/8', '4/4', '4/4', '4/4']);
+  assert.equal(sections[3].key, 'Ddor');
+  // about three and a half minutes: "about 4 min"
+  const { seconds } = longTimeline(id, 'hard');
+  assert.ok(seconds > 205 && seconds < 220, `${seconds} seconds`);
+  assert.equal(longFacts(id, 'hard'), '7 parts · about 4 min');
+  // the path slows from 132 to 81 over all its bars; the coda from 132 to 66 over five
+  [132, 121.8, 111.6, 101.4, 91.2, 81].forEach((bpm, k) => close(barBpm(sections[2], k), bpm, `the path's bar ${k}`));
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 12].map((k) => barBpm(sections[6], k)), [132, 115.5, 99, 82.5, 66, 66, 66]);
+  // the oak's song: a dotted quarter at 54, two to a bar
+  const oak = longBars(id, 'hard').find((b) => b.section === 3);
+  assert.deepEqual([oak.length, oak.beat, oak.bpm], [6, 3, 54]);
+  // the last chord is rolled, from the lowest note up
+  const last = longTimeline(id, 'hard').notes.filter((n) => n.hand === 'rh').slice(-3);
+  assert.deepEqual(last.map((n) => n.midi), [84, 91, 96]);
+  close(last[1].t - last[0].t, ROLL_STEP);
+  close(last[2].t - last[0].t, 2 * ROLL_STEP);
+  // the score: the meter changes to 6/8 for the oak and back, both hands
+  const abc = longAbc(id, 'hard', { perLine: 4 });
+  assert.match(abc, /^M:4\/4$/m);
+  assert.ok(abc.includes('[V:R] [K:Ddor] [M:6/8] [Q:"The Great Oak" 3/8=54] !p! "Dm"F2A d2c'));
+  assert.ok(abc.includes('[V:L] [K:Ddor clef=bass] [M:6/8] D,,A,,F, A,F,A,,'));
+  assert.ok(abc.includes('[V:R] [K:C] [M:4/4] [Q:"Fireflies" 1/4=81] !pp! "^getting faster little by little""Gsus4"z4 .g z z2'));
+  assert.ok(abc.includes('[V:L] [K:C clef=bass] [M:4/4] G,,2 D,2 [G,C]4'));
+  assert.ok(abc.includes('!p! "F"[FA]4 "Fm"[F_A]4'), 'the second chord name in a bar, as written');
+  assert.equal(longLeadSheet(id, 'hard').length, 7);
+});
+
 test('chord names: slash and seventh chords, flats and sharps as signs', () => {
   assert.equal(longChordLabel('Gm/Bb'), 'Gm/B♭');
   assert.equal(longChordLabel('Fm/Ab'), 'Fm/A♭');

@@ -1,27 +1,34 @@
-// The songbook's concert pieces: long pieces in several parts, each part with its own key and
-// speed (read by concert.js, shown in the songbook by songbook.js). Made by a script from the
-// finished music files: don't edit by hand, run the script again.
+// The songbook's concert pieces: long pieces in several parts, each part with its own key,
+// meter and speed (read by concert.js, shown in the songbook by songbook.js). Made by a script
+// from the finished music files: don't edit by hand, run the script again.
 //
 // Keyed by piece id ('long:' and the map the piece comes from). Each piece has name, map (the
 // background id of the map whose song it grows from), story (one line for the piece's page)
 // and levels: { easy, medium, hard }, only the ones written so far. A level is a list of
-// sections, played in order: { name (shown over its first bar), key ('Dm', 'Fm', 'Gm': its key
-// signature), bpm (quarter notes a minute), rh, lh (one string per bar), chords (one chord name
-// per bar, shown above it: 'Gm/D', 'Cm6', 'A7') }. A section's key and bars can differ between
-// levels; the sections are the same.
+// sections, played in order: { name (shown over its first bar), meter ('4/4' or '6/8'; left
+// out when it is 3/4), key ('C', 'Dm', 'Fm', 'Ddor': its key signature), bpm (quarter notes a
+// minute; in 6/8 dotted quarters), bpmTo and rampBars (when the speed slides: from bpm to
+// bpmTo a bar at a time, over the first rampBars bars, or over the whole section without
+// rampBars), marks (words over a bar, by its index in the section from 0: { 0: 'with pedal' }),
+// rh, lh (one string per bar), chords (one chord name per bar, shown above it: 'Gm/D', 'Cm6',
+// 'A7', 'Gsus4') }. A section's key and bars can differ between levels; the sections are the
+// same.
 //
-// The bars are 3/4 all through, in the same ABC notation as arrangements.js (read by
-// arrange.js): L:1/8 (an eighth note is 1, six to a bar), notes 'c' (C5), 'C' (C4), 'C,' (C3),
-// "c'" (C6), '^' sharp, '_' flat, '=' natural over the section's key signature; lengths '2'
-// quarter, '3' dotted quarter, '4' half, '6' dotted half, '/2' sixteenth; chords '[CEG]2';
-// rests 'z2'; ties 'c2-' (also into the next bar); slurs '( )'; dynamics '!pp!' '!p!' '!mp!'
-// '!mf!' '!f!' '!ff!' at the start of a right-hand bar (each lasts till the next, across
-// sections). Also:
-//   '&'          a second voice in the same hand: it counts again from the start of the bar
-//                ('d4 de & B2 A2 B2'); each voice fills the bar, and accidentals are written
-//                in each voice.
-//   'x'          a rest that isn't printed (a voice waiting: 'x2 [D,G,]2 [D,G,]2 & G,,6').
-//   '!fermata!'  hold this bar: it lasts 1.7 times as long.
+// The bars are in the same ABC notation as arrangements.js (read by arrange.js): L:1/8 (an
+// eighth note is 1: six to a bar in 3/4 and 6/8, eight in 4/4), notes 'c' (C5), 'C' (C4),
+// 'C,' (C3), "c'" (C6), '^' sharp, '_' flat, '=' natural over the section's key signature;
+// lengths '2' quarter, '3' dotted quarter, '4' half, '6' dotted half, '8' whole, '/2'
+// sixteenth; chords '[CEG]2'; rests 'z2'; ties 'c2-' (also into the next bar); slurs '( )';
+// dynamics '!pp!' '!p!' '!mp!' '!mf!' '!f!' '!ff!' at the start of a right-hand bar (each lasts
+// till the next, across sections). Also:
+//   '&'           a second voice in the same hand: it counts again from the start of the bar
+//                 ('d4 de & B2 A2 B2'); each voice fills the bar, and accidentals are written
+//                 in each voice.
+//   'x'           a rest that isn't printed (a voice waiting: 'x2 [D,G,]2 [D,G,]2 & G,,6').
+//   '!fermata!'   hold this bar: it lasts 1.7 times as long.
+//   '.'           before a note or chord: short (staccato), it sounds for 45% of its length.
+//   '!arpeggio!'  before a chord: rolled, its notes start one after another from the lowest.
+//   '"Fm"'        a second chord name inside a bar, printed where it is written.
 
 export const LONG_PIECES = {
   // Bubble Waltz/Mermaid's Lullaby: 8 parts
@@ -372,6 +379,127 @@ export const LONG_PIECES = {
             '[D,,A,,D,]6',
           ],
           chords: ['Gm/D', 'Gm/D', 'Gm/D', 'Dm', 'Gm/D', 'Eb', 'A7', 'Dm', 'Dm', 'Dm', 'Dm', 'Gm/D', 'Dm'],
+        },
+      ],
+    },
+  },
+  // Forest Village/The Walk to the Oak: 7 parts
+  'long:bg-meadow': {
+    name: 'Forest Village/The Walk to the Oak',
+    map: 'bg-meadow',
+    story: 'A long piece in seven parts: wake with the birds, dance the village tune, walk the path to the Great Oak and hear its old song, then dance home under the fireflies.',
+    levels: {
+      hard: [
+        {
+          name: 'Before Sunrise', meter: '4/4', key: 'C', bpm: 66,
+          marks: { 0: 'with pedal', 7: 'growing, like the light' },
+          rh: [
+            '!pp! z8', 'f3 a d\'3 c\'', 'b3 a g4', '!p! z4 .e.g c\'2',
+            'z4 .E.G c2', '.e.g c\'2 .E.G c2', '.f.a d\'2 .F.A d2', '!mp! .E.G.c .e.g.c\' z2',
+            '.B.d.g .b d\'4',
+          ],
+          lh: [
+            '[C,G,]2 [G,C]2 [CE]2 [G,C]2', '[C,A,]2 [A,D]2 [DF]2 [A,D]2', '[C,G,]2 [G,C]2 [CE]2 [G,C]2', '[A,,E,]2 [E,A,]2 [A,C]2 [E,A,]2',
+            '[F,,C,]2 [C,F,]2 [F,A,]2 [C,F,]2', '[E,,C,]2 [C,G,]2 [G,C]2 [C,G,]2', '[D,,A,,]2 [A,,F,]2 [F,C]2 [A,,F,]2', '[G,,E,]2 [E,G,]2 [G,C]2 [E,G,]2',
+            '[G,,D,]2 [D,G,]2 [F,B,D]4',
+          ],
+          chords: ['C', 'Dm/C', 'C', 'Am', 'F', 'C/E', 'Dm7', 'C/G', 'G7'],
+        },
+        {
+          name: 'Forest Village', meter: '4/4', key: 'C', bpm: 132,
+          rh: [
+            '!mf! [CE]2 [EG]A/B/ [EGc]2 [GB]A', '[EG]2 EC A,2 [A,C][CE]', '[CF]2 [FA]B [FAc]2 [FA]F', '[B,DG]4 ([B,D][CE][DF][B,D])',
+            '[Ece]2 [Geg][cec\']- [cec\']2 [dd\'][ee\']', '[dgd\']2 [Beb]2 [GBg]2 [Ee][Gg]', '[ca]g [cf]a [cfc\']2 [Aca][Bdb]-', '[Bdb]2 [dgd\']2 [GBdg]2 (d/e/f/g/)',
+            '!mp! [fa]2 z[fa] [ac\'][fa] f/d/A/d/', '[gb]2 z[gb] [bd\'][gb] g/d/B/d/', '!mf! [Beg]2 [egb]2 [gbe\']2 [gbd\'][egb]', '[eac\']2 (a/b/c\'/b/) [cea]2 [Ace]2',
+            '!f! [A,CF]A [Fc]A FA [Fc][Acf]', '[DG]B [Gd]B GB [Gd][Bdg]', '[ege\']2 [dgd\']2 [cec\']2 [Gceg]2', '[cegc\']2 g/e/c/G/ [EGc]2 z2',
+          ],
+          lh: [
+            '[C,,C,]2 [E,G,]G,, C,2 [E,G,]B,,', 'A,,2 [C,E,]E,, A,,2 [C,E,]G,,', '[F,,F,]2 [A,C]C, F,2 [A,C]D,', '[G,,G,]2 G,,/A,,/B,,/C,/ D,2 G,,2',
+            'C,,G,,C,E, G,E,C,G,,', 'E,,B,,E,G, B,G,E,B,,', 'F,,C,F,A, CA,F,D,', 'G,,D,G,B, G,D,F,,2',
+            'D,,A,,D,F, A,F,D,A,,', 'G,,D,G,B, DB,G,D,', 'E,,B,,E,G, B,G,E,B,,', 'A,,E,A,C EC A,G,',
+            '[F,,F,]2 [A,,A,]2 [C,C]2 [A,,A,]2', '[G,,G,]2 [B,,B,]2 [D,D]2 [B,,B,]2', '[C,,G,,C,]3 [E,,E,]- [E,,E,]2 [G,,G,]2', '[C,,C,]2 G,,2 [C,,G,,C,]2 z2',
+          ],
+          chords: ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G', 'Dm', 'G', 'Em', 'Am', 'F', 'G', 'C', 'C'],
+        },
+        {
+          name: 'The Path into the Woods', meter: '4/4', key: 'C', bpm: 132, bpmTo: 81,
+          marks: { 0: 'slowing little by little' },
+          rh: [
+            '!mf! [ce]2 z[ce] [eg][ce] [Gc]2', '[Bd]2 z[Bd] [dg][Bd] [GB]2', '!mp! [Ac]2 z[Ac] [ce]2 [EA]2', '[GB]4 [Bd]2 [GB]2',
+            '!p! [FA]4 "Fm"[F_A]4', '[EG]8',
+          ],
+          lh: [
+            'C,2 [E,G,C]2 C,2 [E,G,C]2', 'B,,2 [D,G,B,]2 B,,2 [D,G,B,]2', 'A,,2 [E,A,C]2 A,,2 [E,A,C]2', 'G,,D,G,B, G,D,G,D,',
+            'F,,C,F,A, F,,C,F,_A,', 'E,,B,,D,G, B,G,D,B,,',
+          ],
+          chords: ['C', 'G/B', 'Am', 'G', 'F', 'Em7'],
+        },
+        {
+          name: 'The Great Oak', meter: '6/8', key: 'Ddor', bpm: 54,
+          rh: [
+            '!p! F2A d2c', '[GB]3 A2G', 'F3/2G/2A c2F', '[EG]6',
+            '[DF]2[FA] [Fd]2[Ec]', '[GB]3 [FA]2[EG]', '[EG]2[FA] [Ec]2[FA]', '[FAd]6',
+            '!mp! [FA]2[Ac] [Af]2[Ge]', '[Gd]3 [Ec]2[DB]', '[DB]2[Gd] [Bg]2[Af]', '[Ge]3 [Fd]2[Ec]',
+            '!p! [DF]2[FA] [Fd]2[Ec]', '[GB]3 [FA]2[EG]', '[EG]2[FA] [Ec]2[FA]', '[^FAd]6',
+          ],
+          lh: [
+            'D,,A,,F, A,F,A,,', 'G,,D,G, B,G,D,', 'F,,C,F, A,F,C,', 'C,E,G, CG,E,',
+            'D,,3 [F,A,D]3', 'G,,3 [G,B,D]3', 'C,3 [E,G,C]3', 'D,3 [F,A,D]3',
+            'F,,C,A, CA,C,', 'E,,C,G, CG,C,', 'G,,D,G, B,G,D,', 'C,E,G, CG,E,',
+            'D,,A,,F, A,F,A,,', 'G,,D,G, B,G,D,', 'C,E,G, CG,C,', 'D,,A,,^F, A,3',
+          ],
+          chords: ['Dm', 'G', 'F', 'C', 'Dm', 'G', 'C', 'Dm', 'F', 'C/E', 'G', 'C', 'Dm', 'G', 'C', 'D'],
+        },
+        {
+          name: 'Fireflies', meter: '4/4', key: 'C', bpm: 81, bpmTo: 132,
+          marks: { 0: 'getting faster little by little' },
+          rh: [
+            '!pp! z4 .g z z2', 'z .f z2 .g z .d\' z', 'c\'ge\'g c\'ge\'g', 'd\'af\'a d\'af\'a',
+            '!p! e\'c\'g\'c\' e\'2 d\'c\'', 'bgd\'g b2 c\'d\'', '!mp! [ec\']g[c\'e\']g [ec\']g[c\'e\']g', '[fd\']a[d\'f\']a [fd\']a[d\'f\']a',
+            '!mf! [fc\']a[c\'f\']a [fc\']a[c\'f\']a', '[gd\']b[d\'g\']b [fd\']b[d\'g\']b',
+          ],
+          lh: [
+            'G,,2 D,2 [G,C]4', 'G,,2 D,2 [F,B,]4', 'C,2 [G,CE]6', 'D,2 [A,DF]6',
+            'E,2 [G,CE]6', 'G,,2 [G,B,D]4 [G,B,F]2', 'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'D,2 [F,A,D]2 A,,2 [F,A,D]2',
+            'F,,2 [F,A,C]2 C,2 [F,A,C]2', 'G,,2 [D,F,B,]2 [G,,G,]2 [A,,A,][B,,B,]',
+          ],
+          chords: ['Gsus4', 'G7', 'C', 'Dm', 'C/E', 'G', 'C', 'Dm', 'F', 'G7'],
+        },
+        {
+          name: 'Dance of the Lights', meter: '4/4', key: 'C', bpm: 132,
+          marks: { 8: 'the tune is in the left hand', 12: 'growing' },
+          rh: [
+            '!f! [EGce]2 [Gceg]2 [cegc\']2 [Bb][Aa]', '[Gceg]2 [Ee][Cc] [EA]2 [Cc][Ee]', '[FAcf]2 [Acfa]2 [cfac\']2 [Aa][Ff]', '[GBdg]4 ([Dd][Ee][Ff][Dd])',
+            '[Ece]2 [Geg][cec\']- [cec\']2 [dd\'][ee\']', '[dgd\']2 [Beb]2 [GBg]2 [Ee][Gg]', '[ca]g [cf]a [cfc\']2 [Aca][Bdb]-', '[Bdb]2 [dgd\']2 [GBdg]2 (g/a/b/c\'/)',
+            '!mf! d\'af\'a d\'af\'a', 'bgd\'g bgd\'g', '!f! [Beg]2 [egb]2 [gbe\']2 [gbd\'][egb]', '[eac\']2 (a/b/c\'/b/) [cea]2 [Ace]2',
+            '[A,CF]A [Fc]A FA [Fc][Acf]', '[DG]B [Gd]B GB [Gd][Bdg]', '[EA]c [Ae]c Ac [Ae][cea]', '[Ac]f [ca]f cf [ca][fac\']',
+            '!ff! [ege\']2 [dgd\']2 [cec\']2 [Gceg]2', '[GBdf]2 [Bdfg]2 [dfgb]2 [fgbd\']2', '[egc\'e\']2 [dgbd\']2 [cegc\']2 [Gceg]2', '[cegc\']2 g/e/c/G/ [EGc]2 z2',
+          ],
+          lh: [
+            '[C,,C,]2 [E,G,C]2 [G,,G,]2 [E,G,C]2', '[A,,,A,,]2 [E,A,]2 [E,,E,]2 [E,A,]2', '[F,,F,]2 [F,A,C]2 [C,,C,]2 [F,A,C]2', '[G,,G,]2 [G,B,D]2 [G,,G,]4',
+            '[C,,C,]2 [E,G,C]2 [G,,G,]2 [E,G,C]2', '[E,,E,]2 [E,G,B,]2 [B,,B,]2 [E,G,B,]2', '[F,,F,]2 [F,A,C]2 [C,,C,]2 [F,A,C]2', '[G,,G,]2 [G,B,D]2 [G,,G,]2 [F,,F,][E,,E,]',
+            '[D,A,]2 z[F,A,] [A,C][F,A,] [D,F,]2', '[D,G,B,]2 z[G,B,] [B,D][G,B,] [D,G,]2', '[E,,E,]2 [G,B,E]2 [B,,B,]2 [G,B,E]2', '[A,,A,]2 [A,CE]2 [A,,A,]2 [G,,G,]2',
+            '[F,,F,]2 [A,,A,]2 [C,C]2 [A,,A,]2', '[G,,G,]2 [B,,B,]2 [D,D]2 [B,,B,]2', '[A,,A,]2 [C,C]2 [E,E]2 [C,C]2', '[F,,F,]2 [A,,A,]2 [C,C]2 [A,,A,]2',
+            '[G,,,G,,]2 [E,G,C]2 [G,,,G,,]2 [E,G,C]2', '[G,,,G,,]2 [D,F,B,]2 [A,,,A,,]2 [B,,,B,,]2', '[C,,C,]2 [E,G,C]2 [E,,E,]2 [G,,G,]2', '[C,,C,]2 G,,2 [C,,G,,C,]2 z2',
+          ],
+          chords: ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G', 'Dm', 'G/D', 'Em', 'Am', 'F', 'G', 'Am', 'F', 'C/G', 'G7', 'C', 'C'],
+        },
+        {
+          name: 'Home by Starlight', meter: '4/4', key: 'C', bpm: 132, bpmTo: 66, rampBars: 5,
+          marks: { 0: 'slowing little by little', 4: 'slow, with pedal' },
+          rh: [
+            '!mf! [fa]2 z[fa] [ac\'][fa] f/c/A/c/', '[eg]2 z[eg] [gb][eg] e/B/G/B/', '!mp! [df]2 z[df] [fa][df] [Ad]2', '[Bd]2 z[Bd] [df]2 [GB]2',
+            '!p! [ce]2 z[ce] [eg][ce] z2', 'F3 A d3 c', 'B3 A G4', 'e2 g2 c\'4',
+            'E2 G2 c4', '!pp! z2 [Gce]6', 'z2 [FBd]6', 'z2 [EGc]6',
+            'z2 !arpeggio![c\'g\'c\'\']6',
+          ],
+          lh: [
+            'F,,2 [F,A,C]2 C,2 [F,A,C]2', 'E,,2 [E,G,B,]2 B,,2 [E,G,B,]2', '[D,,A,,]2 [A,,F,]2 [F,C]2 [A,,F,]2', '[G,,D,]2 [D,G,]2 [F,B,]2 [D,G,]2',
+            '[C,G,]2 [G,C]2 [CE]2 [G,C]2', '[C,A,]2 [A,D]2 [DF]2 [A,D]2', '[C,G,]2 [G,C]2 [CE]2 [G,C]2', '[A,,E,]2 [E,A,]2 [A,C]2 [E,A,]2',
+            '[F,,C,]2 [C,F,]2 [F,A,]2 [C,F,]2', 'E,,8', 'G,,8', '[C,,C,]8-',
+            '[C,,C,]8',
+          ],
+          chords: ['F', 'Em', 'Dm7', 'G7', 'C', 'Dm/C', 'C', 'Am', 'F', 'C/E', 'G7', 'C', 'C'],
         },
       ],
     },
