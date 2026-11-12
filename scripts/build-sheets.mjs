@@ -20,8 +20,9 @@ const had = new Map(before.sheets.map((s) => [s.file, s.fingerprint]));
 const PAGE = `<!doctype html><html><head><meta charset="utf-8"><style>
   @page { size: Letter; margin: 0.55in 0.6in 0.7in; }
   html, body { margin: 0; background: #fff; }
-  #music svg { display: block; }
-  #music > div { break-inside: avoid; page-break-inside: avoid; }
+  #music svg { display: block; width: 100% !important; height: auto !important; }
+  #music > div { break-inside: avoid; page-break-inside: avoid; height: auto !important; overflow: visible !important; }
+  #music { height: auto !important; overflow: visible !important; }
 </style></head><body><div id="music"></div></body></html>`;
 
 const browser = await chromium.launch();
@@ -50,15 +51,17 @@ for (const s of sheets) {
       paddingbottom: 10,
       format: { titlefont: '"Georgia" 24 bold', subtitlefont: '"Georgia" 14 italic', composerfont: '"Georgia" 12', tempofont: '"Georgia" 11 bold', partsfont: '"Georgia" 12 bold', annotationfont: '"Helvetica" 11', gchordfont: '"Helvetica" 12', vocalfont: '"Helvetica" 11' },
     });
-    // each line in its own block, for break-inside
-    for (const svg of [...el.querySelectorAll('svg')]) {
-      const box = document.createElement('div');
-      svg.replaceWith(box);
-      box.appendChild(svg);
-    }
-    return (tune?.warnings || []).map(String);
+    // abcjs gives the music and each line's box a fixed height with overflow hidden, worked
+    // out before scaling: on a long piece that cut off the last lines. Let them size themselves.
+    el.removeAttribute('style');
+    for (const box of el.children) { box.style.height = ''; box.style.overflow = ''; }
+    const out = (tune?.warnings || []).map(String);
+    // nothing may be cut off: every line shows whole, and the page holds every line
+    [...el.children].forEach((box, i) => { if (box.scrollHeight > box.clientHeight + 1 || box.scrollWidth > box.clientWidth + 1) out.push(`line ${i} is cut off`); });
+    if (el.scrollHeight > el.clientHeight + 1) out.push('the music is cut off');
+    return out;
   }, abc);
-  if (warnings.length) throw new Error(`${s.file}: abcjs warnings\n${warnings.join('\n')}`);
+  if (warnings.length) throw new Error(`${s.file}: abcjs warnings or cut-off music\n${warnings.join('\n')}`);
   const html = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const footer = `<div style="width:100%;font:9px Georgia,serif;color:#666;padding:0 0.6in;display:flex;justify-content:space-between">
     <span>${html(s.name)} · ${s.level[0].toUpperCase()}${s.level.slice(1)}</span><span>Kid Quest · ${html(COMPOSER)}</span><span><span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`;
