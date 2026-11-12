@@ -61,6 +61,8 @@ function setPrefs(change) {
 const pianoName = (tier) => itemById(MUSIC_TIERS[tier - 1].piano)?.name.toLowerCase() || 'next piano';
 
 const mapName = (p) => itemById(p.map)?.name || 'map';
+/** A song's name as HTML: a long name with a slash ("Bubble Waltz/Mermaid's Lullaby") may wrap after the slash. */
+const nameHtml = (name) => esc(name).replace(/\//g, '/<wbr>');
 /** Where a piece comes from, in words. */
 function source(p) {
   if (p.kind === 'long') return `From the ${mapName(p)} map song`;
@@ -96,7 +98,7 @@ function listHtml(kid, book) {
   const card = (p) => {
     const s = stars(p.level);
     const name = p.secret ? 'Secret song' : p.name;
-    const head = `<span class="song-icon" aria-hidden="true">${iconOf(p)}</span><b>${esc(name)}</b>`;
+    const head = `<span class="song-icon" aria-hidden="true">${iconOf(p)}</span><b>${nameHtml(name)}</b>`;
     if (!p.open) {
       const why = p.kind === 'show' ? `Opens with the ${pianoName(p.tier)}, or finish the ${mapName(p)} treasure map` : `Opens with the ${pianoName(p.tier)}`;
       return `<div class="song-card locked" aria-label="${esc(name)}, locked">${head}<small>🔒 ${esc(why)}</small></div>`;
@@ -175,7 +177,7 @@ function longPieceHtml(kid, p) {
     <div class="screen songbook piece long" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="song-back" aria-label="Back to the songbook">←</button>
-        <div class="kid-title"><b>${iconOf(p)} ${esc(p.name)}</b><small>${esc(longFacts(p.id, level))} · ${esc(source(p))}</small></div>
+        <div class="kid-title"><b>${iconOf(p)} ${nameHtml(p.name)}</b><small>${esc(longFacts(p.id, level))} · ${esc(source(p))}</small></div>
       </header>
       <p class="song-story">${esc(p.story)}</p>
       <div class="song-tools">
@@ -436,7 +438,7 @@ function askToBuy(id) {
   openModal(`
     <div class="celebrate song-buy-ask">
       <div class="song-buy-art" aria-hidden="true">${iconOf(piece)}🎼</div>
-      <h1>Buy ${esc(piece.name)}?</h1>
+      <h1>Buy ${nameHtml(piece.name)}?</h1>
       <p>It costs <b>🪙 ${SONG_PRICE}</b>. You'll have ${coins - SONG_PRICE} coins left.</p>
       <p class="muted small">It opens the ${levelWords(levelsOf(piece.id))} music, for every buddy you have.</p>
       <div class="stack">

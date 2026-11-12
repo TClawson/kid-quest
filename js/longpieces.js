@@ -24,9 +24,9 @@
 //   '!fermata!'  hold this bar: it lasts 1.7 times as long.
 
 export const LONG_PIECES = {
-  // Bubble Waltz: The Dive: 8 parts
+  // Bubble Waltz/Mermaid's Lullaby: 8 parts
   'long:bg-ocean': {
-    name: 'Bubble Waltz: The Dive',
+    name: 'Bubble Waltz/Mermaid\'s Lullaby',
     map: 'bg-ocean',
     story: 'A long piece in eight parts: float on the waves, dance the Bubble Waltz, sink to the mermaid\'s grotto and hear her lullaby, then swim back up.',
     levels: {
