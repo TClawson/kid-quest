@@ -23,16 +23,20 @@ export const hasLevel = (id, level) => level === 'easy' || Boolean(ARRANGEMENTS[
  * Read one bar of one hand: notes ('c', '^F,', '_b'''), chords ('[CEG]'), rests ('z'), with
  * lengths in eighth notes (L:1/8: '2' a quarter, '3' a dotted quarter, '/2' or '/' a
  * sixteenth, '3/2' a dotted eighth) and ties ('-', also into the next bar). Slurs '( )',
- * decorations ('!p!', '!f!', '.' staccato) and spaces (beaming) are allowed and skipped.
+ * decorations ('!p!', '!f!'), chord names in quotes ('"Fm"') and spaces (beaming) are allowed
+ * and skipped. A '.' before a note or chord (staccato) marks it short, and '!arpeggio!' before
+ * a chord marks it rolled (only the concert pieces play them so).
  * Accidentals hold for the rest of the bar, for the same note on the same line or space, on
  * top of the key signature (sig: an alteration per letter, from signature()).
  * A hand can play two voices in one bar (the concert pieces, longpieces.js): '&' starts the
  * next voice, which counts again from the start of the bar; 'x' is a rest that isn't printed
  * (a voice that waits). Accidentals don't carry from one voice to the other.
- * Returns { events: [{ start, len, notes: [{ letter, alter, octave, midi }], tie, col, voice,
- * hidden }] (a rest has no notes, and hidden when it's an x; col is where it starts in the
- * text; voice 0 is the first), length (eighths: the longest voice), lengths (each voice's),
- * first (where the first note, chord or rest starts in the text), errors: [text] }.
+ * Returns { events: [{ start, len, notes: [{ letter, alter, octave, midi }], tie, col, from,
+ * voice, hidden, short, roll }] (a rest has no notes, and hidden when it's an x; col is where
+ * it starts in the text, and from where its own marks start, the '.' or '!arpeggio!' just
+ * before it, else col; short and roll only when marked; voice 0 is the first), length
+ * (eighths: the longest voice), lengths (each voice's), first (where the first note, chord or
+ * rest starts in the text), errors: [text] }.
  */
 export function readAbcBar(text, sig) {
   const events = [];
@@ -43,6 +47,8 @@ export function readAbcBar(text, sig) {
   let at = 0;
   let first = -1;
   let i = 0;
+  // the marks waiting for the next note or chord: short, rolled, and where they start
+  let mark = { short: false, roll: false, from: -1 };
   const s = String(text);
 
   const length = () => {
@@ -67,7 +73,13 @@ export function readAbcBar(text, sig) {
 
   while (i < s.length) {
     const c = s[i];
-    if (/\s/.test(c) || c === ')' || c === '.') { i += 1; continue; }
+    if (c === '.') {
+      if (mark.from < 0) mark.from = i;
+      mark.short = true;
+      i += 1;
+      continue;
+    }
+    if (/\s/.test(c) || c === ')') { i += 1; continue; }
     if (c === '(') {
       if (/\d/.test(s[i + 1] || '')) { errors.push(`triplets aren't supported: ${s.slice(i, i + 4)}`); i += 2; continue; }
       i += 1;
@@ -76,6 +88,10 @@ export function readAbcBar(text, sig) {
     if (c === '!') {
       const end = s.indexOf('!', i + 1);
       if (end < 0) { errors.push('a ! decoration is not closed'); break; }
+      if (s.slice(i, end + 1) === '!arpeggio!') {
+        if (mark.from < 0) mark.from = i;
+        mark.roll = true;
+      }
       i = end + 1;
       continue;
     }
@@ -91,6 +107,7 @@ export function readAbcBar(text, sig) {
       voice += 1;
       at = 0;
       held = new Map();
+      mark = { short: false, roll: false, from: -1 };
       i += 1;
       continue;
     }
@@ -123,8 +140,11 @@ export function readAbcBar(text, sig) {
     if (/^[<>]/.test(s.slice(i))) { errors.push(`broken rhythm (> <) isn't supported: ${s.slice(start, i + 2)}`); i += 1; }
     if (!(len > 0)) errors.push(`a bad length at "${s.slice(start, i)}"`);
     if (first < 0) first = start;
-    const event = { start: at, len, notes, tie: tie && notes.length > 0, col: start, voice };
+    const event = { start: at, len, notes, tie: tie && notes.length > 0, col: start, from: mark.from < 0 ? start : mark.from, voice };
     if (hidden) event.hidden = true;
+    if (mark.short && notes.length) event.short = true;
+    if (mark.roll && notes.length > 1) event.roll = true;
+    mark = { short: false, roll: false, from: -1 };
     events.push(event);
     at += len;
   }

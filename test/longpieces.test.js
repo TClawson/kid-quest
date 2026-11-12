@@ -1,6 +1,7 @@
 // The songbook's concert pieces (js/concert.js, js/longpieces.js): two voices in a hand,
-// every bar of every level written so far whole and playable, opened by the upright piano,
-// bought like any piece, and played with each part at its own speed and held bars held.
+// every bar of every level written so far whole (in its part's meter) and playable, opened by
+// the upright piano, bought like any piece, and played with each part at its own speed (which
+// may slide), held bars held, short notes short and rolled chords rolled.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeAudio } from './helpers/fake-audio.mjs';
@@ -8,8 +9,8 @@ import { readAbcBar, LEVELS } from '../js/arrange.js';
 import { signature, SONGBOOK, songbookFor, songBuyCheck, buySong, songsBought, songItemId, SONG_PRICE } from '../js/sheetmusic.js';
 import { LONG_PIECES } from '../js/longpieces.js';
 import {
-  CONCERT, CONCERT_TIER, BAR, FERMATA_HOLD, DYNAMICS, concertBookFor, isLongPiece, longLevels, longLevel, longSections,
-  longBars, longNotes, longTimeline, longAbc, longFacts, longChordLabel, longLeadSheet, cancels,
+  CONCERT, CONCERT_TIER, FERMATA_HOLD, SHORT, ROLL_STEP, DYNAMICS, concertBookFor, isLongPiece, longLevels, longLevel, longSections,
+  longBars, longNotes, longTimeline, longAbc, longFacts, longChordLabel, longLeadSheet, cancels, barEighths, beatEighths, barBpm, sectionMeter,
 } from '../js/concert.js';
 import { shelfSongs } from '../js/studiorules.js';
 import { itemById } from '../js/items.js';
@@ -88,13 +89,16 @@ for (const [id, p] of Object.entries(LONG_PIECES)) {
         assert.ok(s.bpm >= 40 && s.bpm <= 200, `${level} ${s.name}: speed ${s.bpm}`);
         assert.equal(s.lh.length, s.rh.length, `${level} ${s.name}: both hands`);
         assert.equal(s.chords.length, s.rh.length, `${level} ${s.name}: a chord a bar`);
-        for (const c of s.chords) assert.match(c, /^[A-G][#b]?(m|dim|aug)?\d*(\/[A-G][#b]?)?$/, `${level} ${s.name}: chord ${c}`);
+        assert.ok(['3/4', '4/4', '6/8'].includes(sectionMeter(s)), `${level} ${s.name}: meter ${s.meter}`);
+        if (s.bpmTo != null) assert.ok(s.bpmTo >= 40 && s.bpmTo <= 200, `${level} ${s.name}: speed to ${s.bpmTo}`);
+        for (const [b, words] of Object.entries(s.marks || {})) assert.ok(Number(b) < s.rh.length && words && !/["—]/.test(words), `${level} ${s.name}: words "${words}" over bar ${b}`);
+        for (const c of s.chords) assert.match(c, /^[A-G][#b]?(m|dim|aug|sus)?\d*(\/[A-G][#b]?)?$/, `${level} ${s.name}: chord ${c}`);
         for (const hand of ['rh', 'lh']) {
           s[hand].forEach((text, b) => {
             const where = `${level} ${s.name} ${hand} bar ${b + 1} "${text}"`;
             const r = readAbcBar(text, sig);
             assert.deepEqual(r.errors, [], where);
-            assert.ok(r.lengths.every((len) => Math.abs(len - BAR) < 1e-9), `${where}: ${r.lengths.join(' + ')} eighths`);
+            assert.ok(r.lengths.every((len) => Math.abs(len - barEighths(s)) < 1e-9), `${where}: ${r.lengths.join(' + ')} eighths in ${sectionMeter(s)}`);
             for (const e of r.events) for (const n of e.notes) assert.ok(n.midi >= 21 && n.midi <= 108, `${where}: ${n.midi} is on the piano`);
           });
         }
@@ -102,8 +106,9 @@ for (const [id, p] of Object.entries(LONG_PIECES)) {
       // every note joined up and on the keys, and every bar has something in it
       const notes = longNotes(id, level);
       const bars = longBars(id, level).length;
+      const eighths = sections.reduce((sum, s) => sum + s.rh.length * barEighths(s), 0);
       assert.ok(notes.every((n) => n.len > 0 && n.midi >= 21 && n.midi <= 108));
-      assert.ok(notes.every((n) => n.start + n.len <= bars * BAR + 1e-9), 'no note runs past the end');
+      assert.ok(notes.every((n) => n.start + n.len <= eighths + 1e-9), 'no note runs past the end');
       assert.match(longFacts(id, level), /^\d+ parts · about \d+ min$/);
       // the score has every bar in both hands, the final bar line only at the end
       const abc = longAbc(id, level, { names: true, perLine: 4 });
@@ -112,9 +117,20 @@ for (const [id, p] of Object.entries(LONG_PIECES)) {
       assert.equal(abc.split('|]').length - 1, 2, `${level}: the final bar line in each hand, once`);
       assert.ok(abc.trimEnd().endsWith('|]'));
       assert.equal((abc.match(/\[Q:"/g) || []).length, sections.length, `${level}: each part's name and speed`);
-      for (const s of sections.slice(1)) assert.ok(abc.includes(`[K:${s.key}] [Q:"${s.name}" 1/4=${s.bpm}]`), `${level}: ${s.name} starts with its key and speed`);
+      assert.match(abc, new RegExp(`^M:${sectionMeter(sections[0])}$`, 'm'), `${level}: the first part's meter`);
+      sections.slice(1).forEach((s, k) => {
+        const meter = sectionMeter(s) === sectionMeter(sections[k]) ? '' : `[M:${sectionMeter(s)}] `;
+        const tempo = `${sectionMeter(s) === '6/8' ? '3/8' : '1/4'}=${s.bpm}`;
+        assert.ok(abc.includes(`[K:${s.key}] ${meter}[Q:"${s.name}" ${tempo}]`), `${level}: ${s.name} starts with its key, meter (when it changes) and speed`);
+      });
+      const changes = sections.filter((s, k) => k && sectionMeter(s) !== sectionMeter(sections[k - 1])).length;
+      assert.equal((abc.match(/\[M:/g) || []).length, 2 * changes, `${level}: each meter change in both hands`);
       assert.equal((abc.match(/\[V:L\] \[K:/g) || []).length, sections.length - 1, 'the left hand changes key too');
       assert.ok(!/\[K:[^\]]*\]/.test(abc.split('\n').filter((l) => l.startsWith('[V:L]')).join('\n').replace(/\[K:[^\]]* clef=bass\]/g, '')), 'and keeps its bass clef');
+      // the timeline has every bar, and the right length of each
+      const { bars: starts } = longTimeline(id, level);
+      assert.equal(starts.length, bars + 1);
+      longBars(id, level).forEach((b, k) => close(starts[k + 1] - starts[k], b.length * (60 / b.beat) / b.bpm * (b.fermata ? FERMATA_HOLD : 1), `${level} bar ${k}`));
     }
   });
 }
@@ -158,6 +174,31 @@ test('the score: names on the first voice, note names skip the second voice, nat
   const lead = longLeadSheet('long:bg-ocean', longLevels('long:bg-ocean')[0]);
   assert.equal(lead.length, 8);
   assert.deepEqual(lead.flatMap((s) => s.bars.map((b) => b.n)), [...Array(lead.reduce((n, s) => n + s.bars.length, 0)).keys()], 'bars numbered through the piece');
+});
+
+test('the score: meter changes in both hands, a 6/8 speed in dotted quarters, words over bars, short notes and a rolled chord', () => {
+  const sections = [
+    { name: 'One', meter: '4/4', key: 'C', bpm: 100, marks: { 1: 'with pedal' }, rh: ['!p! c8', '.c2 .[ce]2 g4'], lh: ['C,8', 'C,8'], chords: ['C', 'C'] },
+    { name: 'Two', meter: '4/4', key: 'C', bpm: 90, rh: ['c8'], lh: ['C,8'], chords: ['C'] },
+    { name: 'Three', meter: '6/8', key: 'Ddor', bpm: 54, rh: ['F2A d2c'], lh: ['D,6'], chords: ['Dm'] },
+    { name: 'Four', key: 'Dm', bpm: 80, rh: ['d6'], lh: ['D,6'], chords: ['Dm'] },
+    { name: 'Five', meter: '4/4', key: 'C', bpm: 81, marks: { 0: 'slowing' }, rh: ['z2 !arpeggio![CEG]6'], lh: ['C,8'], chords: ['C'] },
+  ];
+  const abc = longAbc('x', 'hard', { perLine: 4, names: true }, sections);
+  assert.match(abc, /^M:4\/4$/m, 'the first part\'s meter in the head');
+  assert.ok(abc.includes('[V:R] [Q:"One" 1/4=100] !p! "C"c8 | "^with pedal""C".c2 .[ce]2 g4 ||'), 'the words over their bar, with the chord name before the staccato dot');
+  assert.ok(abc.includes('\nw: C | C E G\n'), 'note names as before');
+  assert.ok(abc.includes('[V:R] [K:C] [Q:"Two" 1/4=90] "C"c8 ||'), 'no meter when it stays the same');
+  assert.ok(abc.includes('[V:R] [K:Ddor] [M:6/8] [Q:"Three" 3/8=54] "Dm"F2A d2c ||'));
+  assert.ok(abc.includes('[V:L] [K:Ddor clef=bass] [M:6/8] D,6 ||'));
+  assert.ok(abc.includes('[V:R] [K:Dm] [M:3/4] [Q:"Four" 1/4=80] "Dm"d6 ||'), 'a part with no meter is in 3/4');
+  assert.ok(abc.includes('[V:L] [K:Dm clef=bass] [M:3/4] D,6 ||'));
+  assert.ok(abc.includes('[V:R] [K:C] [M:4/4] [Q:"Five" 1/4=81] "^slowing""C"z2 !arpeggio![CEG]6 |]'));
+  assert.equal((abc.match(/\[M:/g) || []).length, 6, 'three changes, each in both hands');
+  // a piece in 3/4 all through says nothing more than it did
+  const waltz = longAbc('x', 'hard', {}, [{ name: 'W', key: 'C', bpm: 90, rh: ['c6'], lh: ['C,6'], chords: ['C'] }, { name: 'X', key: 'C', bpm: 90, rh: ['c6'], lh: ['C,6'], chords: ['C'] }]);
+  assert.match(waltz, /^M:3\/4$/m);
+  assert.ok(!waltz.includes('[M:') && !waltz.includes('"^'));
 });
 
 test('the level shown: the one picked when written, else the easiest written', () => {
@@ -232,6 +273,76 @@ test('each part at its own speed, a fermata bar held 1.7 times, tied notes joine
   assert.equal(g[0].gain, DYNAMICS.f, 'the f in the left hand of the quick part');
   assert.equal(g[1].gain, DYNAMICS.ff);
   assert.equal(DYNAMICS.mf, 1);
+});
+
+test('bar lengths and beats: eight eighths in 4/4, six in 3/4 and 6/8, whose beat is a dotted quarter', () => {
+  assert.equal(barEighths({}), 6, 'no meter: 3/4');
+  assert.equal(barEighths({ meter: '3/4' }), 6);
+  assert.equal(barEighths({ meter: '4/4' }), 8);
+  assert.equal(barEighths({ meter: '6/8' }), 6);
+  assert.deepEqual([beatEighths({}), beatEighths({ meter: '4/4' }), beatEighths({ meter: '6/8' })], [2, 2, 3]);
+  assert.throws(() => barEighths({ meter: '5/4' }));
+  // at 60: a bar of 4/4 lasts 4 seconds, of 3/4 3, of 6/8 2 (a dotted quarter a second)
+  const sections = [
+    { name: 'A', meter: '4/4', key: 'C', bpm: 60, rh: ['c8', 'z4 d4'], lh: ['C,8', 'C,8'], chords: ['C', 'C'] },
+    { name: 'B', meter: '6/8', key: 'C', bpm: 60, rh: ['e6', 'z3 f3'], lh: ['C,6', 'C,6'], chords: ['C', 'C'] },
+    { name: 'C', key: 'C', bpm: 60, rh: ['g6'], lh: ['C,6'], chords: ['C'] },
+  ];
+  const bars = longBars('x', 'hard', sections);
+  assert.deepEqual(bars.map((b) => [b.meter, b.length, b.beat, b.at]), [['4/4', 8, 2, 0], ['4/4', 8, 2, 8], ['6/8', 6, 3, 16], ['6/8', 6, 3, 22], ['3/4', 6, 2, 28]]);
+  const rh = longNotes('x', 'hard', sections).filter((n) => n.hand === 'rh');
+  assert.deepEqual(rh.map((n) => [n.midi, n.start, n.len]), [[72, 0, 8], [74, 12, 4], [76, 16, 6], [77, 25, 3], [79, 28, 6]]);
+  const t = longTimeline('x', 'hard', sections);
+  [0, 4, 8, 10, 12, 15].forEach((x, k) => close(t.bars[k], x, `bar ${k}`));
+  const at = (midi) => t.notes.find((n) => n.midi === midi && n.hand === 'rh');
+  close(at(74).t, 6, 'the d on beat 3 of the second 4/4 bar');
+  close(at(74).dur, 2);
+  close(at(77).t, 11, 'the f on the second beat of the 6/8 bar');
+  close(at(77).dur, 1);
+  close(at(79).dur, 3);
+});
+
+test('a speed that slides: a step a bar, over the whole part or over its first rampBars bars', () => {
+  const part = (o) => ({ name: 'P', meter: '4/4', key: 'C', bpm: 120, bpmTo: 60, rh: Array(o.n).fill('c8'), lh: Array(o.n).fill('C,8'), chords: Array(o.n).fill('C'), ...o });
+  // over all four bars: 120, 100, 80, 60 (a 4/4 bar lasts 240 / bpm seconds)
+  const whole = part({ n: 4 });
+  assert.deepEqual([0, 1, 2, 3].map((k) => barBpm(whole, k)), [120, 100, 80, 60]);
+  const a = longTimeline('x', 'hard', [whole]);
+  [0, 2, 4.4, 7.4, 11.4].forEach((x, k) => close(a.bars[k], x, `bar ${k}`));
+  // over the first three bars of five: 120, 90, 60, then 60 on
+  const ramped = part({ n: 5, rampBars: 3 });
+  assert.deepEqual([0, 1, 2, 3, 4].map((k) => barBpm(ramped, k)), [120, 90, 60, 60, 60]);
+  const b = longTimeline('x', 'hard', [ramped]);
+  [0, 2, 2 + 8 / 3, 6 + 8 / 3, 10 + 8 / 3, 14 + 8 / 3].forEach((x, k) => close(b.bars[k], x, `bar ${k}`));
+  // a note keeps its bar's speed all through
+  const n = b.notes.find((x) => x.hand === 'rh' && Math.abs(x.t - 2) < 1e-9);
+  close(n.dur, 8 / 3);
+  // rampBars longer than the part: over the whole part; a part of one bar keeps its bpm
+  assert.equal(barBpm(part({ n: 4, rampBars: 9 }), 3), 60);
+  assert.equal(barBpm(part({ n: 1 }), 0), 120);
+  assert.equal(barBpm({ ...whole, bpmTo: undefined }, 3), 120, 'no slide');
+  // in 6/8 the slide counts dotted quarters: at 40 a bar lasts 3 seconds
+  const slow = part({ n: 2, meter: '6/8', bpm: 60, bpmTo: 40, rh: ['c6', 'c6'], lh: ['C,6', 'C,6'], chords: ['C', 'C'] });
+  close(longTimeline('x', 'hard', [slow]).seconds, 2 + 3);
+});
+
+test('short notes sound for 45% of their length; a rolled chord starts 0.09 s a note from the lowest', () => {
+  const r = readAbcBar('.c2 .[ce]2 g2 !arpeggio![ecG]2', C);
+  assert.deepEqual(r.events.map((e) => [Boolean(e.short), Boolean(e.roll)]), [[true, false], [true, false], [false, false], [false, true]]);
+  assert.deepEqual(r.events.map((e) => [e.from, e.col]), [[0, 1], [4, 5], [11, 11], [14, 24]], 'from: where its own marks start');
+  assert.deepEqual(r.lengths, [8]);
+  assert.equal(SHORT, 0.45);
+  assert.equal(ROLL_STEP, 0.09);
+  const sections = [{ name: 'P', meter: '4/4', key: 'C', bpm: 60, rh: ['.c2 .[ce]2 g2 !arpeggio![ecG]2'], lh: ['C,8'], chords: ['C'] }];
+  const rh = longNotes('x', 'hard', sections).filter((n) => n.hand === 'rh');
+  assert.deepEqual(rh.map((n) => [n.midi, n.start, n.len, n.roll]), [[72, 0, 0.9, undefined], [72, 2, 0.9, undefined], [76, 2, 0.9, undefined], [79, 4, 2, undefined], [67, 6, 2, 0], [72, 6, 2, 1], [76, 6, 2, 2]]);
+  const t = longTimeline('x', 'hard', sections).notes.filter((n) => n.hand === 'rh');
+  close(t[0].dur, 0.45, 'an eighth is half a second at 60: a short quarter sounds 0.45 s');
+  const rolled = t.slice(-3);
+  rolled.forEach((n, k) => { close(n.t, 3 + k * ROLL_STEP, `rolled note ${k}`); close(n.dur, 1, 'each as long as written'); });
+  // a short note tied on stops short, as on the reference page: the tie isn't taken up
+  const tied = longNotes('x', 'hard', [{ ...sections[0], rh: ['.c4- c4'] }]).filter((n) => n.hand === 'rh');
+  assert.deepEqual(tied.map((n) => [n.start, n.len]), [[0, 1.8], [4, 4]]);
 });
 
 test('which bar is playing, when the bars last different times', () => {
