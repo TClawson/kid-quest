@@ -32,7 +32,7 @@ import { leaderboard, weekOf } from './leaderboard.js';
 import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio } from './music.js';
-import { viewSongbook, mountSongbook, songbookActions, openSongbook } from './songbook.js';
+import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHtml } from './songbook.js';
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
 import { viewLab, mountLab, labActions, openLab } from './notolab.js';
@@ -2144,6 +2144,7 @@ ${seasonTestCard()}
       <p class="muted small">Record up to 2 minutes of piano through the tablet's microphone and save it as a sound file. Nothing is kept in the game.</p>
       <div id="rec-test"></div>
     </div>
+${printCardHtml()}
     <div class="card">
       <h2>Parent PIN</h2>
       <button class="btn ghost" data-action="change-pin">Change PIN</button>
