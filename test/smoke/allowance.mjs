@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, fallbackHash } from '../../js/logic.js';
 import { seenSaturday } from '../helpers/seed.mjs';
-import { openKid, toPicker } from '../helpers/open-kid.mjs';
+import { openKid, openParents, doChore, closePops } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -19,7 +19,6 @@ try {
 
   const saved = emptyState();
   saved.settings.pinHash = fallbackHash('kidquest:1234');
-  saved.settings.questView = 'list';
   const ava = defaultTasks();
   const ben = [...defaultTasks(), { id: 'task_dish', name: 'Dishes', icon: '🍽️', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'parent', minutes: 0 }];
   saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: ava, startDate: dateKey(), owned: [], spent: 0 });
@@ -45,19 +44,19 @@ try {
   // Ava brushes her teeth: a small task's share of 300.
   await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   const teeth = ava.find((t) => t.name === 'Brush teeth');
-  await page.click(`[data-action="task"][data-id="${teeth.id}"]`);
+  await doChore(page, teeth.id);
   await page.waitForSelector('.float-xp');
   const float = await page.textContent('.float-xp');
   const m = float.match(/\+(\d+) 🪙/);
   assert.ok(m && Number(m[1]) > 0 && Number(m[1]) < 10, float);
   const teethCoins = Number(m[1]);
   await page.waitForTimeout(300);
-  assert.match(await page.textContent('.week-coins'), new RegExp(`🪙 ${teethCoins} of 300 this week`));
+  // the week's coins are in Status (Me, and This week)
+  await page.click('.k-hud .k-plate');
+  assert.match(await page.textContent('#modal .week-coins'), new RegExp(`🪙 ${teethCoins} of 300 this week`));
 
-  // Parent gives Ava a bonus.
-  await page.click('[data-action="home"]');
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  // Parent gives Ava a bonus (Menu, Parents).
+  await openParents(page);
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="kids"]');
   assert.match(await page.textContent('.list'), /of 300 this week/);
@@ -116,20 +115,20 @@ try {
   await page.click('[data-action="parent-exit"]');
   await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.waitForTimeout(200);
-  const week = await page.textContent('.week-coins');
+  await closePops(page);
+  await page.click('.k-hud .k-pill');
+  await page.click('#modal [data-action="status-tab"][data-tab="week"]');
+  const week = await page.textContent('#modal .week-coins');
   assert.match(week, /of 250 this week/);
   assert.match(week, /\+20 Extra chore/);
   // today's share follows today's setup (Ava's 250 and the bigger bed), plus the bonus
   const earned = Number(week.match(/🪙 (\d+) of 250/)[1]);
   assert.ok(earned > 0 && earned <= teethCoins);
-  assert.equal((await page.textContent('.chip.coin')).trim(), `🪙 ${earned + 20}`);
+  assert.equal((await page.textContent('.k-hud .k-coin')).trim(), `🪙 ${earned + 20}`);
   if (shots) {
-    await page.locator('.week-coins').scrollIntoViewIfNeeded();
-    await page.locator('section', { hasText: 'This week' }).screenshot({ path: `${shots}/kid-this-week.png` });
+    await page.locator('#modal .status-pop').screenshot({ path: `${shots}/kid-this-week.png` });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.click('[data-action="home"]');
-    await toPicker(page);
-    await page.click('[data-action="parent"]');
+    await openParents(page);
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     await page.click('[data-action="tab"][data-tab="kids"]');
     await page.screenshot({ path: `${shots}/kids-tab-phone.png` });

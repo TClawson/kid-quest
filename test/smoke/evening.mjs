@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash, addDays, tasksForDay } from '../../js/logic.js';
-import { openKid, toPicker } from '../helpers/open-kid.mjs';
+import { openKid, openParents, closePops } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS;
 const site = await serve('.');
@@ -23,7 +23,6 @@ try {
   const make = (missed) => {
     const s = emptyState();
     s.settings.pinHash = fallbackHash('kidquest:1234');
-    s.settings.questView = 'list';
     s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: structuredClone(tasks), startDate: yday });
     const kid = s.kids[0];
     kid.tasks.find((t) => t.id === 'task_shower').evening = true;
@@ -45,8 +44,7 @@ try {
   const editing = make(false);
   editing.kids[0].tasks.find((t) => t.id === 'task_shower').evening = false;
   await load(editing);
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  await openParents(page);
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="kids"]');
   await page.click('[data-action="edit-kid"][data-id="kid_sam"]');
@@ -54,7 +52,7 @@ try {
   await page.click(`${row} .task-line`);
   await page.check(`${row} input[data-field="evening"]`);
   await page.waitForTimeout(200);
-  assert.match(await page.locator(row).innerText(), /don't keep the buddy store shut/);
+  assert.match(await page.locator(row).innerText(), /don't keep the buddy shop shut/);
   if (shots) await page.locator(row).screenshot({ path: `${shots}/1-task-editor.png` });
   const after = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
   assert.equal(after.kids[0].tasks.find((t) => t.id === 'task_shower').evening, true);
@@ -63,22 +61,27 @@ try {
   await load(make(false));
   await openKid(page, '[data-action="open-kid"][data-id="kid_sam"]');
   await page.waitForTimeout(300);
-  assert.equal(await page.locator('.store-locked').count(), 0, 'store open with only the evening chore left');
-  assert.ok(await page.locator('[data-action="wardrobe"]').count());
-  if (shots) await page.locator('.buddy-panel').screenshot({ path: `${shots}/2-open-before-shower.png` });
+  await closePops(page);
+  assert.equal(await page.locator('.k-hud .k-shop.locked').count(), 0, 'store open with only the evening chore left');
+  assert.equal(await page.locator('.k-hud .k-shop.open').count(), 1);
+  if (shots) await page.screenshot({ path: `${shots}/2-open-before-shower.png` });
 
   // shower missed last night: today the store waits for the shower too
   await load(make(true));
   await openKid(page, '[data-action="open-kid"][data-id="kid_sam"]');
   await page.waitForTimeout(300);
-  assert.match(await page.locator('.buddy-panel').innerText(), /Shower was missed last night/);
-  await page.click('[data-action="wardrobe"]');
+  await closePops(page);
+  assert.equal(await page.locator('.k-hud .k-shop.locked').count(), 1, 'the shop is shut');
+  // Today's list says the evening chore counts today
+  await page.click('.k-hud [data-action="today"]');
+  assert.match(await page.locator('.t-grp[data-group="evening"]').innerText(), /counts for the shop today \(one was missed last night\)/);
+  if (shots) await page.screenshot({ path: `${shots}/3-locked-after-missed.png` });
+  await closePops(page);
+  // and the locked Shop says why
+  await page.click('.k-hud [data-action="wardrobe"]');
   await page.waitForTimeout(200);
-  assert.match(await page.locator('body').innerText(), /waits for every chore, evening ones too/);
-  if (shots) {
-    await page.locator('.buddy-panel').screenshot({ path: `${shots}/3-locked-after-missed.png` });
-    await page.screenshot({ path: `${shots}/4-locked-toast.png` });
-  }
+  assert.match(await page.locator('.toast').innerText(), /Shower was missed last night, so today the shop waits for every chore, evening ones too/);
+  if (shots) await page.screenshot({ path: `${shots}/4-locked-toast.png` });
   assert.deepEqual(errors, []);
   console.log('evening chores: ok');
 } finally {

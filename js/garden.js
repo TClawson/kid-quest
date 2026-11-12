@@ -11,7 +11,7 @@
 // marking a chore done: watering is a little treat, and tapping elsewhere stops it.
 
 import * as A from './gardenart.js';
-import { makeGrid, findPath } from './village.js';
+import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
 import { seasonNow, tintLand, spriteFor, mountWeather } from './seasonlife.js';
 import { KINDS, seedById, sellPrice, SEEDS, decorById } from './gardenrules.js';
 
@@ -293,10 +293,13 @@ function mount(section, handlers) {
   const me = { x: mem.x, y: mem.y, path: mem.path || [], goal: mem.goal || null, face: mem.face || 1 };
   if (me.path.length) buddyEl.classList.add('walking');
   let S = 3; let vw = 0; let vh = 0;
-  const measure = () => { vw = view.clientWidth; vh = view.clientHeight; S = vw >= 600 ? 3 : 2; };
+  // full screen: as big as fits whole (4x on a 1280x800 tablet), and the HUD's top and bottom rows
+  // are kept clear by letting the view go a little past the room's edges (hudBands, measured here only)
+  let bands = { top: 0, bottom: 0 };
+  const measure = () => { vw = view.clientWidth; vh = view.clientHeight; S = roomScale(Y.W, Y.H, vw, vh); bands = hudBands(section) || bands; };
   const camTarget = () => ({
-    x: Y.W * S <= vw ? -(vw / S - Y.W) / 2 : Math.max(0, Math.min(Y.W - vw / S, me.x - vw / S / 2)),
-    y: Y.H * S <= vh ? -(vh / S - Y.H) / 2 : Math.max(0, Math.min(Y.H - vh / S, me.y - 12 - (vh / S) * (dialog.hidden ? 0.5 : 0.3))),
+    x: camAxis(Y.W, vw, S, me.x - vw / S / 2),
+    y: camAxis(Y.H, vh, S, me.y - 12 - (vh / S) * (dialog.hidden ? 0.5 : 0.3), bands.top, bands.bottom),
   });
   measure();
   let cam = mem.cam && mem.S === S ? { ...mem.cam } : camTarget();

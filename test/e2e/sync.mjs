@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays } from '../../js/logic.js';
-import { openKid, toPicker } from '../helpers/open-kid.mjs';
+import { openKid, openParents, doChore, closePops } from '../helpers/open-kid.mjs';
 
 const pinHash = (pin) => `sha256:${createHash('sha256').update(`kidquest:${pin}`).digest('hex')}`;
 const site = await serve('.');
@@ -40,8 +40,7 @@ async function typePin(page, pin) {
 
 async function openSettings(page, pin) {
   if (await page.locator('[data-action="parent-exit"]').count()) await page.click('[data-action="parent-exit"]');
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  await openParents(page);
   // a phone signed in to the family as a parent opens Parents without the PIN; any other device asks for it
   const role = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud') || 'null')?.role);
   if (role === 'parent') assert.equal(await page.locator('#modal .pin').count(), 0, 'no PIN on a parent phone');
@@ -97,7 +96,6 @@ try {
   // ---- Ava's tablet: has its own progress (two past days, a purchase) and its own PIN
   const saved = emptyState();
   saved.settings.pinHash = pinHash('1111');
-  saved.settings.questView = 'list';
   saved.settings.music = false;
   const tasks = defaultTasks();
   const [teeth, bed] = tasks;
@@ -131,14 +129,13 @@ try {
   // ---- Ava ticks a task; mom sees it
   if (await ava.page.locator('[data-action="parent-exit"]').count()) await ava.page.click('[data-action="parent-exit"]');
   await openKid(ava.page, '[data-action="open-kid"]');
-  await ava.page.click(`[data-action="task"][data-id="${teeth.id}"]`);
+  await doChore(ava.page, teeth.id);
   await until('teeth on mom’s phone', async () => (await stateOf(mom.page)).log[today]?.kid_ava?.tasks[teeth.id]?.status === 'done');
   log('✓ kid change reaches parent');
 
   // ---- Ava offline ticks another task while mom excuses the same day: both survive
   await ava.ctx.setOffline(true);
-  await ava.page.evaluate(() => document.querySelector('[data-action="modal-close"]')?.click());
-  await ava.page.click(`[data-action="task"][data-id="${bed.id}"]`);
+  await doChore(ava.page, bed.id);
   await mom.page.evaluate((day) => {
     const s = window.kidQuest.state;
     s.log[day].kid_ava.excused = true;
@@ -191,7 +188,7 @@ try {
   }, today);
   await until('coins on Ava’s tablet', async () => Object.keys((await stateOf(ava.page)).log).length > 15);
   await ava.page.evaluate(() => document.querySelector('[data-action="modal-close"]')?.click());
-  await ava.page.evaluate(() => document.querySelector('[data-action="wardrobe"]').click());
+  await ava.page.evaluate(() => document.querySelector('.k-hud [data-action="wardrobe"]').click());
   await ava.page.click('[data-action="wardrobe-slot"][data-slot="home"]');
   await ava.page.click('[data-action="wardrobe-item"][data-id="home-chair-bean-blue-plain"]');
   await ava.page.waitForSelector('[data-action="buy-confirm"]');
@@ -213,21 +210,26 @@ try {
   await ava.page.click('[data-action="wardrobe-back"]');
   log('✓ two purchases in a row both stick');
 
-  // ---- Mom adds Ben on her phone; Ben visits Ava's map wearing his outfit
+  // ---- Mom adds Ben on her phone; Ben visits Ava's village wearing his outfit
+  // (Ava made her bed in the house: she walks out the door to the village, where visitors come)
+  await closePops(ava.page);
+  if (await ava.page.locator('.house').count()) {
+    await ava.page.locator('.house .h-spot[data-spot="door"]').evaluate((b) => b.click());
+    await ava.page.waitForSelector('.village .village-view', { timeout: 20000 });
+  }
   await mom.page.evaluate(() => {
     const s = window.kidQuest.state;
     s.kids.push({ id: 'kid_ben', name: 'Ben', color: '#4dabf7', tasks: [], startDate: s.kids[0].startDate, seenUnlocks: [], buddy: { species: 'bear', outfit: {} } });
     window.kidQuest.save();
   });
-  await ava.page.click('[data-action="quest-mode"][data-mode="map"]');
-  const visitor = ava.page.locator('.map-visitor');
+  const visitor = ava.page.locator('.village .v-visitor');
   await until('Ben visiting Ava', async () => (await visitor.count()) === 1 && (await visitor.locator('.visitor-name').textContent()) === 'Ben');
-  const plain = await visitor.locator('.visitor-buddy').innerHTML();
+  const plain = await visitor.locator('.v-vbuddy').innerHTML();
   await mom.page.evaluate(() => {
     window.kidQuest.state.kids.find((k) => k.id === 'kid_ben').buddy.outfit.hat = 'hat-party';
     window.kidQuest.save();
   });
-  await until('Ben’s new hat on Ava’s map', async () => (await visitor.locator('.visitor-buddy').innerHTML()) !== plain);
+  await until('Ben’s new hat in Ava’s village', async () => (await visitor.locator('.v-vbuddy').innerHTML()) !== plain);
   assert.equal((await stateOf(ava.page)).kids.length, 1, 'visitors are not added to the kid tablet’s own kids');
   log('✓ another kid visits, wearing their current outfit');
 

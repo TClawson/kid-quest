@@ -6,7 +6,7 @@
 // - an earlier day's chest waits in a button next to Today
 // - Plan my day opens from the list; coming back from the shop puts the village back in view,
 //   and the shop's buddy picker opens from its own Switch buddy button
-// - a kid tablet with one kid skips the kid picker
+// - a kid tablet with one kid skips the kid picker (Parents is in the Menu)
 // Run: node test/smoke/kid-today.mjs [outDir]   (outDir: also save screenshots)
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import assert from 'node:assert/strict';
@@ -130,7 +130,8 @@ try {
     await page.click('.village .v-dialog [data-v="bye"]');
 
     // Esther's day is all done, so her shop is open: the shop and back puts the village in view again
-    await page.click('[data-action="home"]');
+    await page.click('.k-hud [data-action="menu"]');
+    await page.click('#modal [data-action="menu-switch"]');
     await page.click('[data-action="open-kid"][data-id="kid_esther"]');
     await page.clock.runFor(1500);
     await closeModals(page);
@@ -157,7 +158,10 @@ try {
     assert.equal(await page.locator('[data-action="open-kid"]').count(), 0, 'no kid picker');
     await page.clock.runFor(1500);
     await closeModals(page);
-    assert.ok(await page.locator('[data-action="home"]').count(), 'the way back to the picker (and Parents) is still there');
+    await page.click('.k-hud [data-action="menu"]');
+    assert.ok(await page.locator('#modal [data-action="menu-parents"]').count(), 'Parents is in the Menu');
+    assert.equal(await page.locator('#modal [data-action="menu-switch"]').count(), 0, 'and no Switch kid with one kid');
+    await closeModals(page);
     await page.locator('.village').scrollIntoViewIfNeeded();
     await page.clock.runFor(800);
 

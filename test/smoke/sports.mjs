@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, fallbackHash } from '../../js/logic.js';
-import { openKid } from '../helpers/open-kid.mjs';
+import { openKid, doChore } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -18,7 +18,6 @@ try {
   const t = dateKey();
   const saved = emptyState();
   saved.settings.pinHash = fallbackHash('kidquest:1234');
-  saved.settings.questView = 'list';
   const tasks = [...defaultTasks(), { id: 'task_run', name: 'Run', icon: '🏃', period: 'exercise', days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0, gems: 50 }];
   // exercised every day for the last 21 days: at least two full Monday-Sunday weeks whatever
   // day the test runs (14 days only gave two on some weekdays), so jumping jacks are unlocked
@@ -33,27 +32,35 @@ try {
   await page.waitForTimeout(500);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
 
-  // the bonus exercise section is there, the gems chip shows 21 x 50
-  assert.equal(await page.locator('.exercise .tile').count(), 1);
-  assert.match(await page.locator('.chip.gem').innerText(), /1,?050/);
-  // the quest list doesn't include the exercise task
-  assert.equal(await page.locator('section:not(.exercise) .tile[data-id="task_run"]').count(), 0);
+  // the exercise is in Today's list on its own (not among the quests), the gems in the HUD show 21 x 50
+  await page.click('.k-hud [data-action="today"]');
+  assert.equal(await page.locator('.t-grp[data-group="exercise"] .t-q[data-id="task_run"]').count(), 1);
+  assert.equal(await page.locator('.t-grp:not([data-group="exercise"]) .t-q[data-id="task_run"]').count(), 0);
+  await page.click('#modal [data-action="modal-close"]');
+  assert.match(await page.locator('.k-hud .k-gem').innerText(), /1,?050/);
 
-  // tapping the buddy does a move
-  await page.click('.buddy-panel .buddy-tap');
+  // tapping the buddy does a move, in the village and in Status
+  await page.locator('.village .v-buddy').click({ force: true });
   await page.waitForTimeout(200);
-  assert.equal(await page.locator('.buddy-panel svg.trick').count(), 1, 'buddy does a move');
+  assert.equal(await page.locator('.village .v-buddy svg.trick').count(), 1, 'buddy does a move');
   await page.waitForTimeout(2000);
-  assert.equal(await page.locator('.buddy-panel svg.trick').count(), 0, 'and goes back to normal');
+  assert.equal(await page.locator('.village .v-buddy svg.trick').count(), 0, 'and goes back to normal');
+  await page.click('.k-hud .k-plate');
+  await page.click('#modal .s-big');
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('#modal .s-big svg.trick').count(), 1, 'the buddy in Status does a move too');
+  await page.waitForTimeout(2000);
+  assert.equal(await page.locator('#modal .s-big svg.trick').count(), 0);
+  await page.click('#modal [data-action="modal-close"]');
 
-  // exercise today: +50 gems
-  await page.click('.exercise .tile[data-id="task_run"]');
+  // exercise today, with the coach: +50 gems
+  await doChore(page, 'task_run');
   await page.waitForTimeout(800);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
-  assert.match(await page.locator('.chip.gem').innerText(), /1,?100/);
+  assert.match(await page.locator('.k-hud .k-gem').innerText(), /1,?100/);
 
   // buy a soccer ball with gems
-  await page.click('[data-action="wardrobe"]');
+  await page.click('.k-hud [data-action="wardrobe"]');
   await page.click('[data-action="wardrobe-slot"][data-slot="sport"]');
   await page.click('[data-action="wardrobe-item"][data-id="sport-soccer-regular"]');
   await page.click('[data-action="buy-confirm"]');

@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
-import { openKid, toPicker } from '../helpers/open-kid.mjs';
+import { openKid, openParents } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews').replace(/\/$/, '');
 const video = process.argv.includes('--video');
@@ -245,8 +245,7 @@ const PHONE = { width: 412, height: 915 };
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), st);
   await page.reload();
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  await openParents(page);
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="kids"]');
   await page.click('[data-action="edit-kid"][data-id="kid_ava"]');

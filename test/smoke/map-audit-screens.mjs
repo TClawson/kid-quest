@@ -7,7 +7,7 @@ import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, newId, fallbackHash } from '../../js/logic.js';
 import { pickVisitors, planVisits } from '../../js/visits.js';
 import { bestGear } from '../../js/items.js';
-import { openKid } from '../helpers/open-kid.mjs';
+import { openKid, openOldMap } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 const part = process.argv[3] || 'all';
@@ -23,7 +23,7 @@ function family(theme, gear = null) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
-  s.settings.questView = 'map'; // the old map (a new device starts in the village)
+  s.settings.questView = 'map'; // chose the old map once: the village opens, and the map is in the Menu
   const start = addDays(day, -50);
   const mk = (id, name, color, species, extra) => {
     const tasks = defaultTasks();
@@ -85,6 +85,7 @@ for (const [name, theme, gear, want, force] of SETUPS) {
     await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), family(theme, gear));
     await page.reload();
     await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
+    await openOldMap(page); // the old map, from the Menu
     await page.clock.runFor(1500);
     while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
     await page.clock.runFor(4000);

@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
-import { openKid } from '../helpers/open-kid.mjs';
+import { openKid, openOldMap } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 const mode = process.argv[3] || 'still';
@@ -22,13 +22,14 @@ async function open(viewport, video) {
   const saved = emptyState();
   saved.settings.pinHash = 'sha256:test';
   saved.settings.sound = false;
-  saved.settings.questView = 'map'; // the old map (a new device starts in the village)
+  saved.settings.questView = 'map'; // chose the old map once: the village opens, and the map is in the Menu
   const tasks = defaultTasks();
   saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: dateKey(), buddy: { species: 'fox', outfit: { background: 'bg-rainforest' } } });
   saved.log = { [dateKey()]: { kid_ava: { tasks: { [tasks[0].id]: { status: 'done' }, [tasks[1].id]: { status: 'done' } } } } };
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
   await openKid(page, '[data-action="open-kid"]');
+  await openOldMap(page); // the old map, from the Menu
   await page.waitForTimeout(300);
   return { ctx, page };
 }
@@ -98,7 +99,7 @@ try {
       const s = emptyState();
       s.settings.pinHash = 'sha256:test';
       s.settings.sound = false;
-      s.settings.questView = 'map'; // the old map (a new device starts in the village)
+      s.settings.questView = 'map'; // chose the old map once: the village opens, and the map is in the Menu
       const tasks = defaultTasks();
       s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: [], buddy: { species: 'fox', outfit: { background: 'bg-rainforest' } } });
       s.log[dateKey()] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
@@ -110,6 +111,7 @@ try {
       }, s);
       await page.reload();
       await openKid(page, '[data-action="open-kid"]');
+      await openOldMap(page); // the old map, from the Menu
       await page.waitForTimeout(500);
       while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
       await page.waitForSelector('.map-visitor');

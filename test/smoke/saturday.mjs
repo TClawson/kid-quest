@@ -33,7 +33,8 @@ try {
       assert.match(text.join(' '), /Saturday: 2 free games/i, 'Saturday pops up the two free games');
       await page.click('#modal [data-action="modal-close"]');
       await page.clock.runFor(1000);
-      await page.click('[data-action="home"]').catch(() => {});
+      // the app opens again later the same day (a one-kid tablet has no picker to go back to)
+      await page.reload();
       await openKid(page, '[data-action="open-kid"]');
       await page.clock.runFor(1500);
       assert.doesNotMatch((await page.locator('#modal:not([hidden])').allInnerTexts()).join(' '), /free games/i, 'only once a day');

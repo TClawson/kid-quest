@@ -1,0 +1,206 @@
+/* ---------- the kid's screen, full screen (js/hud.js) ----------
+   The village (or the house, the garden, the music house) fills the screen; a small HUD sits over
+   its corners, and the Status and Menu pop-ups hold everything else. html.kid-full is set by
+   app.js while it is on screen, so the page itself never scrolls. */
+
+html.kid-full, html.kid-full body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+html.kid-full body { background: #1b1430; }
+.screen.kid-full { max-width: none; margin: 0; padding: 0; min-height: 100vh; min-height: 100dvh; }
+.kid-full .village, .kid-full .house, .kid-full .garden {
+  position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100dvh; margin: 0; z-index: 1;
+}
+.kid-full .village-view, .kid-full .house .house-view, .kid-full .garden .garden-view {
+  height: 100%; min-height: 0; border: 0; border-radius: 0;
+}
+/* the talk box: not wider than it reads well, and above the phone's gesture bar */
+.kid-full .v-dialog {
+  left: max(10px, 50% - 470px); right: max(10px, 50% - 470px);
+  bottom: calc(10px + env(safe-area-inset-bottom));
+}
+/* the house's, garden's and music house's name sign: the plate already says whose it is */
+.kid-full .h-sign { left: 50%; top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); }
+/* the house's Garden button and the garden's Water button: under the top-right corner */
+.kid-full .h-gbtn, .kid-full .g-water {
+  top: calc(var(--hud-top, 92px) + env(safe-area-inset-top)); right: calc(14px + env(safe-area-inset-right));
+  min-height: 60px; min-width: 60px; padding: 4px 14px;
+}
+
+/* ---------- the HUD ---------- */
+.k-hud { --in: 14px; --tap: 64px; position: absolute; inset: 0; z-index: 7; pointer-events: none; font-family: var(--px-font); color: var(--px-ink); }
+.k-hud button { pointer-events: auto; cursor: pointer; font-family: var(--px-font); color: var(--px-ink); }
+/* never over a talk box, the landmark's show or a pop-up's game */
+.talking > .k-hud, .show-on > .k-hud { display: none; }
+
+.k-plate, .k-pill, .k-sq, .k-fam { box-sizing: border-box; border: 3px solid var(--px-ink); border-radius: 6px; }
+.k-plate, .k-pill, .k-sq { background: var(--px-paper); box-shadow: inset 0 -4px 0 var(--px-paper-2), 0 4px 0 var(--px-ink); }
+.k-plate:active, .k-pill:active, .k-sq:active { transform: translateY(3px); box-shadow: inset 0 -4px 0 var(--px-paper-2), 0 1px 0 var(--px-ink); }
+
+.k-plate {
+  position: absolute; left: calc(var(--in) + env(safe-area-inset-left)); top: calc(var(--in) + env(safe-area-inset-top));
+  display: flex; align-items: center; gap: 10px; min-height: var(--tap); max-width: 46vw; padding: 5px 14px 5px 5px; text-align: left;
+}
+.k-face { width: 50px; height: 50px; flex: none; display: block; border: 2px solid var(--px-ink); border-radius: 4px; overflow: hidden; background: #a5d8ff; }
+.k-face svg { width: 100%; height: 100%; display: block; }
+.k-who { display: block; min-width: 0; }
+.k-who b { display: block; font-size: 1.45rem; line-height: 1; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-who small { display: flex; align-items: center; gap: 6px; margin-top: 4px; font: 0.85rem/1 var(--px-text); color: var(--muted); white-space: nowrap; }
+.k-xp { display: inline-block; width: 70px; height: 9px; border: 2px solid var(--px-ink); background: #fff; }
+.k-xp > i { display: block; height: 100%; background: #ffd43b; }
+
+/* the family's progress: top centre on a wide screen, under the plate on a narrow one */
+.k-fam {
+  position: absolute; left: 50%; top: calc(var(--in) + env(safe-area-inset-top)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 0 16px; white-space: nowrap;
+  background: rgba(42, 24, 56, 0.8); border-color: transparent; color: #fff8e7 !important; font-size: 1.2rem;
+}
+.k-fam.happy { background: #e8590c; border-color: var(--px-ink); animation: v-hop 0.8s steps(2, end) infinite; }
+.k-fbar { display: inline-block; width: 110px; height: 9px; background: rgba(255, 255, 255, 0.25); }
+.k-fbar > i { display: block; height: 100%; background: #74c0fc; }
+
+.k-tr { position: absolute; right: calc(var(--in) + env(safe-area-inset-right)); top: calc(var(--in) + env(safe-area-inset-top)); display: flex; gap: 10px; pointer-events: none; }
+.k-pill { display: flex; align-items: center; gap: 16px; min-height: var(--tap); padding: 0 16px; font-size: 1.5rem; white-space: nowrap; }
+.k-pill .cold { filter: grayscale(1); opacity: 0.6; }
+.k-sq { position: relative; width: var(--tap); height: var(--tap); display: grid; place-items: center; padding: 0; font-size: 1.7rem; }
+.k-burger { display: grid; gap: 5px; width: 30px; }
+.k-burger i { display: block; height: 4px; background: var(--px-ink); border-radius: 1px; }
+
+.k-hud .v-hud { left: calc(var(--in) + env(safe-area-inset-left)); bottom: calc(var(--in) + env(safe-area-inset-bottom)); }
+.k-hud .today-btn { min-height: 76px; min-width: 250px; }
+.k-hud .today-btn b { font-size: 1.7rem; }
+.k-hud .hud-chest { width: 76px; height: 76px; }
+.k-hud .hud-chest svg { width: 40px; }
+
+.k-br { position: absolute; right: calc(var(--in) + env(safe-area-inset-right)); bottom: calc(var(--in) + env(safe-area-inset-bottom)); display: flex; gap: 10px; align-items: flex-end; pointer-events: none; }
+.k-sq.big { width: 76px; height: 76px; padding-bottom: 14px; font-size: 2.1rem; }
+.k-sq small { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font: 700 0.85rem/1 var(--px-font); color: var(--px-ink); }
+.k-lock { position: absolute; right: -10px; top: -12px; width: 28px; height: 28px; display: grid; place-items: center; font-size: 0.9rem; background: var(--px-paper); border: 2px solid var(--px-ink); border-radius: 4px; }
+.k-shop.locked > span:first-child { filter: saturate(0.5); opacity: 0.8; }
+.k-br .t-nb { font-size: 0.85rem; }
+
+/* narrow screens (portrait tablet, phone): the family pill goes under the plate */
+@media (orientation: portrait), (max-width: 1100px) {
+  .k-fam { left: calc(var(--in) + env(safe-area-inset-left)); top: calc(var(--in) + var(--tap) + 10px + env(safe-area-inset-top)); transform: none; font-size: 1.05rem; min-height: 60px; padding: 0 12px; }
+  .k-fam.happy { animation: none; }
+  .k-fbar { width: 80px; }
+}
+/* a phone: 44px targets, and everything a little smaller */
+@media (max-width: 600px) {
+  .k-hud { --in: 8px; --tap: 48px; }
+  .k-plate { gap: 6px; padding: 3px 8px 3px 3px; max-width: 44vw; }
+  .k-face { width: 38px; height: 38px; }
+  .k-who b { font-size: 1.1rem; }
+  .k-who small { font-size: 0.75rem; gap: 4px; }
+  .k-xp { width: 38px; height: 7px; }
+  .k-tr { gap: 6px; }
+  .k-pill { gap: 7px; padding: 0 8px; font-size: 1.1rem; }
+  .k-sq { font-size: 1.3rem; }
+  .k-burger { width: 22px; gap: 4px; }
+  .k-burger i { height: 3px; }
+  .k-fam { min-height: 44px; font-size: 0.95rem; gap: 6px; padding: 0 10px; }
+  .k-fbar { width: 56px; height: 7px; }
+  .k-hud .today-btn { min-height: 56px; min-width: 150px; }
+  .k-hud .today-btn b { font-size: 1.25rem; }
+  .k-hud .hud-chest { width: 56px; height: 56px; }
+  .k-hud .hud-chest svg { width: 28px; }
+  .k-sq.big { width: 56px; height: 56px; padding-bottom: 12px; font-size: 1.5rem; }
+  .k-sq small { font-size: 0.75rem; bottom: 3px; }
+  .k-lock { width: 22px; height: 22px; right: -7px; top: -9px; font-size: 0.7rem; }
+  .kid-full .h-sign { display: none; }
+  .kid-full .h-gbtn, .kid-full .g-water { min-height: 44px; min-width: 44px; padding: 4px 10px; right: calc(8px + env(safe-area-inset-right)); }
+}
+/* toasts keep clear of the bottom row */
+html.kid-full .toast { bottom: calc(110px + env(safe-area-inset-bottom)); }
+
+/* ---------- the Status and Menu pop-ups ---------- */
+.modal-card.status-card, .modal-card.menu-card { padding: 0; text-align: left; display: flex; flex-direction: column; overflow: hidden; }
+.modal-card.status-card { width: min(880px, 100%); max-height: min(92vh, 760px); }
+.modal-card.menu-card { width: min(520px, 100%); }
+.status-pop, .menu-pop { display: flex; flex-direction: column; min-height: 0; color: var(--px-ink); }
+.p-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px 8px 18px; border-bottom: 3px solid var(--px-ink); background: #f3e6c4; flex: none; }
+.p-head h2 { margin: 0; flex: 1 1 auto; min-width: 0; font: 400 2rem/1.1 var(--px-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-star { font-size: 1.8rem; flex: none; }
+.p-head .k-burger { width: 26px; }
+.p-sub { font: 1rem var(--px-text); color: var(--muted); white-space: nowrap; }
+.p-x { width: 56px; height: 56px; flex: none; cursor: pointer; font: 700 1.5rem/1 var(--px-font); background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); color: var(--px-ink); }
+.p-tabs { display: flex; gap: 8px; padding: 10px 18px 2px; flex: none; overflow-x: auto; }
+.p-tabs button {
+  min-height: 52px; padding: 0 16px; flex: none; cursor: pointer; white-space: nowrap; font: 400 1.25rem/1 var(--px-font);
+  background: #fff; color: var(--px-ink); border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink);
+}
+.p-tabs button.on { background: #5b4bdb; color: #fff; }
+.p-body { padding: 12px 18px 14px; overflow: auto; min-height: 0; flex: 1 1 auto; }
+.p-body h2 { margin-top: 4px; }
+.p-foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 18px 14px; border-top: 3px dashed #d9c9a0; flex: none; }
+
+/* Me */
+.s-me { display: grid; grid-template-columns: 210px 1fr; gap: 18px; align-items: start; }
+.s-left { display: grid; gap: 12px; }
+.s-big { display: block; width: 100%; border: 3px solid var(--px-ink); border-radius: 4px; overflow: hidden; background: #a5d8ff; }
+.s-big .buddy { width: 100%; height: auto; aspect-ratio: 1; margin: 0; border-radius: 0; }
+.s-big svg { width: 100%; height: 100%; display: block; }
+.s-outfit { width: 100%; }
+.s-say { margin: 0 0 10px; }
+.s-say span { display: inline-block; position: relative; background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; padding: 6px 12px; font: 1.05rem/1.3 var(--px-text); }
+.s-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.s-tile { border: 3px solid var(--px-ink); border-radius: 6px; background: #fff; padding: 8px 6px; text-align: center; }
+.s-tile b { display: block; font: 400 1.7rem/1 var(--px-font); }
+.s-tile small { font: 0.82rem/1.2 var(--px-text); color: var(--muted); }
+.s-h { margin: 12px 0 6px; font: 400 1.25rem/1.1 var(--px-font); }
+.s-h small { font: 0.85rem var(--px-text); }
+.s-line { font: 1rem/1.4 var(--px-text); margin: 8px 0 0; }
+.s-fam { color: var(--muted); }
+.status-pop .week { max-width: 420px; }
+.status-pop .reward-line, .status-pop .month-line { font-family: var(--px-text); }
+.status-pop .habits { margin: 0; }
+.status-pop .garden-line { margin: 8px 0 0; }
+
+/* Menu */
+.m-list { display: grid; gap: 10px; padding: 14px 18px 18px; overflow: auto; }
+.m-item {
+  display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 16px; cursor: pointer; text-align: left;
+  background: #fff; color: var(--px-ink); border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); font: 400 1.4rem/1 var(--px-font);
+}
+.m-item:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--px-ink); }
+.m-item b { font-weight: 400; }
+.m-ic { font-size: 1.6rem; width: 34px; text-align: center; flex: none; }
+.m-item small { margin-left: auto; font: 0.95rem var(--px-text); color: var(--muted); }
+
+/* portrait and phones: a sheet from the bottom, one column */
+@media (orientation: portrait), (max-width: 720px) {
+  .modal:has(.status-card) { align-items: end; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .modal-card.status-card { max-height: 88vh; max-height: 88dvh; }
+  .s-me { grid-template-columns: 1fr; }
+  .s-left { grid-template-columns: 150px 1fr; align-items: end; }
+  .s-tiles { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .p-head { padding: 8px 8px 6px 12px; gap: 8px; flex-wrap: wrap; }
+  .p-head h2 { font-size: 1.6rem; }
+  .p-sub { order: 3; flex-basis: 100%; margin-top: -4px; font-size: 0.9rem; }
+  .p-x { width: 44px; height: 44px; }
+  .p-tabs { padding: 8px 10px 2px; gap: 6px; }
+  .p-tabs button { min-height: 44px; padding: 0 10px; font-size: 1.05rem; }
+  .p-body { padding: 10px 10px 12px; }
+  .p-foot { padding: 8px 10px 12px; gap: 8px; }
+  .s-left { grid-template-columns: 110px 1fr; }
+  .s-tile b { font-size: 1.4rem; }
+  .m-list { padding: 10px; }
+  .m-item { min-height: 56px; font-size: 1.25rem; }
+}
+
+/* ---------- the old map page (Menu > Old map, for one release) ---------- */
+.old-map-back { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
+.old-map-back .btn { flex: none; }
+
+/* ---------- the shop's tabs: kinds of things, then (for clothes and the house) which ones ---------- */
+.shop-tabs { display: grid; gap: 8px; margin-bottom: 16px; }
+.shop-tabs .tabs { flex-wrap: nowrap; overflow-x: auto; margin: 0; padding: 2px 2px 6px; scrollbar-width: thin; }
+.shop-tabs .tabs button { flex: none; min-height: 52px; }
+.shop-tabs .tabs.sub { padding-left: 16px; }
+.shop-tabs .tabs.sub button { min-height: 46px; font-size: 1rem; background: #fff; }
+.shop-tabs .tabs.sub button.on { background: #7048e8; color: #fff; }
+@media (max-width: 600px) {
+  .shop-tabs .tabs button { min-height: 46px; }
+  .shop-tabs .tabs.sub { padding-left: 8px; }
+  .shop-tabs .tabs.sub button { min-height: 44px; }
+}

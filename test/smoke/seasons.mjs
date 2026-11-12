@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
 import { VILLAGE_START } from '../../js/familygarden.js';
-import { openKid, toPicker } from '../helpers/open-kid.mjs';
+import { openKid, openParents } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 fs.mkdirSync(out, { recursive: true });
@@ -90,8 +90,7 @@ for (const [sizeName, viewport] of Object.entries(SIZES)) {
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), family('bg-meadow'));
   await page.reload();
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  await openParents(page);
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="settings"]');
 if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools

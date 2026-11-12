@@ -571,12 +571,24 @@ export function villageGoal(kidId, goal) { goals.set(kidId, goal); }
 
 /**
  * Where the arrows to quests off screen go: each on the edge of the view, in the direction of
- * its quest, never on top of another arrow, and out of the Today button's corner (bottom left).
- * list: [{ id, sx, sy, ... }] (sx, sy: the quest on screen, maybe off it); hud: { w, h } or null.
+ * its quest, never on top of another arrow, and out of the HUD's corners.
+ * list: [{ id, sx, sy, ... }] (sx, sy: the quest on screen, maybe off it); hud: the HUD's corners
+ * (hudBands), or { w, h } for just a Today button in the bottom-left corner, or null.
  * Returns [{ ...q, left, top, angle }] for the quests that are off screen.
  */
 export function arrowSpots(list, vw, vh, hud = null, m = 30, gap = 50) {
   const cx = vw / 2; const cy = vh / 2;
+  const bl = hud?.bl || (hud?.w ? { w: hud.w, h: hud.h } : null);
+  const br = hud?.br || null;
+  const topBand = hud?.top || 0;
+  const clear = 8 + 26; // an arrow's half and a little room
+  // how far along each edge an arrow may go: [from, to]
+  const span = {
+    top: [m, vw - m],
+    bottom: [bl ? bl.w + clear : m, vw - (br ? br.w + clear : m)],
+    left: [topBand ? topBand + clear : m, vh - (bl ? bl.h + clear : m)],
+    right: [topBand ? topBand + clear : m, vh - (br ? br.h + clear : m)],
+  };
   const out = [];
   for (const q of list) {
     if (q.sx > 10 && q.sx < vw - 10 && q.sy > 10 && q.sy < vh - 10) continue;
@@ -585,17 +597,16 @@ export function arrowSpots(list, vw, vh, hud = null, m = 30, gap = 50) {
     const k = Math.min(kx, ky);
     const edge = kx <= ky ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'top' : 'bottom');
     let left = cx + dx * k; let top = cy + dy * k;
-    if (hud) {
-      // out of the corner: along the bottom it moves right of the button, up the left side above it
-      if (edge === 'bottom' && left < hud.w + 8 + 26) left = hud.w + 8 + 26;
-      if (edge === 'left' && top > vh - hud.h - 8 - 26) top = vh - hud.h - 8 - 26;
-    }
+    // along the top they sit under the HUD's top row
+    if (edge === 'top' && topBand) top = Math.max(top, topBand + clear);
+    const [a, b] = span[edge];
+    if (edge === 'top' || edge === 'bottom') left = Math.max(a, Math.min(b, left)); else top = Math.max(a, Math.min(b, top));
     out.push({ ...q, edge, left, top, angle: Math.round(Math.atan2(dy, dx) * (180 / Math.PI)) });
   }
   // arrows on the same edge spread out so none hides another
   for (const edge of ['top', 'bottom', 'left', 'right']) {
     const along = edge === 'top' || edge === 'bottom' ? 'left' : 'top';
-    const max = (along === 'left' ? vw : vh) - m;
+    const max = span[edge][1];
     const row = out.filter((a) => a.edge === edge).sort((a, b) => a[along] - b[along]);
     for (let i = 1; i < row.length; i += 1) row[i][along] = Math.max(row[i][along], row[i - 1][along] + gap);
     for (let i = row.length - 1; i >= 0; i -= 1) row[i][along] = Math.min(row[i][along], i === row.length - 1 ? max : row[i + 1][along] - gap);
@@ -603,6 +614,53 @@ export function arrowSpots(list, vw, vh, hud = null, m = 30, gap = 50) {
   for (const a of out) { a.left = Math.round(a.left); a.top = Math.round(a.top); }
   return out;
 }
+
+/**
+ * The HUD's corners over a full-screen view (hud.js), in screen pixels from the view's edges:
+ * { top, bottom, bl: { w, h }, br: { w, h }, boxes } (bl and br: the bottom corners' buttons, or null;
+ * boxes: every HUD button's box, { x, y, w, h }).
+ * Measured when a screen opens or the screen changes size, never per frame. Returns null when
+ * there is no HUD showing (or it is hidden behind a talk box): keep the last one then.
+ */
+export function hudBands(section) {
+  const hud = section.querySelector(':scope > .k-hud');
+  const view = section.querySelector('.village-view');
+  if (!hud || !view || !hud.getClientRects().length) return hud ? null : { top: 0, bottom: 0, bl: null, br: null, boxes: [] };
+  const v = view.getBoundingClientRect();
+  const rect = (sel) => { const el = hud.querySelector(sel); const r = el?.getClientRects().length ? el.getBoundingClientRect() : null; return r && r.width ? r : null; };
+  const tops = ['.k-plate', '.k-fam', '.k-tr'].map(rect).filter(Boolean);
+  const bl = rect('.v-hud'); const br = rect('.k-br');
+  const boxes = [...tops, bl, br].filter(Boolean).map((r) => ({ x: r.left - v.left - 4, y: r.top - v.top - 4, w: r.width + 8, h: r.height + 8 }));
+  return {
+    boxes,
+    top: Math.max(0, ...tops.map((r) => r.bottom - v.top)),
+    bottom: Math.max(0, ...[bl, br].filter(Boolean).map((r) => v.bottom - r.top)),
+    bl: bl ? { w: bl.right - v.left, h: v.bottom - bl.top } : null,
+    br: br ? { w: v.right - br.left, h: v.bottom - br.top } : null,
+  };
+}
+
+/**
+ * One axis of a camera: where a world `size` long starts, for a view `view` screen pixels long at
+ * S screen pixels a world pixel, when the HUD covers `lo` and `hi` screen pixels at its two ends.
+ * A world that fits between them is centred there; otherwise the camera follows `want`, and may go
+ * past the world's edges just far enough to bring them out from under the HUD.
+ */
+export function camAxis(size, view, S, want, lo = 0, hi = 0) {
+  if (size * S <= view - lo - hi) return -(lo + (view - lo - hi - size * S) / 2) / S;
+  const min = -lo / S; const max = size - (view - hi) / S;
+  return Math.max(min, Math.min(max, want));
+}
+
+/** Screen pixels a world pixel: 3 on a tablet, 2 on a phone (either way up). */
+export const baseScale = () => (Math.min(window.innerWidth, window.innerHeight) >= 600 ? 3 : 2);
+
+/**
+ * The scale for a room (the house, the garden, the music house) on a full screen: the biggest
+ * whole number that shows all of it (4x on a 1280x800 tablet), and never smaller than the
+ * village's (on a portrait tablet or a phone the view then follows the buddy, as before).
+ */
+export const roomScale = (W, H, vw, vh) => Math.max(baseScale(), Math.floor(Math.min(vw / W, vh / H)));
 
 /** The buddy just came out of the music house: it stands outside the music hall's door. */
 export function cameOutOfMusic(kidId, theme) {
@@ -711,11 +769,46 @@ function mount(section, handlers) {
   let S = 3;
   let cam = { x: 0, y: 0 };
   let vw = 0; let vh = 0;
+  // beyond the edges of the village (when the view goes past them, see below), its own ground
+  const ground = MAP_THEMES[L.id]?.ground?.[0];
+  if (ground) view.style.background = ground;
+
+  // The HUD covers the view's top and bottom rows. Everything the kid needs (the villagers and
+  // their chore bubbles, the shopkeeper, the chest, the doors, the signs, the landmark) must be
+  // able to come out from under it: where one stands at the very top or bottom of the village,
+  // the view may go past that edge by just enough (only then, and only that far).
+  const needed = [
+    ...people.map((p) => [p.y - 40, p.y + 2]),
+    ...(L.shop ? [[L.shop.y - 40, L.shop.y + 2]] : []),
+    [L.chest.y - 16, L.chest.y + 2],
+    [L.home.y + L.home.h - 34, L.home.y + L.home.h + 2],
+    ...(L.music ? [[L.music.y + L.music.h - 34, L.music.y + L.music.h + 2]] : []),
+    ...[...section.querySelectorAll('.v-label.period, .v-garden')].map((el) => { const y = parseFloat(el.style.top) || 0; return [y - 2, y + 20]; }),
+  ];
+  const keyTop = Math.min(...needed.map((n) => n[0]));
+  const keyBottom = Math.max(...needed.map((n) => n[1]));
+  // and the same things as boxes [x, y, w, h], so the view can step aside when a HUD button would sit on one
+  const signBox = (el) => { const w = el.offsetWidth || 40; const x = parseFloat(el.style.left) || 0; const y = parseFloat(el.style.top) || 0; return el.classList.contains('v-garden') ? [x, y, w, 20] : [x - w / 2, y, w, 12]; };
+  const keyBoxes = [
+    ...people.map((p) => [p.x - 10, p.y - 40, 20, 42]),
+    ...(L.shop ? [[L.shop.x - 10, L.shop.y - 40, 20, 42]] : []),
+    [L.chest.x - 12, L.chest.y - 16, 24, 18],
+    [L.home.x + L.home.w / 2 - 14, L.home.y + L.home.h - 34, 28, 36],
+    ...(L.music ? [[L.music.x + L.music.w / 2 - 14, L.music.y + L.music.h - 34, 28, 36]] : []),
+    ...[...section.querySelectorAll('.v-label.period, .v-label.home-label, .v-garden')].map(signBox),
+  ];
+  let bands = { top: 0, bottom: 0, bl: null, br: null, boxes: [] };
+  let pad = { lo: 0, hi: 0 };
 
   const showLand = section.querySelector('.v-show canvas.map-land');
   const measure = () => {
     vw = view.clientWidth; vh = view.clientHeight;
-    S = vw >= 600 ? 3 : 2;
+    S = baseScale();
+    bands = hudBands(section) || bands;
+    pad = {
+      lo: Math.max(0, bands.top / S + 2 - keyTop) * S,
+      hi: Math.max(0, keyBottom - (H - bands.bottom / S - 2)) * S,
+    };
     // the treasure map's show plays over the view (mapshow.js sizes itself from this canvas)
     if (showLand) { showLand.width = Math.ceil(vw / S); showLand.height = Math.ceil(vh / S); showLand.parentElement.dataset.scale = S; }
   };
@@ -725,11 +818,38 @@ function mount(section, handlers) {
     const fx = lm && (atLandmark || me.goal?.landmark) ? (Math.min(me.x - 12, lm.x) + Math.max(me.x + 12, lm.x + lm.w)) / 2 : me.x;
     // if the buddy and a big landmark don't both fit (phones), the buddy always stays fully in view
     const left = Math.max(me.x + 16 - vw / S, Math.min(me.x - 16, fx - vw / S / 2));
-    const tx = W * S <= vw ? -(vw / S - W) / 2 : Math.max(0, Math.min(W - vw / S, left));
     // while someone is talking, the buddy sits higher up, above the talk box
     const at = dialog.hidden ? 0.5 : 0.3;
-    const ty = H * S <= vh ? -(vh / S - H) / 2 : Math.max(0, Math.min(H - vh / S, me.y - 12 - (vh / S) * at));
-    return { x: tx, y: ty };
+    const x = camAxis(W, vw, S, left);
+    const y = camAxis(H, vh, S, me.y - 12 - (vh / S) * at, pad.lo, pad.hi);
+    return { x, y: dialog.hidden ? clearOfHud(x, y) : y };
+  };
+  // A HUD button sitting on a villager, the chest, a door or a sign: the view moves up or down a
+  // little (the smallest step that clears them all, keeping the buddy in view), and keeps that
+  // step while it still works, so it doesn't flicker. Only sums: nothing is measured per frame.
+  let nudge = 0;
+  const hides = (cx, cy) => bands.boxes.some((b) => keyBoxes.some(([x, y, w, h]) => {
+    const sx = (x - cx) * S; const sy = (y - cy) * S;
+    return sx < b.x + b.w && sx + w * S > b.x && sy < b.y + b.h && sy + h * S > b.y;
+  }));
+  const clearOfHud = (cx, cy) => {
+    if (!bands.boxes.length) return cy;
+    const lo = -pad.lo / S; const hi = Math.max(lo, H - (vh - pad.hi) / S);
+    const ok = (d) => {
+      const y = cy + d;
+      if (y < lo - 0.01 || y > hi + 0.01) return false;
+      const by = (me.y - y) * S; // the buddy stays well inside the view
+      return by > bands.top + 30 && by < vh - bands.bottom - 10 && !hides(cx, y);
+    };
+    if (ok(0)) { nudge = 0; return cy; }
+    if (nudge && ok(nudge)) return cy + nudge;
+    const most = Math.ceil(Math.max(bands.top, bands.bottom) / S) + 12;
+    for (let d = 0; d <= most; d += 3) {
+      if (ok(d)) { nudge = d; return cy + d; }
+      if (d && ok(-d)) { nudge = -d; return cy - d; }
+    }
+    nudge = 0;
+    return cy;
   };
   measure();
   cam = mem.cam && mem.S === S ? { ...mem.cam } : camTarget();
@@ -1084,9 +1204,8 @@ function mount(section, handlers) {
     // all done, chest opened: the shop is open
     else if (!list.length && data.shop.open && L.shop && !data.chest.ready) list.push({ id: 'shop', x: L.shop.x, y: L.shop.y - 22, icon: '👕' });
     const shown = new Set();
-    // the Today button sits in the bottom-left corner: arrows keep out of its way
-    const hudEl = hud();
-    const spots = arrowSpots(list.map((q) => ({ ...q, sx: (q.x - cam.x) * S, sy: (q.y - cam.y) * S })), vw, vh, hudEl ? { w: hudEl.offsetWidth, h: hudEl.offsetHeight } : null);
+    // the HUD sits in the corners and along the top: arrows keep out of its way (measured in measure())
+    const spots = arrowSpots(list.map((q) => ({ ...q, sx: (q.x - cam.x) * S, sy: (q.y - cam.y) * S })), vw, vh, bands);
     for (const q of spots) {
       let el = arrowEls.get(q.id);
       if (!el) {
@@ -1107,11 +1226,10 @@ function mount(section, handlers) {
     // a visitor right at the bottom edge keeps quiet, so its bubble isn't under the arrows and the Today button
     for (const el of visitors) {
       const sp = data.spots[el.dataset.id];
-      const low = Boolean(sp) && (sp.y - cam.y) * S > vh - 70;
+      const low = Boolean(sp) && (sp.y - cam.y) * S > vh - Math.max(70, bands.bottom);
       if (el.classList.contains('hush') !== low) el.classList.toggle('hush', low);
     }
   };
-  const hud = () => section.querySelector(':scope > .v-hud');
 
   // ---- the loop ----
   const artEl = section.querySelector('.v-landmark canvas.v-art');

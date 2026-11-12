@@ -3,7 +3,7 @@
 // Run: npm run test:smoke   (SHOTS_DIR=... saves screenshots)
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { toPicker } from '../helpers/open-kid.mjs';
+import { toPicker, openParents } from '../helpers/open-kid.mjs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, weekStart, entryFor, tasksForDay, fallbackHash } from '../../js/logic.js';
 
@@ -43,8 +43,7 @@ try {
     // The Parents button counts the reward to hand over.
     await toPicker(page);
     assert.match(await page.textContent('[data-action="parent"]'), /1/);
-    await toPicker(page);
-    await page.click('[data-action="parent"]');
+    await openParents(page);
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     // one strip on Today: how many, and who; See opens the Given rows
     const strip = page.locator('.reward-strip');

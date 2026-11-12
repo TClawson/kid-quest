@@ -2,7 +2,7 @@
 // floor and the buddy walks there round the furniture (the village's A* walking, at the
 // same pixel scale), and the view follows it. The music house uses it (musichouse.js).
 
-import { makeGrid, findPath } from './village.js';
+import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
 
 /**
  * Starts the walking in a room's section (.village-view > .village-world with a .v-buddy,
@@ -30,10 +30,13 @@ export function walkRoom(o) {
   const me = { x: mem.x, y: mem.y, path: mem.path || [], goal: mem.goal || null, face: mem.face || 1 };
   if (me.path.length) buddyEl.classList.add('walking');
   let S = 3; let vw = 0; let vh = 0;
-  const measure = () => { vw = view.clientWidth; vh = view.clientHeight; S = vw >= 600 ? 3 : 2; };
+  // full screen: as big as fits whole (4x on a 1280x800 tablet), and the HUD's top and bottom rows
+  // are kept clear by letting the view go a little past the room's edges (hudBands, measured here only)
+  let bands = { top: 0, bottom: 0 };
+  const measure = () => { vw = view.clientWidth; vh = view.clientHeight; S = roomScale(W, H, vw, vh); bands = hudBands(section) || bands; };
   const camTarget = () => ({
-    x: W * S <= vw ? -(vw / S - W) / 2 : Math.max(0, Math.min(W - vw / S, me.x - vw / S / 2)),
-    y: H * S <= vh ? -(vh / S - H) / 2 : Math.max(0, Math.min(H - vh / S, me.y - 12 - (vh / S) * (talking() ? 0.3 : 0.5))),
+    x: camAxis(W, vw, S, me.x - vw / S / 2),
+    y: camAxis(H, vh, S, me.y - 12 - (vh / S) * (talking() ? 0.3 : 0.5), bands.top, bands.bottom),
   });
   measure();
   const cam = mem.cam && mem.S === S ? { ...mem.cam } : camTarget();
