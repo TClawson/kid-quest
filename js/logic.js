@@ -427,10 +427,10 @@ export function storeOpen(state, kid, today) {
   };
 }
 
-/** One line telling the kid why the store is shut (or that evening chores don't hold it). */
+/** One line telling the kid why the shop is shut (or that evening chores don't hold it). */
 export function storeLockText(lock) {
   if (lock.open) return '';
-  const why = lock.missed.length ? `${lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were'} missed last night, so today the store waits for every chore, evening ones too. ` : '';
+  const why = lock.missed.length ? `${lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were'} missed last night, so today the shop waits for every chore, evening ones too. ` : '';
   const what = lock.left ? `Finish today's chores first (${lock.left} to go${lock.evening ? ', not counting evening chores' : ''})` : `Opens when a parent approves your chores (${lock.waiting} waiting)`;
   return why + what;
 }
@@ -763,6 +763,50 @@ export function kidToday(state, kid, today, daysBack = 14) {
     waiting,
     todo,
     doneTasks,
+  };
+}
+
+/**
+ * The kid's own Today list: today's chores grouped the way the day goes, each in the kid's
+ * planned order, with what the list shows about it. Builds on kidToday (its counts and bar).
+ * - groups: { morning, afternoon, evening, exercise }: [{ task, record, state ('done', 'waiting'
+ *   or 'todo'), next, secondsLeft, cue, mastered }]. Evening chores (isEvening) are their own
+ *   group whatever their time of day; bonus exercise is last.
+ * - next: the id of the next quest: the first chore not done or waiting, mornings first, in
+ *   the kid's plan order (the village's next quest too), or null. Exercise is never next.
+ * - secondsLeft: for a timer chore not done yet, the seconds still to go, else null.
+ * - cue: the moment the kid picked for it in Plan my day, or ''; mastered: a habit star.
+ */
+export function todayQuests(state, kid, today) {
+  const day = kidToday(state, kid, today, 0);
+  const tasks = tasksForDay(state, kid, today, today);
+  const entry = entryFor(state, kid.id, today);
+  const habits = habitInfo(state, kid, today);
+  const quests = ['morning', 'afternoon'].flatMap((period) => planOrder(kid, questTasks(tasks).filter((t) => (period === 'morning' ? t.period === 'morning' : t.period !== 'morning'))));
+  const stateOf = (t) => { const st = entry?.tasks?.[t.id]?.status; return st === 'done' ? 'done' : st === 'pending' ? 'waiting' : 'todo'; };
+  const next = quests.find((t) => stateOf(t) === 'todo')?.id || null;
+  const item = (t) => {
+    const record = entry?.tasks?.[t.id] || null;
+    const st = stateOf(t);
+    return {
+      task: t,
+      record,
+      state: st,
+      next: t.id === next,
+      secondsLeft: st === 'todo' && t.minutes > 0 ? Math.max(0, t.minutes * 60 - (record?.seconds || 0)) : null,
+      cue: cueFor(kid, t),
+      mastered: Boolean(habits.get(t.id)?.mastered),
+    };
+  };
+  return {
+    ...day,
+    next,
+    groups: {
+      morning: quests.filter((t) => t.period === 'morning' && !isEvening(t)).map(item),
+      afternoon: quests.filter((t) => t.period !== 'morning' && !isEvening(t)).map(item),
+      evening: quests.filter(isEvening).map(item),
+      exercise: planOrder(kid, tasks.filter(isExercise)).map(item),
+    },
   };
 }
 

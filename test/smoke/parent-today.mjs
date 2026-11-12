@@ -6,6 +6,7 @@
 // Run: npm run test:smoke   (SHOTS_DIR=... saves screenshots)
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { toPicker } from '../helpers/open-kid.mjs';
 import { serve } from '../helpers/serve.mjs';
 import { parentFamily } from '../helpers/parent-family.mjs';
 import { dateKey, addDays, totalCoins, totalXp } from '../../js/logic.js';
@@ -38,7 +39,9 @@ try {
   // ---------- a phone on its own (not in a family): the PIN, then Today ----------
   {
     const { page, errors } = await open({ width: 412, height: 915 }, (s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)));
+    await toPicker(page);
     assert.match(await page.textContent('[data-action="parent"]'), /🔒 Parents/);
+    await toPicker(page);
     await page.click('[data-action="parent"]');
     assert.equal(await page.locator('#modal .pin').count(), 1, 'the PIN on a device not in a family');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
@@ -221,6 +224,7 @@ try {
   // ---------- 360 px wide and a tablet: nothing pokes out sideways ----------
   for (const viewport of [{ width: 360, height: 780 }, { width: 800, height: 1280 }]) {
     const { page, errors } = await open(viewport, (s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)));
+    await toPicker(page);
     await page.click('[data-action="parent"]');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     for (const id of ['kid_ayden', 'kid_remi']) await page.click(`[data-action="today-kid"][data-kid="${id}"]`);
@@ -241,9 +245,11 @@ try {
       localStorage.setItem('kidquest.cloud', JSON.stringify({ familyId: 'fam', role: 'parent', kidId: null, email: 'parent@example.com' }));
       localStorage.setItem('kidquest.cloud.cache', JSON.stringify(s));
     }, { family: true });
+    await toPicker(page);
     assert.match(await page.textContent('[data-action="parent"]'), /👪 Parents/);
     assert.match(await page.locator('.kid-card[data-id="kid_ayden"]').innerText(), /4 of 9 done · 2 waiting/);
     assert.doesNotMatch(await page.locator('.kid-card[data-id="kid_edison"]').innerText(), /waiting/);
+    await toPicker(page);
     await page.click('[data-action="parent"]');
     assert.equal(await page.locator('#modal .pin').count(), 0, 'no PIN on a parent phone');
     assert.equal(await page.locator('.pnav [data-tab="today"].on').count(), 1);
@@ -259,8 +265,10 @@ try {
       localStorage.setItem('kidquest.cloud', JSON.stringify({ familyId: 'fam', role: 'kid', kidId: 'kid_ayden' }));
       localStorage.setItem('kidquest.cloud.cache', JSON.stringify(kidOnly));
     }, { family: true });
+    await toPicker(page);
     assert.match(await page.textContent('[data-action="parent"]'), /🔒 Parents/);
     assert.doesNotMatch(await page.locator('.kid-card').innerText(), /waiting/);
+    await toPicker(page);
     await page.click('[data-action="parent"]');
     assert.equal(await page.locator('#modal .pin').count(), 1, 'the PIN on a kid tablet');
     await page.close();

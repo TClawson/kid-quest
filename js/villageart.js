@@ -145,6 +145,33 @@ const HEADS = {
     '..KAaaaaaaaaAK..',
     '...KKKKKKKKKK...',
   ],
+  // the coach, who gives the bonus exercise: a golden dog in a sweatband
+  coach: [
+    '....KKKKKKKK....',
+    '..KKAAAAAAAAKK..',
+    '.KRRRRRRRRRRRRK.',
+    '.KQQQQQQQQQQQQK.',
+    'KDDKAAAAAAAAKDDK',
+    'KDDAAweAAweAADDK',
+    'KDDAAeeAAeeAADDK',
+    'KDDbbAaNNaAbbDDK',
+    '.KDKAaaaaaaAKDK.',
+    '..KKKAaTTaAKKK..',
+    '....KKKKKKKK....',
+  ],
+};
+
+// what each kind wears below the head (most share BODY); the coach is in a tracksuit with a whistle
+const BODIES = {
+  coach: [
+    '..KCCgCCCCgCCK..',
+    '.KCKLCgCCgCLKCK.',
+    '.KAKLCCGGCCLKAK.',
+    '..KKLCCHGCCLKK..',
+    '...KPPK..KPPK...',
+    '...KZZK..KZZK...',
+    '...KKKK..KKKK...',
+  ],
 };
 
 // colors for each kind; lid is what closed (happy) eyes are drawn over
@@ -158,15 +185,21 @@ const PALS = {
   raccoon: { A: '#adb5bd', a: '#f1f3f5', D: '#495057', M: '#3d4249', N: '#1b1430', C: '#e03131', lid: 'M' },
   mouse: { A: '#ced4da', a: '#f1f3f5', i: '#ffadc6', N: '#ff6b9a', C: '#fcc419', lid: 'A' },
   badger: { A: '#495057', a: '#f1f3f5', s: '#f8f9fa', N: '#1b1430', C: '#2b8a3e', lid: 'a' },
+  // golden fur, darker floppy ears, a red sweatband, a blue tracksuit with white stripes, a silver whistle on a yellow cord
+  coach: { A: '#e8a33d', a: '#ffe3b0', D: '#a8641e', N: '#3b2314', T: '#ff8fab', R: '#f03e3e', Q: '#c92a2a', C: '#1c7ed6', L: '#f8f9fa', g: '#fcc419', G: '#adb5bd', H: '#f8f9fa', P: '#1864ab', Z: '#ffffff', lid: 'A' },
 };
 
-export const VILLAGER_KINDS = Object.keys(HEADS).filter((k) => k !== 'badger');
+/** Who can be given a chore by name: everyone but the shopkeeper and the coach, who have their own jobs. */
+export const VILLAGER_KINDS = Object.keys(HEADS).filter((k) => k !== 'badger' && k !== 'coach');
 
 /** A villager's letter grid, and its size. */
 export function villagerGrid(kind) {
   const head = HEADS[kind] || HEADS.bunny;
-  return [...head, ...BODY];
+  return [...head, ...(BODIES[kind] || BODY)];
 }
+
+/** How many rows of a villager's grid are its head (a fishbowl helmet goes over them). */
+export const headRows = (kind) => (HEADS[kind] || HEADS.bunny).length;
 
 /** Draws a villager onto a canvas (one canvas pixel per grid cell). happy: closed eyes and pink cheeks. */
 export function drawVillager(canvas, kind, happy = false) {

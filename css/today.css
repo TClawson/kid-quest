@@ -1,0 +1,110 @@
+/* ---------- the kid's Today button and Today's quests (js/today.js) ----------
+   The button sits in the bottom-left corner of the village, the house, the garden and the
+   music house, over the picture; it hides while a talk box is open there. */
+
+.village, .house, .garden { position: relative; }
+.v-hud { position: absolute; left: 12px; bottom: 12px; z-index: 6; display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
+.v-hud > * { pointer-events: auto; }
+.talking > .v-hud { display: none; }
+
+.today-btn {
+  position: relative; display: flex; flex-direction: column; gap: 5px; justify-content: center; text-align: left;
+  min-width: 210px; min-height: 64px; padding: 7px 14px 10px; box-sizing: border-box; cursor: pointer;
+  background: #5b4bdb; color: #fff; border: 3px solid var(--px-ink); border-radius: 6px;
+  box-shadow: var(--px-bevel), 0 5px 0 var(--px-ink); font-family: var(--px-font);
+}
+.today-btn b { font-size: 1.5rem; line-height: 1; font-weight: 400; white-space: nowrap; }
+.today-btn b em { font-style: normal; opacity: 0.88; font-size: 1.15rem; margin-left: 6px; }
+.today-btn.all { background: #2f9e44; }
+.today-btn:active { transform: translateY(3px); box-shadow: var(--px-bevel), 0 2px 0 var(--px-ink); }
+.t-seg { display: flex; gap: 3px; }
+.t-seg i { flex: 1; height: 9px; border: 2px solid var(--px-ink); background: #fff; }
+.t-seg i.d { background: #51cf66; }
+.t-seg i.w { background: #fcc419; }
+.t-nb {
+  position: absolute; right: -10px; top: -12px; min-width: 24px; height: 24px; padding: 0 4px; box-sizing: border-box;
+  display: grid; place-items: center; white-space: nowrap; background: #e03131; color: #fff;
+  border: 2px solid var(--px-ink); border-radius: 4px; font: 700 1rem/1 var(--px-font);
+}
+.t-nb.amber { background: #f59f00; }
+
+/* an earlier day's chest, waiting to be opened: next to the Today button */
+.hud-chest {
+  position: relative; width: 64px; height: 64px; padding: 0 0 14px; box-sizing: border-box; cursor: pointer;
+  display: grid; place-items: center; background: var(--px-paper); border: 3px solid var(--px-ink); border-radius: 6px;
+  box-shadow: inset 0 -4px 0 var(--px-paper-2), 0 4px 0 var(--px-ink); animation: v-hop 0.6s steps(2, end) infinite;
+}
+.hud-chest svg { width: 34px; height: auto; display: block; }
+.hud-chest small { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font: 700 0.85rem/1 var(--px-font); color: var(--px-ink); }
+
+@media (max-width: 600px) {
+  .v-hud { left: 8px; bottom: 8px; gap: 8px; }
+  .today-btn { min-width: 150px; min-height: 52px; padding: 5px 10px 8px; }
+  .today-btn b { font-size: 1.25rem; }
+  .today-btn b em { font-size: 1rem; margin-left: 4px; }
+  .t-seg i { height: 7px; }
+  .hud-chest { width: 52px; height: 52px; }
+  .hud-chest svg { width: 28px; }
+}
+
+/* ---------- the list ---------- */
+.modal-card.today-card { width: min(940px, 100%); padding: 0; text-align: left; }
+.today-pop { color: var(--px-ink); }
+.t-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px 8px 18px; border-bottom: 3px solid var(--px-ink); background: #f3e6c4; position: sticky; top: 0; z-index: 1; }
+.t-head h2 { margin: 0; font: 400 1.8rem/1.1 var(--px-font); flex: 1 1 auto; }
+.t-sub { font: 0.95rem var(--px-text); color: var(--muted); order: 3; flex-basis: 100%; margin-top: -4px; }
+.t-x { width: 44px; height: 44px; flex: none; cursor: pointer; font: 700 1.3rem/1 var(--px-font); background: var(--px-paper); border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); color: var(--px-ink); }
+.t-body { padding: 4px 18px 12px; }
+.t-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+.t-cols.one { grid-template-columns: 1fr; }
+.t-grp h3 { font: 400 1.3rem/1.1 var(--px-font); color: #7048e8; margin: 12px 0 6px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.t-grp h3 small { font: 0.85rem var(--px-text); color: var(--muted); }
+.t-q {
+  display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 5px 8px 5px 8px; margin-bottom: 8px; box-sizing: border-box;
+  background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink);
+}
+.t-ic { font-size: 1.6rem; width: 34px; text-align: center; flex: none; }
+.t-tx { flex: 1; min-width: 0; }
+.t-tx b { display: block; font: 400 1.25rem/1.05 var(--px-font); }
+.t-tx small { display: block; font: 0.85rem/1.2 var(--px-text); color: var(--muted); }
+.t-star { font-size: 0.95rem; }
+.t-q.done { background: #e6fcf5; box-shadow: none; }
+.t-q.done .t-tx b { color: #2b6b3f; }
+.t-q.done .t-ic { opacity: 0.6; }
+.t-q.waiting { background: #fff9db; }
+.t-q.next { border-color: #e67700; box-shadow: 0 3px 0 #e67700; background: #fff3bf; }
+.t-go {
+  flex: none; min-width: 84px; min-height: 46px; padding: 0 12px; box-sizing: border-box; cursor: pointer; white-space: nowrap;
+  background: #5b4bdb; color: #fff; border: 3px solid var(--px-ink); border-radius: 6px;
+  box-shadow: var(--px-bevel), 0 3px 0 var(--px-ink); font: 400 1.2rem/1 var(--px-font);
+}
+.t-go.ghost { background: var(--px-paper); color: var(--px-ink); box-shadow: inset 0 -3px 0 var(--px-paper-2), 0 3px 0 var(--px-ink); }
+.t-st { flex: none; font: 400 1.1rem/1 var(--px-font); color: #2b8a3e; padding: 0 6px; }
+.t-foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 18px 14px; border-top: 3px dashed #d9c9a0; }
+.t-tag {
+  min-height: 44px; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; padding: 6px 10px;
+  background: #fff; color: var(--px-ink); border: 2px solid var(--px-ink); border-radius: 4px; font: 0.95rem/1.2 var(--px-text); text-align: left;
+}
+button.t-tag { cursor: pointer; box-shadow: 0 2px 0 var(--px-ink); }
+.t-tag svg { width: 24px; height: auto; flex: none; }
+.t-tag.ready { background: #fff3bf; border-color: #e67700; font-weight: 700; }
+.t-tag.open { background: #d3f9d8; }
+
+/* one column: the day in order, the bonus exercise last */
+@media (max-width: 720px), (orientation: portrait) {
+  .t-cols { display: flex; flex-direction: column; }
+  .t-cols > div { display: contents; }
+  .t-grp[data-group="exercise"] { order: 1; }
+}
+@media (max-width: 600px) {
+  .t-head { padding: 8px 8px 6px 12px; }
+  .t-head h2 { font-size: 1.5rem; }
+  .t-body { padding: 2px 10px 10px; }
+  .t-foot { padding: 8px 10px 12px; gap: 8px; }
+  .t-q { gap: 8px; }
+  .t-go { min-width: 70px; padding: 0 8px; font-size: 1.1rem; }
+}
+
+/* the shop: picking another kind of buddy starts from its own small button */
+.buddy-side .switch-buddy { justify-self: start; padding-left: 16px; padding-right: 16px; }
+@media (max-width: 560px) { .buddy-side .switch-buddy { justify-self: center; } }

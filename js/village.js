@@ -11,7 +11,7 @@
 // buddies' pixels. app.js decides what a tap on a quest does (the same as tapping the
 // chore anywhere else).
 
-import { drawVillager, VILLAGER_KINDS, villagerGrid, bowlCanvas, BOWL_THEMES } from './villageart.js';
+import { drawVillager, VILLAGER_KINDS, villagerGrid, headRows, bowlCanvas, BOWL_THEMES } from './villageart.js';
 import { paintVillage } from './villageprops.js';
 import { villageLayout } from './villagemaps.js';
 import { MAP_THEMES } from './maparts.js';
@@ -37,8 +37,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(
 
 // ---------- villagers ----------
 
-const NAMES = { bunny: 'Clover', beaver: 'Bucky', owl: 'Hoot', frog: 'Fiddle', sheep: 'Wooly', hedgehog: 'Hazel', raccoon: 'Rory', mouse: 'Pip', badger: 'Barty' };
-const SPECIES_NAMES = { bunny: 'the Bunny', beaver: 'the Beaver', owl: 'the Owl', frog: 'the Frog', sheep: 'the Sheep', hedgehog: 'the Hedgehog', raccoon: 'the Raccoon', mouse: 'the Mouse', badger: 'the Badger' };
+const NAMES = { bunny: 'Clover', beaver: 'Bucky', owl: 'Hoot', frog: 'Fiddle', sheep: 'Wooly', hedgehog: 'Hazel', raccoon: 'Rory', mouse: 'Pip', badger: 'Barty', coach: 'Coach Dash' };
+const SPECIES_NAMES = { bunny: 'the Bunny', beaver: 'the Beaver', owl: 'the Owl', frog: 'the Frog', sheep: 'the Sheep', hedgehog: 'the Hedgehog', raccoon: 'the Raccoon', mouse: 'the Mouse', badger: 'the Badger', coach: 'the Dog' };
 // who gives which chore, when the chore's name fits (beavers know about teeth)
 const LIKES = [
   ['beaver', /teeth|tooth|brush|floss/i],
@@ -59,6 +59,7 @@ const HELLO = {
   hedgehog: (n) => `Hi ${n}! I'd do it myself, but I'm a little prickly. Could you?`,
   raccoon: (n) => `Psst, ${n}! I've got a secret mission for you:`,
   mouse: (n) => `Squeak! Oh, ${n}! A small quest for a big hero:`,
+  coach: (n) => `*Tweet!* Hey ${n}! Ready to move? Bonus exercise earns 💎 gems:`,
 };
 const THANKS = {
   bunny: (n) => `Hoppy day! Thank you, ${n}!`,
@@ -69,6 +70,7 @@ const THANKS = {
   hedgehog: (n) => `You're the best, ${n}! Have a (gentle) hug.`,
   raccoon: (n) => `Mission complete! You're a legend, ${n}.`,
   mouse: (n) => `Squeak squeak hooray! Thanks, ${n}!`,
+  coach: (n) => `*Tweet tweet!* That's how it's done, ${n}! High five!`,
 };
 const liked = (name) => LIKES.find(([, re]) => re.test(name))?.[0] || null;
 
@@ -236,6 +238,34 @@ function gardenSign(L, garden, people = []) {
   return `<button class="v-garden" style="left:${left}px;top:${top}px;z-index:450" aria-label="${label}"><span class="v-garden-post"></span><span class="v-garden-board">🌱 Garden${n ? `<i class="v-garden-n">💧${n}</i>` : ''}</span></button>`;
 }
 
+/** The id the coach goes by among the quest givers. */
+export const COACH = 'coach';
+
+/** Where each talking visitor's speech bubble may be, roughly, in village pixels: [x, y, w, h]. */
+export function bubbleBoxes(visit, L) {
+  const spots = visitorSpots(visit, L);
+  return Object.values(spots).map((sp) => [sp.x - 36, sp.y - 58, 72, 34]);
+}
+
+/**
+ * A "Morning quests" sign's spot, moved a little (sideways first, then up or down) when it would
+ * sit under a visitor's speech bubble or a villager. label: [x, y, text]; returns [x, y, text].
+ */
+export function labelSpot(label, avoid, L) {
+  const [x, y, text] = label;
+  const w = text.length * 4 + 10;
+  const hits = (cx, cy) => avoid.filter(([bx, by, bw, bh]) => cx - w / 2 < bx + bw && cx + w / 2 > bx && cy < by + bh && cy + 11 > by).length;
+  let best = [x, y]; let least = hits(x, y);
+  for (const [dx, dy] of [[0, 0], [-30, 0], [30, 0], [-60, 0], [60, 0], [0, -14], [0, 14], [-40, -14], [40, -14], [-40, 14], [40, 14]]) {
+    const cx = x + dx; const cy = y + dy;
+    if (cx - w / 2 < 22 || cx + w / 2 > L.W - 22) continue;
+    const n = hits(cx, cy);
+    if (n < least) { least = n; best = [cx, cy]; }
+    if (!least) break;
+  }
+  return [...best, text];
+}
+
 /**
  * The village for a kid. v: {
  *   theme: the kid's Places background (which map's village),
@@ -251,11 +281,16 @@ function gardenSign(L, garden, people = []) {
  *     to go before it opens,
  *   garden: { thirsty }: how many plants in the garden are waiting for water (the sign by the house),
  *   bloom: the family's trees and flowers (bloomData in villagebloom.js) or null,
+ *   coach: { tasks: [quests, as in tasks], line } or null: the bonus exercise, given by the coach
+ *     beside the play spots; line: how the kid's strong weeks are going,
+ *   hud: markup laid over a corner of the village window (the Today button), or '',
  * }
  */
 export function villageHtml(v) {
   const L = villageLayout(v.theme);
   const people = placeVillagers(v.tasks, L);
+  // the coach gives the bonus exercise (never the day's quest, so no arrows point to him)
+  if (v.coach?.tasks?.length && L.coach) people.push({ id: COACH, kind: 'coach', x: L.coach.x, y: L.coach.y, period: 'exercise', tasks: v.coach.tasks });
   const quest = (t) => ({ id: t.id, st: t.st, verify: t.verify, timer: Boolean(t.timer), icon: t.icon, task: t.name, sub: t.sub, step: t.step || 0, plan: t.plan || '' });
   // most landmarks are their treasure-map art drawn twice as big; the meadow's Great Oak (oakart.js) and the
   // sunset's ghost ship wreck (wreckart.js) are drawn for the village
@@ -267,6 +302,7 @@ export function villageHtml(v) {
     planned: Boolean(v.planned), chest: { ready: v.chest.ready, opened: v.chest.opened }, shop,
     areas: greenAreas(v.visit, L), spots: visitorSpots(v.visit, L), landmark: lm,
     home: v.home || null,
+    coach: v.coach ? { line: v.coach.line || '' } : null,
     music: { tier: v.music?.tier || 0, left: v.music?.left || 0 },
     bloom: v.bloom || null, // the family's trees and flowers (villagebloom.js)
     today: v.today || v.bloom?.today || '', // the season follows this day (seasons.js)
@@ -282,7 +318,7 @@ export function villageHtml(v) {
         <span class="v-hearts" aria-hidden="true"></span>
       </button>`;
   }).join('');
-  const keeper = L.shop ? `<button class="villager keeper st-${shop.open ? 'done' : 'todo'}" data-kind="badger" data-shop="1" style="left:${L.shop.x}px;top:${L.shop.y}px;z-index:${L.shop.y}" aria-label="${esc(villagerName('badger'))}: the buddy shop">
+  const keeper = L.shop ? `<button class="villager keeper st-${shop.open ? 'done' : 'todo'}" data-kind="badger" data-shop="1" style="left:${L.shop.x}px;top:${L.shop.y}px;z-index:${L.shop.y}" aria-label="${esc(villagerName('badger'))}: the shop">
         <span class="v-bubble"><span class="v-icon">${shop.open ? '👕' : '🔒'}</span></span>
         <canvas class="v-sprite" width="16" height="${villagerGrid('badger').length}"></canvas>
       </button>` : '';
@@ -290,8 +326,10 @@ export function villageHtml(v) {
   const home = v.home && v.home.left > 0 ? v.home : null;
   const homeBubble = home ? `<span class="v-bubble v-home-bubble" style="left:${L.home.w / 2}px">${home.step && v.planned ? `<span class="v-step">${home.step}</span>` : ''}<span class="v-icon">${esc(home.icon)}</span>${home.left > 1 ? `<span class="v-badge more">×${home.left}</span>` : ''}</span>` : '';
   const am = people.some((p) => p.period === 'morning');
-  const pm = people.some((p) => p.period !== 'morning');
-  const [mx, my, mt] = L.labels.morning; const [ax, ay, at] = L.labels.afternoon;
+  const pm = people.some((p) => p.period === 'afternoon');
+  // the signs step aside from the visitors' speech bubbles and the villagers
+  const avoid = [...bubbleBoxes(v.visit, L), ...people.map((p) => [p.x - 9, p.y - 36, 18, 36])];
+  const [mx, my, mt] = labelSpot(L.labels.morning, avoid, L); const [ax, ay, at] = labelSpot(L.labels.afternoon, avoid, L);
   return `
     <section class="village theme-${esc(L.id)}" data-kid="${esc(v.kidId)}" data-v="${esc(JSON.stringify(data))}">
       <div class="village-view">
@@ -309,13 +347,14 @@ export function villageHtml(v) {
           ${lm ? `<button class="v-landmark${lm.art ? ` art-${lm.art}` : ''}" style="left:${lm.x}px;top:${lm.y}px;width:${lm.w}px;z-index:${lm.y + lm.h}" aria-label="${esc(v.landmark.name)}">${LANDMARK_ART[lm.art] ? `<canvas class="v-art" width="${LANDMARK_ART[lm.art].size.w}" height="${LANDMARK_ART[lm.art].size.h}" aria-hidden="true"></canvas>` : v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
           <span class="v-critter b1" aria-hidden="true"></span><span class="v-critter b2" aria-hidden="true"></span>
           <button class="v-chest ${v.chest.ready ? 'ready' : ''} ${v.chest.opened ? 'opened' : ''}" style="left:${L.chest.x}px;top:${L.chest.y}px;z-index:${L.chest.y}" aria-label="Treasure">${v.chest.html}</button>
-          <div class="v-buddy" style="z-index:500"><div class="v-flip">${v.buddy}</div></div>
+          <div class="v-buddy" data-kid="${esc(v.kidId)}" style="z-index:500"><div class="v-flip">${v.buddy}</div></div>
           <span class="v-target" hidden></span>
         </div>
         <div class="v-show"><canvas class="map-land" data-z="1" width="1" height="1"></canvas></div>
         <div class="v-arrows"></div>
         <div class="v-dialog" hidden></div>
       </div>
+      ${v.hud || ''}
     </section>`;
 }
 
@@ -525,6 +564,46 @@ export function cameOut(kidId, theme) {
   memory.set(key, { ...(memory.get(key) || { seen: {} }), x: L.start.x, y: L.start.y + 4, face: 1, cam: null });
 }
 
+// Where the Today list sent the buddy from indoors (the house, the garden, the music house):
+// kid id -> { task } (a villager's quest) or { home: true }, done when the village opens.
+const goals = new Map();
+export function villageGoal(kidId, goal) { goals.set(kidId, goal); }
+
+/**
+ * Where the arrows to quests off screen go: each on the edge of the view, in the direction of
+ * its quest, never on top of another arrow, and out of the Today button's corner (bottom left).
+ * list: [{ id, sx, sy, ... }] (sx, sy: the quest on screen, maybe off it); hud: { w, h } or null.
+ * Returns [{ ...q, left, top, angle }] for the quests that are off screen.
+ */
+export function arrowSpots(list, vw, vh, hud = null, m = 30, gap = 50) {
+  const cx = vw / 2; const cy = vh / 2;
+  const out = [];
+  for (const q of list) {
+    if (q.sx > 10 && q.sx < vw - 10 && q.sy > 10 && q.sy < vh - 10) continue;
+    const dx = q.sx - cx; const dy = q.sy - cy;
+    const kx = (cx - m) / Math.abs(dx || 1e-6); const ky = (cy - m) / Math.abs(dy || 1e-6);
+    const k = Math.min(kx, ky);
+    const edge = kx <= ky ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'top' : 'bottom');
+    let left = cx + dx * k; let top = cy + dy * k;
+    if (hud) {
+      // out of the corner: along the bottom it moves right of the button, up the left side above it
+      if (edge === 'bottom' && left < hud.w + 8 + 26) left = hud.w + 8 + 26;
+      if (edge === 'left' && top > vh - hud.h - 8 - 26) top = vh - hud.h - 8 - 26;
+    }
+    out.push({ ...q, edge, left, top, angle: Math.round(Math.atan2(dy, dx) * (180 / Math.PI)) });
+  }
+  // arrows on the same edge spread out so none hides another
+  for (const edge of ['top', 'bottom', 'left', 'right']) {
+    const along = edge === 'top' || edge === 'bottom' ? 'left' : 'top';
+    const max = (along === 'left' ? vw : vh) - m;
+    const row = out.filter((a) => a.edge === edge).sort((a, b) => a[along] - b[along]);
+    for (let i = 1; i < row.length; i += 1) row[i][along] = Math.max(row[i][along], row[i - 1][along] + gap);
+    for (let i = row.length - 1; i >= 0; i -= 1) row[i][along] = Math.min(row[i][along], i === row.length - 1 ? max : row[i + 1][along] - gap);
+  }
+  for (const a of out) { a.left = Math.round(a.left); a.top = Math.round(a.top); }
+  return out;
+}
+
 /** The buddy just came out of the music house: it stands outside the music hall's door. */
 export function cameOutOfMusic(kidId, theme) {
   const L = villageLayout(theme);
@@ -612,7 +691,7 @@ function mount(section, handlers) {
     };
     bowl(flip, 20, 20, 'left:2px;top:0');
     section.querySelectorAll('.v-vbuddy').forEach((el) => bowl(el, 20, 20, 'left:2px;top:0'));
-    const folkBowl = (el, kind) => bowl(el, 20, villagerGrid(kind).length - 6 + 4, 'left:-2px;bottom:4px');
+    const folkBowl = (el, kind) => bowl(el, 20, headRows(kind) + 4, `left:-2px;bottom:${villagerGrid(kind).length - headRows(kind) - 2}px`);
     for (const p of people) folkBowl(els.get(p.id), p.kind);
     if (keeperEl) folkBowl(keeperEl, 'badger');
   }
@@ -696,10 +775,13 @@ function mount(section, handlers) {
   const questCard = (q) => `<div class="v-quest"><span class="v-quest-icon">${esc(q.icon)}</span><span><b>${esc(q.task)}</b><small>${esc(q.sub)}</small>${q.plan ? `<small class="v-plan">📝 Your plan: “${esc(q.plan)}”</small>` : ''}</span></div>`;
   const doLabel = (q) => (q.timer && !/^Time done/.test(q.sub) ? '▶ Start the timer' : q.verify === 'parent' ? '🙋 I did it! Ask a parent' : '✓ I did it!');
 
-  const say = (p, mode) => {
+  const say = (p, mode, focus = null) => {
     const name = data.name;
     const el = els.get(p.id);
-    const q = activeQuest(p.tasks);
+    // a quest picked from the Today list is the one talked about (unless it's done already)
+    const picked = focus && p.tasks.find((t) => t.id === focus && t.st !== 'done');
+    const q = picked || activeQuest(p.tasks);
+    const coach = p.kind === 'coach';
     const more = p.tasks.filter((t) => t.st === 'todo' || t.st === 'current');
     // the next quest may be waiting in the kid's house (bed, teeth, floor)
     const next = allQuests.find((t) => t.st === 'current') || (data.home?.now ? { task: data.home.task, icon: data.home.icon, home: true } : null);
@@ -707,9 +789,11 @@ function mount(section, handlers) {
     const goNext = next?.home ? `<button class="btn" data-v="go" data-to="home">Next quest: ${esc(next.icon)}</button>`
       : next && nextOwner !== p ? `<button class="btn" data-v="go" data-to="${esc(nextOwner.id)}">Next quest: ${esc(next.icon)}</button>` : '';
     let text; let buttons; let quest = '';
-    const offPlan = data.planned && next && q.st === 'todo' && next !== q;
+    // bonus exercise is never part of the plan, so the coach never says to do the plan first
+    const offPlan = !coach && data.planned && next && q.st === 'todo' && next !== q;
     if (mode === 'thanks' || doneAll(p)) {
       text = THANKS[p.kind](name);
+      if (coach && data.coach?.line) text += ` ${data.coach.line}`;
       const just = mode === 'thanks' ? p.tasks.filter((t) => t.st === 'done').pop() : null;
       if (more.length) {
         // this villager has another quest: it's handed over right away
@@ -734,7 +818,8 @@ function mount(section, handlers) {
       }
     } else {
       text = HELLO[p.kind](name);
-      if (more.length > 1) text += ` (I have ${more.length} quests for you today. Here's the first.)`;
+      if (coach && data.coach?.line) text = `${text.replace(/:$/, '.')} ${data.coach.line}`;
+      if (more.length > 1 && !picked) text += ` (I have ${more.length} quests for you today. Here's the first.)`;
       // off the plan's order: point to the planned step, but never block this one
       if (offPlan) text = `Hi ${name}! Your plan says ${next.task} comes first. I can wait, or you can do mine now.`;
       else if (data.planned && q.st === 'current' && q.step) text += ` (Step ${q.step} of your plan.)`;
@@ -744,7 +829,7 @@ function mount(section, handlers) {
         : `<button class="btn" data-v="do" data-q="${esc(q.id)}">${doLabel(q)}</button><button class="btn ghost" data-v="bye">Not yet</button>`;
     }
     // sometimes a villager mentions the family's plants, so kids can see why they grow or droop
-    if (mode !== 'pending' && q.st !== 'pending') {
+    if (!coach && mode !== 'pending' && q.st !== 'pending') {
       const hint = bloomHint(data.bloom?.hint, `${data.bloom?.today}|${p.id}|${hintTaps += 1}`);
       if (hint) text += ` ${hint}`;
       // in the first days of a season (or when a parent is trying one), a villager may say so
@@ -759,11 +844,11 @@ function mount(section, handlers) {
   const sayShop = () => {
     const s = data.shop;
     const text = s.open
-      ? `Welcome, ${data.name}! ${s.evening ? 'Your day quests are done (evening ones can wait till tonight)' : 'All your quests are done'}, so the shop is open. Want to dress up your buddy?`
+      ? `Welcome, ${data.name}! ${s.evening ? 'Your day quests are done (evening ones can wait till tonight)' : 'All your quests are done'}, so the shop is open. Come on in!`
       : s.missed?.length
         ? `Hi ${data.name}! ${s.missed.length === 1 ? `${s.missed[0]} was` : 'Some evening quests were'} missed last night, so today my shop waits for every quest, evening ones too.${s.left ? ` ${s.left} to go!` : ''} See you then!`
         : `Hi ${data.name}! My shop opens when ${s.evening ? "today's day quests" : "all of today's quests"} are done and a grown-up has checked them.${s.evening ? ' Evening quests can wait.' : ''}${s.left ? ` ${s.left} to go!` : ''} See you then!`;
-    const buttons = s.open ? '<button class="btn" data-v="shop">👕 Go shopping</button><button class="btn ghost" data-v="bye">Bye!</button>' : '<button class="btn" data-v="bye">OK!</button>';
+    const buttons = s.open ? '<button class="btn" data-v="shop">👕 Shop</button><button class="btn ghost" data-v="bye">Bye!</button>' : '<button class="btn" data-v="bye">OK!</button>';
     open(card(villagerName('badger'), text, '', buttons), 'badger', s.open, 'shop');
     typeText(text);
   };
@@ -782,7 +867,7 @@ function mount(section, handlers) {
     const p = personById(dialog.dataset.vid);
     if (b.dataset.v === 'bye' || !p) { closeDialog(); return; }
     if (b.dataset.v === 'do') { closeDialog(); handlers.onTask(b.dataset.q || activeQuest(p.tasks).id, els.get(p.id)); }
-    if (b.dataset.v === 'go' && b.dataset.to === 'home') { closeDialog(); walkTo(L.start.x, L.start.y, { home: true }); return; }
+    if (b.dataset.v === 'go' && b.dataset.to === 'home') { closeDialog(); goHome(); return; }
     if (b.dataset.v === 'go') { const q = personById(b.dataset.to); if (q) goTalk(q); }
   });
 
@@ -796,7 +881,7 @@ function mount(section, handlers) {
     if (goal.person) {
       const p = personById(goal.person);
       me.face = p.x >= me.x ? 1 : -1;
-      say(p);
+      say(p, undefined, goal.focus);
     } else if (goal.shop) {
       me.face = L.shop.x >= me.x ? 1 : -1;
       sayShop();
@@ -865,11 +950,19 @@ function mount(section, handlers) {
     buddyEl.classList.add('walking');
   };
   const near = (spot) => Math.hypot(me.x - spot.x, me.y - spot.y) < 22;
-  const goTalk = (p) => {
+  const goTalk = (p, focus = null) => {
     const spot = standSpot(grid, p.x, p.y, me.x);
-    if (near(spot)) { me.face = p.x >= me.x ? 1 : -1; say(p); return; }
-    walkTo(spot.x, spot.y, { person: p.id });
+    if (near(spot)) { me.face = p.x >= me.x ? 1 : -1; say(p, undefined, focus); return; }
+    walkTo(spot.x, spot.y, { person: p.id, focus });
   };
+  const goHome = () => walkTo(L.start.x, L.start.y, { home: true });
+  // the Today list's Go: walk to whoever gives a quest (or in at the door for a house chore)
+  section.goTask = (id) => {
+    const p = people.find((o) => o.tasks.some((t) => t.id === id));
+    if (p) { goTalk(p, id); return true; }
+    return false;
+  };
+  section.goHome = goHome;
   const goShop = () => {
     const spot = standSpot(grid, L.shop.x, L.shop.y, me.x);
     if (near(spot)) { sayShop(); return; }
@@ -932,6 +1025,8 @@ function mount(section, handlers) {
     // the Cheer button in a visitor's bubble is the app's
     if (e.target.closest('.v-visitor [data-action]')) return;
     e.stopPropagation();
+    // a tap on the kid's own buddy: a move (or a giggle), as on the map
+    if (e.target.closest('.v-buddy')) { handlers.onBuddy?.(buddyEl); return; }
     const vis = e.target.closest('.v-visitor');
     if (vis) { handlers.sound?.('tap'); goVisitor(vis); return; }
     const area = e.target.closest('.v-area.tap');
@@ -973,7 +1068,7 @@ function mount(section, handlers) {
   // the kid's house counts as a morning stop while its chores (bed, teeth, floor) are left
   const homeStop = data.home ? { id: 'home', x: L.home.x + L.home.w / 2, y: L.home.y + L.home.h - 38, period: 'morning', icon: data.home.icon, now: data.home.now } : null;
   const openFolk = () => {
-    const left = people.filter((p) => p.tasks.some((t) => t.st === 'todo' || t.st === 'current'))
+    const left = people.filter((p) => p.period !== 'exercise' && p.tasks.some((t) => t.st === 'todo' || t.st === 'current'))
       .map((p) => ({ id: p.id, x: p.x, y: p.y - 22, period: p.period, icon: activeQuest(p.tasks).icon, now: p.tasks.some((t) => t.st === 'current') }));
     if (homeStop) left.unshift(homeStop);
     // with a plan, only the plan's next step gets an arrow
@@ -988,14 +1083,11 @@ function mount(section, handlers) {
     if (!list.length && data.chest.ready) list.push({ id: 'chest', x: L.chest.x, y: L.chest.y - 10, icon: '🎁' });
     // all done, chest opened: the shop is open
     else if (!list.length && data.shop.open && L.shop && !data.chest.ready) list.push({ id: 'shop', x: L.shop.x, y: L.shop.y - 22, icon: '👕' });
-    const m = 30; // keep arrows this far inside the edge
     const shown = new Set();
-    for (const q of list) {
-      const sx = (q.x - cam.x) * S; const sy = (q.y - cam.y) * S;
-      if (sx > 10 && sx < vw - 10 && sy > 10 && sy < vh - 10) continue;
-      const cx = vw / 2; const cy = vh / 2;
-      const dx = sx - cx; const dy = sy - cy;
-      const k = Math.min((cx - m) / Math.abs(dx || 1e-6), (cy - m) / Math.abs(dy || 1e-6));
+    // the Today button sits in the bottom-left corner: arrows keep out of its way
+    const hudEl = hud();
+    const spots = arrowSpots(list.map((q) => ({ ...q, sx: (q.x - cam.x) * S, sy: (q.y - cam.y) * S })), vw, vh, hudEl ? { w: hudEl.offsetWidth, h: hudEl.offsetHeight } : null);
+    for (const q of spots) {
       let el = arrowEls.get(q.id);
       if (!el) {
         el = document.createElement('button');
@@ -1006,13 +1098,20 @@ function mount(section, handlers) {
         arrows.append(el);
         arrowEls.set(q.id, el);
       }
-      el.style.left = `${Math.round(cx + dx * k)}px`;
-      el.style.top = `${Math.round(cy + dy * k)}px`;
-      el.firstChild.style.transform = `rotate(${Math.round(Math.atan2(dy, dx) * (180 / Math.PI))}deg)`;
+      el.style.left = `${q.left}px`;
+      el.style.top = `${q.top}px`;
+      el.firstChild.style.transform = `rotate(${q.angle}deg)`;
       shown.add(q.id);
     }
     for (const [id, el] of arrowEls) if (!shown.has(id)) { el.remove(); arrowEls.delete(id); }
+    // a visitor right at the bottom edge keeps quiet, so its bubble isn't under the arrows and the Today button
+    for (const el of visitors) {
+      const sp = data.spots[el.dataset.id];
+      const low = Boolean(sp) && (sp.y - cam.y) * S > vh - 70;
+      if (el.classList.contains('hush') !== low) el.classList.toggle('hush', low);
+    }
   };
+  const hud = () => section.querySelector(':scope > .v-hud');
 
   // ---- the loop ----
   const artEl = section.querySelector('.v-landmark canvas.v-art');
@@ -1057,6 +1156,12 @@ function mount(section, handlers) {
   mountWeather(world, { season: se, mapId: L.id, W, H, z: 9500 });
   place();
   requestAnimationFrame(tick);
+  // the Today list sent the buddy here from indoors: off to that quest
+  const pending = goals.get(data.kid);
+  if (pending) {
+    goals.delete(data.kid);
+    if (pending.home) goHome(); else section.goTask(pending.task);
+  }
 
   // a quest that just got done: the villager cheers and says thanks; one sent to a parent waits
   for (const p of people) {

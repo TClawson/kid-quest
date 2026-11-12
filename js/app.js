@@ -2,7 +2,7 @@ import {
   DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
   tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, rewardsToGive, markRewardGiven, storeOpen, storeLockText, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
   defaultReward, parseReward, MAX_REWARD, isEvening,
-  pendingApprovals, fallbackHash, pianoStreakInfo, kidToday, applyTaskChange, undoTaskChanges,
+  pendingApprovals, fallbackHash, pianoStreakInfo, kidToday, todayQuests, applyTaskChange, undoTaskChanges,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS, EXERCISE_KEEP_DAYS,
   defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
@@ -17,8 +17,10 @@ import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
 import { dailySummaries } from './familygarden.js';
 import { bloomData, gardenLine } from './villagebloom.js';
-import { villageHtml, mountVillages, cameOut, cameOutOfMusic } from './village.js';
-import { houseHtml, mountHouses, cameIn } from './house.js';
+import { villageHtml, mountVillages, cameOut, cameOutOfMusic, placeVillagers, villagerName, villageGoal } from './village.js';
+import { villageLayout } from './villagemaps.js';
+import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
+import { todayHud, todayListHtml } from './today.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, tierInfo } from './musicrules.js';
@@ -123,6 +125,7 @@ setSound(state.settings.sound);
 
 const ui = {
   view: state.settings.pinHash ? 'home' : 'setup',
+  autoKid: true, // on start, a device with one kid skips the picker (see render)
   kidId: null,
   taskId: null,
   tab: 'today',
@@ -826,7 +829,7 @@ function sendCheer(kid, v) {
 
 /** The first time a friend's buddy comes to cheer, it dances and the kid hears about it. */
 function greetCheers() {
-  if (ui.view !== 'kid' || state.settings.questView === 'list') return;
+  if (ui.view !== 'kid') return;
   const kid = kidById(ui.kidId);
   if (!kid) return;
   const fresh = [...cheersFor(kid)].filter(([from, c]) => !(kid.cheersSeen || []).includes(`${from}|${c.mid}`));
@@ -841,17 +844,24 @@ function greetCheers() {
 /** How the whole family is doing today, and whether the map should party. */
 const familyToday = () => familyDay(familyBuddies(), today());
 
+/**
+ * The village, unless this device picked the old map. A new device (no choice saved) gets the
+ * village; 'map' is the map, and so is 'list', which older versions saved for the map too.
+ */
+const villageOn = () => !['map', 'list'].includes(state.settings.questView);
+
 /** "Family: 8 of 10 chores done today" while there is more than one kid. */
 function familyBanner() {
   const all = familyBuddies();
   if (all.length < 2) return '';
   const f = familyDay(all, today());
   const goal = Math.round(FAMILY_GOAL * 100);
+  const where = villageOn() ? 'village' : 'map';
   const text = f.happy
     ? `🎉 Family party! Everyone's done ${Math.round(f.share * 100)}% of today's chores`
     : f.unknown
-      ? `👨‍👩‍👧‍👦 Family: ${f.done} chores done so far · when everyone gets to ${goal}%, the whole map celebrates`
-      : `👨‍👩‍👧‍👦 Family: ${f.done} of ${f.total} chores done · at ${goal}% the whole map celebrates`;
+      ? `👨‍👩‍👧‍👦 Family: ${f.done} chores done so far · when everyone gets to ${goal}%, the whole ${where} celebrates`
+      : `👨‍👩‍👧‍👦 Family: ${f.done} of ${f.total} chores done · at ${goal}% the whole ${where} celebrates`;
   return `<div class="family-banner ${f.happy ? 'happy' : ''}" data-action="family-party">${esc(text)}${f.happy ? '' : `<span class="bar"><span style="width:${Math.min(100, Math.round((f.share / FAMILY_GOAL) * 100))}%"></span></span>`}</div>`;
 }
 
@@ -867,7 +877,7 @@ const PARTY_MS = 5000;
 let partyDue = false;
 let partyDay = null; // the day the family party already started by itself on this screen
 function maybeParty() {
-  if (ui.view !== 'kid' || state.settings.questView === 'list') return;
+  if (ui.view !== 'kid') return;
   const happy = familyToday().happy;
   // when the family crosses the goal while the map is open, celebrate right then too
   const justNow = happy && partyDay !== today();
@@ -1074,25 +1084,53 @@ function questMap(kid, s, entry, mood) {
     </section>`;
 }
 
-// The village: the same chores as the map, as quests from villagers (see village.js).
-function villageView(kid, s, entry, mood) {
+/** A chore as a quest in the village (and its talk box): its state, its line and its plan step. */
+function questItem(kid, t, status, st, step = 0) {
+  let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'A parent checks this one' : 'Tap "I did it" when it\'s done';
+  if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
+    const sec = status?.seconds || 0;
+    const left = t.minutes * 60 - sec;
+    sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left on the timer` : `${t.minutes} minute timer`;
+  }
+  // bonus exercise says what it earns
+  if (isExercise(t) && st !== 'done' && taskGems(t)) sub += ` · earns ${taskGems(t)} 💎`;
+  const cue = cueFor(kid, t);
+  return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step, plan: cue ? planSentence(cue, t) : '' };
+}
+
+/** Today's quests as the village gives them: mornings first, each half in the kid's planned order; the first one to do is 'current'. */
+function questList(kid, s, entry) {
   const tasks = ['morning', 'afternoon'].flatMap((period) => planOrder(kid, s.tasks.filter((x) => x.period === period)));
   let current = false;
   // a kid who made their own plan sees its steps numbered, and the village follows them
   const planned = Boolean(kid.plan?.order?.length);
-  const list = tasks.map((t, i) => {
+  return tasks.map((t, i) => {
     const status = entry?.tasks?.[t.id];
     let st = status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo';
     if (st === 'todo' && !current) { st = 'current'; current = true; }
-    let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'A parent checks this one' : 'Tap "I did it" when it\'s done';
-    if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
-      const sec = status?.seconds || 0;
-      const left = t.minutes * 60 - sec;
-      sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left on the timer` : `${t.minutes} minute timer`;
-    }
-    const cue = cueFor(kid, t);
-    return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
+    return questItem(kid, t, status, st, planned ? i + 1 : 0);
   });
+}
+
+/** Today's bonus exercise, as the coach gives it (never 'current': it's a bonus, not the next quest). */
+function coachQuests(kid, entry) {
+  const t = today();
+  return planOrder(kid, tasksForDay(state, kid, t, t).filter(isExercise)).map((x) => {
+    const status = entry?.tasks?.[x.id];
+    return questItem(kid, x, status, status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo');
+  });
+}
+
+/** The ids of today's chores done in the kid's house (bed, teeth, floor), which villagers don't give out. */
+function houseQuestIds(kid) {
+  const hc = houseChores(state, kid, today());
+  return new Set(['bed', 'teeth', 'floor'].map((k) => hc[k]?.id).filter(Boolean));
+}
+
+// The village: the same chores as the map, as quests from villagers (see village.js).
+function villageView(kid, s, entry, mood) {
+  const list = questList(kid, s, entry);
+  const planned = Boolean(kid.plan?.order?.length);
   // the buddy's house: where the day starts, and wherever the kid left the buddy after that
   // (its house, the music house, or out in the village)
   const place = placeOf(kid.id, today());
@@ -1103,8 +1141,7 @@ function villageView(kid, s, entry, mood) {
   if (place === 'music' && tier) return musicView(kid, list, mood, tier);
   // chores linked to the house (bed, teeth, floor) are done in the house, not given out by
   // villagers; the house door shows what's still waiting in there
-  const hc = houseChores(state, kid, today());
-  const inHouse = new Set(['bed', 'teeth', 'floor'].map((k) => hc[k]?.id).filter(Boolean));
+  const inHouse = houseQuestIds(kid);
   const homeOpen = list.filter((q) => inHouse.has(q.id) && (q.st === 'todo' || q.st === 'current'));
   const homeNext = homeOpen.find((q) => q.st === 'current') || homeOpen[0];
   const home = homeOpen.length ? { left: homeOpen.length, icon: homeNext.icon, task: homeNext.name, step: homeNext.step, now: homeOpen.some((q) => q.st === 'current') } : null;
@@ -1132,7 +1169,15 @@ function villageView(kid, s, entry, mood) {
     garden: { thirsty: gardenThirsty(kid) },
     bloom: bloomData(gardenKids(), today()),
     today: today(),
+    coach: coachFor(kid, entry),
+    hud: kidHud(kid),
   });
+}
+
+/** The coach's quests (bonus exercise) and how the kid's strong weeks are going, or null with no exercise today. */
+function coachFor(kid, entry) {
+  const tasks = coachQuests(kid, entry);
+  return tasks.length ? { tasks, line: exWeekText(exerciseInfo(kid)) } : null;
 }
 
 // Which look of the music house each kid has seen on this device, so a new look is
@@ -1162,6 +1207,7 @@ function musicView(kid, list, mood, tier) {
     lab: labOpen(state, kid, today()),
     hello: musicHello(kid.id, tier),
     quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
+    hud: kidHud(kid),
   });
 }
 
@@ -1204,6 +1250,7 @@ function houseView(kid, list, mood) {
     fish: bookCount(kid.fishRecords).caught,
     garden: { thirsty: gardenThirsty(kid) },
     harvest: houseHarvest(state, kid, t),
+    hud: kidHud(kid),
   });
 }
 
@@ -1257,6 +1304,7 @@ function gardenScreen(kid, list, mood) {
     seeds: gardenOf(kid).seeds,
     theme: kidTheme(kid),
     today: t,
+    hud: kidHud(kid),
   });
 }
 
@@ -1501,8 +1549,141 @@ const villageHandlers = {
     cameInMusic(kid.id);
     render();
   },
+  onBuddy: (el) => actions['buddy-move'](el),
   sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
 };
+
+// ---------- the kid's Today button and Today's quests (markup in today.js) ----------
+// In the corner of the village (and the house, the garden and the music house): how many of
+// today's quests are left, and a list of all of them. The list is walk only: Go walks the buddy
+// to whoever gives the quest (into the house for the bed, teeth and floor, to the coach for
+// exercise) and the usual talk box takes it from there.
+
+/** The Today button, and the chest button beside it while an earlier day's chest is waiting. */
+function kidHud(kid) {
+  const t = today();
+  const d = kidToday(state, kid, t, 0);
+  const late = lateChest(kid);
+  return todayHud({
+    ...d,
+    waiting: d.waitingToday,
+    chest: late ? { key: late.key, html: chestSvg(late.tier.id, false, 2), when: late.key === addDays(t, -1) ? 'yesterday' : 'an earlier day' } : null,
+  });
+}
+
+/** Who gives each of today's chores: a villager's name, "In your house", or the coach. */
+function questGivers(kid) {
+  const t = today();
+  const s = dayStatus(state, kid, t, t);
+  const inHouse = houseQuestIds(kid);
+  const out = new Map([...inHouse].map((id) => [id, 'In your house']));
+  const list = questList(kid, s, entryFor(state, kid.id, t)).filter((q) => !inHouse.has(q.id));
+  for (const p of placeVillagers(list, villageLayout(kidTheme(kid)))) for (const q of p.tasks) out.set(q.id, villagerName(p.kind));
+  for (const x of tasksForDay(state, kid, t, t).filter(isExercise)) out.set(x.id, villagerName('coach'));
+  return out;
+}
+
+/** Why the shop is shut, in a few words (storeOpen's rules, the evening-chores one too). */
+function shopLine(lock) {
+  const n = (k, what) => `${k} ${what}${k === 1 ? '' : 's'}`;
+  if (lock.open) return '👕 The shop is open';
+  if (lock.left) return `🔒 Shop opens after ${n(lock.left, lock.evening ? 'more day quest' : 'more quest')}${lock.missed.length ? ' (evening ones count today)' : ''}`;
+  return `🔒 Shop opens when a parent checks ${lock.waiting === 1 ? 'your quest' : `${lock.waiting} quests`}`;
+}
+
+/** Everything the Today list shows (todayQuests in logic.js, in words). */
+function todayModel(kid) {
+  const t = today();
+  const q = todayQuests(state, kid, t);
+  const givers = questGivers(kid);
+  const lock = storeOpen(state, kid, t);
+  const ex = exerciseInfo(kid);
+  const sub = (it) => {
+    const x = it.task;
+    if (it.state === 'done') return givers.get(x.id) || '';
+    if (it.state === 'waiting') return 'Waiting for a parent';
+    const parts = [];
+    if (it.next) parts.push('Next up');
+    if (it.cue) parts.push(it.cue);
+    if (it.secondsLeft !== null) parts.push(it.secondsLeft <= 0 ? 'time done! Get a parent' : it.record?.seconds ? `${mmss(it.secondsLeft)} left on the timer` : `${x.minutes} minute timer`);
+    if (givers.get(x.id)) parts.push(givers.get(x.id));
+    if (x.verify === 'parent' && !(x.minutes > 0)) parts.push('a parent checks this one');
+    if (isExercise(x) && taskGems(x)) parts.push(`earns ${taskGems(x)} 💎`);
+    const line = parts.join(' · ');
+    return line.charAt(0).toUpperCase() + line.slice(1);
+  };
+  const rows = (list) => list.map((it) => ({
+    id: it.task.id, icon: it.task.icon, name: it.task.name, star: it.mastered, sub: sub(it), state: it.state, next: it.next,
+    action: it.state === 'todo' ? 'go' : it.state === 'waiting' ? 'ask' : '',
+  }));
+  const inHouse = houseQuestIds(kid);
+  const g = q.groups;
+  const groups = [
+    { id: 'morning', icon: '🌅', name: 'Morning', note: `by ${formatTime(state.settings.morningBy)}${g.morning.length && g.morning.every((it) => inHouse.has(it.task.id)) ? ' · in your house' : ''}`, list: g.morning },
+    { id: 'afternoon', icon: '☀️', name: 'After school', note: `by ${formatTime(state.settings.bedtime)}`, list: g.afternoon },
+    { id: 'evening', icon: '🌙', name: 'Evening', note: lock.missed.length ? 'counts for the shop today (one was missed last night)' : "doesn't keep the shop shut", list: g.evening },
+    { id: 'exercise', icon: '💪', name: 'Bonus exercise', note: ex.goal ? `${ex.thisWeek} of ${ex.goal} days this week` : 'an excused week', list: g.exercise },
+  ].filter((x) => x.list.length).map(({ list, ...x }) => ({ ...x, rows: rows(list) }));
+  const c = chestFor(kid, t);
+  const tier = `<b>${esc(c.tier.name.toLowerCase())}</b>`;
+  const chest = c.opened ? `🎁 Today's chest: ${esc(prizeText(c.opened, mapName).title)}`
+    : c.ready ? `🎁 Today's ${tier} is ready! Open it`
+      : !q.total ? '🎁 No quests today' : q.toGo ? `🎁 ${q.toGo} more for today's ${tier}` : `🎁 A parent checks ${q.waitingToday === 1 ? 'one quest' : `${q.waitingToday} quests`}, then today's ${tier}`;
+  const day = parseKey(t).toLocaleDateString(undefined, { weekday: 'long' });
+  return {
+    kidId: kid.id,
+    head: `${day} · ${q.excused ? 'day off' : `${q.done} of ${q.total} done`}${q.waitingToday ? ` · ${q.waitingToday} waiting for a parent` : ''}`,
+    groups,
+    chest: { text: chest, ready: c.ready },
+    shop: { open: lock.open, text: shopLine(lock) },
+  };
+}
+
+function openToday(kid) {
+  if (!kid) return;
+  openModal(todayListHtml(todayModel(kid)));
+  $modal.querySelector('.modal-card')?.classList.add('today-card');
+}
+
+/**
+ * Go, from the Today list: closes it and walks the buddy to whoever gives the quest, the talk
+ * box opening on arrival. A house chore walks in at the door; from indoors the buddy comes out
+ * (or goes in) first.
+ */
+function goQuest(kid, id) {
+  closeModal();
+  const t = today();
+  if (!kid || !taskById(kid, t, id)) return;
+  const hc = houseChores(state, kid, t);
+  const kind = ['bed', 'teeth', 'floor'].find((k) => hc[k]?.id === id);
+  const place = placeOf(kid.id, t);
+  const where = place === 'house' || place === 'garden' ? place : place === 'music' && musicTier(progressFor(kid)) ? 'music' : 'out';
+  if (kind) {
+    if (where === 'house') { $app.querySelector('.house:not(.music-house)')?.goChore?.(kind); return; }
+    houseGoal(kid.id, kind);
+    const village = where === 'out' && $app.querySelector('.village');
+    if (village?.goHome) { village.goHome(); return; }
+    setInside(kid.id, t, true);
+    cameIn(kid.id);
+    render();
+    return;
+  }
+  if (where === 'out' && $app.querySelector('.village')?.goTask?.(id)) return;
+  villageGoal(kid.id, { task: id });
+  setPlace(kid.id, t, 'out');
+  if (where === 'music') cameOutOfMusic(kid.id, kidTheme(kid)); else cameOut(kid.id, kidTheme(kid));
+  render();
+}
+
+/** How the strong weeks are going, in one line for the coach to say. */
+function exWeekText(ex) {
+  const left = (n) => `${n} more ${n === 1 ? 'day' : 'days'}`;
+  if (!ex.goal) return `This week is excused: your ${weeksLabel(ex.weeks)} wait for you. 🛡️`;
+  if (ex.status === 'strong') return `⭐ Strong week! You have ${weeksLabel(ex.weeks)}.`;
+  if (!ex.weeks) return `${left(ex.goal - ex.thisWeek)} of exercise this week makes a ⭐ strong week.`;
+  if (ex.status === 'safe') return `🛡️ Your ${weeksLabel(ex.weeks)} are safe. ${left(ex.goal - ex.thisWeek)} adds a ⭐.`;
+  return `${left(ex.keep - ex.thisWeek)} keeps your ${weeksLabel(ex.weeks)} safe 🛡️, and ${left(ex.goal - ex.thisWeek)} adds a ⭐.`;
+}
 
 function viewKid() {
   const kid = kidById(ui.kidId);
@@ -1514,7 +1695,7 @@ function viewKid() {
   const entry = entryFor(state, kid.id, t);
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
   const mood = moodFor(kid);
-  const villageMode = state.settings.questView === 'village';
+  const villageMode = villageOn();
   const newCount = (kid.newItems || []).length;
   const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
   const late = lateChest(kid);
@@ -1543,7 +1724,7 @@ function viewKid() {
           ${storeButton(kid, storeOpen(state, kid, t), newCount)}
         </div>
       </div>
-      ${exerciseSection(kid, exTasks, entry)}
+      ${villageMode ? '' : exerciseSection(kid, exTasks, entry)}
       <div class="view-toggle">
         <button class="${villageMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
         <button class="${villageMode ? 'on' : ''}" data-action="quest-mode" data-mode="village">🏘️ Village</button>
@@ -1658,14 +1839,14 @@ function exWeekHtml(ex) {
 }
 
 /** Bonus exercise: optional tiles that earn gems, and how the exercise week is going. */
-/** The kid page's store button, with a line saying why it's shut (or that evening chores can wait). */
+/** The kid page's shop button, with a line saying why it's shut (or that evening chores can wait). */
 function storeButton(kid, lock, newCount) {
   if (lock.open) {
-    return `<button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>`;
+    return `<button class="btn ghost" data-action="wardrobe">👕 Shop${newCount ? ` <span class="badge">new</span>` : ''}</button>`;
   }
-  const label = lock.missed.length ? "🔒 Buddy store opens when all of today's chores are done"
-    : lock.evening ? "🔒 Buddy store opens when today's day chores are done"
-      : "🔒 Buddy store opens when today's chores are done";
+  const label = lock.missed.length ? "🔒 Shop opens when all of today's chores are done"
+    : lock.evening ? "🔒 Shop opens when today's day chores are done"
+      : "🔒 Shop opens when today's chores are done";
   const note = lock.missed.length ? `<small class="muted store-why">${esc(lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were')} missed last night, so today evening chores count too.</small>`
     : lock.evening ? '<small class="muted store-why">Evening chores don\'t count.</small>' : '';
   return `<button class="btn ghost store-locked" data-action="wardrobe">${label}</button>${note}`;
@@ -1696,12 +1877,15 @@ function viewWardrobe() {
     <div class="screen wardrobe" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="wardrobe-back" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Streak ${prog.streak} days · best ${prog.best}${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days (best ${prog.pianoBest})` : ''}</small></div>
+        <div class="kid-title"><b>👕 Shop</b><small>Streak ${prog.streak} days · best ${prog.best}${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days (best ${prog.pianoBest})` : ''}</small></div>
       </header>
       <div class="wardrobe-top">
         <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, 'happy', 'lg', { live: true, feel: { valence: 0.8, arousal: 0.6 } })}</button>
         <div class="buddy-side">
-          <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
+          ${ui.speciesOpen
+    ? `<div class="pick species-pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
+          <button class="btn ghost small-btn switch-buddy" data-action="wardrobe-switch">Keep my ${esc(speciesName(kid.buddy.species).toLowerCase())}</button>`
+    : `<button class="btn ghost small-btn switch-buddy" data-action="wardrobe-switch">🔁 Switch buddy</button>`}
           ${sportTab ? `<p class="gem-line">💎 <b>${prog.gems}</b> gems to spend</p>
           <p class="muted">💪 <b>${esc(weeksLabel(prog.ex.weeks))}</b> (best ${prog.ex.best})</p>
           ${exWeekHtml(prog.ex)}` : `<p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
@@ -2537,6 +2721,11 @@ function reconcile() {
 
 function render() {
   const scrollY = window.scrollY;
+  // a single kid's own device opens straight on their page (the back arrow still leads to the picker and Parents)
+  if (ui.view === 'home' && ui.autoKid && state.kids.length) {
+    ui.autoKid = false;
+    if (state.kids.length === 1 && !parentDevice()) { ui.view = 'kid'; ui.kidId = state.kids[0].id; setTimeout(() => { if (ui.view === 'kid') celebrateIfDue(kidById(ui.kidId)); }, 300); }
+  }
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio' || ui.view === 'lab';
@@ -2550,9 +2739,14 @@ function render() {
   if (html === lastHtml && $app.firstElementChild) { syncMusic(); maybeParty(); greetCheers(); return; }
   const sameView = lastView === ui.view;
   const side = sameView ? [...$app.querySelectorAll(SIDE_SCROLLERS)].map((el) => el.scrollLeft) : [];
+  // leaving the kid's page (the shop, the piano timer, the music house's screens) remembers where
+  // it was, and coming back puts it there again, the village in view
+  if (lastView === 'kid' && ui.view !== 'kid') ui.kidScroll = scrollY;
+  const back = ui.view === 'kid' && lastView && lastView !== 'kid' && lastView !== 'home' && ui.kidScroll != null;
   $app.innerHTML = html;
   lastHtml = html;
   lastView = ui.view;
+  if (back) window.scrollTo(0, ui.kidScroll);
   $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
   paintQuestMaps($app);
   mountVillages($app, villageHandlers);
@@ -2572,7 +2766,7 @@ function render() {
 
 /** Map music plays only on the quest map, with sound on and music not muted, while the app is visible. */
 function syncMusic() {
-  const onMap = ui.view === 'kid' && state.settings.questView !== 'list';
+  const onMap = ui.view === 'kid';
   const wanted = onMap && state.settings.sound && state.settings.music !== false && document.visibilityState === 'visible';
   if (wanted) startMusic(kidTheme(kidById(ui.kidId) || {}));
   else stopMusic();
@@ -2588,9 +2782,9 @@ window.addEventListener('resize', () => {
 
 const actions = {
   'setup-pin': () => pinPad({ title: 'Choose a parent PIN', subtitle: 'Pick 4 digits the kids don’t know', mode: 'new', onSuccess: () => { ui.view = 'parent'; ui.tab = 'kids'; render(); toast('PIN saved. Now add your kids.'); } }),
-  home: () => { ui.view = 'home'; render(); },
+  home: () => { ui.view = 'home'; ui.kidScroll = null; render(); },
   'open-kid': (el) => {
-    ui.kidId = el.dataset.id; ui.view = 'kid'; render();
+    ui.kidId = el.dataset.id; ui.view = 'kid'; ui.kidScroll = null; render();
     setTimeout(() => celebrateIfDue(kidById(ui.kidId)), 300);
   },
   task: (el) => onTaskTap(el.dataset.id, el),
@@ -2691,11 +2885,13 @@ const actions = {
   wardrobe: () => {
     const lock = storeOpen(state, kidById(ui.kidId), today());
     if (!lock.open) { sounds.error(); toast(`🔒 ${storeLockText(lock)}`); return; }
-    ui.view = 'wardrobe'; render(); window.scrollTo(0, 0);
+    ui.view = 'wardrobe'; ui.speciesOpen = false; render(); window.scrollTo(0, 0);
   },
-  'wardrobe-back': () => { ui.view = 'kid'; render(); },
+  'wardrobe-back': () => { ui.view = 'kid'; ui.speciesOpen = false; render(); },
+  // picking another kind of buddy is a choice made on purpose: the picker opens from its own button
+  'wardrobe-switch': () => { ui.speciesOpen = !ui.speciesOpen; sounds.tap(); render(); },
   'wardrobe-slot': (el) => { ui.slot = el.dataset.slot; render(); },
-  'wardrobe-species': (el) => { changeSpecies(kidById(ui.kidId), el.dataset.val); sounds.tap(); save(); render(); },
+  'wardrobe-species': (el) => { changeSpecies(kidById(ui.kidId), el.dataset.val); ui.speciesOpen = false; sounds.tap(); save(); render(); },
   'wardrobe-item': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
@@ -2744,6 +2940,16 @@ const actions = {
     render();
   },
   'music-toggle': () => { state.settings.music = state.settings.music === false; save(); render(); },
+  today: () => { sounds.tap(); openToday(kidById(ui.kidId)); },
+  'today-go': (el) => { sounds.tap(); goQuest(kidById(ui.kidId), el.dataset.id); },
+  'today-ask': (el) => {
+    const kid = kidById(ui.kidId);
+    const task = kid && taskById(kid, today(), el.dataset.id);
+    closeModal();
+    if (task) askParentNowOrLater(kid, task, null);
+  },
+  'today-chest': () => { closeModal(); const kid = kidById(ui.kidId); if (kid) openChest(kid, today()); },
+  'today-shop': () => { closeModal(); actions.wardrobe(); },
   'quest-mode': (el) => { state.settings.questView = el.dataset.mode; save(); render(); },
   chest: (el) => {
     const kid = kidById(ui.kidId);

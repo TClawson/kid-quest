@@ -21,6 +21,7 @@ function seed() {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
+  s.settings.questView = 'map'; // the old map first (a new device starts in the village)
   const ava = defaultTasks();
   ava.push({ id: 'task_bath', name: 'Clean the bathroom with a really long chore name', icon: '🛁', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'parent', minutes: 0 });
   s.kids.push({ id: 'kid_ava', name: 'Annabelle', color: '#ff6b6b', tasks: ava, startDate: today, owned: [], spent: -2400, buddy: { species: 'fox', outfit: {} } });

@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -96,6 +97,7 @@ try {
     const s = emptyState();
     s.settings.pinHash = 'sha256:test';
     s.settings.sound = false;
+    s.settings.questView = 'map'; // the old map (a new device starts in the village)
     const tasks = defaultTasks();
     s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: [], buddy: { species: 'fox', outfit: {} } });
     s.log[dateKey()] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
@@ -108,7 +110,7 @@ try {
       ]));
     }, s);
     await page.reload();
-    await page.click('[data-action="open-kid"]');
+    await openKid(page, '[data-action="open-kid"]');
     await page.waitForTimeout(500);
     while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
     await page.waitForSelector('.map-visitor');

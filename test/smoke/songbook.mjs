@@ -13,6 +13,7 @@ import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.
 import { SONGBOOK, songById, songbookFor, songItemId } from '../../js/sheetmusic.js';
 import { SHOW_SONGS } from '../../js/songs.js';
 import { hasLevel } from '../../js/arrange.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews/songbook').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -49,7 +50,7 @@ async function openSongbook(viewport, weeks, found, opts) {
   await page.goto(site.url);
   await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [family(weeks, found, opts), { kid_ava: { day, inside: false, place: 'music' } }]);
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   for (let i = 0; i < 6 && await page.locator('#modal:not([hidden])').count(); i += 1) {
     const close = page.locator('#modal [data-action="modal-close"]');
@@ -295,7 +296,7 @@ async function litBar(page, n, ms = 8000) {
 // a phone; too few coins says how many more; a song not bought can't be opened any other way;
 // and what was bought is still bought after a reload.
 async function backToSongbook(page) {
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   for (let i = 0; i < 6 && await page.locator('#modal:not([hidden])').count(); i += 1) {
     await page.locator('#modal [data-action="modal-close"]').first().click();

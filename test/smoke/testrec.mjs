@@ -9,6 +9,7 @@
 // Run: node test/smoke/testrec.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import { chromium } from 'playwright';
+import { toPicker } from '../helpers/open-kid.mjs';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
@@ -79,6 +80,7 @@ async function bytesOf(dl) { return fs.readFileSync(await dl.path()); }
 
 // 1. behind the PIN, right after the piano listening test
 assert.equal(await card.count(), 0, 'not on the start screen');
+await toPicker(page);
 await page.click('[data-action="parent"]');
 for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
 await page.waitForSelector('.pnav');

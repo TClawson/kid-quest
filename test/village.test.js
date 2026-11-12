@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { villageLayout, VILLAGE_THEMES } from '../js/villagemaps.js';
-import { placeVillagers, folkCaps, activeQuest, makeGrid, findPath, standSpot, visitorSpots, landmarkBlock } from '../js/village.js';
+import { placeVillagers, folkCaps, activeQuest, makeGrid, findPath, standSpot, visitorSpots, landmarkBlock, arrowSpots, labelSpot } from '../js/village.js';
+import { VILLAGER_KINDS, headRows, villagerGrid } from '../js/villageart.js';
 import { secretSize } from '../js/treasure-art.js';
 import { MAP_THEMES } from '../js/maparts.js';
 
@@ -18,7 +19,7 @@ for (const theme of VILLAGE_THEMES) {
     const L = villageLayout(theme);
     const size = secretSize(theme);
     const lm = { ...L.landmark, w: L.landmark.w ?? size.w * 2, h: L.landmark.h ?? size.h * 2 };
-    const folk = [...L.slots.morning.slice(0, 6), ...L.slots.afternoon.slice(0, 6)];
+    const folk = [...L.slots.morning.slice(0, 6), ...L.slots.afternoon.slice(0, 6), L.coach];
     // the busiest green: a pond and a play patch, four visitors
     const visit = { visitors: ['a', 'b', 'c', 'd'].map((id) => ({ id })), areas: [{ side: 'left', kind: 'pond', members: ['a', 'b'] }, { side: 'right', kind: 'soccer', members: ['c'] }] };
     const spots = visitorSpots(visit, L);
@@ -36,6 +37,7 @@ for (const theme of VILLAGE_THEMES) {
       assert.ok(Math.hypot(end.x - to.x, end.y - to.y) < 14, `${theme}: ${what} ends ${Math.round(Math.hypot(end.x - to.x, end.y - to.y))} px away`);
     };
     folk.forEach((s, i) => reach(`quest spot ${i}`, standSpot(grid, s.x, s.y, from.x)));
+    reach('the coach', standSpot(grid, L.coach.x, L.coach.y, from.x));
     reach('the shopkeeper', standSpot(grid, L.shop.x, L.shop.y, from.x));
     reach('the chest', standSpot(grid, L.chest.x, L.chest.y, from.x));
     reach('the landmark', L.landmark.stand);
@@ -48,7 +50,7 @@ for (const theme of VILLAGE_THEMES) {
     const L = villageLayout(theme);
     const size = secretSize(theme);
     const lm = [L.landmark.x, L.landmark.y, L.landmark.w ?? size.w * 2, L.landmark.h ?? size.h * 2];
-    const all = [...L.slots.morning.slice(0, 6).map((s) => ({ ...s, what: 'morning' })), ...L.slots.afternoon.slice(0, 6).map((s) => ({ ...s, what: 'afternoon' })), { ...L.shop, what: 'shop' }, { ...L.chest, what: 'chest' }];
+    const all = [...L.slots.morning.slice(0, 6).map((s) => ({ ...s, what: 'morning' })), ...L.slots.afternoon.slice(0, 6).map((s) => ({ ...s, what: 'afternoon' })), { ...L.shop, what: 'shop' }, { ...L.chest, what: 'chest' }, { ...L.coach, what: 'coach' }];
     const inBox = (x, y, [bx, by, bw, bh], pad = 0) => x > bx - pad && x < bx + bw + pad && y > by - pad && y < by + bh + pad;
     for (const s of all) {
       assert.ok(!L.blocked(s.x, s.y), `${theme}: ${s.what} spot ${s.x},${s.y} is blocked`);
@@ -103,4 +105,41 @@ test('piano quests go to the music hall on every map', () => {
     const hall = L.slots.afternoon.find((s) => s.likes?.test('piano'));
     assert.deepEqual([piano.x, piano.y], [hall.x, hall.y], theme);
   }
+});
+
+// The coach gives the bonus exercise: a villager of its own, on every map, never one of the
+// usual villagers.
+test('the coach: its own art, 16 pixels wide, and not one of the usual villagers', () => {
+  assert.ok(!VILLAGER_KINDS.includes('coach'));
+  const grid = villagerGrid('coach');
+  assert.ok(grid.every((row) => row.length === 16), 'every row is 16 wide');
+  assert.notDeepEqual(grid, villagerGrid('bunny'), 'a body of its own');
+  assert.ok(headRows('coach') > 0);
+  for (const theme of VILLAGE_THEMES) assert.ok(villageLayout(theme).coach, `${theme} has a coach`);
+});
+
+test('arrows to quests off screen sit on the edges, apart, and out of the Today button\'s corner', () => {
+  const vw = 400; const vh = 600;
+  const list = [
+    { id: 'on', sx: 200, sy: 300 },
+    { id: 'a', sx: 50, sy: 900 }, { id: 'b', sx: 60, sy: 950 }, { id: 'c', sx: 90, sy: 1000 },
+    { id: 'up', sx: 200, sy: -100 },
+  ];
+  const out = arrowSpots(list, vw, vh, { w: 160, h: 60 });
+  assert.deepEqual(out.map((a) => a.id).sort(), ['a', 'b', 'c', 'up'], 'only the ones off screen');
+  const bottom = out.filter((a) => a.edge === 'bottom').sort((x, y) => x.left - y.left);
+  assert.equal(bottom.length, 3);
+  for (const a of bottom) assert.ok(a.left >= 160 + 8 + 26, `${a.id} is clear of the Today button`);
+  for (let i = 1; i < bottom.length; i += 1) assert.ok(bottom[i].left - bottom[i - 1].left >= 50, 'and of each other');
+  for (const a of out) assert.ok(a.left >= 0 && a.left <= vw && a.top >= 0 && a.top <= vh, `${a.id} is on screen`);
+  assert.equal(out.find((a) => a.id === 'up').edge, 'top');
+});
+
+test('a quest-time sign moves out from under a speech bubble', () => {
+  const L = villageLayout('bg-meadow');
+  const sign = [200, 300, 'Morning quests'];
+  assert.deepEqual(labelSpot(sign, [], L), sign, 'stays put with nothing in the way');
+  const moved = labelSpot(sign, [[185, 296, 30, 12]], L);
+  assert.notDeepEqual(moved.slice(0, 2), [200, 300]);
+  assert.equal(moved[2], 'Morning quests');
 });

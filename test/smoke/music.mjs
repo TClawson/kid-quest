@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews/music').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -51,7 +52,7 @@ async function open(viewport, st, place = 'out', time = '16:00') {
   await page.goto(site.url);
   await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [st, { kid_ava: { day, inside: place === 'house', place } }]);
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   await closeModals(page);
   await page.clock.runFor(800);

@@ -7,6 +7,7 @@ import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash, freeGamesOn } from '../../js/logic.js';
 import { seenSaturday } from '../helpers/seed.mjs';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -32,6 +33,7 @@ async function open(device, done, played = 0, held = null, tweak = null) {
   const s = emptyState();
   s.settings.pinHash = 'sha256:test';
   s.settings.sound = false;
+  s.settings.questView = 'map'; // the old map (a new device starts in the village)
   const tasks = defaultTasks();
   s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: ['sport-shoes-regular'], buddy: { species: 'fox', outfit: { background: 'bg-meadow', hat: 'hat-cap' } } });
   // Saturday's free games would change every count below, so use them up first
@@ -52,7 +54,7 @@ async function open(device, done, played = 0, held = null, tweak = null) {
     ]));
   }, s);
   await page.reload();
-  await page.click('[data-action="open-kid"]');
+  await openKid(page, '[data-action="open-kid"]');
   await page.waitForTimeout(500);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
   await page.waitForSelector('.map-visitor');
@@ -216,10 +218,12 @@ try {
     const s = emptyState();
     s.settings.pinHash = fallbackHash('kidquest:1234');
     s.settings.sound = false;
+    s.settings.questView = 'map'; // the old map (a new device starts in the village)
     s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: {} } });
     s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'cat', outfit: {} }, playLog: { day: dateKey(), n: 99 } });
     await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), seenSaturday(s));
     await page.reload();
+    await toPicker(page);
     await page.click('[data-action="parent"]');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     await page.click('[data-action="tab"][data-tab="settings"]');

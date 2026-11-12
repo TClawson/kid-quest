@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 fs.mkdirSync(out, { recursive: true });
@@ -24,12 +25,13 @@ try {
     const saved = emptyState();
     saved.settings.pinHash = 'sha256:test';
     saved.settings.sound = false;
+    saved.settings.questView = 'map'; // the old map (a new device starts in the village)
     const tasks = defaultTasks();
     const mk = (id, name, color, species) => ({ id, name, color, tasks, startDate: dateKey(), buddy: { species, outfit: { background: theme } } });
     saved.kids.push(mk('kid_ava', 'Ava', '#ff6b6b', 'fox'));
     await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
     await page.reload();
-    await page.click('[data-action="open-kid"]');
+    await openKid(page, '[data-action="open-kid"]');
     const box = await page.locator('.quest-map').boundingBox();
     const y = where === 'top' ? box.y - 10 : where === 'bottom' ? box.y + box.height - size.height + 10 : box.y + box.height / 2 - size.height / 2;
     await page.evaluate((yy) => window.scrollTo(0, yy), y);

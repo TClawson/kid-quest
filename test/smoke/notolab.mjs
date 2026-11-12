@@ -18,6 +18,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, fallbackHash, addDays, dateKey } from '../../js/logic.js';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews/note-o-matic/lab').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -106,7 +107,7 @@ async function setFamily(page, st) {
 }
 /** Into Ava's music house. */
 async function intoHouse(page) {
-  await page.click(`[data-action="open-kid"][data-id="${KID}"]`);
+  await openKid(page, `[data-action="open-kid"][data-id="${KID}"]`);
   await page.waitForSelector('.music-house');
   // what pops up on the way in (news for the day, the music house's hello): closed
   await page.waitForTimeout(1500);
@@ -434,6 +435,7 @@ async function recordToPick(page, name = '', stop = 'limit') {
 // 2. Settings: a test desk right after the studio's, behind the PIN, with its own shelf
 {
   const { ctx, page } = await start(TABLET, family());
+  await toPicker(page);
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
   await page.waitForSelector('.pnav');

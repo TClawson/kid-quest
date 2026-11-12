@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, fallbackHash } from '../../js/logic.js';
 import { seenSaturday } from '../helpers/seed.mjs';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -42,7 +43,7 @@ try {
   await page.reload();
 
   // Ava brushes her teeth: a small task's share of 300.
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   const teeth = ava.find((t) => t.name === 'Brush teeth');
   await page.click(`[data-action="task"][data-id="${teeth.id}"]`);
   await page.waitForSelector('.float-xp');
@@ -55,6 +56,7 @@ try {
 
   // Parent gives Ava a bonus.
   await page.click('[data-action="home"]');
+  await toPicker(page);
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="kids"]');
@@ -112,7 +114,7 @@ try {
 
   // The kid sees the bonus and the week's total.
   await page.click('[data-action="parent-exit"]');
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.waitForTimeout(200);
   const week = await page.textContent('.week-coins');
   assert.match(week, /of 250 this week/);
@@ -126,6 +128,7 @@ try {
     await page.locator('section', { hasText: 'This week' }).screenshot({ path: `${shots}/kid-this-week.png` });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.click('[data-action="home"]');
+    await toPicker(page);
     await page.click('[data-action="parent"]');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     await page.click('[data-action="tab"][data-tab="kids"]');

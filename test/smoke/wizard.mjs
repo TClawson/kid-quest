@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash, tasksForDay } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -49,7 +50,7 @@ try {
       await page.goto(site.url);
       await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), s);
       await page.reload();
-      await page.click('[data-action="open-kid"]');
+      await openKid(page, '[data-action="open-kid"]');
     };
 
     // Buy the whole set
@@ -78,6 +79,7 @@ try {
     if (shots && label === 'tablet') await page.screenshot({ path: `${shots}/3-full-set-${label}.png` });
 
     // A new buddy needs its own wand
+    await page.click('[data-action="wardrobe-switch"]'); // the buddy picker opens on purpose
     await page.click('[data-action="wardrobe-species"][data-val="fox"]');
     s = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids[0]);
     assert.equal(s.buddy.outfit.hand, undefined);

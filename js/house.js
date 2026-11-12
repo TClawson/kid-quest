@@ -64,6 +64,7 @@ const DONE_SAY = {
  *   tank: fishbook.js tankFish(kid) (the fish in the tank, null when empty), fish: how many kinds
  *   of fish the kid has caught, garden: { thirsty } (plants waiting for water, for the Garden tag),
  *   harvest: gardenrules.js houseHarvest (the vases, baskets and fruit bowl the garden puts out),
+ *   hud: markup laid over a corner of the room (the Today button), or '',
  * }
  */
 export function houseHtml(h) {
@@ -108,6 +109,7 @@ export function houseHtml(h) {
         <button class="h-gbtn" data-garden aria-label="Go to the garden">🌱 Garden${h.garden?.thirsty ? `<i>💧${h.garden.thirsty}</i>` : ''}</button>
         <div class="v-dialog" hidden></div>
       </div>
+      ${h.hud || ''}
     </section>`;
 }
 
@@ -116,6 +118,10 @@ const memory = new Map();
 
 /** The buddy just came in through the door (instead of wherever it was). */
 export function cameIn(kidId) { memory.set(kidId, { ...HOUSE_SPOTS.door, face: 1, cam: null, entering: true }); }
+
+// A chore the Today list sent the buddy in for (bed, teeth, floor): kid id -> kind, done when the house opens.
+const goals = new Map();
+export function houseGoal(kidId, kind) { goals.set(kidId, kind); }
 
 /**
  * Starts every house inside root. handlers: {
@@ -270,6 +276,8 @@ function mount(section, handlers) {
     if (Math.hypot(me.x - spot.x, me.y - spot.y) < 16) { me.goal = goal; arrive(); return; }
     walkTo(spot.x, spot.y, goal);
   };
+  // the Today list's Go for a house chore: walk to it and talk about it
+  section.goChore = (kind) => use(kind);
 
   view.addEventListener('click', (e) => {
     if (e.target.closest('.v-dialog')) return;
@@ -329,6 +337,8 @@ function mount(section, handlers) {
   window.addEventListener('resize', onResize, { passive: true });
   place();
   requestAnimationFrame(tick);
+  const pending = goals.get(data.kid);
+  if (pending) { goals.delete(data.kid); use(pending); }
 }
 
 

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
 import { villageLayout } from '../../js/villagemaps.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 fs.mkdirSync(out, { recursive: true });
@@ -24,7 +25,7 @@ await page.clock.install({ time: new Date(`${day}T07:30:00`) });
 await page.goto(site.url);
 await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), s);
 await page.reload();
-await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
 await page.clock.runFor(1000);
 while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
 await page.locator('.village').scrollIntoViewIfNeeded();

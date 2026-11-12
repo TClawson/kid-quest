@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
 import { VILLAGE_START } from '../../js/familygarden.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 const only = process.argv[3];
@@ -48,7 +49,7 @@ async function open(theme, c, viewport, tall) {
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), family(theme, c.today, c.pattern));
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1000);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
   await page.locator('.village').scrollIntoViewIfNeeded();

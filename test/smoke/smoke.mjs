@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -22,7 +23,7 @@ try {
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
 
-  await page.click('[data-action="open-kid"]');
+  await openKid(page, '[data-action="open-kid"]');
   const teeth = tasks.find((t) => t.name === 'Brush teeth');
   await page.click(`[data-action="task"][data-id="${teeth.id}"]`);
   await page.waitForTimeout(300);

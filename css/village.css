@@ -256,3 +256,12 @@
 
 /* the season's weather: one canvas over the whole village (seasonlife.js) */
 .season-weather { position: absolute; left: 0; top: 0; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+
+/* bigger tap areas than the art on a phone (44px at 2x), without changing the art */
+.villager::before { content: ''; position: absolute; left: -3px; right: -3px; top: -2px; bottom: 0; }
+.v-chest::before { content: ''; position: absolute; left: -1px; right: -1px; top: -6px; bottom: -3px; }
+/* tapping your own buddy plays one of its moves */
+.village .v-buddy { pointer-events: auto; cursor: pointer; }
+.village .v-buddy.walking { pointer-events: none; }
+/* a visitor right at the bottom edge keeps its bubble to itself, so it can't sit under the Today button or the arrows */
+.v-visitor.hush:not(.news) .visitor-bubble { opacity: 0; pointer-events: none; }

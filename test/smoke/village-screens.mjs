@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 fs.mkdirSync(out, { recursive: true });
@@ -35,7 +36,7 @@ for (const [label, viewport] of [['tablet', { width: 800, height: 1280 }], ['pho
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), family(1));
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
   await page.locator('.village').scrollIntoViewIfNeeded();
@@ -62,7 +63,7 @@ for (const [label, viewport] of [['tablet', { width: 800, height: 1280 }], ['pho
   // with the kid's own plan: steps numbered, an off-plan villager points back to the plan
   await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), family(3, true));
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
   await page.locator('.village').scrollIntoViewIfNeeded();

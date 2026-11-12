@@ -20,6 +20,7 @@ import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.
 import { sourceOf, newMix, addPart, addTake, shelfSongs, takeToNotes } from '../../js/studiorules.js';
 import { MUSIC_TIERS } from '../../js/musicrules.js';
 import { CLICK } from '../../js/studio-audio.js';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews/studio').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -110,7 +111,7 @@ async function start(viewport, done, s = family(done)) {
 /** Into the music house and up to the studio desk. */
 async function walkIn(page) {
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   for (let i = 0; i < 6 && await page.locator('#modal:not([hidden])').count(); i += 1) {
     const close = page.locator('#modal [data-action="modal-close"]');
@@ -184,6 +185,7 @@ const seedStudio = (page, mixes, takes) => page.evaluate(([mixes, takes]) => new
 }), [mixes, takes]);
 /** From the start screen into the parent's Settings, with the PIN. */
 async function toSettings(page) {
+  await toPicker(page);
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
   await page.waitForSelector('.pnav');
@@ -808,7 +810,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await page.reload();
   await page.clock.runFor(1000);
   assert.equal(await page.locator('.studio-screen').count(), 0, 'not in the test desk after a reload');
-  assert.equal(await page.locator('[data-action="open-kid"][data-id="kid_ava"]').count(), 1, 'the usual start screen');
+  // (one kid on a kid tablet: the start screen goes straight to her quests)
+  assert.equal(await page.locator('[data-action="open-kid"][data-id="kid_ava"], .screen.kid').count(), 1, 'the usual start screen');
 
   // a take the test desk threw away is swept, as for a kid (and Ava's old take still isn't)
   await toSettings(page);

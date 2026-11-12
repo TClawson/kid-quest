@@ -3,6 +3,7 @@
 // Run: npm run test:smoke   (SHOTS_DIR=... saves screenshots)
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { toPicker } from '../helpers/open-kid.mjs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, weekStart, entryFor, tasksForDay, fallbackHash } from '../../js/logic.js';
 
@@ -40,7 +41,9 @@ try {
     const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
 
     // The Parents button counts the reward to hand over.
+    await toPicker(page);
     assert.match(await page.textContent('[data-action="parent"]'), /1/);
+    await toPicker(page);
     await page.click('[data-action="parent"]');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     // one strip on Today: how many, and who; See opens the Given rows
@@ -70,6 +73,7 @@ try {
     assert.equal((await stored()).kids[0].rewardsGiven[lastMonday], undefined);
     await page.click('[data-action="reward-given"][data-kid="kid_ava"]');
     await page.click('[data-action="parent-exit"]');
+    await toPicker(page);
     assert.doesNotMatch(await page.textContent('[data-action="parent"]'), /\d/);
 
     // no page-wide horizontal scroll on a phone

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
 import { VILLAGE_START } from '../../js/familygarden.js';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 fs.mkdirSync(out, { recursive: true });
@@ -46,7 +47,7 @@ async function open(c, viewport) {
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), family(c.theme));
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1000);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
   await page.locator('.village').scrollIntoViewIfNeeded();
@@ -89,6 +90,7 @@ for (const [sizeName, viewport] of Object.entries(SIZES)) {
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), family('bg-meadow'));
   await page.reload();
+  await toPicker(page);
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="settings"]');
@@ -132,7 +134,7 @@ for (const c of GCASES) {
       localStorage.setItem('kidquest.house', JSON.stringify({ kid_ava: { day: d, inside: false, place: 'garden' } }));
     }, [st, today]);
     await page.reload();
-    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
     await page.clock.runFor(1500);
     while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
     await page.clock.runFor(3000);

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -28,7 +29,7 @@ try {
     await page.goto(site.url);
     await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
     await page.reload();
-    await page.click('[data-action="open-kid"]');
+    await openKid(page, '[data-action="open-kid"]');
     await page.click('[data-action="wardrobe"]');
     await page.click('[data-action="wardrobe-slot"][data-slot="neck"]');
 
@@ -53,6 +54,7 @@ try {
     // Each other buddy sees only its own special, in its own tab.
     const tabs = { fox: ['hat', 'hat-coonskin'], bear: ['hat', 'hat-beehive'], cat: ['neck', 'neck-yarn'], dino: ['neck', 'neck-jersey'], puppy: ['neck', 'neck-bone'], turtle: ['face', 'face-ninja'] };
     for (const [species, [slot, id]] of Object.entries(tabs)) {
+      await page.click('[data-action="wardrobe-switch"]'); // the buddy picker opens on purpose
       await page.click(`[data-action="wardrobe-species"][data-val="${species}"]`);
       await page.click(`[data-action="wardrobe-slot"][data-slot="${slot}"]`);
       assert.equal(await page.getAttribute('.items .item >> nth=0', 'data-id'), id);
@@ -63,6 +65,7 @@ try {
     assert.equal(s.buddy.outfit.neck, undefined, 'the turtle wears no bamboo');
 
     // Back to the panda: the bamboo goes back on.
+    await page.click('[data-action="wardrobe-switch"]'); // the buddy picker opens on purpose
     await page.click('[data-action="wardrobe-species"][data-val="panda"]');
     s = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids[0]);
     assert.equal(s.buddy.outfit.neck, 'neck-bamboo');

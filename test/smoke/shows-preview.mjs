@@ -9,6 +9,7 @@ import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, tasksForDay, fallbackHash } from '../../js/logic.js';
 import { SECRETS } from '../../js/treasure-art.js';
 import { SHOWS } from '../../js/mapshow.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR || '/tmp/shows';
 const TODAY = '2026-11-12';
@@ -46,7 +47,7 @@ try {
     await page.goto(site.url);
     await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), family(theme));
     await page.reload();
-    await page.click('[data-action="open-kid"]');
+    await openKid(page, '[data-action="open-kid"]');
     await page.waitForSelector('.map-secret');
     await page.waitForTimeout(900);
     while (await page.isVisible('#modal:not([hidden]) [data-action="modal-close"]')) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(400); }

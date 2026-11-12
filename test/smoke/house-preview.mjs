@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews').replace(/\/$/, '');
 const video = process.argv.includes('--video');
@@ -68,7 +69,7 @@ async function open(viewport, st, { inside = true, time = '07:30', record = fals
   // inside: the buddy has been here before (a new day starts inside); outside: left outside today
   await page.evaluate(([s, house]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); }, [st, { kid_ava: inside ? { day: addDaysIso(day, -1), inside: false } : { day, inside: false } }]);
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   await closeModals(page);
   await page.locator(inside ? '.house' : '.village').scrollIntoViewIfNeeded();
@@ -244,6 +245,7 @@ const PHONE = { width: 412, height: 915 };
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), st);
   await page.reload();
+  await toPicker(page);
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="kids"]');

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -25,7 +26,7 @@ try {
       localStorage.setItem('kidquest.cloud.cache', JSON.stringify(st));
     }, s);
     await page.reload();
-    await page.click('[data-action="open-kid"]');
+    await openKid(page, '[data-action="open-kid"]');
     await page.clock.runFor(1500);
     const text = await page.locator('#modal:not([hidden])').allInnerTexts();
     if (expectPopup) {
@@ -33,7 +34,7 @@ try {
       await page.click('#modal [data-action="modal-close"]');
       await page.clock.runFor(1000);
       await page.click('[data-action="home"]').catch(() => {});
-      await page.click('[data-action="open-kid"]');
+      await openKid(page, '[data-action="open-kid"]');
       await page.clock.runFor(1500);
       assert.doesNotMatch((await page.locator('#modal:not([hidden])').allInnerTexts()).join(' '), /free games/i, 'only once a day');
     } else {

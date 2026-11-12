@@ -11,7 +11,7 @@
 //   green: the visitors' two play spots (left, right) and idle spots; landmark: where a
 //   finished treasure map's landmark stands, and where the buddy stands to look at it (one
 //   drawn for the village itself also gives its size w, h, its art and its foot box);
-//   chest; start: where the buddy starts; slots: where quest givers stand, in order, for the
+//   chest; coach: where the coach stands (bonus exercise, beside the play spots); start: where the buddy starts; slots: where quest givers stand, in order, for the
 //   morning and after school; labels: the "Morning quests" signs.
 
 import { PROPS, waterDepth } from './villageprops.js';
@@ -71,6 +71,7 @@ export const VILLAGE_MAPS = {
     },
     // the Great Oak, drawn for the village (oakart.js): the biggest thing here, in the south-east corner
     landmark: { x: 282, y: 378, w: OAK.w, h: OAK.h, art: 'oak', foot: [4, 8, 148, 152], stand: { x: 270, y: 506 } },
+    coach: { x: 32, y: 262 }, // the coach, who gives the bonus exercise, beside the play spots
     chest: { x: 224, y: 512 },
     start: { x: 224, y: 122 },
     slots: {
@@ -124,6 +125,7 @@ export const VILLAGE_MAPS = {
     },
     // the ghost ship wreck, drawn for the village (wreckart.js): run aground in the south-west corner
     landmark: { x: 16, y: 418, w: WRECK.w, h: WRECK.h, art: 'wreck', foot: [8, 30, 156, 72], stand: { x: 194, y: 458 } },
+    coach: { x: 372, y: 164 },
     chest: { x: 372, y: 484 },
     start: { x: 88, y: 130 },
     slots: {
@@ -174,6 +176,7 @@ export const VILLAGE_MAPS = {
     },
     // the Kraken's ship, drawn for the village (galleonart.js): broken in two in the south-west corner
     landmark: { x: 20, y: 456, w: GALLEON.w, h: GALLEON.h, art: 'galleon', foot: [6, 44, 172, 76], stand: { x: 208, y: 498 } },
+    coach: { x: 242, y: 262 },
     chest: { x: 252, y: 556 },
     start: { x: 224, y: 130 },
     slots: {
@@ -226,6 +229,7 @@ export const VILLAGE_MAPS = {
     },
     // the moon worm's cave in its crater (caveart.js); its foot is the rocky hill and the crater round it
     landmark: { x: 266, y: 450, w: CAVE.w, h: CAVE.h, art: 'cave', foot: [4, 34, 156, 72], stand: { x: 254, y: 514 } },
+    coach: { x: 290, y: 206 },
     chest: { x: 380, y: 436 },
     start: { x: 90, y: 134 },
     slots: {
@@ -276,6 +280,7 @@ export const VILLAGE_MAPS = {
     },
     // the Dragon King's gatehouse (gateart.js); its foot is the towers and the gate, not the roofs and the dragon on top
     landmark: { x: 272, y: 482, w: GATE.w, h: GATE.h, art: 'gate', foot: [4, 56, 148, 96], stand: { x: 260, y: 620 } },
+    coach: { x: 32, y: 422 },
     chest: { x: 224, y: 606 },
     start: { x: 224, y: 146 },
     slots: {
@@ -323,6 +328,7 @@ export const VILLAGE_MAPS = {
       idle: [{ x: 360, y: 250 }, { x: 410, y: 250 }, { x: 180, y: 300 }, { x: 370, y: 300 }],
     },
     landmark: { x: 16, y: 384, w: STONE.w, h: STONE.h, art: 'stone', foot: [18, 106, 92, 42], stand: { x: 154, y: 494 } },
+    coach: { x: 362, y: 342 },
     chest: { x: 240, y: 486 },
     start: { x: 90, y: 130 },
     slots: {
@@ -375,6 +381,7 @@ export const VILLAGE_MAPS = {
     },
     // the great kapok tree with its rain drum, drawn for the village (kapokart.js): the biggest thing here, in the south-east corner
     landmark: { x: 280, y: 388, w: KAPOK.w, h: KAPOK.h, art: 'kapok', foot: [40, 118, 118, 42], stand: { x: 270, y: 552 } },
+    coach: { x: 268, y: 244 },
     chest: { x: 368, y: 370 },
     start: { x: 90, y: 144 },
     slots: {
@@ -428,6 +435,7 @@ export const VILLAGE_MAPS = {
     },
     life: { chimneys: [[246, 16], [98, 106], [388, 106], [109, 396]] }, // where the hearts and stars puff from (rainbowart.js chimneyOf)
     landmark: { x: 278, y: 396, w: GOLDPOT.w, h: GOLDPOT.h, art: 'goldpot', foot: [6, 100, 140, 44], stand: { x: 262, y: 528 } },
+    coach: { x: 416, y: 236 },
     chest: { x: 224, y: 506 },
     start: { x: 224, y: 136 },
     slots: {
@@ -472,6 +480,7 @@ export const VILLAGE_MAPS = {
       idle: [{ x: 180, y: 216 }, { x: 250, y: 300 }, { x: 160, y: 244 }, { x: 250, y: 344 }],
     },
     landmark: { x: 14, y: 392, w: STARWHALE.w, h: STARWHALE.h, art: 'starwhale', foot: [12, 100, 152, 36], stand: { x: 176, y: 536 } },
+    coach: { x: 416, y: 322 },
     chest: { x: 224, y: 480 },
     start: { x: 370, y: 132 },
     slots: {
@@ -594,6 +603,7 @@ export function villageLayout(theme) {
     life: spec.life || {},
     landmark: lm,
     chest: spec.chest,
+    coach: spec.coach,
     start: spec.start,
     labels: spec.labels,
     slots: {

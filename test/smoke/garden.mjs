@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || '/mnt/project-files/kid-quest-previews/garden/app/').replace(/\/?$/, '/');
 fs.mkdirSync(out, { recursive: true });
@@ -66,7 +67,7 @@ async function start(viewport, s, place = 'garden') {
     localStorage.setItem('kidquest.house', JSON.stringify({ kid_ava: { day: d, inside: pl === 'house', place: pl } }));
   }, [s, place, day]);
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(400); }
   await page.clock.runFor(1500);

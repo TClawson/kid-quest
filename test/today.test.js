@@ -144,3 +144,52 @@ test('approve all and its undo cover every kid and day', () => {
   assert.equal(undoTaskChanges(state, changes), 2);
   assert.equal(JSON.stringify(state), before);
 });
+
+// The kid's Today list (todayQuests): grouped, next one up, timers, cues and stars.
+import { todayQuests } from '../js/logic.js';
+
+test('todayQuests groups the day: morning, after school, evening and bonus exercise', () => {
+  const { state, kid } = setup();
+  kid.tasks.push({ id: 'task_dish', name: 'Dishes', icon: '🍽️', period: 'afternoon', evening: true, days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0 });
+  const q = todayQuests(state, kid, THURSDAY);
+  const ids = (list) => list.map((it) => it.task.id);
+  assert.equal(q.groups.morning.length, 3);
+  assert.ok(q.groups.morning.every((it) => it.task.period === 'morning'));
+  assert.ok(q.groups.afternoon.every((it) => it.task.period === 'afternoon' && !it.task.evening));
+  assert.deepEqual(ids(q.groups.evening), ['task_dish']);
+  assert.deepEqual(ids(q.groups.exercise), ['task_run']);
+  assert.equal(q.total, kidToday(state, kid, THURSDAY, 0).total, 'the same counts as kidToday');
+  assert.equal(q.next, q.groups.morning[0].task.id, 'the first morning quest is next');
+  assert.equal(q.groups.morning[0].next, true);
+  assert.equal(q.groups.exercise[0].next, false, 'exercise is never "next"');
+});
+
+test('todayQuests: done, waiting, the next quest moves on, and the timer time left', () => {
+  const { state, kid } = setup();
+  const [teeth, bed, floor, piano] = quest(state, kid, THURSDAY);
+  const e = entryFor(state, kid.id, THURSDAY, true);
+  e.tasks[teeth.id] = { status: 'done' };
+  e.tasks[bed.id] = { status: 'pending' };
+  e.tasks[piano.id] = { seconds: 600 };
+  const q = todayQuests(state, kid, THURSDAY);
+  const of = (id) => [...q.groups.morning, ...q.groups.afternoon].find((it) => it.task.id === id);
+  assert.equal(of(teeth.id).state, 'done');
+  assert.equal(of(bed.id).state, 'waiting');
+  assert.equal(of(floor.id).state, 'todo');
+  assert.equal(q.next, floor.id, 'the first one still to do');
+  assert.equal(of(piano.id).secondsLeft, piano.minutes * 60 - 600);
+  assert.equal(of(floor.id).secondsLeft, null, 'no timer, no time left');
+  assert.equal(of(teeth.id).secondsLeft, null);
+});
+
+test('todayQuests follows the kid\'s plan, with its cues and mastered habits', () => {
+  const { state, kid } = setup();
+  const [teeth, bed, floor] = quest(state, kid, THURSDAY);
+  kid.plan = { order: [floor.id, teeth.id, bed.id], cues: { [floor.id]: 'After breakfast', [teeth.id]: 'Not a real cue' } };
+  const q = todayQuests(state, kid, THURSDAY);
+  assert.deepEqual(q.groups.morning.map((it) => it.task.id), [floor.id, teeth.id, bed.id]);
+  assert.equal(q.next, floor.id);
+  assert.equal(q.groups.morning[0].cue, 'After breakfast');
+  assert.equal(q.groups.morning[1].cue, '', 'a cue from another list is ignored');
+  assert.ok(q.groups.morning.every((it) => it.mastered === false));
+});

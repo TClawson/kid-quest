@@ -2,6 +2,7 @@
 // Run: node test/smoke/turns.mjs  (SHOTS=dir also saves screenshots)
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { toPicker } from '../helpers/open-kid.mjs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash, weekParity, tasksForDay, addDays } from '../../js/logic.js';
 
@@ -25,6 +26,8 @@ try {
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
+
+  await toPicker(page);
 
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
