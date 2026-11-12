@@ -2123,7 +2123,6 @@ function parentSettings() {
     </div>
 ${allowanceCard()}
 ${gameTestCard()}
-${printCardHtml()}
     <div class="card studio-test">
       <h2>🎚️ Try the recording studio</h2>
       <p class="muted small">Open the recording studio right away to see how it works. This is a test desk: the kids' mixes and stickers are not touched.</p>
@@ -2145,6 +2144,7 @@ ${seasonTestCard()}
       <p class="muted small">Record up to 2 minutes of piano through the tablet's microphone and save it as a sound file. Nothing is kept in the game.</p>
       <div id="rec-test"></div>
     </div>
+${printCardHtml()}
     <div class="card">
       <h2>Parent PIN</h2>
       <button class="btn ghost" data-action="change-pin">Change PIN</button>
