@@ -107,3 +107,42 @@
   font: 700 1rem/1 var(--px-font); color: var(--px-ink); background: #d3f9d8; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink);
 }
 .h-gbtn i { font-style: normal; margin-left: 6px; color: #1864ab; }
+
+/* the turntable (js/turntable.js): while it plays, a glint goes round the record and notes float up */
+.h-spot[data-spot="music"] .h-tag { top: -2px; }
+.h-spin, .h-notes { position: absolute; width: 0; height: 0; pointer-events: none; display: none; }
+.house.tt-on .h-spin, .house.tt-on .h-notes { display: block; }
+.h-spin { z-index: 1; }
+.h-spin i { position: absolute; left: -0.5px; top: -0.5px; width: 1px; height: 1px; background: #d8d4f0; animation: h-spin 0.9s infinite steps(1, end); }
+@keyframes h-spin {
+  0% { transform: translate(4px, 0); } 12.5% { transform: translate(3px, 1px); } 25% { transform: translate(0, 1.5px); } 37.5% { transform: translate(-3px, 1px); }
+  50% { transform: translate(-4px, 0); } 62.5% { transform: translate(-3px, -1px); } 75% { transform: translate(0, -1.5px); } 87.5% { transform: translate(3px, -1px); }
+}
+.h-notes { z-index: 300; }
+.h-notes i { position: absolute; left: 0; top: 0; font: 700 7px/1 var(--px-font); font-style: normal; color: #7a4ab0; text-shadow: 0.5px 0.5px 0 #fff8e7; opacity: 0; animation: h-note 2.4s linear infinite; }
+.h-notes i:nth-child(2) { color: #e0546a; animation-delay: 0.8s; }
+.h-notes i:nth-child(3) { color: #3e6ab0; animation-delay: 1.6s; }
+@keyframes h-note {
+  0% { transform: translate(-2px, 0); opacity: 0; } 15% { opacity: 1; }
+  50% { transform: translate(4px, -10px); } 85% { opacity: 1; } 100% { transform: translate(-1px, -20px); opacity: 0; }
+}
+
+/* the turntable's pop-up */
+.tt { display: grid; gap: 10px; }
+.tt-top { display: flex; align-items: center; gap: 10px; }
+.tt-top h2 { margin: 0; }
+.tt-icon { font-size: 2rem; }
+.tt h3 { margin: 10px 0 4px; font-size: 1rem; }
+.tt-status { margin: 0; padding: 8px 10px; border-radius: 10px; background: rgba(122, 74, 176, 0.1); }
+.tt-empty { margin: 0; padding: 12px; border-radius: 12px; background: rgba(122, 74, 176, 0.1); }
+.tt-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px; border-radius: 12px; border: 2px solid transparent; }
+.tt-row + .tt-row { margin-top: 4px; }
+.tt-row.on { border-color: #7a4ab0; background: rgba(122, 74, 176, 0.08); }
+.tt-row .tt-name { display: grid; flex: 1 1 140px; min-width: 0; }
+.tt-row .tt-name small { color: var(--muted, #6b6b80); }
+.tt-row > .btn { flex: 1 1 120px; min-height: 44px; margin: 0; }
+.tt-disc { flex: none; width: 28px; height: 28px; border-radius: 50%; background: radial-gradient(circle, #e0546a 0 22%, #24202e 24% 100%); box-shadow: inset 0 0 0 3px #3a3448, inset 4px -4px 0 0 rgba(255, 255, 255, 0.12); }
+.tt-disc.spin { animation: tt-spin 1.4s linear infinite; }
+@keyframes tt-spin { to { transform: rotate(360deg); } }
+.tt-vol { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; }
+.tt-vol input { flex: 1; min-height: 44px; accent-color: #7a4ab0; }

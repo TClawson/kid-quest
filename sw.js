@@ -82,6 +82,8 @@ const SHELL = [
   'js/hearnotes.js',
   'js/tunerules.js',
   'js/notolab.js',
+  'js/mixsound.js',
+  'js/turntable.js',
   'js/notomatic.js',
   'js/arrange.js',
   'js/arrangements.js',
