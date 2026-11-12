@@ -3,9 +3,10 @@
 // scale). The bed, the toothbrush and the floor show today's chores (houserules.js); the
 // trophy shelf opens the trophies, the chart on the wall the family leaderboard, the fish
 // tank its fish picker (its fish swims in it, fishbook.js) and the book beside it the fish
-// book, and the door leads back out to the village. houseart.js draws it all.
+// book, the turntable (once bought) its records (turntable.js), and the door leads back out
+// to the village. houseart.js draws it all.
 
-import { ROOM, TANK, paintRoom } from './houseart.js';
+import { ROOM, TANK, TURNTABLE, paintRoom } from './houseart.js';
 import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
 import { furnitureById } from './furniture.js';
 import { fishSpecies } from './fishbook.js';
@@ -26,8 +27,10 @@ export const HOUSE_SPOTS = {
   floor: { x: 120, y: 142 },
   tank: { x: 156, y: 131 }, // just behind the tank, looking in
   book: { x: 186, y: 131 },
+  music: { x: 66, y: 66 }, // in front of the turntable
 };
 const T = ROOM.at.tank;
+const M = ROOM.at.music;
 // the tappable things: [x, y, w, h] boxes over the art
 const HOT = {
   shelf: [84, 8, 34, 48],
@@ -37,6 +40,7 @@ const HOT = {
   sink: [250, 8, 24, 52],
   tank: [T.x + 1, T.y, 45, 39],
   book: [T.x + TANK.book[0], T.y + TANK.book[1] - 2, TANK.book[2], 27],
+  music: [M.x, M.y, TURNTABLE.w, TURNTABLE.h],
 };
 // the floating bubbles over a chore that's still to do
 const BUBBLE = { bed: { x: 26, y: 30 }, teeth: { x: 262, y: 22 }, floor: { x: 120, y: 84 } };
@@ -98,6 +102,9 @@ export function houseHtml(h) {
           ${tank}
           ${spot('tank', h.tank ? `Fish tank: ${h.tank.nickname}` : 'Fish tank', `<span class="h-tag">🐟 ${h.tank ? 'Tank' : h.fish ? 'Pick a fish' : 'Fish tank'}</span>`)}
           ${spot('book', 'Fish book', '<span class="h-tag">📖 Fish book</span>')}
+          ${data.layout.music ? `${spot('music', 'Turntable', '<span class="h-tag">🎶 Turntable</span>')}
+          <span class="h-spin" style="left:${M.x + TURNTABLE.record.x}px;top:${M.y + TURNTABLE.record.y}px" aria-hidden="true"><i></i></span>
+          <span class="h-notes" style="left:${M.x + TURNTABLE.record.x}px;top:${M.y + 2}px" aria-hidden="true"><i>♪</i><i>♫</i><i>♪</i></span>` : ''}
           ${spot('bed', 'Bed')}
           ${spot('sink', 'Sink')}
           ${spot('door', 'Go outside', `<span class="h-tag out">⬇ Outside${h.quests ? ` · ${h.quests} ${h.quests === 1 ? 'quest' : 'quests'}` : ''}</span>`)}
@@ -127,7 +134,8 @@ export function houseGoal(kidId, kind) { goals.set(kidId, kind); }
  * Starts every house inside root. handlers: {
  *   onTask(taskId, el): the kid says a chore is done, onTrophies(), onLeaderboard(),
  *   onTank(): the fish picker, onFishBook(), onGarden(): the buddy went out to the garden,
- *   onExit(): the buddy went out the door, sound(name),
+ *   onExit(): the buddy went out the door, sound(name), onTurntable(): the turntable's screen,
+ *   spinning(kidId): whether that kid's turntable is playing (the record goes round),
  * }
  */
 export function mountHouses(root, handlers) {
@@ -264,6 +272,7 @@ function mount(section, handlers) {
     else if (goal.use === 'chart') handlers.onLeaderboard?.();
     else if (goal.use === 'tank') handlers.onTank?.();
     else if (goal.use === 'book') handlers.onFishBook?.();
+    else if (goal.use === 'music') handlers.onTurntable?.();
     else if (goal.use) choreTalk(goal.use);
   };
   const walkTo = (x, y, goal = null) => {
@@ -308,7 +317,7 @@ function mount(section, handlers) {
   });
 
   // the trophy, chart, tank and book tags show when the buddy is close
-  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"]')].map((el) => ({ el, at: HOUSE_SPOTS[el.dataset.spot] }));
+  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"]')].map((el) => ({ el, at: HOUSE_SPOTS[el.dataset.spot] }));
   const swim = tankSwimmer(section, data.tank);
 
   let last = performance.now();
@@ -332,6 +341,9 @@ function mount(section, handlers) {
     Object.assign(mem, { x: me.x, y: me.y, face: me.face, cam, S, path: me.path, goal: me.goal });
     for (const g of tags) g.el.classList.toggle('near', Math.hypot(me.x - g.at.x, me.y - g.at.y) < (g.el.dataset.spot === 'tank' || g.el.dataset.spot === 'book' ? 26 : 48));
     swim?.(now / 1000);
+    // the record goes round (and notes float up) while the turntable plays
+    const spin = Boolean(data.layout.music && handlers.spinning?.(data.kid));
+    if (spin !== section.classList.contains('tt-on')) section.classList.toggle('tt-on', spin);
     place();
     requestAnimationFrame(tick);
   };

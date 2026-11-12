@@ -6,6 +6,15 @@
 // spot: { bed: 'home-bed-quilt-blue', rug: 'home-rug-round-red', ... }. The basic bed and the
 // basic table and chair are free and always there; the other spots are empty until filled.
 
+/** The turntable and speakers (turntable.js plays them). */
+export const TURNTABLE_ID = 'home-turntable';
+
+/** Whether a piece can only be bought once the kid's music house is open (the turntable). */
+export const needsMusicHouse = (item) => item?.musicHouse === true;
+
+/** Whether the kid's turntable stands in their house (owned and in its spot), so it can play. */
+export const hasTurntable = (kid) => homeLayout(kid).music?.id === TURNTABLE_ID;
+
 // Each spot in the room holds one piece at a time.
 export const HOME_SPOTS = [
   { id: 'bed', name: 'Bed', icon: '🛏️', basic: 'home-bed-basic' },
@@ -16,6 +25,7 @@ export const HOME_SPOTS = [
   { id: 'lamp', name: 'Lamp', icon: '💡' },
   { id: 'rug', name: 'Rug', icon: '🧶' },
   { id: 'art', name: 'Wall art', icon: '🖼️' },
+  { id: 'music', name: 'Music corner', icon: '🎶' },
 ];
 export const spotById = (id) => HOME_SPOTS.find((s) => s.id === id);
 
@@ -68,6 +78,9 @@ const BASE = [
   { id: 'home-art-stars', spot: 'art', name: 'Night sky painting', art: 'pic', price: 70, look: { c: 'purple', p: 'night' } },
   { id: 'home-art-map', spot: 'art', name: 'Treasure map', art: 'pic', price: 80, look: { c: 'cream', p: 'map' } },
   { id: 'home-art-rainbow', spot: 'art', name: 'Rainbow painting', art: 'pic', price: 70, look: { c: 'pink', p: 'rainbow' } },
+
+  // the turntable plays the kid's own music from the music house, so it can be bought once that opens
+  { id: TURNTABLE_ID, spot: 'music', name: 'Turntable and speakers', art: 'turntable', price: 300, look: { c: 'brown', p: 'plain' }, musicHouse: true, note: 'Play the mixes you make in the recording studio and the tunes you keep from the Note-o-Matic, right in your house. Play one once, or keep one playing as your house\'s music.' },
 ];
 
 const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);

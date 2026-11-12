@@ -316,6 +316,54 @@ function scheduleStep(r, song, s, t, only = null) {
 let ac = null;
 let live = null; // { r, song, id, master, timer, step, nextTime }
 
+/** The game's AudioContext (made the first time it is needed), shared with the turntable. Null without sound. */
+export function musicContext() {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+  } catch {
+    return null;
+  }
+  return ac;
+}
+
+// The map song goes out through a filter and a knob, so inside the buddy's house it can sound
+// as if it comes from outside: quiet and muffled, the high notes gone (muffleMusic).
+export const MUFFLE = { hz: 520, level: 0.28 };
+let outlet = null; // { ac, filter, gain }
+let muffled = false;
+function musicOut() {
+  if (outlet?.ac !== ac) {
+    const filter = ac.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.5;
+    filter.frequency.value = muffled ? MUFFLE.hz : 20000;
+    const gain = ac.createGain();
+    gain.gain.value = muffled ? MUFFLE.level : 1;
+    filter.connect(gain).connect(ac.destination);
+    outlet = { ac, filter, gain };
+  }
+  return outlet.filter;
+}
+
+/**
+ * Muffle the map song (on: inside the buddy's house, as if heard through the walls) or let it
+ * play clearly again. It slides over half a second, so walking in the door sounds smooth.
+ */
+export function muffleMusic(on) {
+  const want = Boolean(on);
+  if (want === muffled) return;
+  muffled = want;
+  if (!outlet || outlet.ac !== ac) return;
+  const t = ac.currentTime;
+  const f = outlet.filter.frequency;
+  const g = outlet.gain.gain;
+  f.cancelScheduledValues(t); f.setValueAtTime(f.value, t);
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t);
+  f.exponentialRampToValueAtTime(want ? MUFFLE.hz : 20000, t + 0.5);
+  g.linearRampToValueAtTime(want ? MUFFLE.level : 1, t + 0.5);
+}
+export const isMuffled = () => muffled;
+
 function tick() {
   const p = live;
   while (p.nextTime < ac.currentTime + 0.25) {
@@ -340,7 +388,7 @@ export function startMusic(theme = 'bg-meadow') {
   const master = ac.createGain();
   master.gain.setValueAtTime(0.0001, ac.currentTime);
   master.gain.linearRampToValueAtTime(VOLUME * (song.gain || 1), ac.currentTime + 1.2);
-  master.connect(ac.destination);
+  master.connect(musicOut());
   live = { id, song, master, r: rig(ac, master, song, 60 / song.bpm / 2), step: 0, nextTime: ac.currentTime + 0.1, timer: 0 };
   ducked = 0;
   tick();
