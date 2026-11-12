@@ -50,7 +50,9 @@ try {
   // the village redrawn every 0.7 s, half of the times with something on screen changing (so the
   // section is drawn again): the visitors stay where they are, and the sea's fish keep swimming
   await page.waitForSelector('.village .v-visitor');
-  const spots = () => page.evaluate(() => [...document.querySelectorAll('.village .v-visitor')].map((v) => `${v.dataset.id}@${v.style.left},${v.style.top}`).join(' '));
+  // the first open today they walk in to their spots (village-shows.mjs): where they stand is after that
+  await page.waitForSelector('.village[data-arrive="done"], .village[data-arrive="no"]');
+  const spots =() => page.evaluate(() => [...document.querySelectorAll('.village .v-visitor')].map((v) => `${v.dataset.id}@${v.style.left},${v.style.top}`).join(' '));
   const stood = await spots();
   await page.evaluate(() => {
     window.__fish = 0;

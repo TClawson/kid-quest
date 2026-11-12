@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
-import { openKid, tapInVillage } from '../helpers/open-kid.mjs';
+import { openKid, tapInVillage, visitorsHere } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -100,6 +100,7 @@ try {
     await page.waitForTimeout(500);
     while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
     await page.waitForSelector('.village .v-visitor');
+    await visitorsHere(page); // they walk in first (the first time today)
     await page.waitForTimeout(900);
     assert.match(await page.locator('.village .v-visitor .visitor-bubble').innerText(), /fishing/i, 'the fisher invites you fishing');
     await tapInVillage(page, '.v-visitor'); // the buddy walks over to the visitor

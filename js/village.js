@@ -176,6 +176,70 @@ export function visitorSpots(visit, L = villageLayout('bg-meadow')) {
   return out;
 }
 
+// The visitors walk in once a day per kid on this device (like the old map's arrival): the day
+// they last did, per kid, kept in the browser (and in memory when there is no storage).
+const ARRIVED_KEY = 'kidquest.visitorsIn';
+const arrivedMem = new Map();
+const readArrived = () => { try { return JSON.parse(localStorage.getItem(ARRIVED_KEY) || '{}') || {}; } catch { return {}; } };
+function arrivedToday(kidId, day) {
+  return arrivedMem.get(kidId) === day || readArrived()[kidId] === day;
+}
+function markArrived(kidId, day) {
+  arrivedMem.set(kidId, day);
+  try { localStorage.setItem(ARRIVED_KEY, JSON.stringify({ ...readArrived(), [kidId]: day })); } catch { /* remembered while the app is open */ }
+}
+
+/**
+ * Where a visitor walks in from to reach its spot sp: just past the nearest edge of the village
+ * (when that's not too far and the way in is open), else a point on a path a little way off.
+ * Returns { x, y } or null when there's no way in (then the visitor is simply there).
+ */
+export function arrivalStart(L, grid, sp) {
+  const open = (x, y) => { const [c, r] = cellOf(grid, x, y); return !grid[r * grid.cols + c]; };
+  const reach = (from) => {
+    const path = findPath(grid, from, sp);
+    const end = path[path.length - 1];
+    return end && Math.hypot(end.x - sp.x, end.y - sp.y) < 20 ? path : null;
+  };
+  // the edges: from outside the map, in through the border at the visitor's own row or column
+  const edges = [
+    { inner: { x: 28, y: sp.y }, from: { x: -12, y: sp.y }, d: sp.x },
+    { inner: { x: L.W - 28, y: sp.y }, from: { x: L.W + 12, y: sp.y }, d: L.W - sp.x },
+    { inner: { x: sp.x, y: 30 }, from: { x: sp.x, y: -6 }, d: sp.y },
+    { inner: { x: sp.x, y: L.H - 26 }, from: { x: sp.x, y: L.H + 14 }, d: L.H - sp.y },
+  ].filter((e) => e.d <= 170 && open(e.inner.x, e.inner.y)).sort((a, b) => a.d - b.d);
+  for (const e of edges) if (reach(e.inner)) return e.from;
+  // a path a little way off (about 100 village pixels, at least 50)
+  const pts = [];
+  for (const line of L.paths || []) {
+    for (let i = 1; i < line.length; i += 1) {
+      const [ax, ay] = line[i - 1]; const [bx, by] = line[i];
+      const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / 8));
+      for (let k = 0; k <= n; k += 1) {
+        const x = ax + ((bx - ax) * k) / n; const y = ay + ((by - ay) * k) / n;
+        const d = Math.hypot(x - sp.x, y - sp.y);
+        if (d >= 50 && x > 22 && x < L.W - 22 && y > 24 && y < L.H - 20 && open(x, y)) pts.push({ x, y, d });
+      }
+    }
+  }
+  pts.sort((a, b) => Math.abs(a.d - 100) - Math.abs(b.d - 100));
+  for (const q of pts.slice(0, 6)) if (reach(q)) return { x: q.x, y: q.y };
+  return null;
+}
+
+/** Whether the app's pop-up is open over the screen (a property read, no layout). */
+const popupOpen = () => { const m = document.getElementById('modal'); return Boolean(m && !m.hidden); };
+
+/** A visitor's feet at `at` (village pixels), facing `face` (1 right, -1 left). */
+function placeVisitor(el, at, face) {
+  el.style.left = `${at.x.toFixed(1)}px`;
+  el.style.top = `${at.y.toFixed(1)}px`;
+  el.style.zIndex = Math.round(at.y);
+  const b = el.firstElementChild;
+  const sc = face < 0 ? '-1 1' : '';
+  if (b && b.style.scale !== sc) b.style.scale = sc;
+}
+
 /** The pond or play patch for each visitor area, in village pixels. */
 export const greenAreas = (visit, L = villageLayout('bg-meadow')) => (visit?.areas || []).map((a) => ({ ...L.green[a.side], kind: a.kind, side: a.side }));
 
@@ -231,11 +295,21 @@ function musicDoor(L, music) {
 function gardenSign(L, garden, people = []) {
   const h = L.home;
   // beside the house, on the side with room: not off the map and not on a villager (or their chore bubble)
-  const top = h.y + h.h - 18;
-  const spots = [h.x + h.w + 3, h.x - 35, h.x + h.w + 3 + 14].filter((x) => x >= 2 && x + 32 <= L.W - 2);
-  const hits = (x) => people.filter((p) => p.x + 10 > x && p.x - 10 < x + 32 && p.y + 3 > top && p.y - 38 < top + 18).length;
-  const left = spots.sort((a, b) => hits(a) - hits(b))[0] ?? h.x + h.w + 3;
+  // the sign is about 34 village pixels wide (46 with a 💧 count) and 18 tall; a villager's chore
+  // bubble reaches 38 over their feet, and it keeps a couple of pixels clear of all of it
   const n = garden?.thirsty || 0;
+  const w = n ? 46 : 34;
+  const base = h.y + h.h - 18;
+  const spots = [];
+  for (const top of [base, base - 14, base - 28, base + 6]) {
+    for (const x of [h.x + h.w + 3, h.x - w - 3, h.x + h.w + 17]) {
+      if (x >= 22 && x + w <= L.W - 22 && !L.inWater(x + w / 2, top + 18, 2)) spots.push({ x, top });
+    }
+  }
+  const hits = ({ x, top }) => people.filter((p) => p.x + 12 > x && p.x - 12 < x + w && p.y + 4 > top && p.y - 40 < top + 18).length;
+  // the first spot with nobody near (beside the house, low down, comes first), else the least crowded
+  const pick = spots.find((sp) => !hits(sp)) || spots.sort((a, b) => hits(a) - hits(b))[0] || { x: h.x + h.w + 3, top: base };
+  const left = pick.x; const top = pick.top;
   const label = n ? `Go to the garden (${n} ${n === 1 ? 'plant is' : 'plants are'} thirsty)` : 'Go to the garden';
   return `<button class="v-garden" style="left:${left}px;top:${top}px;z-index:450" aria-label="${label}"><span class="v-garden-post"></span><span class="v-garden-board">🌱 Garden${n ? `<i class="v-garden-n">💧${n}</i>` : ''}</span></button>`;
 }
@@ -243,24 +317,33 @@ function gardenSign(L, garden, people = []) {
 /** The id the coach goes by among the quest givers. */
 export const COACH = 'coach';
 
-/** Where each talking visitor's speech bubble may be, roughly, in village pixels: [x, y, w, h]. */
-export function bubbleBoxes(visit, L) {
-  const spots = visitorSpots(visit, L);
-  return Object.values(spots).map((sp) => [sp.x - 36, sp.y - 58, 72, 34]);
-}
+/** What the signs keep clear of, as [x, y, w, h] in village pixels: the visitors' bubbles and the villagers (with their chore bubbles). */
+const signAvoid = (spots, people) => [
+  ...Object.values(spots).map((sp) => [sp.x - 39, sp.y - 60, 78, 36]),
+  ...people.map((p) => [p.x - 10, p.y - 38, 20, 38]),
+];
 
 /**
  * A "Morning quests" sign's spot, moved a little (sideways first, then up or down) when it would
  * sit under a visitor's speech bubble or a villager. label: [x, y, text]; returns [x, y, text].
  */
-export function labelSpot(label, avoid, L) {
+export function labelSpot(label, avoid, L, { w: width = 0, win = null } = {}) {
   const [x, y, text] = label;
-  const w = text.length * 4 + 10;
-  const hits = (cx, cy) => avoid.filter(([bx, by, bw, bh]) => cx - w / 2 < bx + bw && cx + w / 2 > bx && cy < by + bh && cy + 11 > by).length;
-  let best = [x, y]; let least = hits(x, y);
-  for (const [dx, dy] of [[0, 0], [-30, 0], [30, 0], [-60, 0], [60, 0], [0, -14], [0, 14], [-40, -14], [40, -14], [-40, 14], [40, 14]]) {
-    const cx = x + dx; const cy = y + dy;
-    if (cx - w / 2 < 22 || cx + w / 2 > L.W - 22) continue;
+  // a little wider than the sign itself, so it never touches a bubble
+  const w = (width || text.length * 4 + 10) + 4;
+  const hits = (cx, cy) => avoid.filter(([bx, by, bw, bh]) => cx - w / 2 < bx + bw && cx + w / 2 > bx && cy - 1 < by + bh && cy + 12 > by).length;
+  // win ({ l, r }, in village pixels): where the view looks when the village opens; the sign
+  // should be whole in it (on a phone the view is narrower than the village)
+  const inWin = (cx, cy) => !win || (cx - w / 2 >= win.l && cx + w / 2 <= win.r && (win.t === undefined || (cy >= win.t && cy + 12 <= win.b)));
+  const MOVES = [[0, 0], [-30, 0], [30, 0], [-60, 0], [60, 0], [0, -14], [0, 14], [-40, -14], [40, -14], [-40, 14], [40, 14]];
+  // in a narrow window, any step along the row (and a row up or down) nearest first
+  if (win) for (let dx = -120; dx <= 120; dx += 6) for (const dy of [0, -14, 14, -28, 28]) MOVES.push([dx, dy]);
+  if (win) MOVES.sort((a, b) => Math.abs(a[0]) + Math.abs(a[1]) * 2 - Math.abs(b[0]) - Math.abs(b[1]) * 2);
+  const fits = MOVES.map(([dx, dy]) => [x + dx, y + dy]).filter(([cx]) => cx - w / 2 >= 22 && cx + w / 2 <= L.W - 22);
+  // whole in the window if it can be; otherwise as before
+  const pool = fits.some(([cx, cy]) => inWin(cx, cy)) ? fits.filter(([cx, cy]) => inWin(cx, cy)) : fits;
+  let best = [x, y]; let least = Infinity;
+  for (const [cx, cy] of pool) {
     const n = hits(cx, cy);
     if (n < least) { least = n; best = [cx, cy]; }
     if (!least) break;
@@ -330,7 +413,7 @@ export function villageHtml(v) {
   const am = people.some((p) => p.period === 'morning');
   const pm = people.some((p) => p.period === 'afternoon');
   // the signs step aside from the visitors' speech bubbles and the villagers
-  const avoid = [...bubbleBoxes(v.visit, L), ...people.map((p) => [p.x - 9, p.y - 36, 18, 36])];
+  const avoid = signAvoid(visitorSpots(v.visit, L), people);
   const [mx, my, mt] = labelSpot(L.labels.morning, avoid, L); const [ax, ay, at] = labelSpot(L.labels.afternoon, avoid, L);
   return `
     <section class="village theme-${esc(L.id)}" data-kid="${esc(v.kidId)}" data-v="${esc(JSON.stringify(data))}">
@@ -342,8 +425,8 @@ export function villageHtml(v) {
           <button class="v-home${home ? ' has-quests' : ''}${home?.now ? ' now' : ''}" style="left:${L.home.x}px;top:${L.home.y - 12}px;width:${L.home.w}px;height:${L.home.h + 12}px;z-index:${L.home.y + L.home.h - 2}" aria-label="Go into ${esc(v.kidName)}'s house${home ? ` (${home.left} to do inside)` : ''}"><span class="v-home-door" style="left:${L.home.w / 2}px">🚪</span>${homeBubble}</button>
           ${musicDoor(L, data.music)}
           ${gardenSign(L, v.garden, people)}
-          ${am ? `<div class="v-label period" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
-          ${pm ? `<div class="v-label period" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
+          ${am ? `<div class="v-label period" data-sign="morning" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
+          ${pm ? `<div class="v-label period" data-sign="afternoon" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
           ${folk}${keeper}
           ${visitorsMarkup(v.visit, L)}
           ${lm ? `<button class="v-landmark${lm.art ? ` art-${lm.art}` : ''}" style="left:${lm.x}px;top:${lm.y}px;width:${lm.w}px;z-index:${lm.y + lm.h}" aria-label="${esc(v.landmark.name)}">${LANDMARK_ART[lm.art] ? `<canvas class="v-art" width="${LANDMARK_ART[lm.art].size.w}" height="${LANDMARK_ART[lm.art].size.h}" aria-hidden="true"></canvas>` : v.landmark.html}<span class="v-lm-bubble" hidden></span></button>` : ''}
@@ -435,6 +518,8 @@ function riverFalls(L) {
 
 const CELL = 8;
 const SPEED = 100; // village pixels a second
+const FRINGE = 96; // village pixels of border drawn over the top edge
+const FRINGE_BAND = 32; // the village's top rows that are drawn again there
 const inRect = (x, y, [rx, ry, rw, rh], pad = 0) => x > rx - pad && x < rx + rw + pad && y > ry - pad && y < ry + rh + pad;
 
 /**
@@ -763,6 +848,27 @@ function mount(section, handlers) {
   const canvas = section.querySelector('.village-land');
   const se = seasonNow(data.today);
   canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas, se), 0, 0);
+  // over the top edge (where the view goes past it on a phone, to bring the house's name out from
+  // under the HUD), the map's own border carries on: its top rows again, drawn once
+  const fringe = document.createElement('canvas');
+  fringe.className = 'v-fringe';
+  fringe.setAttribute('aria-hidden', 'true');
+  fringe.width = W; fringe.height = FRINGE;
+  fringe.style.cssText = `top:${-FRINGE}px;width:${W}px;height:${FRINGE}px`;
+  const fc = fringe.getContext('2d');
+  // a house whose roof (or chimney, or spire) reaches into those rows is left out: its columns are
+  // filled from the border beside it, so the copy is only the trees, the wall, the stars...
+  const roofs = [L.home, ...L.houses].filter((h) => h.y - 40 < FRINGE_BAND).map((h) => [Math.max(0, h.x - 8), Math.min(W, h.x + h.w + 8)]);
+  const clear = (a, b) => a >= 0 && b <= W && roofs.every(([ra, rb]) => b <= ra || a >= rb);
+  for (let y = FRINGE - FRINGE_BAND; y > -FRINGE_BAND; y -= FRINGE_BAND) {
+    fc.drawImage(canvas, 0, 0, W, FRINGE_BAND, 0, y, W, FRINGE_BAND);
+    for (const [a, b] of roofs) {
+      const w = b - a;
+      const from = [a - w, b, a - 2 * w, b + w].find((x) => clear(x, x + w));
+      if (from !== undefined) fc.drawImage(canvas, from, 0, w, FRINGE_BAND, a, y, w, FRINGE_BAND);
+    }
+  }
+  canvas.after(fringe);
   const paintSprite = (el, kind, happy) => {
     const c = el.querySelector('.v-sprite');
     const src = spriteUrl(kind, happy);
@@ -808,6 +914,28 @@ function mount(section, handlers) {
   // beyond the edges of the village (when the view goes past them, see below), its own ground
   const ground = MAP_THEMES[L.id]?.ground?.[0];
   if (ground) view.style.background = ground;
+
+  // The "Morning quests" signs again, now that the view's size is known: each is whole in the view
+  // that shows it (the morning one where the buddy starts, the other where it stands), inside the
+  // arrows along the edges, and clear of the visitors' bubbles and the villagers. Once, not per frame.
+  {
+    const S0 = baseScale(); const ww = view.clientWidth / S0; const wh = view.clientHeight / S0;
+    const avoid = signAvoid(data.spots, people);
+    if (ww && (ww < W || wh < H)) {
+      for (const el of section.querySelectorAll('.v-label.period[data-sign]')) {
+        const label = L.labels[el.dataset.sign];
+        if (!label) continue;
+        const from = el.dataset.sign === 'morning' ? L.start.x : label[0];
+        const l = Math.max(0, Math.min(W - ww, from - ww / 2));
+        const m = Math.min(ARROW_BAND / S0, Math.max(0, (ww - el.offsetWidth) / 2 - 4));
+        const win = ww < W ? { l: l + m, r: l + ww - m } : { l: 0, r: W };
+        // the morning sign is also whole top to bottom in the view where the buddy starts
+        if (el.dataset.sign === 'morning' && wh < H) { const t = Math.max(0, Math.min(H - wh, L.start.y - 12 - wh / 2)); win.t = t + 4; win.b = t + wh - 4; }
+        const [x, y] = labelSpot(label, avoid, L, { w: el.offsetWidth, win });
+        el.style.left = `${x}px`; el.style.top = `${y}px`;
+      }
+    }
+  }
 
   // The HUD covers the view's top and bottom rows. Everything the kid needs (the villagers and
   // their chore bubbles, the shopkeeper, the chest, the doors, the signs, the landmark) must be
@@ -1148,6 +1276,8 @@ function mount(section, handlers) {
   };
   // visitors take turns talking, one bubble at a time (news always shows)
   const visitors = [...section.querySelectorAll('.v-visitor')];
+  // where each visitor is now (their spot, unless they're still walking in)
+  const vpos = new Map(visitors.map((el) => [el, { ...(data.spots[el.dataset.id] || { x: 0, y: 0 }) }]));
   let talker = 0;
   const talkTimer = setInterval(() => {
     if (!section.isConnected) { clearInterval(talkTimer); return; }
@@ -1174,6 +1304,57 @@ function mount(section, handlers) {
     }, 900);
     setTimeout(() => el.classList.remove('reeling'), 3400);
   }, 9000) : 0;
+
+  // ---- visitors walking in ----
+  // The first time the visitors show on a day (on this device), they walk in to their spots from
+  // the nearest edge of the village, or from a path, along the same walking grid as the buddy.
+  const walkers = [];
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (visitors.length && !arrivedToday(data.kid, data.today) && !reduce) {
+    visitors.forEach((el, i) => {
+      const sp = data.spots[el.dataset.id];
+      const from = sp && arrivalStart(L, grid, sp);
+      if (!from) return;
+      const path = findPath(grid, from, sp);
+      // the spot itself is stood round on the grid: the last step goes onto it
+      const last = path[path.length - 1];
+      if (!last || Math.hypot(last.x - sp.x, last.y - sp.y) > 0.5) path.push({ x: sp.x, y: sp.y });
+      const len = path.reduce((d, q, k) => d + Math.hypot(q.x - (k ? path[k - 1] : from).x, q.y - (k ? path[k - 1] : from).y), 0);
+      walkers.push({ el, sp, path, at: { ...from }, wait: i * 0.35, speed: Math.max(SPEED * 0.7, len / 3.2), face: sp.face, walked: 0 });
+      el.classList.add('arriving', 'walking', 'hush'); // the bubble fades in once they're there
+      el.style.opacity = '0'; // they fade in over their first steps
+      vpos.set(el, { ...from });
+    });
+    for (const w of walkers) placeVisitor(w.el, w.at, w.face);
+  }
+  if (visitors.length) markArrived(data.kid, data.today);
+  section.dataset.arrive = walkers.length ? 'walking' : 'no';
+  const stepArrivals = (dt) => {
+    for (let i = walkers.length - 1; i >= 0; i -= 1) {
+      const w = walkers[i];
+      if (w.wait > 0) { w.wait -= dt; continue; }
+      let step = w.speed * dt;
+      w.walked += step;
+      while (step > 0 && w.path.length) {
+        const t = w.path[0];
+        const dx = t.x - w.at.x; const dy = t.y - w.at.y; const d = Math.hypot(dx, dy);
+        if (Math.abs(dx) > 0.5) w.face = dx > 0 ? 1 : -1;
+        if (d <= step) { w.at.x = t.x; w.at.y = t.y; w.path.shift(); step -= d; } else { w.at.x += (dx / d) * step; w.at.y += (dy / d) * step; step = 0; }
+      }
+      if (!w.path.length) {
+        // there: facing the way they stand all day, and talking as before
+        w.at = { x: w.sp.x, y: w.sp.y };
+        w.face = w.sp.face;
+        w.el.classList.remove('arriving', 'walking');
+        w.el.style.opacity = '';
+        walkers.splice(i, 1);
+        if (!walkers.length) section.dataset.arrive = 'done';
+      }
+      vpos.set(w.el, { x: w.at.x, y: w.at.y });
+      placeVisitor(w.el, w.at, w.face);
+      if (w.path.length) { const o = String(Math.min(1, w.walked / 12).toFixed(2)); if (w.el.style.opacity !== o) w.el.style.opacity = o; }
+    }
+  };
 
   // ---- taps ----
   view.addEventListener('click', (e) => {
@@ -1259,7 +1440,7 @@ function mount(section, handlers) {
       shown.add(q.id);
     }
     for (const [id, el] of arrowEls) if (!shown.has(id)) { el.remove(); arrowEls.delete(id); }
-    placeBubbles();
+    placeBubbles(spots);
   };
 
   // ---- the visitors' speech bubbles: never under the HUD or the arrows ----
@@ -1274,19 +1455,48 @@ function mount(section, handlers) {
     if (!z || z.text !== text) { z = { text, w: bub.offsetWidth, h: bub.offsetHeight }; bubbleSize.set(bub, z); }
     return z;
   };
-  const placeBubbles = () => {
-    if (!visitors.length || !vw) return;
+  // the signs, as boxes in village pixels (measured once, here), so bubbles keep off them and a sign
+  // cut off by the view's edge, or under an arrow, waits out of sight
+  const signs = [...section.querySelectorAll('.v-label.period, .v-label.home-label, .v-garden')].map((el) => {
+    const [x, y, w, h] = signBox(el);
+    return { el, x, y, w, h, period: el.classList.contains('period') };
+  });
+  const tagSize = new WeakMap();
+  const arrowHit = (arrowsAt, x, y, w, h) => arrowsAt.some((a) => x < a.left + 27 && x + w > a.left - 27 && y < a.top + 27 && y + h > a.top - 27);
+  const placeBubbles = (arrowsAt = []) => {
+    if (!vw) return;
+    // signs: screen boxes from sums only
+    const signAt = signs.map((g) => ({ g, x: (g.x - cam.x) * S, y: (g.y - cam.y) * S, w: g.w * S, h: g.h * S }));
+    for (const { g, x, y, w, h } of signAt) {
+      // the "Morning quests" signs fade when the edge cuts them; any sign fades under an arrow
+      const cut = (a, b, n) => (a < 0 && b > 0) || (a < n && b > n);
+      const off = (g.period && (cut(x, x + w, vw) || cut(y, y + h, vh))) || arrowHit(arrowsAt, x, y, w, h);
+      if (g.el.classList.contains('v-off') !== off) g.el.classList.toggle('v-off', off);
+    }
+    if (!visitors.length) return;
     const safe = { l: ARROW_BAND, r: vw - ARROW_BAND, t: Math.max(ARROW_BAND, bands.top + ARROW_BAND), b: vh - ARROW_BAND };
+    const avoid = [...bands.boxes, ...signAt.filter((a) => a.x + a.w > 0 && a.x < vw && a.y + a.h > 0 && a.y < vh).map((a) => ({ x: a.x - 2, y: a.y - 2, w: a.w + 4, h: a.h + 4 }))];
     for (const el of visitors) {
-      const sp = data.spots[el.dataset.id];
+      const sp = vpos.get(el);
       const bub = el.querySelector('.visitor-bubble');
       if (!sp || !bub) continue;
+      // a name tag an arrow or a HUD button would cover keeps out of sight meanwhile
+      const tag = el.querySelector('.visitor-name');
+      if (tag) {
+        let tz = tagSize.get(tag);
+        if (!tz) { tz = { w: tag.offsetWidth || 20, h: tag.offsetHeight || 7 }; tagSize.set(tag, tz); }
+        const tx = (sp.x - tz.w / 2 - cam.x) * S; const ty = (sp.y + 1 - cam.y) * S;
+        const tw = tz.w * S; const th = tz.h * S;
+        const hid = arrowHit(arrowsAt, tx, ty, tw, th) || bands.boxes.some((b) => tx < b.x + b.w && tx + tw > b.x && ty < b.y + b.h && ty + th > b.y);
+        if (el.classList.contains('tag-hush') !== hid) el.classList.toggle('tag-hush', hid);
+      }
+      if (el.classList.contains('arriving')) continue;
       const { w, h } = sizeOf(bub);
       // in village pixels: the bubble's left and top over the head (see .v-visitor in village.css), and under the name
       const left = sp.x - w / 2; const top = sp.y - 23 - 3 - h; const under = sp.y + 10;
       const sx = (sp.x - cam.x) * S; const head = (sp.y - 14 - cam.y) * S;
       const seen = sx > 0 && sx < vw && head > 0 && head < vh;
-      const at = seen && w ? bubbleSpot({ cx: sx, top: (top - cam.y) * S, below: (under - cam.y) * S, w: w * S, h: h * S }, safe, bands.boxes, Math.max(60, h * S * 1.5)) : null;
+      const at = seen && w ? bubbleSpot({ cx: sx, top: (top - cam.y) * S, below: (under - cam.y) * S, w: w * S, h: h * S }, safe, avoid, Math.max(60, h * S * 1.5)) : null;
       if (el.classList.contains('hush') !== !at) el.classList.toggle('hush', !at);
       if (!at) continue;
       if (el.classList.contains('below') !== at.below) el.classList.toggle('below', at.below);
@@ -1318,6 +1528,8 @@ function mount(section, handlers) {
       }
       if (!me.path.length) arrive();
     }
+    // they wait while a pop-up (a start-of-day one) is over the village, so the kid sees them come
+    if (walkers.length && !popupOpen()) stepArrivals(dt);
     const t = camTarget();
     const k = Math.min(1, dt * 5);
     cam.x += (t.x - cam.x) * k; cam.y += (t.y - cam.y) * k;
