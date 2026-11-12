@@ -186,8 +186,9 @@ const seedStudio = (page, mixes, takes) => page.evaluate(([mixes, takes]) => new
 async function toSettings(page) {
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
-  await page.waitForSelector('.tabs');
+  await page.waitForSelector('.pnav');
   await page.click('[data-action="tab"][data-tab="settings"]');
+if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
   await page.waitForSelector('[data-action="studio-test"]');
 }
 /** The buttons matching `sel` that are under 44 px tall or wide: [text, width, height]. */
@@ -783,7 +784,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   // Back goes to Settings, and nothing of Ava's changed
   await page.click('[data-action="studio-back"]');
   await wait(page, 1000);
-  assert.equal(await page.locator('.tabs [data-tab="settings"].on').count(), 1, 'back on Settings');
+  assert.equal(await page.locator('.pnav [data-tab="settings"].on').count(), 1, 'back on Settings');
   assert.equal(await page.locator('.studio-screen').count(), 0);
   assert.deepEqual(await page.evaluate(async () => (await import('./js/studio.js')).studioSound()), { playing: false, recording: false, sounds: 0 }, 'the studio is quiet');
   assert.equal(await kidsNow(), kidsBefore, 'no kid, coins, XP or log changed');

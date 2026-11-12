@@ -83,6 +83,7 @@ try {
   await page.click('[data-action="edit-kid"][data-id="kid_ava"]');
   const bed = ava.find((t) => t.name === 'Make bed');
   const row = `.task-edit[data-task="${bed.id}"]`;
+  await page.click(`${row} .task-line`);
   assert.equal(await page.$(`${row} [data-field="coins"]`), null);
   assert.equal(await page.inputValue(`${row} [data-field="size"]`), '1');
   const before = await page.textContent(`${row} .reward-edit small`);

@@ -60,6 +60,7 @@ async function openTest(page, mode) {
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="settings"]');
+if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
   await page.click('[data-action="listen-open"]');
   assert.equal(await page.getAttribute(`[data-action="listen-mode"][data-mode="${mode}"]`, 'aria-pressed'), 'true');
   await page.click('[data-action="listen-start"]');
@@ -266,6 +267,7 @@ try {
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     await page.click('[data-action="tab"][data-tab="kids"]');
     await page.click('[data-action="edit-kid"][data-id="kid_ava"]');
+    await page.click('.task-edit .task-line:has-text("Piano")'); // each chore opens on tap
   } }, async (page) => {
     const listenBoxes = page.locator('[data-field="listen"]');
     assert.equal(await listenBoxes.count(), 1, 'one timer task, one switch');

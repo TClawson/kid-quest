@@ -1,5 +1,5 @@
-// Browser test: a kid who earned the weekly reward shows up above the parent
-// tabs until a parent taps Given, with Undo on the toast.
+// Browser test: a kid who earned the weekly reward shows up in one strip at the
+// top of the parents' Today tab until a parent taps Given, with Undo on the toast.
 // Run: npm run test:smoke   (SHOTS_DIR=... saves screenshots)
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
@@ -43,22 +43,29 @@ try {
     assert.match(await page.textContent('[data-action="parent"]'), /1/);
     await page.click('[data-action="parent"]');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
+    // one strip on Today: how many, and who; See opens the Given rows
+    const strip = page.locator('.reward-strip');
+    assert.match(await strip.innerText(), /1 Friday reward to hand out\s+Ava/);
+    assert.equal(await page.locator('.reward-remind').count(), 0, 'rows stay folded');
+    await page.click('[data-action="rewards-see"]');
     const rows = page.locator('.reward-remind .list-row');
     assert.equal(await rows.count(), 1);
     assert.match(await rows.first().textContent(), /Ava earned Pick the Friday movie/);
-    // it stays on every tab
-    for (const tab of ['kids', 'history', 'settings', 'approvals']) {
-      await page.click(`[data-action="tab"][data-tab="${tab}"]`);
-      assert.equal(await page.locator('.reward-remind .list-row').count(), 1, tab);
-    }
     if (shots) await page.screenshot({ path: `${shots}/remind-${name}.png` });
+    // it no longer sits above the other tabs
+    for (const tab of ['kids', 'history', 'settings']) {
+      await page.click(`[data-action="tab"][data-tab="${tab}"]`);
+      assert.equal(await page.locator('.reward-strip, .reward-remind').count(), 0, tab);
+    }
+    await page.click('[data-action="tab"][data-tab="today"]');
 
     await page.click('[data-action="reward-given"][data-kid="kid_ava"]');
-    assert.equal(await page.locator('.reward-remind').count(), 0);
+    assert.equal(await page.locator('.reward-remind, .reward-strip').count(), 0);
     assert.ok((await stored()).kids[0].rewardsGiven[lastMonday]);
     if (shots) await page.screenshot({ path: `${shots}/given-${name}.png` });
     // Undo brings it back, Given again clears it.
     await page.click('.toast-btn');
+    assert.equal(await page.locator('.reward-strip').count(), 1);
     assert.equal(await page.locator('.reward-remind .list-row').count(), 1);
     assert.equal((await stored()).kids[0].rewardsGiven[lastMonday], undefined);
     await page.click('[data-action="reward-given"][data-kid="kid_ava"]');

@@ -121,11 +121,18 @@ try {
     await check('pin-pad');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     await page.waitForSelector('.parent');
-    for (const tab of ['approvals', 'kids', 'history', 'settings']) {
-      if (!(await page.$(`[data-action="tab"][data-tab="${tab}"]`))) continue;
+    for (const tab of ['today', 'kids', 'history', 'settings']) {
       await go(`[data-action="tab"][data-tab="${tab}"]`);
       await check(`parent-${tab}`);
     }
+    // Settings with the test tools open; Today with a kid's card open and the done chores shown
+    await go('[data-action="test-tools"]');
+    await check('parent-settings-test-tools');
+    await go('[data-action="tab"][data-tab="today"]');
+    await go('[data-action="today-kid"][data-kid="kid_ava"]');
+    await go('[data-action="today-tick"][data-kid="kid_ava"]');
+    await go('[data-action="today-show-done"][data-kid="kid_ava"]');
+    await check('parent-today-open');
     await go('[data-action="tab"][data-tab="kids"]');
     await go('[data-action="bonus"][data-kid="kid_ava"]');
     await page.waitForSelector('#modal:not([hidden])');
@@ -133,6 +140,8 @@ try {
     await go('#modal [data-action="modal-close"]');
     await go('[data-action="edit-kid"][data-id="kid_ava"]');
     await check('parent-edit-kid');
+    await go('.task-edit[data-task="task_bath"] .task-line');
+    await check('parent-edit-kid-open');
     assert.deepEqual(errors, [], `no page errors at ${size.name}`);
     await ctx.close();
   }

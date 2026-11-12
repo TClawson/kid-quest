@@ -92,6 +92,7 @@ for (const [sizeName, viewport] of Object.entries(SIZES)) {
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="settings"]');
+if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
   const card = page.locator('.season-test');
   await card.scrollIntoViewIfNeeded();
   check(await card.count() === 1, `settings ${sizeName}: Try a season card`);

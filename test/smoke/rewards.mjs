@@ -31,6 +31,10 @@ try {
   await page.click('[data-action="edit-kid"][data-id="kid_ava"]');
   const teeth = tasks.find((t) => t.name === 'Brush teeth');
   const row = `.task-edit[data-task="${teeth.id}"]`;
+  // each chore is one line until it is opened
+  assert.equal(await page.locator(`${row} [data-field="coins"]`).count(), 0, 'closed chore shows no fields');
+  assert.match(await page.locator(`${row} .task-line`).innerText(), /Brush teeth[\s\S]*10 🪙/);
+  await page.click(`${row} .task-line`);
   assert.equal(await page.getAttribute(`${row} [data-field="coins"]`, 'placeholder'), '10');
   await page.fill(`${row} [data-field="coins"]`, '3');
   await page.press(`${row} [data-field="coins"]`, 'Tab');

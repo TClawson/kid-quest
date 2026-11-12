@@ -49,6 +49,7 @@ try {
   await page.click('[data-action="tab"][data-tab="kids"]');
   await page.click('[data-action="edit-kid"][data-id="kid_sam"]');
   const row = '.task-edit[data-task="task_shower"]';
+  await page.click(`${row} .task-line`);
   await page.check(`${row} input[data-field="evening"]`);
   await page.waitForTimeout(200);
   assert.match(await page.locator(row).innerText(), /don't keep the buddy store shut/);

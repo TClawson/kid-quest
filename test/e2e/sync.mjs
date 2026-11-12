@@ -40,7 +40,10 @@ async function typePin(page, pin) {
 async function openSettings(page, pin) {
   if (await page.locator('[data-action="parent-exit"]').count()) await page.click('[data-action="parent-exit"]');
   await page.click('[data-action="parent"]');
-  await typePin(page, pin);
+  // a phone signed in to the family as a parent opens Parents without the PIN; any other device asks for it
+  const role = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud') || 'null')?.role);
+  if (role === 'parent') assert.equal(await page.locator('#modal .pin').count(), 0, 'no PIN on a parent phone');
+  else await typePin(page, pin);
   await page.click('[data-action="tab"][data-tab="settings"]');
 }
 

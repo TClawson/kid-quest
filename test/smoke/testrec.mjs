@@ -81,8 +81,9 @@ async function bytesOf(dl) { return fs.readFileSync(await dl.path()); }
 assert.equal(await card.count(), 0, 'not on the start screen');
 await page.click('[data-action="parent"]');
 for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
-await page.waitForSelector('.tabs');
+await page.waitForSelector('.pnav');
 await page.click('[data-action="tab"][data-tab="settings"]');
+if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
 await page.waitForSelector('.card.rec-test [data-rec="go"]');
 assert.equal(await page.locator('.card:has([data-action="listen-open"]) + .card.rec-test').count(), 1, 'right after the listening test');
 assert.equal(await card.locator('h2').textContent(), '🎙️ Save a test recording');

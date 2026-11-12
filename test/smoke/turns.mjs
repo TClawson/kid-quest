@@ -31,6 +31,7 @@ try {
   await page.click('[data-action="tab"][data-tab="kids"]');
   await page.click('[data-action="edit-kid"][data-id="kid_ava"]');
   const row = '.task-edit[data-task="task_bath"]';
+  await page.click(`${row} .task-line`);
   assert.equal(await page.locator(`${row} [data-action="task-turns"]`).count(), 0, 'no turn buttons on an every-week task');
   await page.selectOption(`${row} select[data-action-change="task-repeat"]`, 'this');
   await page.click(`${row} [data-action="task-turns"][data-kid="kid_ben"]`);
@@ -53,6 +54,8 @@ try {
   await page.click('[data-action="edit-kid-done"]');
   await page.click('[data-action="edit-kid"][data-id="kid_ben"]');
   const benRow = `.task-edit[data-task="${b.id}"]`;
+  assert.match(await page.locator(`${benRow} .task-line`).innerText(), /every other week/);
+  await page.click(`${benRow} .task-line`);
   assert.equal(await page.locator(`${benRow} select[data-action-change="task-repeat"]`).inputValue(), 'next');
   assert.match(await page.locator(benRow).innerText(), /Takes turns with\s+Ava/);
   if (shots) {

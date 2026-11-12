@@ -28,7 +28,17 @@ export function onCloudStatus({ pending, error }) {
   const before = `${cloud.pending}|${cloud.error}`;
   if (pending !== undefined) cloud.pending = pending;
   if (error !== undefined) cloud.error = error;
-  if (`${cloud.pending}|${cloud.error}` !== before && ui.view === 'parent' && ui.tab === 'settings') render();
+  if (`${cloud.pending}|${cloud.error}` !== before && ui.view === 'parent' && (ui.tab === 'settings' || ui.tab === 'today')) render();
+}
+
+/** This device's sync state in a couple of words for the parents' header, or '' when it isn't in a family. */
+export function syncState() {
+  if (!cloudCfg) return '';
+  if (cloud.signedOut) return '⚠️ signed out';
+  if (cloud.error) return '⚠️ sync problem';
+  if (cloud.pending) return navigator.onLine ? '⏳ saving' : '📴 offline';
+  if (!cloud.gotState) return '⏳ getting the latest';
+  return '✅ synced';
 }
 
 export async function startCloud() {

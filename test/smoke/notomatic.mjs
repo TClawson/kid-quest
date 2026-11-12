@@ -110,8 +110,9 @@ function seedDesk(page, takes, bpm = 120) {
 async function openDesk(page) {
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
-  await page.waitForSelector('.tabs');
+  await page.waitForSelector('.pnav');
   await page.click('[data-action="tab"][data-tab="settings"]');
+if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
   await page.click('[data-action="studio-test"]');
   await page.waitForSelector('#studio .st-bar');
   await page.waitForFunction(() => document.querySelectorAll('#studio .st-clip').length > 0);

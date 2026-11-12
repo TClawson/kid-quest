@@ -223,6 +223,7 @@ try {
     await page.click('[data-action="parent"]');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     await page.click('[data-action="tab"][data-tab="settings"]');
+if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
     await page.selectOption('#gt-kid', 'kid_ava');
     await page.selectOption('#gt-vis', 'kid_sam');
     await page.selectOption('#gt-vis-gear', '3');
