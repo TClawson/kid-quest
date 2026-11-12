@@ -63,6 +63,9 @@ try {
     const { page, errors, ctx } = await open({ width: 900, height: 1200 }, s);
     assert.ok(await page.isVisible('.map-node.chest.chest-silver'), 'a 10-day streak earns a silver chest');
     assert.equal(await page.isVisible('.late-chest'), false, "yesterday's chest was opened");
+    // A one-kid tablet opens straight on the kid's page, so a start-of-day pop-up can already be up: close it first.
+    await page.waitForTimeout(600);
+    while (await page.isVisible('#modal:not([hidden]) [data-action="modal-close"]')) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
     await page.click(`[data-action="task"][data-id="${last}"]`);
     await page.waitForTimeout(800);
     if (await page.isVisible('[data-action="modal-close"]')) await page.click('[data-action="modal-close"]');
