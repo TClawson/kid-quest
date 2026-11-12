@@ -405,6 +405,7 @@ for (const [name, viewport] of [['tablet', { width: 1280, height: 800 }], ['phon
     const text = await page.locator('#sheet').textContent();
     for (const s of longSections(id, level)) assert.ok(text.includes(s.name), `${level}: ${s.name} is named`);
     assert.ok(await page.locator('#sheet .abcjs-chord').count() >= bars, `${level}: a chord name on every bar`);
+    if (name === 'tablet' && level !== top) await page.screenshot({ path: `${out}/8-concert-${level}-${name}.png`, fullPage: true });
   }
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: no sideways scrolling`);
   // the remembered level is the one shown; one not written yet shows the easiest written
