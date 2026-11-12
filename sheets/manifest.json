@@ -402,6 +402,20 @@
   },
   {
    "id": "long:bg-meadow",
+   "level": "easy",
+   "name": "Forest Village/The Walk to the Oak",
+   "file": "sheets/forest-village-the-walk-to-the-oak-easy.pdf",
+   "fingerprint": "bd1b4c96"
+  },
+  {
+   "id": "long:bg-meadow",
+   "level": "medium",
+   "name": "Forest Village/The Walk to the Oak",
+   "file": "sheets/forest-village-the-walk-to-the-oak-medium.pdf",
+   "fingerprint": "568806b1"
+  },
+  {
+   "id": "long:bg-meadow",
    "level": "hard",
    "name": "Forest Village/The Walk to the Oak",
    "file": "sheets/forest-village-the-walk-to-the-oak-hard.pdf",

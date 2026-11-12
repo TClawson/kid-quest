@@ -389,6 +389,226 @@ export const LONG_PIECES = {
     map: 'bg-meadow',
     story: 'A long piece in seven parts: wake with the birds, dance the village tune, walk the path to the Great Oak and hear its old song, then dance home under the fireflies.',
     levels: {
+      easy: [
+        {
+          name: 'Before Sunrise', meter: '4/4', key: 'C', bpm: 66,
+          marks: { 0: 'with pedal', 6: 'growing, like the light' },
+          rh: [
+            '!pp! z8', 'f3 a d\'3 c\'', 'b3 a g4', '!p! z4 .e.g c\'2',
+            'z4 .E.G c2', '.e.g c\'2 .E.G c2', '!mp! .E.G c2 .e.g c\'2', '.B.d g2 .b d\'3',
+          ],
+          lh: [
+            'C,2 E,2 G,2 E,2', 'D,2 F,2 A,2 F,2', 'C,2 E,2 G,2 E,2', 'A,,2 C,2 E,2 C,2',
+            'F,,2 A,,2 C,2 A,,2', 'C,2 E,2 G,2 E,2', 'G,,2 C,2 E,2 C,2', 'G,,2 B,,2 D,4',
+          ],
+          chords: ['C', 'Dm', 'C', 'Am', 'F', 'C', 'C/G', 'G'],
+        },
+        {
+          name: 'Forest Village', meter: '4/4', key: 'C', bpm: 132,
+          rh: [
+            '!mf! e2 g2 c\'2 b a', 'g2 e c A2 ce', 'f2 a2 c\'2 a f', 'g4 d ef d',
+            'e2 g2 c\'2 d\' e\'', 'd\'2 b2 g2 e g', 'ag fa c\'2 a2', 'b2 d\'2 g2 z2',
+            'a2 z ac\' a f2', 'b2 z bd\' b g2', 'g2 b2 e\'2 d\' b', 'c\'4 a2 e2',
+            'fa c\'a fa c\'f\'', 'gb d\'b gb d\'g\'', 'e\'2 d\'2 c\'2 g2', 'c\'4 z4',
+          ],
+          lh: [
+            'C,4 G,4', 'A,,4 E,4', 'F,,4 C,4', 'G,,4 D,4',
+            'C,4 G,4', 'E,4 B,4', 'F,,4 C,4', 'G,,4 D,4',
+            'D,4 A,4', 'G,,4 D,4', 'E,4 B,4', 'A,,4 E,4',
+            'F,,4 C,4', 'G,,4 D,4', 'C,4 G,4', 'C,8',
+          ],
+          chords: ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G', 'Dm', 'G', 'Em', 'Am', 'F', 'G', 'C', 'C'],
+        },
+        {
+          name: 'The Path into the Woods', meter: '4/4', key: 'C', bpm: 132, bpmTo: 81,
+          marks: { 0: 'slowing little by little' },
+          rh: [
+            '!mf! e2 z e ge c2', 'd2 z d gd B2', '!mp! c2 z c e2 A2', 'B4 d2 B2',
+            '!p! A4 "Fm"_A4', 'G8',
+          ],
+          lh: [
+            'C,4 G,4', 'B,,4 G,4', 'A,,4 E,4', 'G,,4 D,4',
+            'F,,4 C,4', 'E,,4 B,,4',
+          ],
+          chords: ['C', 'G/B', 'Am', 'G', 'F', 'Em'],
+        },
+        {
+          name: 'The Great Oak', meter: '6/8', key: 'Ddor', bpm: 54,
+          rh: [
+            '!p! F2A d2c', 'B3 A2G', 'F2A c2F', 'G6',
+            'F2A d2c', 'B3 A2G', 'G2A c2A', 'd6',
+            '!mp! A2c f2e', 'd3 c2B', 'B2d g2f', 'e3 d2c',
+            '!p! F2A d2c', 'B3 A2G', 'G2A c2A', 'd6',
+          ],
+          lh: [
+            'D,F,A, F,D,F,', 'G,,B,,D, B,,G,,B,,', 'F,,A,,C, A,,F,,A,,', 'C,E,G, E,C,E,',
+            'D,3 [F,A,]3', 'G,,3 [B,,D,]3', 'C,3 [E,G,]3', 'D,3 [F,A,]3',
+            'F,,A,,C, A,,F,,A,,', 'C,E,G, E,C,E,', 'G,,B,,D, B,,G,,B,,', 'C,E,G, E,C,E,',
+            'D,F,A, F,D,F,', 'G,,B,,D, B,,G,,B,,', 'C,E,G, E,C,E,', 'D,3 [^F,A,]3',
+          ],
+          chords: ['Dm', 'G', 'F', 'C', 'Dm', 'G', 'C', 'Dm', 'F', 'C', 'G', 'C', 'Dm', 'G', 'C', 'D'],
+        },
+        {
+          name: 'Fireflies', meter: '4/4', key: 'C', bpm: 81, bpmTo: 132,
+          marks: { 0: 'getting faster little by little' },
+          rh: [
+            '!pp! z4 .g z z2', 'z .f z2 .g z .d\' z', '!p! c\'ge\'g c\'ge\'g', 'd\'af\'a d\'af\'a',
+            '!mp! e\'c\'g\'c\' e\'2 d\'c\'', 'bgd\'g b2 c\'d\'', '!mf! c\'af\'a c\'af\'a', 'd\'bg\'b d\'bg\'b',
+          ],
+          lh: [
+            'G,,2 D,2 G,4', 'G,,2 D,2 F,4', 'C,2 [E,G,]6', 'D,2 [F,A,]6',
+            'C,2 [E,G,]6', 'G,,2 [B,,D,]6', 'F,,2 C,2 F,,2 C,2', 'G,,2 D,2 G,,2 A,,B,,',
+          ],
+          chords: ['G', 'G7', 'C', 'Dm', 'C', 'G', 'F', 'G7'],
+        },
+        {
+          name: 'Dance of the Lights', meter: '4/4', key: 'C', bpm: 132,
+          marks: { 8: 'the tune is in the left hand', 12: 'growing' },
+          rh: [
+            '!f! e2 g2 c\'2 b a', 'g2 e c A2 ce', 'f2 a2 c\'2 a f', 'g4 d ef d',
+            'e2 g2 c\'2 d\' e\'', 'd\'2 b2 g2 e g', 'ag fa c\'2 a2', 'b2 d\'2 g2 z2',
+            '!mf! d\'af\'a d\'af\'a', 'bgd\'g bgd\'g', '!f! g2 b2 e\'2 d\' b', 'c\'4 a2 e2',
+            'fa c\'a fa c\'f\'', 'gb d\'b gb d\'g\'', '!ff! e\'2 d\'2 c\'2 g2', 'f2 g2 b2 d\'2',
+            'e\'2 d\'2 c\'2 g2', 'c\'4 c2 z2',
+          ],
+          lh: [
+            'C,2 G,2 C,2 G,2', 'A,,2 E,2 A,,2 E,2', 'F,,2 C,2 F,,2 C,2', 'G,,2 D,2 G,,4',
+            'C,2 G,2 C,2 G,2', 'E,2 B,2 E,2 B,2', 'F,,2 C,2 F,,2 C,2', 'G,,2 D,2 G,,2 z2',
+            'A,2 z A, CA, F,2', 'B,2 z B, DB, G,2', 'E,2 B,2 E,2 B,2', 'A,,2 E,2 A,,2 G,,2',
+            'F,,2 A,,2 C,2 A,,2', 'G,,2 B,,2 D,2 B,,2', 'G,,2 E,2 G,,2 E,2', 'G,,2 D,2 A,,2 B,,2',
+            'C,2 G,2 C,2 G,,2', 'C,4 C,,2 z2',
+          ],
+          chords: ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G', 'Dm', 'G', 'Em', 'Am', 'F', 'G', 'C/G', 'G7', 'C', 'C'],
+        },
+        {
+          name: 'Home by Starlight', meter: '4/4', key: 'C', bpm: 132, bpmTo: 66, rampBars: 5,
+          marks: { 0: 'slowing little by little', 4: 'slow, with pedal' },
+          rh: [
+            '!mf! a2 z a c\'a f2', 'g2 z g bg e2', '!mp! f2 z f af d2', 'd2 z d f2 B2',
+            '!p! e2 z e ge z2', 'F3 A d3 c', 'B3 A G4', 'e2 g2 c\'4',
+            '!pp! z2 [ce]6', 'z2 [Bd]6', 'z2 [Gc]6', 'z2 !arpeggio![c\'g\'c\'\']6',
+          ],
+          lh: [
+            'F,2 C2 F,2 C2', 'E,2 B,2 E,2 B,2', 'D,2 A,2 D,2 A,2', 'G,,2 D,2 F,2 D,2',
+            'C,2 E,2 G,2 E,2', 'D,2 F,2 A,2 F,2', 'C,2 E,2 G,2 E,2', 'A,,2 C,2 E,2 C,2',
+            'E,,8', 'G,,8', 'C,8-', 'C,8',
+          ],
+          chords: ['F', 'Em', 'Dm', 'G7', 'C', 'Dm', 'C', 'Am', 'C/E', 'G7', 'C', 'C'],
+        },
+      ],
+      medium: [
+        {
+          name: 'Before Sunrise', meter: '4/4', key: 'C', bpm: 66,
+          marks: { 0: 'with pedal', 7: 'growing, like the light' },
+          rh: [
+            '!pp! z8', 'f3 a d\'3 c\'', 'b3 a g4', '!p! z4 .e.g c\'2',
+            'z4 .E.G c2', '.e.g c\'2 .E.G c2', '.f.a d\'2 .F.A d2', '!mp! .E.G.c .e.g.c\' z2',
+            '.B.d.g .b d\'4',
+          ],
+          lh: [
+            '[C,G,]2 [G,C]2 [CE]2 [G,C]2', '[C,A,]2 [A,D]2 [DF]2 [A,D]2', '[C,G,]2 [G,C]2 [CE]2 [G,C]2', '[A,,E,]2 [E,A,]2 [A,C]2 [E,A,]2',
+            '[F,,C,]2 [C,F,]2 [F,A,]2 [C,F,]2', '[E,,C,]2 [C,G,]2 [G,C]2 [C,G,]2', '[D,,A,,]2 [A,,F,]2 [F,C]2 [A,,F,]2', '[G,,E,]2 [E,G,]2 [G,C]2 [E,G,]2',
+            '[G,,D,]2 [D,G,]2 [F,B,D]4',
+          ],
+          chords: ['C', 'Dm/C', 'C', 'Am', 'F', 'C/E', 'Dm7', 'C/G', 'G7'],
+        },
+        {
+          name: 'Forest Village', meter: '4/4', key: 'C', bpm: 132,
+          rh: [
+            '!mf! [CE]2 [EG]2 [EGc]2 BA', '[EG]2 EC A,2 CE', '[CF]2 [FA]2 [FAc]2 AF', '[B,DG]4 (DEFD)',
+            '[CE]2 [EG]2 [Gc]2 [Gd][Ge]', '[Bd]2 [GB]2 [EG]2 EG', '[FA]G FA [FAc]2 [CFA]2', '[GB]2 [Bd]2 [B,DG]2 z2',
+            '!mp! [FA]2 z[FA] [Ac][FA] [DF]2', '[GB]2 z[GB] [Bd][GB] [DG]2', '!mf! [EG]2 [GB]2 [GBe]2 [Bd][GB]', '[EAc]4 [CA]2 [CE]2',
+            '!f! [CF]A cA [CF]A c[Ff]', '[DG]B dB [DG]B d[Gg]', '[Gce]2 [Gd]2 [EGc]2 [CEG]2', '[EGc]4 [CEGc]2 z2',
+          ],
+          lh: [
+            'C,G,E,G, C,G,E,G,', 'A,,E,C,E, A,,C,E,C,', 'F,,A,,C,A,, F,,A,,C,A,,', 'G,,D,B,,D, G,,D,B,,D,',
+            'C,,G,,C,G,, C,,G,,C,G,,', 'E,,B,,E,B,, E,,B,,E,B,,', 'F,,C,F,C, F,,C,F,C,', 'G,,D,G,D, G,,B,,A,,G,,',
+            'D,,A,,D,F, A,,D,F,D,', 'G,,B,,D,G, B,,D,G,D,', 'E,,G,,B,,E, B,,G,,E,,G,,', 'A,,C,E,A, E,C,A,,C,',
+            '[F,,F,]2 C,F, A,,F,C,F,', '[G,,G,]2 D,G, B,,G,D,G,', 'C,G,E,G, C,G,E,G,', 'C,G,E,G, [C,,C,]2 z2',
+          ],
+          chords: ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G', 'Dm', 'G', 'Em', 'Am', 'F', 'G', 'C', 'C'],
+        },
+        {
+          name: 'The Path into the Woods', meter: '4/4', key: 'C', bpm: 132, bpmTo: 81,
+          marks: { 0: 'slowing little by little' },
+          rh: [
+            '!mf! [ce]2 z[ce] [eg][ce] [Gc]2', '[Bd]2 z[Bd] [dg][Bd] [GB]2', '!mp! [Ac]2 z[Ac] [ce]2 [EA]2', '[GB]4 [Bd]2 [GB]2',
+            '!p! [FA]4 "Fm"[F_A]4', '[EG]8',
+          ],
+          lh: [
+            'C,2 [E,G,]2 C,2 [E,G,]2', 'B,,2 [D,G,]2 B,,2 [D,G,]2', 'A,,2 [E,A,]2 A,,2 [E,A,]2', 'G,,D,G,D, G,,D,G,D,',
+            'F,,C,F,C, F,,C,F,C,', 'E,,B,,D,B,, E,,B,,D,B,,',
+          ],
+          chords: ['C', 'G/B', 'Am', 'G', 'F', 'Em7'],
+        },
+        {
+          name: 'The Great Oak', meter: '6/8', key: 'Ddor', bpm: 54,
+          rh: [
+            '!p! F2A d2c', '[GB]3 A2G', 'F3/2G/2A c2F', '[EG]6',
+            '[DF]2A [Fd]2c', '[GB]3 [FA]2G', '[EG]2A [Ec]2A', '[FAd]6',
+            '!mp! [FA]2c [Af]2e', '[Gd]3 [Ec]2B', '[DB]2d [Bg]2f', '[Ge]3 [Fd]2c',
+            '!p! [DF]2A [Fd]2c', '[GB]3 [FA]2G', '[EG]2A [Ec]2A', '[^FAd]6',
+          ],
+          lh: [
+            'D,F,A, DA,F,', 'G,,B,,D, G,D,B,,', 'F,,A,,C, F,C,A,,', 'C,E,G, CG,E,',
+            'D,3 [F,A,D]3', 'G,,3 [G,B,D]3', 'C,3 [E,G,C]3', 'D,3 [F,A,D]3',
+            'F,,A,,C, F,C,A,,', 'E,,G,,C, E,C,G,,', 'G,,B,,D, G,D,B,,', 'C,E,G, CG,E,',
+            'D,F,A, DA,F,', 'G,,B,,D, G,D,B,,', 'C,E,G, CG,E,', 'D,^F,A, D3',
+          ],
+          chords: ['Dm', 'G', 'F', 'C', 'Dm', 'G', 'C', 'Dm', 'F', 'C/E', 'G', 'C', 'Dm', 'G', 'C', 'D'],
+        },
+        {
+          name: 'Fireflies', meter: '4/4', key: 'C', bpm: 81, bpmTo: 132,
+          marks: { 0: 'getting faster little by little' },
+          rh: [
+            '!pp! z4 .g z z2', 'z .f z2 .g z .d\' z', 'c\'ge\'g c\'ge\'g', 'd\'af\'a d\'af\'a',
+            '!p! e\'c\'g\'c\' e\'2 d\'c\'', 'bgd\'g b2 c\'d\'', '!mp! [ec\']ge\'g [ec\']ge\'g', '[fd\']af\'a [fd\']af\'a',
+            '!mf! [fc\']af\'a [fc\']af\'a', '[gd\']bg\'b [fd\']bg\'b',
+          ],
+          lh: [
+            'G,,2 D,2 [G,C]4', 'G,,2 D,2 [F,B,]4', 'C,2 [G,CE]6', 'D,2 [A,DF]6',
+            'E,2 [G,CE]6', 'G,,2 [G,B,D]4 [G,B,F]2', 'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'D,2 [F,A,D]2 A,,2 [F,A,D]2',
+            'F,,2 [F,A,C]2 C,2 [F,A,C]2', 'G,,2 [D,F,B,]2 G,,2 A,,B,,',
+          ],
+          chords: ['Gsus4', 'G7', 'C', 'Dm', 'C/E', 'G', 'C', 'Dm', 'F', 'G7'],
+        },
+        {
+          name: 'Dance of the Lights', meter: '4/4', key: 'C', bpm: 132,
+          marks: { 8: 'the tune is in the left hand', 12: 'growing' },
+          rh: [
+            '!f! [ce]2 [eg]2 [egc\']2 ba', '[eg]2 ec A2 ce', '[cf]2 [fa]2 [fac\']2 af', '[Bdg]4 (defd)',
+            '[ce]2 [eg]2 [gc\']2 [gd\'][ge\']', '[bd\']2 [gb]2 [eg]2 eg', '[fa]g fa [fac\']2 [cfa]2', '[gb]2 [bd\']2 [Bdg]2 bc\'',
+            '!mf! d\'af\'a d\'af\'a', 'bgd\'g bgd\'g', '!f! [eg]2 [gb]2 [gbe\']2 [bd\'][gb]', '[eac\']4 [ca]2 [ce]2',
+            '[CF]A cA [CF]A c[Ff]', '[DG]B dB [DG]B d[Gg]', '[EA]c ec [EA]c e[Aa]', '[Ac]f af [Ac]f a[cc\']',
+            '!ff! [gc\'e\']2 [gd\']2 [egc\']2 [ceg]2', '[Bdf]2 [dfg]2 [fgb]2 [gbd\']2', '[gc\'e\']2 [gd\']2 [egc\']2 [ceg]2', '[egc\']2 [ceg]2 [EGc]2 z2',
+          ],
+          lh: [
+            'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'A,,2 [E,A,C]2 E,,2 [E,A,C]2', 'F,,2 [F,A,C]2 C,2 [F,A,C]2', 'G,,2 [G,B,D]2 G,,4',
+            'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'E,2 [G,B,E]2 B,,2 [G,B,E]2', 'F,,2 [F,A,C]2 C,2 [F,A,C]2', 'G,,2 [G,B,D]2 G,,2 F,,E,,',
+            '[D,A,]2 z[F,A,] [A,C][F,A,] [D,F,]2', '[D,G,B,]2 z[G,B,] [B,D][G,B,] [D,G,]2', 'E,2 [G,B,E]2 B,,2 [G,B,E]2', 'A,,2 [A,CE]2 A,,2 G,,2',
+            '[F,,F,]2 C,F, A,,F,C,F,', '[G,,G,]2 D,G, B,,G,D,G,', '[A,,A,]2 E,A, C,A,E,A,', '[F,,F,]2 C,F, A,,F,C,F,',
+            'G,,2 [E,G,C]2 G,,2 [E,G,C]2', 'G,,2 [D,F,B,]2 A,,2 B,,2', 'C,2 [E,G,C]2 E,2 G,2', '[C,,C,]2 G,,2 [C,,C,]2 z2',
+          ],
+          chords: ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G', 'Dm', 'G/D', 'Em', 'Am', 'F', 'G', 'Am', 'F', 'C/G', 'G7', 'C', 'C'],
+        },
+        {
+          name: 'Home by Starlight', meter: '4/4', key: 'C', bpm: 132, bpmTo: 66, rampBars: 5,
+          marks: { 0: 'slowing little by little', 4: 'slow, with pedal' },
+          rh: [
+            '!mf! [fa]2 z[fa] [ac\'][fa] [cf]2', '[eg]2 z[eg] [gb][eg] [Be]2', '!mp! [df]2 z[df] [fa][df] [Ad]2', '[Bd]2 z[Bd] [df]2 [GB]2',
+            '!p! [ce]2 z[ce] [eg][ce] z2', 'F3 A d3 c', 'B3 A G4', 'e2 g2 c\'4',
+            'E2 G2 c4', '!pp! z2 [Gce]6', 'z2 [FBd]6', 'z2 [EGc]6',
+            'z2 !arpeggio![c\'g\'c\'\']6',
+          ],
+          lh: [
+            'F,,2 [F,A,C]2 C,2 [F,A,C]2', 'E,,2 [E,G,B,]2 B,,2 [E,G,B,]2', '[D,,A,,]2 [A,,F,]2 [F,C]2 [A,,F,]2', '[G,,D,]2 [D,G,]2 [F,B,]2 [D,G,]2',
+            '[C,G,]2 [G,C]2 [CE]2 [G,C]2', '[C,A,]2 [A,D]2 [DF]2 [A,D]2', '[C,G,]2 [G,C]2 [CE]2 [G,C]2', '[A,,E,]2 [E,A,]2 [A,C]2 [E,A,]2',
+            '[F,,C,]2 [C,F,]2 [F,A,]2 [C,F,]2', 'E,,8', 'G,,8', '[C,,C,]8-',
+            '[C,,C,]8',
+          ],
+          chords: ['F', 'Em', 'Dm7', 'G7', 'C', 'Dm/C', 'C', 'Am', 'F', 'C/E', 'G7', 'C', 'C'],
+        },
+      ],
       hard: [
         {
           name: 'Before Sunrise', meter: '4/4', key: 'C', bpm: 66,

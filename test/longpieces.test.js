@@ -146,7 +146,7 @@ test('the Bubble Waltz concert piece: eight parts, about three minutes at hard',
   assert.ok(keys.has('Dm') && keys.has('Fm') && keys.has('Gm'));
 });
 
-test('the Forest Village concert piece: seven parts, 90 bars at hard, in 4/4 and 6/8', () => {
+test('the Forest Village concert piece: seven parts in 4/4 and 6/8, 90 bars at hard and medium, 84 at easy', () => {
   const id = 'long:bg-meadow';
   const p = LONG_PIECES[id];
   assert.equal(p.name, 'Forest Village/The Walk to the Oak');
@@ -155,7 +155,19 @@ test('the Forest Village concert piece: seven parts, 90 bars at hard, in 4/4 and
   assert.deepEqual(CONCERT.map((x) => x.id), ['long:bg-ocean', id], 'the second concert piece, after the Bubble Waltz');
   assert.equal(CONCERT[1].parts, 7);
   assert.equal(CONCERT[1].tier, CONCERT_TIER);
-  assert.ok(longLevels(id).includes('hard'));
+  assert.deepEqual(longLevels(id), ['easy', 'medium', 'hard']);
+  // medium keeps every bar of hard; easy is six bars shorter. Every level has the same parts
+  // in the same meters and ends on the same rolled chord
+  assert.deepEqual(longSections(id, 'medium').map((s) => s.rh.length), [9, 16, 6, 16, 10, 20, 13]);
+  assert.deepEqual(longSections(id, 'easy').map((s) => s.rh.length), [8, 16, 6, 16, 8, 18, 12]);
+  assert.equal(longBars(id, 'easy').length, 84);
+  for (const level of ['easy', 'medium']) {
+    assert.deepEqual(longSections(id, level).map((s) => s.name), longSections(id, 'hard').map((s) => s.name), level);
+    assert.deepEqual(longSections(id, level).map(sectionMeter), ['4/4', '4/4', '4/4', '6/8', '4/4', '4/4', '4/4'], level);
+    assert.deepEqual(longTimeline(id, level).notes.filter((n) => n.hand === 'rh').slice(-3).map((n) => n.midi), [84, 91, 96], `${level}: the last chord`);
+  }
+  assert.equal(longFacts(id, 'medium'), '7 parts · about 4 min');
+  assert.equal(longFacts(id, 'easy'), '7 parts · about 3 min');
   const sections = longSections(id, 'hard');
   assert.deepEqual(sections.map((s) => s.name), ['Before Sunrise', 'Forest Village', 'The Path into the Woods', 'The Great Oak', 'Fireflies', 'Dance of the Lights', 'Home by Starlight']);
   assert.deepEqual(sections.map((s) => s.rh.length), [9, 16, 6, 16, 10, 20, 13]);
