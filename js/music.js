@@ -615,18 +615,61 @@ export function playNotes(notes, { bpm, beat, tempo = 1, swing = 0 }) {
   // a swung song plays its piano versions swung, like the game does
   if (swing) notes = notes.map((n) => ({ ...n, start: swingAt(n.start, swing), len: swingAt(n.start + n.len, swing) - swingAt(n.start, swing) }));
   const steps = Math.ceil(Math.max(0, ...notes.map((n) => n.start + n.len)) / beat) * beat;
+  const p = pianoPlayer(a, [...notes].sort((x, y) => x.start - y.start).map((n) => ({ midi: n.midi, t: n.start * step, dur: n.len * step, vel: n.hand === 'lh' ? 0.11 : 0.14 })), steps * step);
+  return { step, beat, steps, at: () => p.heard() / step, done: p.done, stop: p.stop };
+}
+
+/**
+ * Play a piece whose bars don't all last the same (the songbook's concert pieces: each part
+ * has its own speed, and a held bar lasts longer; see concert.js longTimeline): notes
+ * [{ midi, t, dur (seconds), hand, gain (loudness, 1 the usual) }] and bars (the second each
+ * bar starts, and then the end), at tempo (0.7 is slower). Returns { at() (seconds of the
+ * piece heard so far, at its own speed; negative before the first note), bar() (the bar being
+ * heard: -1 before the first), bars, done(), stop() }, or null without sound.
+ */
+export function playTimeline(notes, { bars, tempo = 1 }) {
+  const a = context();
+  if (!a) return null;
+  const end = bars[bars.length - 1];
+  const list = notes.map((n) => ({ midi: n.midi, t: n.t / tempo, dur: n.dur / tempo, vel: (n.hand === 'lh' ? 0.11 : 0.14) * (n.gain ?? 1) })).sort((x, y) => x.t - y.t);
+  const p = pianoPlayer(a, list, end / tempo);
+  const at = () => p.heard() * tempo;
+  return { bars, at, bar: () => barAt(bars, at()), done: p.done, stop: p.stop };
+}
+
+/**
+ * Which bar a moment falls in: bars holds the second each bar starts, then the end. -1 before
+ * the first bar; the last bar once past the end.
+ */
+export function barAt(bars, t) {
+  if (!(t >= bars[0])) return -1;
+  let lo = 0;
+  let hi = bars.length - 2;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (bars[mid] <= t) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}
+
+/**
+ * Schedule piano notes ([{ midi, t, dur (seconds from the start), vel }], in order of t) a
+ * little ahead of the clock, on their own output. seconds: how long the piece lasts. Returns
+ * { heard() (seconds heard so far: the speaker plays a little after the clock, more on
+ * Bluetooth), done(), stop() }.
+ */
+function pianoPlayer(a, list, seconds) {
   const master = a.createGain();
   master.gain.value = 0.55;
   const squash = a.createDynamicsCompressor(); // many notes at once stay below clipping
   master.connect(squash).connect(a.destination);
   const t0 = a.currentTime + 0.15;
-  const list = [...notes].sort((x, y) => x.start - y.start);
   let next = 0;
   let timer = 0;
   const schedule = () => {
-    while (next < list.length && t0 + list[next].start * step < a.currentTime + 0.3) {
+    while (next < list.length && t0 + list[next].t < a.currentTime + 0.3) {
       const n = list[next];
-      pianoNote(a, master, n.midi, t0 + n.start * step, n.len * step, n.hand === 'lh' ? 0.11 : 0.14);
+      pianoNote(a, master, n.midi, t0 + n.t, n.dur, n.vel);
       next += 1;
     }
     if (next >= list.length) clearInterval(timer);
@@ -635,11 +678,8 @@ export function playNotes(notes, { bpm, beat, tempo = 1, swing = 0 }) {
   timer = setInterval(schedule, 100);
   let stopped = false;
   return {
-    step,
-    beat,
-    steps,
-    at: () => (a.currentTime - (a.outputLatency || a.baseLatency || 0) - t0) / step,
-    done: () => stopped || a.currentTime > t0 + steps * step + 0.8,
+    heard: () => a.currentTime - (a.outputLatency || a.baseLatency || 0) - t0,
+    done: () => stopped || a.currentTime > t0 + seconds + 0.8,
     stop() {
       if (stopped) return;
       stopped = true;
