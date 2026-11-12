@@ -16,7 +16,7 @@ import { pianoNotes, talking, concat, addNoise, room, wav, RATE } from '../helpe
 import { MEDIAPIPE, YAMNET } from '../../js/hear.js';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
-import { openKid, toPicker } from '../helpers/open-kid.mjs';
+import { openKid, openParents, doChore } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS;
 const site = await serve('.');
@@ -58,8 +58,7 @@ async function realPiano(names, gap) {
 
 /** The parent's listening test page. */
 async function openTest(page, mode) {
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  await openParents(page);
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="settings"]');
 if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
@@ -73,7 +72,7 @@ if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').coun
 /** Sam's piano timer (the task listens), started. */
 async function openTimer(page) {
   await openKid(page, '[data-action="open-kid"][data-id="kid_sam"]');
-  await page.click(`[data-action="task"][data-id="${PIANO}"]`);
+  await doChore(page, PIANO); // Today, Go: the piano's villager starts it
   // no line under the buddy while all is well, and no metronome
   assert.equal(await page.isVisible('#ears-text'), false, 'no text before the timer starts');
   assert.equal(await page.locator('.listen-metro').count(), 0, 'no metronome on the timer');
@@ -96,7 +95,6 @@ async function withMic(samples, { mode = 'builtin', viewport = { width: 1280, he
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     const saved = emptyState();
     saved.settings.pinHash = fallbackHash('kidquest:1234');
-    saved.settings.questView = 'list';
     saved.settings.sound = false;
     // Sam's piano practice listens, every day
     const tasks = defaultTasks().map((t) => (/piano/i.test(t.name) ? { ...t, id: PIANO, listen: true, days: [0, 1, 2, 3, 4, 5, 6] } : t));
@@ -265,8 +263,7 @@ try {
 
   // the parent setting: in the task editor, only for timer tasks
   await withMic(new Float32Array(RATE), { open: async (page) => {
-    await toPicker(page);
-    await page.click('[data-action="parent"]');
+    await openParents(page);
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     await page.click('[data-action="tab"][data-tab="kids"]');
     await page.click('[data-action="edit-kid"][data-id="kid_ava"]');

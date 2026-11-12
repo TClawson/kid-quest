@@ -20,7 +20,7 @@ import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.
 import { sourceOf, newMix, addPart, addTake, shelfSongs, takeToNotes } from '../../js/studiorules.js';
 import { MUSIC_TIERS } from '../../js/musicrules.js';
 import { CLICK } from '../../js/studio-audio.js';
-import { openKid, toPicker } from '../helpers/open-kid.mjs';
+import { openKid, openParents } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews/studio').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -185,8 +185,7 @@ const seedStudio = (page, mixes, takes) => page.evaluate(([mixes, takes]) => new
 }), [mixes, takes]);
 /** From the start screen into the parent's Settings, with the PIN. */
 async function toSettings(page) {
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  await openParents(page);
   for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
   await page.waitForSelector('.pnav');
   await page.click('[data-action="tab"][data-tab="settings"]');
@@ -740,7 +739,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
 
   // the test desk can't be reached without the PIN: the same tap from a kid's screen does nothing
   await page.evaluate(() => { const b = document.createElement('button'); b.id = 'sneak'; b.dataset.action = 'studio-test'; document.body.append(b); });
-  await page.click('#sneak');
+  await page.locator('#sneak').evaluate((b) => b.click()); // (under the full-screen village, so tapped directly)
   await page.clock.runFor(500);
   assert.equal(await page.locator('.studio-screen').count(), 0, 'no test desk without the PIN');
 

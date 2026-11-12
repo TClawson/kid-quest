@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
 import { seenSaturday } from '../helpers/seed.mjs';
+import { closePops, toPicker } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS;
 if (shots) mkdirSync(shots, { recursive: true });
@@ -21,7 +22,6 @@ function seed() {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
-  s.settings.questView = 'map'; // the old map first (a new device starts in the village)
   const ava = defaultTasks();
   ava.push({ id: 'task_bath', name: 'Clean the bathroom with a really long chore name', icon: '🛁', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'parent', minutes: 0 });
   s.kids.push({ id: 'kid_ava', name: 'Annabelle', color: '#ff6b6b', tasks: ava, startDate: today, owned: [], spent: -2400, buddy: { species: 'fox', outfit: {} } });
@@ -83,11 +83,24 @@ try {
 
     await check('home');
     await go('[data-action="open-kid"][data-id="kid_ava"]');
+    await page.waitForSelector('.village .villager');
+    await closePops(page);
+    await check('kid-village');
+    // Status, every tab, and the Menu
+    await go('.k-hud .k-plate');
+    for (const tab of ['me', 'week', 'habits', 'trophies']) {
+      await go(`#modal [data-action="status-tab"][data-tab="${tab}"]`);
+      await check(`kid-status-${tab}`);
+    }
+    await go('#modal [data-action="modal-close"]');
+    await go('.k-hud [data-action="menu"]');
+    await check('kid-menu');
+    // the old map, from the Menu
+    await go('#modal [data-action="old-map"]');
     await page.waitForSelector('.quest-map');
     await check('kid-map');
-    await go('[data-action="quest-mode"][data-mode="village"]');
+    await go('[data-action="old-map-back"]');
     await page.waitForSelector('.village .villager');
-    await check('kid-village');
     // the piano's villager: walk over, then start the timer from what they say
     // (weekdays only: the default piano task has no Saturday or Sunday). The piano's villager
     // can be off screen, where a real click can't reach it, so the tap is sent to it directly.
@@ -101,12 +114,12 @@ try {
       await check('timer');
       await go('[data-action="timer-back"]');
     }
-    await go('[data-action="quest-mode"][data-mode="map"]');
-    await go('[data-action="home"]');
+    await toPicker(page);
     // Annabelle still has chores, so her buddy store is locked; Ben's day is excused, so his is open
     await go('[data-action="open-kid"][data-id="kid_ben"]');
-    await go('[data-action="wardrobe"]');
-    for (const slot of ['background', 'hat', 'face', 'neck', 'music', 'sport']) {
+    await closePops(page);
+    await go('.k-hud [data-action="wardrobe"]');
+    for (const slot of ['background', 'hat', 'face', 'neck', 'hand', 'music', 'sport', 'home', 'garden']) {
       await go(`[data-action="wardrobe-slot"][data-slot="${slot}"]`);
       await check(`wardrobe-${slot}`);
       if (slot === 'hat') {
@@ -117,7 +130,7 @@ try {
       }
     }
     await go('[data-action="wardrobe-back"]');
-    await go('[data-action="home"]');
+    await toPicker(page);
     await go('[data-action="parent"]');
     await check('pin-pad');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);

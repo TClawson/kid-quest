@@ -7,7 +7,7 @@ import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, newId, fallbackHash } from '../../js/logic.js';
 import { pickVisitors, planVisits } from '../../js/visits.js';
 import { bestGear } from '../../js/items.js';
-import { openKid } from '../helpers/open-kid.mjs';
+import { openKid, openOldMap } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 const part = process.argv[3] || 'all';
@@ -23,7 +23,7 @@ function family(theme, gear = null) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
-  s.settings.questView = 'map'; // the old map (a new device starts in the village)
+  s.settings.questView = 'map'; // chose the old map once: the village opens, and the map is in the Menu
   const start = addDays(day, -50);
   const mk = (id, name, color, species, extra) => {
     const tasks = defaultTasks();
@@ -78,6 +78,7 @@ try {
     await page.clock.runFor(1500);
     await page.screenshot({ path: `${out}/new-moves.png` });
     await closeModal(page);
+    await openOldMap(page); // the old map, from the Menu
     await page.screenshot({ path: `${out}/kid-screen-tablet.png` });
     await page.click('[data-action="wardrobe"]');
     await page.click('[data-action="wardrobe-slot"][data-slot="sport"]');
@@ -90,6 +91,7 @@ try {
       for (const theme of THEMES) {
         const { ctx, page } = await open(viewport, theme);
         await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
+        await openOldMap(page); // the old map, from the Menu
         await page.clock.runFor(1500);
         await closeModal(page);
         await page.clock.runFor(1000);
@@ -115,6 +117,7 @@ try {
       const { ctx: c2, page: p2 } = await open(vp, theme, true);
       await p2.clock.resume();
       await openKid(p2, '[data-action="open-kid"][data-id="kid_ava"]');
+      await openOldMap(p2); // the old map, from the Menu
       await p2.waitForTimeout(800);
       await closeModal(p2);
       const box = await p2.locator('.quest-map').boundingBox();
@@ -149,6 +152,7 @@ try {
       const { ctx, page } = await open(vp, theme, true, gear);
       await page.clock.resume();
       await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
+      await openOldMap(page); // the old map, from the Menu
       await page.waitForTimeout(800);
       await closeModal(page);
       const box = await page.locator('.quest-map').boundingBox();
@@ -159,6 +163,7 @@ try {
       // and a still on a phone
       const { ctx: c2, page: p2 } = await open({ width: 412, height: 915 }, theme, false, gear);
       await openKid(p2, '[data-action="open-kid"][data-id="kid_ava"]');
+      await openOldMap(p2); // the old map, from the Menu
       await p2.clock.runFor(1500);
       await closeModal(p2);
       await p2.clock.runFor(1200);

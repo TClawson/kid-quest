@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks } from '../../js/logic.js';
-import { openKid } from '../helpers/open-kid.mjs';
+import { openKid, doChore } from '../helpers/open-kid.mjs';
 
 const shots = process.argv[2];
 const site = await serve('.');
@@ -46,7 +46,7 @@ try {
     await page.reload();
 
     await openKid(page, '[data-action="open-kid"]');
-    await page.click(`[data-action="task"][data-id="${piano.id}"]`);
+    await doChore(page, piano.id, { clock: true });
     assert.ok(await page.isVisible('.timer-buddy'), 'buddy on the timer page');
     assert.match(await page.locator('.timer').textContent(), /Note Rush/);
     await page.click('[data-action="timer-start"]');
@@ -98,7 +98,7 @@ try {
     }, ['kid_sam', piano.id]);
     await page.reload();
     await openKid(page, '[data-action="open-kid"]');
-    await page.click(`[data-action="task"][data-id="${piano.id}"]`);
+    await doChore(page, piano.id, { clock: true });
     await page.click('[data-action="timer-start"]');
     await page.clock.runFor(MIN);
     await setHidden(page, true);

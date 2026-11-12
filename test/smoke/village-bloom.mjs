@@ -64,7 +64,11 @@ for (const [name, c] of Object.entries(CASES)) {
     // the whole village in one tall picture, with the checks
     {
       const { ctx, page } = await open(theme, c, { width: 1400, height: 1700 }, true);
-      const info = await page.evaluate(() => {
+      // the garden's message line is in Status (Me): open it, read it, close it again
+      await page.click('.k-hud .k-plate');
+      const line = (await page.locator('#modal .garden-line').count()) ? await page.textContent('#modal .garden-line') : '';
+      await page.click('#modal [data-action="modal-close"]');
+      const info = await page.evaluate((line) => {
         const sec = document.querySelector('.village');
         const bloom = JSON.parse(sec.dataset.v).bloom;
         const alpha = (cv) => { const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; for (let i = 3; i < d.length; i += 4) if (d[i]) return true; return false; };
@@ -73,9 +77,9 @@ for (const [name, c] of Object.entries(CASES)) {
           treeEls: sec.querySelectorAll('.v-tree').length,
           critterCanvases: sec.querySelectorAll('.v-bloom-life').length,
           critterDrawn: [...sec.querySelectorAll('.v-bloom-life')].some(alpha),
-          line: document.querySelector('.garden-line')?.textContent || '',
+          line,
         };
-      });
+      }, line);
       console.log(label, JSON.stringify(info));
       check(info.bloom.trees > 0 && info.treeEls === info.bloom.trees, `${label}: every tree is on the map`);
       check(name === 'week2' || info.bloom.flowers > 0, `${label}: flowers`);
@@ -115,14 +119,16 @@ for (const [name, c] of Object.entries(CASES)) {
       const { ctx, page } = await open(theme, c, viewport, false);
       await page.screenshot({ path: `${out}/${label}-${sizeName}.png`, fullPage: false });
       if (theme === 'bg-meadow') {
-        const line = page.locator('.garden-line');
-        const banner = page.locator('.family-banner');
-        const a = banner.count().then((n) => (n ? banner.boundingBox() : null));
+        // the family line and the garden's message are in Status (Me)
+        await page.evaluate(() => document.querySelector('#modal:not([hidden]) [data-action="modal-close"]')?.click());
+        await page.click('.k-hud .k-plate');
+        const line = page.locator('#modal .garden-line');
+        const fam = page.locator('#modal .s-fam');
         const l = await line.boundingBox();
-        const b = await a;
-        const y = await page.evaluate(() => window.scrollY);
-        const top = Math.min(l.y, b?.y ?? l.y);
-        await page.screenshot({ path: `${out}/${label}-${sizeName}-message.png`, clip: { x: 0, y: y + top - 6, width: viewport.width, height: l.y + l.height - top + 12 }, fullPage: true });
+        const f = (await fam.count()) ? await fam.boundingBox() : null;
+        const top = Math.min(l.y, f?.y ?? l.y);
+        const card = await page.locator('#modal .status-pop').boundingBox();
+        await page.screenshot({ path: `${out}/${label}-${sizeName}-message.png`, clip: { x: card.x, y: top - 6, width: card.width, height: l.y + l.height - top + 12 } });
       }
       await ctx.close();
     }

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
-import { openKid, toPicker } from '../helpers/open-kid.mjs';
+import { openKid, openParents, doChore } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -26,8 +26,7 @@ try {
   await page.reload();
 
   // Parent opens the task editor and sets Brush teeth to 3 coins and 25 XP.
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  await openParents(page);
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="kids"]');
   await page.click('[data-action="edit-kid"][data-id="kid_ava"]');
@@ -62,11 +61,11 @@ try {
   // The kid ticks it and gets 3 coins.
   await page.click('[data-action="parent-exit"]');
   await openKid(page, '[data-action="open-kid"]');
-  await page.click(`[data-action="task"][data-id="${teeth.id}"]`);
+  await doChore(page, teeth.id);
   await page.waitForSelector('.float-xp');
   assert.equal(await page.textContent('.float-xp'), '+25 XP · +3 🪙');
   await page.waitForTimeout(300);
-  assert.equal((await page.textContent('.chip.coin')).trim(), '🪙 3');
+  assert.equal((await page.textContent('.k-hud .k-coin')).trim(), '🪙 3');
   assert.deepEqual(errors, [], 'no errors in the page');
   console.log('rewards test passed');
 } finally {

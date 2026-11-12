@@ -9,7 +9,7 @@ import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, tasksForDay, fallbackHash } from '../../js/logic.js';
 import { TROPHIES } from '../../js/treasure.js';
-import { openKid } from '../helpers/open-kid.mjs';
+import { openKid, closePops, doChore } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const TODAY = '2026-11-12';
@@ -19,7 +19,6 @@ const browser = await chromium.launch();
 function family({ yesterdayOpen = true } = {}) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
-  s.settings.questView = 'map'; // the old map (a new device starts in the village)
   s.settings.allowance = { on: false, coins: 300, xp: 300, bonus: 50, since: '2026-11-01' };
   const kid = { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks().map((t) => ({ ...t, verify: 'self' })), startDate: addDays(TODAY, -9), owned: ['bg-ocean'], spent: 0 };
   s.kids.push(kid);
@@ -61,30 +60,38 @@ try {
   {
     const { s, last } = family();
     const { page, errors, ctx } = await open({ width: 900, height: 1200 }, s);
-    assert.ok(await page.isVisible('.map-node.chest.chest-silver'), 'a 10-day streak earns a silver chest');
-    assert.equal(await page.isVisible('.late-chest'), false, "yesterday's chest was opened");
     // A one-kid tablet opens straight on the kid's page, so a start-of-day pop-up can already be up: close it first.
-    await page.waitForTimeout(600);
-    while (await page.isVisible('#modal:not([hidden]) [data-action="modal-close"]')) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
-    await page.click(`[data-action="task"][data-id="${last}"]`);
-    await page.waitForTimeout(800);
-    if (await page.isVisible('[data-action="modal-close"]')) await page.click('[data-action="modal-close"]');
-    await page.waitForTimeout(400);
-    while (await page.isVisible('#modal:not([hidden]) [data-action="modal-close"]')) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
-    await page.locator('.map-node.chest.ready').scrollIntoViewIfNeeded();
-    if (shots) await page.locator('.quest-map').screenshot({ path: `${shots}/chest-ready.png`, clip: undefined }).catch(() => {});
-    await page.click('.map-node.chest.ready');
-    await page.waitForTimeout(400);
+    await page.clock.runFor(600);
+    await closePops(page);
+    await page.clock.runFor(400);
+    assert.equal(await page.locator('.village .v-chest .chest-svg.chest-silver').count(), 1, 'a 10-day streak earns a silver chest');
+    assert.equal(await page.locator('.k-hud .hud-chest').count(), 0, "yesterday's chest was opened");
+    await doChore(page, last, { clock: true });
+    await page.clock.runFor(800);
+    for (let i = 0; i < 6 && await page.locator('#modal:not([hidden]) [data-action="modal-close"]').count(); i += 1) { await page.click('#modal [data-action="modal-close"]'); await page.clock.runFor(300); }
+    // the chest in the village is ready: tap it, the buddy walks over and opens it
+    if (await page.locator('.village .v-dialog:not([hidden])').count()) await page.click('.village .v-dialog [data-v="bye"]');
+    assert.equal(await page.locator('.village .v-chest.ready').count(), 1, 'the chest is ready');
+    if (shots) await page.screenshot({ path: `${shots}/chest-ready.png` });
+    // (the screen can be redrawn once more as the day's news settles, which stops a walk: tap again then)
+    for (let i = 0; i < 60 && !(await page.locator('#modal:not([hidden])').count()); i += 1) {
+      if (!(await page.locator('.village .v-buddy.walking').count())) await page.locator('.village .v-chest.ready').dispatchEvent('click');
+      await page.clock.runFor(300);
+    }
+    await page.clock.runFor(400);
     if (shots) await page.screenshot({ path: `${shots}/chest-opening.png` });
-    await page.waitForTimeout(1300);
+    await page.clock.runFor(1300);
     if (shots) await page.screenshot({ path: `${shots}/chest-prize.png` });
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
     const chest = saved.log[TODAY].kid_ava.chest;
     assert.ok(chest && chest.tier === 'silver', 'the prize is saved on the day');
     await page.click('#modal [data-action="modal-close"]');
-    assert.ok(await page.isVisible('.map-node.chest.opened'), 'the chest shows open');
-    await page.click('[data-action="trophies"]');
-    await page.waitForTimeout(500);
+    await page.clock.runFor(400);
+    assert.equal(await page.locator('.village .v-chest.opened').count(), 1, 'the chest shows open');
+    // the trophies are in Status
+    await page.click('.k-hud .k-plate');
+    await page.click('#modal [data-action="status-tab"][data-tab="trophies"]');
+    await page.clock.runFor(500);
     assert.equal(await page.locator('.trophy-shelf .trophy').count(), TROPHIES.length + 0);
     assert.equal(await page.locator('.treasure-map-row').count(), 3, 'meadow, sunset (3-day streak) and the bought ocean map');
     if (shots) await page.screenshot({ path: `${shots}/trophies-tablet.png` });
@@ -95,17 +102,23 @@ try {
   {
     const { s } = family({ yesterdayOpen: false });
     const { page, errors, ctx } = await open({ name: 'Pixel 7' }, s);
-    assert.ok(await page.isVisible('.late-chest'), "yesterday's chest waits");
+    await page.clock.runFor(600);
+    await closePops(page);
+    await page.clock.runFor(400);
+    assert.ok(await page.isVisible('.k-hud .hud-chest'), "yesterday's chest waits, beside Today");
     if (shots) await page.screenshot({ path: `${shots}/late-chest-phone.png` });
-    await page.click('.late-chest');
-    await page.waitForTimeout(1500);
+    await page.click('.k-hud .hud-chest');
+    await page.clock.runFor(1500);
     if (shots) await page.screenshot({ path: `${shots}/chest-prize-phone.png` });
     await page.click('#modal [data-action="modal-close"]');
-    assert.equal(await page.isVisible('.late-chest'), false);
+    await page.clock.runFor(400);
+    assert.equal(await page.locator('.k-hud .hud-chest').count(), 0);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
     assert.ok(saved.log[addDays(TODAY, -1)].kid_ava.chest, "yesterday's prize saved on yesterday");
-    await page.click('[data-action="trophies"]');
-    await page.waitForTimeout(500);
+    await page.click('.k-hud .k-plate');
+    await page.click('#modal [data-action="status-tab"][data-tab="trophies"]');
+    await page.clock.runFor(500);
+    assert.equal(await page.locator('#modal .trophy-shelf .trophy').count(), TROPHIES.length);
     if (shots) await page.screenshot({ path: `${shots}/trophies-phone.png` });
     assert.deepEqual(errors, [], 'no errors in the page');
     await ctx.close();

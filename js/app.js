@@ -21,6 +21,7 @@ import { villageHtml, mountVillages, cameOut, cameOutOfMusic, placeVillagers, vi
 import { villageLayout } from './villagemaps.js';
 import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
 import { todayHud, todayListHtml } from './today.js';
+import { kidHudHtml, statusHtml, menuHtml, STATUS_TABS } from './hud.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, tierInfo } from './musicrules.js';
@@ -498,7 +499,7 @@ function openChest(kid, key) {
     const n = after.pieces[prize.map] || 0;
     art = mapPiecesSvg(n, PIECES_PER_MAP, { scale: 7, ground: mapGround(prize.map) });
     extra = n >= PIECES_PER_MAP
-      ? `<p class="prize-big">You finished the ${esc(mapName(prize.map))} treasure map! Something secret is waiting on that map now. 👀</p>`
+      ? `<p class="prize-big">You finished the ${esc(mapName(prize.map))} treasure map! Something secret is waiting in that village now. 👀</p>`
       : `<p class="muted">${n} of ${PIECES_PER_MAP} pieces</p>`;
   }
   sounds.tap();
@@ -517,8 +518,8 @@ function openChest(kid, key) {
   setTimeout(() => { sounds.day(); confetti(prize.kind === 'piece' || prize.kind === 'trophy' ? 160 : 90, 2200); }, 1000);
 }
 
-/** The trophy shelf and the treasure maps. */
-function openTrophies(kid) {
+/** The trophy shelf and the treasure maps (in the Status pop-up and from the shelf in the house). */
+function trophiesHtml(kid) {
   const found = treasureFound(state.log, kid.id);
   const maps = unlockedMaps(kid);
   const shelf = TROPHIES.map((t) => {
@@ -528,16 +529,22 @@ function openTrophies(kid) {
   const mapShelf = [...found.maps].map((m) => `<div class="trophy">${trophySvg(`map-${m}`, { scale: 3, ground: mapGround(m) })}<small>${esc(mapName(m))} map</small></div>`).join('');
   const mapRows = maps.map((m) => {
     const n = found.pieces[m] || 0;
-    return `<div class="treasure-map-row">${mapPiecesSvg(n, PIECES_PER_MAP, { scale: 3, ground: mapGround(m) })}<div><b>${esc(mapName(m))}</b><small>${n >= PIECES_PER_MAP ? 'Finished! Find the secret on this map.' : `${n} of ${PIECES_PER_MAP} pieces`}</small></div></div>`;
+    return `<div class="treasure-map-row">${mapPiecesSvg(n, PIECES_PER_MAP, { scale: 3, ground: mapGround(m) })}<div><b>${esc(mapName(m))}</b><small>${n >= PIECES_PER_MAP ? 'Finished! Find the secret in its village.' : `${n} of ${PIECES_PER_MAP} pieces`}</small></div></div>`;
   }).join('');
-  openModal(`
-    <div class="trophy-room">
-      <h2>🏆 ${esc(kid.name)}'s trophies</h2>
+  return `
       <p class="muted small">Trophies come from treasure chests. ${found.trophies.size} of ${TROPHIES.length} found.</p>
       <div class="trophy-shelf">${shelf}${mapShelf}</div>
       <h3>🗺️ Treasure maps</h3>
-      <p class="muted small">Silver and gold chests sometimes hold a piece of a treasure map. Finish one to find a secret on that map.</p>
-      <div class="treasure-maps">${mapRows}</div>
+      <p class="muted small">Silver and gold chests sometimes hold a piece of a treasure map. Finish one to find a secret in that place's village.</p>
+      <div class="treasure-maps">${mapRows}</div>`;
+}
+
+/** The trophy shelf and the treasure maps, on their own (from the shelf in the house). */
+function openTrophies(kid) {
+  openModal(`
+    <div class="trophy-room">
+      <h2>🏆 ${esc(kid.name)}'s trophies</h2>
+      ${trophiesHtml(kid)}
       <button class="btn" data-action="modal-close">Close</button>
     </div>`);
 }
@@ -751,7 +758,8 @@ function familyBuddies() {
  * this device's kids in full, and on a kid's device the others from the cloud.
  */
 function gardenKids() {
-  const all = new Map((family.buddies || []).map((b) => [b.id, b]));
+  // a buddy cached by an older version has no tasks: nothing of theirs is counted then
+  const all = new Map((family.buddies || []).map((b) => [b.id, b.tasks ? b : { ...b, tasks: [] }]));
   for (const k of state.kids) all.set(k.id, k);
   return [...all.values()];
 }
@@ -844,28 +852,33 @@ function greetCheers() {
 /** How the whole family is doing today, and whether the map should party. */
 const familyToday = () => familyDay(familyBuddies(), today());
 
-/**
- * The village, unless this device picked the old map. A new device (no choice saved) gets the
- * village; 'map' is the map, and so is 'list', which older versions saved for the map too.
- */
-const villageOn = () => !['map', 'list'].includes(state.settings.questView);
+// The kid's screen is always the village now. A device that chose the old map (settings.questView
+// 'map', or 'list' from older versions) opens the village too: the old map is only reached from
+// the Menu, for this one release (ui.oldMap, never saved).
 
-/** "Family: 8 of 10 chores done today" while there is more than one kid. */
-function familyBanner() {
+/** "Family: 8 of 10 chores done today" while there is more than one kid (where: what celebrates). */
+function familyText(where) {
   const all = familyBuddies();
-  if (all.length < 2) return '';
+  if (all.length < 2) return null;
   const f = familyDay(all, today());
   const goal = Math.round(FAMILY_GOAL * 100);
-  const where = villageOn() ? 'village' : 'map';
   const text = f.happy
     ? `🎉 Family party! Everyone's done ${Math.round(f.share * 100)}% of today's chores`
     : f.unknown
       ? `👨‍👩‍👧‍👦 Family: ${f.done} chores done so far · when everyone gets to ${goal}%, the whole ${where} celebrates`
       : `👨‍👩‍👧‍👦 Family: ${f.done} of ${f.total} chores done · at ${goal}% the whole ${where} celebrates`;
+  return { f, text };
+}
+
+/** The family banner on the old map page. */
+function familyBanner() {
+  const fam = familyText('map');
+  if (!fam) return '';
+  const { f, text } = fam;
   return `<div class="family-banner ${f.happy ? 'happy' : ''}" data-action="family-party">${esc(text)}${f.happy ? '' : `<span class="bar"><span style="width:${Math.min(100, Math.round((f.share / FAMILY_GOAL) * 100))}%"></span></span>`}</div>`;
 }
 
-/** Why the village is growing (or thirsty): one small, warm line under the family banner. */
+/** Why the village is growing (or thirsty): one small, warm line, in the Status pop-up. */
 function gardenBanner() {
   const line = gardenLine(gardenKids(), today());
   return line ? `<p class="garden-line ${line.wilted ? 'wilted' : ''}">${line.icon} ${esc(line.text)}</p>` : '';
@@ -1559,15 +1572,33 @@ const villageHandlers = {
 // to whoever gives the quest (into the house for the bed, teeth and floor, to the coach for
 // exercise) and the usual talk box takes it from there.
 
-/** The Today button, and the chest button beside it while an earlier day's chest is waiting. */
+/**
+ * The HUD over the full-screen village, house, garden and music house (hud.js): the buddy plate,
+ * the family's progress, streak, coins and gems, the Menu, the Today button (and the chest button
+ * beside it while an earlier day's chest is waiting) and the Shop.
+ */
 function kidHud(kid) {
   const t = today();
   const d = kidToday(state, kid, t, 0);
   const late = lateChest(kid);
-  return todayHud({
-    ...d,
-    waiting: d.waitingToday,
-    chest: late ? { key: late.key, html: chestSvg(late.tier.id, false, 2), when: late.key === addDays(t, -1) ? 'yesterday' : 'an earlier day' } : null,
+  const prog = progressFor(kid);
+  const fam = familyBuddies().length > 1 ? familyToday() : null;
+  const hasGems = tasksForDay(state, kid, t, t).some(isExercise) || kid.gemsSpent || prog.gems;
+  return kidHudHtml({
+    name: kid.name,
+    face: buddySvg(dressed(kid), moodFor(kid), { background: true }),
+    level: prog.level,
+    into: prog.into,
+    streak: prog.streak,
+    coins: prog.coins,
+    gems: hasGems ? prog.gems : null,
+    family: fam ? { happy: fam.happy, done: fam.done, total: fam.total, unknown: fam.unknown, pct: Math.min(100, Math.round((fam.share / FAMILY_GOAL) * 100)) } : null,
+    shop: { open: storeOpen(state, kid, t).open, fresh: (kid.newItems || []).length > 0 },
+    today: todayHud({
+      ...d,
+      waiting: d.waitingToday,
+      chest: late ? { key: late.key, html: chestSvg(late.tier.id, false, 2), when: late.key === addDays(t, -1) ? 'yesterday' : 'an earlier day' } : null,
+    }),
   });
 }
 
@@ -1645,6 +1676,107 @@ function openToday(kid) {
   $modal.querySelector('.modal-card')?.classList.add('today-card');
 }
 
+// ---------- the Status and Menu pop-ups (markup in hud.js) ----------
+// Everything the old kid page showed around the village: the buddy and what it says, streak,
+// freezes, coins and gems, the week, the Friday reward, the month, piano and exercise streaks,
+// the habits and the trophies; and the Menu's music, sounds, plan, old map, switch kid, Parents.
+
+const daysText = (n) => `${n} ${n === 1 ? 'day' : 'days'}`;
+
+/** Status, Me: the big buddy, the numbers, and how the week is going. */
+function statusMe(kid) {
+  const t = today();
+  const prog = progressFor(kid);
+  const info = streakInfo(state, kid, t);
+  const mood = moodFor(kid);
+  const shop = storeOpen(state, kid, t);
+  const exTasks = kid.tasks.some(isExercise);
+  const tile = (icon, n, what) => `<div class="s-tile"><b><span aria-hidden="true">${icon}</span> ${n}</b><small>${what}</small></div>`;
+  const lines = [
+    prog.pianoPerWeek ? `🎹 Piano streak <b>${daysText(prog.piano)}</b> (best ${prog.pianoBest})` : '',
+    exTasks || prog.ex.weeks ? `💪 ${esc(exWeekText(prog.ex))}` : '',
+  ].filter(Boolean);
+  const fam = familyText('village');
+  return `
+      <div class="s-me">
+        <div class="s-left">
+          <button class="s-big buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, mood, 'xl')}</button>
+          <button class="btn ghost s-outfit" data-action="status-outfit">👕 Change outfit${shop.open ? '' : ' 🔒'}</button>
+        </div>
+        <div class="s-main">
+          <p class="s-say"><span>${esc(buddyLine(mood, kid.name))}</span></p>
+          <div class="s-tiles">
+            ${tile('🔥', info.streak, `day streak · best ${info.best}`)}
+            ${tile('❄️', info.freezes, info.freezes === 1 ? 'streak freeze' : 'streak freezes')}
+            ${tile('🪙', prog.coins, 'coins to spend')}
+            ${tile('💎', prog.gems, 'gems to spend')}
+          </div>
+          ${weekCoinsHtml(kid)}
+          <h3 class="s-h">This week</h3>
+          ${weekDots(kid, info)}
+          ${rewardLine(kid)}
+          ${lines.length ? `<p class="s-line">${lines.join(' · ')}</p>` : ''}
+          ${fam ? `<p class="s-line s-fam">${esc(fam.text)}</p>` : ''}
+          ${gardenBanner()}
+        </div>
+      </div>`;
+}
+
+/** Status, This week: streaks, the week's days, the reward, the month, coins and exercise. */
+function statusWeek(kid) {
+  const info = streakInfo(state, kid, today());
+  const w = weekEarnings(state, kid, today());
+  const ex = exerciseInfo(kid);
+  return `
+      ${streakLine(kid, info)}
+      ${weekDots(kid, info)}
+      ${rewardLine(kid)}
+      ${monthLine(kid)}
+      ${weekCoinsHtml(kid)}
+      ${w.allowance ? `<p class="muted small">Doing every chore this week earns all ${w.allowance.coins} 🪙. Each chore pays its share.</p>` : ''}
+      ${kid.tasks.some(isExercise) || ex.weeks ? `<h3 class="s-h">💪 Bonus exercise <small class="muted">earns 💎 gems from Coach Dash</small></h3>${exWeekHtml(ex)}` : ''}
+      <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Miss a day without one and you lose a quarter of your streak (at least 1 day), not all of it, and finishing the next day earns a welcome-back bonus.</p>`;
+}
+
+/** Status, Habits: the Habits section, or what it will show once there are habits. */
+function statusHabits(kid) {
+  return habitsSection(kid) || `
+      <section class="habits">
+        <h2>⭐ Habits</h2>
+        <button class="btn ghost plan-btn" data-action="plan" data-kid="${kid.id}">📝 Plan my day</button>
+        <p class="muted">A chore becomes a habit once it has come up for a while. Do it on most days for 60 days to earn a star!</p>
+      </section>`;
+}
+
+const STATUS_BODIES = { me: statusMe, week: statusWeek, habits: statusHabits, trophies: trophiesHtml };
+
+function openStatus(kid, tab = 'me') {
+  if (!kid) return;
+  ui.statusTab = STATUS_BODIES[tab] ? tab : 'me';
+  const lv = levelFor(totalXp(state, kid, today()));
+  const html = statusHtml({ kidId: kid.id, name: kid.name, sub: `Level ${lv.level} · ${100 - lv.into} XP to level ${lv.level + 1}`, tab: ui.statusTab, body: withMemo(() => STATUS_BODIES[ui.statusTab](kid)) });
+  // already open: change the tab in place, so it doesn't pop in again
+  const open = !$modal.hidden && $modal.querySelector('.modal-card > .status-pop');
+  if (open) { open.outerHTML = html; return; }
+  openModal(html);
+  $modal.querySelector('.modal-card')?.classList.add('status-card');
+}
+
+function openMenu(kid) {
+  if (!kid) return;
+  const html = menuHtml({
+    kidId: kid.id,
+    music: state.settings.music !== false,
+    sound: Boolean(state.settings.sound),
+    kids: state.kids.length,
+    parents: { open: parentDevice(), waiting: parentBadge() },
+  });
+  const open = !$modal.hidden && $modal.querySelector('.modal-card > .menu-pop');
+  if (open) { open.outerHTML = html; return; }
+  openModal(html);
+  $modal.querySelector('.modal-card')?.classList.add('menu-card');
+}
+
 /**
  * Go, from the Today list: closes it and walks the buddy to whoever gives the quest, the talk
  * box opening on arrival. A house chore walks in at the door; from indoors the buddy comes out
@@ -1685,9 +1817,28 @@ function exWeekText(ex) {
   return `${left(ex.keep - ex.thisWeek)} keeps your ${weeksLabel(ex.weeks)} safe 🛡️, and ${left(ex.goal - ex.thisWeek)} adds a ⭐.`;
 }
 
+/**
+ * The kid's screen: the village (or wherever the buddy is: the house, the garden, the music
+ * house), full screen, with the HUD over it. Everything that used to be on the page around it
+ * is in the Status and Menu pop-ups. The old map page is still there for now, from the Menu.
+ */
 function viewKid() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
+  if (ui.oldMap) return viewOldMap(kid);
+  const t = today();
+  const { s } = kidSummary(kid);
+  return `
+    <div class="screen kid kid-full" style="--kid:${kid.color}">
+      ${villageView(kid, s, entryFor(state, kid.id, t), moodFor(kid))}
+    </div>`;
+}
+
+/**
+ * The old kid page with the quest map: header, buddy panel, exercise, the map, This week and
+ * Habits. Kept for one release, reached from the Menu, with a button back to the village.
+ */
+function viewOldMap(kid) {
   const t = today();
   const { s, info } = kidSummary(kid);
   const xp = totalXp(state, kid, t);
@@ -1695,7 +1846,6 @@ function viewKid() {
   const entry = entryFor(state, kid.id, t);
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
   const mood = moodFor(kid);
-  const villageMode = villageOn();
   const newCount = (kid.newItems || []).length;
   const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
   const late = lateChest(kid);
@@ -1711,6 +1861,10 @@ function viewKid() {
           ${exTasks.length || kid.gemsSpent ? `<span class="chip gem" title="Gems">💎 ${Math.max(0, totalGems(state, kid, t) - (kid.gemsSpent || 0))}</span>` : ''}
         </div>
       </header>
+      <div class="old-map-back">
+        <button class="btn huge" data-action="old-map-back">🏘️ Back to the village</button>
+        <small class="muted">The old map stays here for a little while.</small>
+      </div>
       <div class="buddy-panel">
         <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, mood, 'lg', { live: true, idle: true })}</button>
         <div class="buddy-side">
@@ -1724,15 +1878,10 @@ function viewKid() {
           ${storeButton(kid, storeOpen(state, kid, t), newCount)}
         </div>
       </div>
-      ${villageMode ? '' : exerciseSection(kid, exTasks, entry)}
-      <div class="view-toggle">
-        <button class="${villageMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
-        <button class="${villageMode ? 'on' : ''}" data-action="quest-mode" data-mode="village">🏘️ Village</button>
-      </div>
+      ${exerciseSection(kid, exTasks, entry)}
       ${!state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
       ${familyBanner()}
-      ${villageMode ? gardenBanner() : ''}
-      ${villageMode ? villageView(kid, s, entry, mood) : questMap(kid, s, entry, mood)}
+      ${questMap(kid, s, entry, mood)}
       <section>
         <h2>This week</h2>
         ${streakLine(kid, info)}
@@ -1892,7 +2041,7 @@ function viewWardrobe() {
           ${nextItem ? `<p class="muted">Next streak prize: <b>${esc(nextItem.name)}</b> at ${esc(needLabel(nextItem))}</p>` : ''}`}
         </div>
       </div>
-      <nav class="tabs">${SLOTS.map((sl) => `<button class="${ui.slot === sl.id ? 'on' : ''}" data-action="wardrobe-slot" data-slot="${sl.id}">${sl.icon} ${sl.name}</button>`).join('')}</nav>
+      ${shopTabs()}
       <div class="items">
         ${items.map((item) => {
     const open = isUnlocked(item, prog);
@@ -1919,6 +2068,33 @@ function viewWardrobe() {
       ${ui.slot === 'home' ? '<p class="muted small">Every task you finish earns coins to spend on furniture. Furniture goes in your buddy\'s house, and every buddy you have can use it. Each spot holds one thing at a time: tap something you own to put it in, or tap it again to take it out. Walk your buddy in the front door of your house in the village to see it!</p>' : ''}
       ${sportTab || ui.slot === 'home' || ui.slot === 'garden' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
+}
+
+// The shop's 9 tabs in 5 kinds, so they fit one row on a tablet: Places, Dress up (hats,
+// glasses, extras, magic), Music, Sports, House & garden (furniture, garden). A kind with more
+// than one tab shows them in a second row. Each button is still a wardrobe-slot button, so
+// what's sold and how a tab opens stay the same.
+const SHOP_KINDS = [
+  { slots: ['background'] },
+  { name: 'Dress up', icon: '👕', slots: ['hat', 'face', 'neck', 'hand'] },
+  { slots: ['music'] },
+  { slots: ['sport'] },
+  { name: 'House & garden', icon: '🏠', slots: ['home', 'garden'] },
+];
+const slotById = (id) => SLOTS.find((sl) => sl.id === id);
+
+function shopTabs() {
+  const kind = SHOP_KINDS.find((k) => k.slots.includes(ui.slot)) || SHOP_KINDS[1];
+  const top = SHOP_KINDS.map((k) => {
+    const sl = slotById(k.slots[0]);
+    const on = k === kind;
+    // a kind's button opens its first tab (or stays on the one already open)
+    return `<button class="${on ? 'on' : ''}" data-action="wardrobe-slot" data-slot="${on ? ui.slot : sl.id}" aria-pressed="${on}">${k.name ? `${k.icon} ${esc(k.name)}` : `${sl.icon} ${esc(sl.name)}`}</button>`;
+  }).join('');
+  const sub = kind.slots.length > 1
+    ? `<nav class="tabs sub" aria-label="${esc(kind.name)}">${kind.slots.map((id) => { const sl = slotById(id); return `<button class="${ui.slot === id ? 'on' : ''}" data-action="wardrobe-slot" data-slot="${id}">${sl.icon} ${esc(sl.name)}</button>`; }).join('')}</nav>`
+    : '';
+  return `<div class="shop-tabs"><nav class="tabs kinds" aria-label="The shop">${top}</nav>${sub}</div>`;
 }
 
 // ---------- the Garden tab of the shop (seed packets and garden decorations, see gardenrules.js) ----------
@@ -2381,7 +2557,7 @@ function parentEditKid() {
         ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>
         <label class="row"><input type="checkbox" data-field="listen" ${t.listen ? 'checked' : ''}> Listen to the piano</label>` : ''}
       </div>
-      ${t.evening && !isExercise(t) ? '<small class="muted task-hint">Evening chores don\'t keep the buddy store shut, so the store can open after the day chores. If one is missed, the next day the store waits for every chore, evening ones too.</small>' : ''}
+      ${t.evening && !isExercise(t) ? '<small class="muted task-hint">Evening chores don\'t keep the buddy shop shut, so the shop can open after the day chores. If one is missed, the next day the shop waits for every chore, evening ones too.</small>' : ''}
       ${t.minutes > 0 && t.listen ? '<small class="muted task-hint">While the timer runs, the buddy listens and dances to the playing. With no piano for 30 seconds it gets bored; after a minute it falls asleep and the timer pauses until the piano starts again. It uses the microphone only on the timer screen, and nothing is recorded. Try it in Settings › Test tools › Piano listening test.</small>' : ''}
       ${isExercise(t) ? `<div class="row wrap reward-edit">
         <label>Earns 💎 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="gems" value="${Number.isFinite(t.gems) ? t.gems : ''}" placeholder="${DEFAULT_GEMS}" class="num" aria-label="Gems earned"> gems</label>
@@ -2732,6 +2908,9 @@ function render() {
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio' || ui.view === 'lab';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
   const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
+  // the kid's screen fills the whole screen and the page doesn't scroll (the old map page still does)
+  const full = ui.view === 'kid' && !ui.oldMap;
+  if (document.documentElement.classList.contains('kid-full') !== full) document.documentElement.classList.toggle('kid-full', full);
   // load the sign-in code early, so a sign-in popup opens straight from the tap
   if (ui.view === 'setup' || (ui.view === 'parent' && ui.tab === 'settings')) loadCloud().catch(() => {});
   // Family sync can ask for a redraw many times a minute (another tablet saving, a piano timer
@@ -2747,7 +2926,7 @@ function render() {
   $app.innerHTML = html;
   lastHtml = html;
   lastView = ui.view;
-  if (back) window.scrollTo(0, ui.kidScroll);
+  if (full) { if (window.scrollY) window.scrollTo(0, 0); } else if (back) window.scrollTo(0, ui.kidScroll);
   $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
   paintQuestMaps($app);
   mountVillages($app, villageHandlers);
@@ -2783,9 +2962,9 @@ window.addEventListener('resize', () => {
 
 const actions = {
   'setup-pin': () => pinPad({ title: 'Choose a parent PIN', subtitle: 'Pick 4 digits the kids don’t know', mode: 'new', onSuccess: () => { ui.view = 'parent'; ui.tab = 'kids'; render(); toast('PIN saved. Now add your kids.'); } }),
-  home: () => { ui.view = 'home'; ui.kidScroll = null; render(); },
+  home: () => { ui.view = 'home'; ui.kidScroll = null; ui.oldMap = false; render(); },
   'open-kid': (el) => {
-    ui.kidId = el.dataset.id; ui.view = 'kid'; ui.kidScroll = null; render();
+    ui.kidId = el.dataset.id; ui.view = 'kid'; ui.kidScroll = null; ui.oldMap = false; render();
     setTimeout(() => celebrateIfDue(kidById(ui.kidId)), 300);
   },
   task: (el) => onTaskTap(el.dataset.id, el),
@@ -2951,7 +3130,7 @@ const actions = {
   },
   'today-chest': () => { closeModal(); const kid = kidById(ui.kidId); if (kid) openChest(kid, today()); },
   'today-shop': () => { closeModal(); actions.wardrobe(); },
-  'quest-mode': (el) => { state.settings.questView = el.dataset.mode; save(); render(); },
+  'quest-mode': (el) => { ui.oldMap = el.dataset.mode === 'map'; render(); },
   chest: (el) => {
     const kid = kidById(ui.kidId);
     const key = el.dataset.day || today();
@@ -3599,6 +3778,37 @@ Object.assign(actions, {
     toast('Plan saved! 📝');
   },
   'family-party': () => { if (familyToday().happy) startParty(); },
+  // the HUD's family pill: the party once it's earned, otherwise how the family is doing
+  'family-pill': () => {
+    if (familyToday().happy) { startParty(); return; }
+    const fam = familyText('village');
+    sounds.tap();
+    if (fam) toast(fam.text);
+  },
+  status: (el) => { sounds.tap(); openStatus(kidById(ui.kidId), el.dataset.tab || 'me'); },
+  'status-tab': (el) => { sounds.tap(); openStatus(kidById(ui.kidId), el.dataset.tab); },
+  // Change outfit: the shop when it's open, otherwise why it's shut (on the village, under the pop-up)
+  'status-outfit': () => { closeModal(); actions.wardrobe(); },
+  'status-scores': () => openLeaderboard(kidById(ui.kidId)),
+  'status-fish': () => openFishBook(kidById(ui.kidId)),
+  menu: () => { sounds.tap(); openMenu(kidById(ui.kidId)); },
+  'menu-music': () => {
+    // music needs sounds: turning music on turns sounds on too
+    const on = !(state.settings.sound && state.settings.music !== false);
+    state.settings.music = on;
+    if (on && !state.settings.sound) { state.settings.sound = true; setSound(true); }
+    save(); render(); openMenu(kidById(ui.kidId));
+  },
+  'menu-sound': () => {
+    state.settings.sound = !state.settings.sound;
+    setSound(state.settings.sound);
+    save(); render(); sounds.tap(); openMenu(kidById(ui.kidId));
+  },
+  'menu-switch': () => { closeModal(); actions.home(); },
+  'menu-parents': () => { closeModal(); actions.parent(); },
+  // the old map page, for one release: from the Menu, with a big button back to the village
+  'old-map': () => { closeModal(); ui.oldMap = true; ui.kidScroll = null; render(); window.scrollTo(0, 0); },
+  'old-map-back': () => { ui.oldMap = false; ui.kidScroll = null; render(); },
   'send-cheer': (el) => {
     const kid = kidById(el.closest('.map-visitors')?.dataset.host);
     sendCheer(kid, familyBuddies().find((b) => b.id === el.dataset.id));

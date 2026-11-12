@@ -11,7 +11,7 @@
 // Run: node test/smoke/notomatic.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import { chromium } from 'playwright';
-import { toPicker } from '../helpers/open-kid.mjs';
+import { openParents } from '../helpers/open-kid.mjs';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
@@ -109,8 +109,7 @@ function seedDesk(page, takes, bpm = 120) {
 
 /** From the start screen into Settings with the PIN, and on to the test desk. */
 async function openDesk(page) {
-  await toPicker(page);
-  await page.click('[data-action="parent"]');
+  await openParents(page);
   for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
   await page.waitForSelector('.pnav');
   await page.click('[data-action="tab"][data-tab="settings"]');

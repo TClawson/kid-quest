@@ -6,7 +6,7 @@ import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
-import { openKid } from '../helpers/open-kid.mjs';
+import { openKid, closePops, openMenu } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -19,7 +19,6 @@ try {
   const s = emptyState();
   s.settings.pinHash = 'sha256:test';
   s.settings.sound = false;
-  s.settings.questView = 'map'; // the map's visitors (a new device starts in the village)
   s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: { background: 'bg-ocean' } } });
   s.log[dateKey()] = { kid_sam: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
   // a kid's tablet in a family, with two other kids' buddies cached for visiting
@@ -34,6 +33,29 @@ try {
   }, seenSaturday(s));
   await page.reload();
   await openKid(page, '[data-action="open-kid"]');
+  await closePops(page);
+  await page.waitForSelector('.village[data-live] .k-hud');
+
+  // the village: a redraw with nothing changed leaves it alone (the same live section, not
+  // started again). The redraws come from the old view switch's action (its button is gone from
+  // the page, so the test keeps its own outside it), which redraws whatever is on screen.
+  await page.evaluate(() => {
+    for (const mode of ['village', 'map']) {
+      const b = document.createElement('button');
+      b.hidden = true;
+      b.id = `redraw-${mode}`;
+      Object.assign(b.dataset, { action: 'quest-mode', mode });
+      document.body.append(b);
+    }
+    window.__village = document.querySelector('.village');
+  });
+  for (let i = 0; i < 4; i += 1) { await page.evaluate(() => document.getElementById('redraw-village').click()); await page.waitForTimeout(200); }
+  assert.ok(await page.evaluate(() => window.__village === document.querySelector('.village')), 'the village is not drawn again when nothing changed');
+  assert.ok(await page.locator('.village .k-hud').isVisible());
+
+  // the old map (from the Menu) and its visitors
+  await openMenu(page);
+  await page.click('#modal [data-action="old-map"]');
   await page.waitForSelector('.map-visitor');
   await page.waitForTimeout(300);
 
@@ -54,7 +76,7 @@ try {
     window.__redraws = setInterval(() => {
       n += 1;
       if (n % 2) window.kidQuest.state.kids[0].name = `Sam${n}`;
-      document.querySelector('[data-action="quest-mode"][data-mode="map"]').click();
+      document.getElementById('redraw-map').click();
     }, 700);
   });
   await page.waitForTimeout(6000);
@@ -64,8 +86,11 @@ try {
 
   // side scrollers keep their scroll place when the screen is redrawn. The slot tabs now
   // wrap onto two lines on a phone, so make them a side scroller here to test it.
-  await page.click('[data-action="wardrobe"]');
-  await page.addStyleTag({ content: '.tabs { flex-wrap: nowrap !important; overflow-x: auto !important; display: flex !important; }' });
+  await page.click('[data-action="old-map-back"]');
+  await page.waitForSelector('.village .k-hud');
+  await page.click('.k-hud [data-action="wardrobe"]');
+  // the shop's tab rows scroll sideways when they don't fit; make sure the first one doesn't fit here
+  await page.addStyleTag({ content: '.tabs { flex-wrap: nowrap !important; overflow-x: auto !important; display: flex !important; } .tabs button { min-width: 160px !important; flex: none !important; }' });
   await page.evaluate(() => { document.querySelector('.tabs').scrollLeft = 150; });
   const before = await page.evaluate(() => document.querySelector('.tabs').scrollLeft);
   assert.ok(before > 0, 'the tabs scroll sideways');
