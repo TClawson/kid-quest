@@ -56,6 +56,7 @@ export const ROOM = {
     bathmat: { x: 252, y: 66 },
     basket: { x: 292, y: 148 },
     tank: { x: 132, y: 133 }, // the fish tank on its cabinet, against the front wall right of the door
+    music: { x: 48, y: 34 }, // the turntable and its speakers, against the back wall under the window
   },
 };
 const R = ROOM;
@@ -1023,6 +1024,59 @@ function mess(px, level) {
   if (level >= 3) for (const [x, y] of [[14, 102], [208, 66], [226, 164], [127, 166], [70, 50]]) grid(px, x, y, ['.gg.', 'gGgg', '.gg.'], { g: 'rgba(150,140,150,0.75)', G: 'rgba(210,200,210,0.85)' });
 }
 
+// ---------- the turntable ----------
+
+/** Where the record sits on the turntable's art (its middle), for the spinning glint (house.js). */
+export const TURNTABLE = { w: 34, h: 26, record: { x: 16, y: 9, rx: 5, ry: 2 } };
+
+/**
+ * The turntable and speaker set: a low record cabinet (sleeves showing in its open shelf) with
+ * a record player on top, between two little speakers.
+ */
+function turntableArt(item) {
+  const C = rampOf(item.look?.c || 'brown');
+  const { record: rc } = TURNTABLE;
+  return sprite(TURNTABLE.w, TURNTABLE.h, (b) => {
+    // the speakers: dark boxes, a small tweeter over a big woofer
+    for (const x0 of [0, 26]) {
+      for (let y = 6; y < 26; y += 1) for (let x = x0; x < x0 + 8; x += 1) {
+        const edge = x === x0 || x === x0 + 7;
+        b.set(x, y, y === 6 ? CAP[4] : edge ? CAP[x === x0 ? 3 : 1] : y > 23 ? CAP[1] : CAP[2]);
+      }
+      for (let y = 8; y < 24; y += 1) for (let x = x0 + 1; x < x0 + 7; x += 1) {
+        if (inEll(x, y, x0 + 4, 18.5, 3, 3)) b.set(x, y, inEll(x, y, x0 + 4, 18.5, 1.2, 1.2) ? CHROME[3] : inEll(x, y, x0 + 4, 18.5, 2.2, 2.2) ? CAP[0] : CHROME[1]);
+        else if (inEll(x, y, x0 + 4, 11, 1.6, 1.6)) b.set(x, y, inEll(x, y, x0 + 4, 11, 0.7, 0.7) ? CHROME[4] : CHROME[1]);
+      }
+    }
+    // the cabinet, with an open shelf of record sleeves
+    for (let y = 13; y < 26; y += 1) for (let x = 8; x < 26; x += 1) {
+      let c = y === 13 ? C[5] : y === 14 ? C[4] : x === 8 ? C[4] : x === 25 ? C[1] : y > 23 ? C[1] : C[3];
+      if (y >= 16 && y <= 22 && x >= 10 && x <= 23) c = y === 16 ? C[0] : C[1];
+      b.set(x, y, c);
+    }
+    const sleeves = ['#e0546a', '#4f9ad8', '#ffd23f', '#6cb85a', '#f0a848', '#7a4ab0', '#e0709a'];
+    for (let i = 0; i < 7; i += 1) {
+      const x = 11 + i * 2 - (i > 4 ? 0 : 0);
+      const top = 17 + (i % 3 === 1 ? 1 : 0);
+      for (let y = top; y <= 22; y += 1) b.set(x, y, y === top ? mix(sleeves[i], '#ffffff', 0.35) : sleeves[i]);
+    }
+    // the record player on top: its base, the black record with a red label, the arm
+    for (let y = 7; y < 13; y += 1) for (let x = 9; x < 25; x += 1) b.set(x, y, y === 7 ? CHROME[4] : y === 12 ? CHROME[0] : x === 9 ? CHROME[3] : x === 24 ? CHROME[1] : CHROME[2]);
+    for (let y = 6; y < 13; y += 1) for (let x = 9; x < 24; x += 1) {
+      if (!inEll(x, y, rc.x, rc.y, rc.rx + 0.5, rc.ry + 0.6)) continue;
+      const lab = inEll(x, y, rc.x, rc.y, 1.6, 0.8);
+      b.set(x, y, lab ? '#e0546a' : (x + y) % 3 === 0 ? '#3a3448' : '#24202e');
+    }
+    b.set(rc.x, rc.y, '#fff4c8');
+    // the arm: a silver post at the back right corner, reaching over the record
+    b.set(23, 7, CHROME[5]); b.set(23, 8, CHROME[4]);
+    for (const [x, y] of [[22, 8], [21, 9], [20, 9], [19, 10]]) b.set(x, y, CHROME[5]);
+    b.set(18, 10, CAP[1]);
+    // a knob and a light on the front
+    b.set(11, 11, '#6cb85a'); b.set(22, 11, CHROME[5]);
+  });
+}
+
 // ---------- the whole room ----------
 
 const pieceArt = (item, state = {}) => {
@@ -1036,6 +1090,7 @@ const pieceArt = (item, state = {}) => {
     case 'lamp': return lampArt(item);
     case 'rug': return rugArt(item, state.lift);
     case 'art': return pictureArt(item.look);
+    case 'music': return turntableArt(item);
     default: return null;
   }
 };
@@ -1111,6 +1166,12 @@ export function paintRoom(canvas, o) {
     shadow(px, at.couch.x + 24, at.couch.y + 34, 24, 2, 0.22);
     c.blit(px, at.couch.x, at.couch.y);
     blocks.push([at.couch.x, R.floorTop - 2, 48, at.couch.y + 34 - R.floorTop + 2]);
+  }
+  if (lay.music) {
+    const t = pieceArt(lay.music);
+    shadow(px, at.music.x + 17, at.music.y + 26, 17, 2, 0.22);
+    t.blit(px, at.music.x, at.music.y);
+    blocks.push([at.music.x, R.floorTop - 2, TURNTABLE.w, at.music.y + TURNTABLE.h - R.floorTop + 2]);
   }
   if (lay.lamp) {
     const l = pieceArt(lay.lamp);

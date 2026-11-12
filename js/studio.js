@@ -40,6 +40,7 @@ import {
   clickWave, clickPlan, makeTake, fadeEnds, phonesDelay, softClip, usableDelay, stopPoint, firstPass, MOST_DELAY,
 } from './studio-audio.js';
 import { openMic, capture } from './mic.js';
+import { soundOf, mixSound, soundKey, renderSound } from './mixsound.js';
 
 // ---------- words ----------
 
@@ -1249,31 +1250,6 @@ function audio() {
 /** How late the speaker is: what plays at context time t is heard at t + this. */
 const outLag = () => (A.ac ? A.ac.outputLatency || A.ac.baseLatency || 0 : 0);
 
-/**
- * What a ready-made clip sounds like, in a mix in key `mixKey`: { kind, song, part, pattern,
- * loop, tonic (the key note a backing track's chords are on), voice, kit, shift }. Two clips
- * with the same sound share one rendering.
- */
-function soundOf(c, mixKey, swing = 0) {
-  // (a notes clip's voice is the one it plays in: the kid's, else its own)
-  const how = { voice: (c.kind === 'notes' ? notesVoice(c) : c.voice) || '', kit: c.kit || '', shift: c.shift || 0 };
-  if (c.kind === 'part') return { kind: 'part', song: c.song, part: c.part, ...how };
-  // the kid's notes: their name (nid) says which notes, so copies share one rendering
-  // (and their role says how loud they play: a band part sits under its tune, studiorules.js roleLevel)
-  // (at its pace: half or double speed plays the same notes later or sooner, setPace)
-  if (c.kind === 'notes') return { kind: 'notes', nid: c.nid, notes: pacedNotes(c), beats: c.total, role: c.role || '', pace: paceOf(c) || '', swing, ...how };
-  const notes = clipSound(c) === 'notes';
-  const loop = notes ? (LOOPS[c.loop] ? c.loop : 'sunny') : '';
-  // a backing track swings with the mix's song parts (studiorules.js backingSwing)
-  return { kind: 'backing', pattern: c.pattern, loop, tonic: notes ? keyTonic(backingKey(mixKey, LOOPS[loop].mood)) : '', swing, ...how };
-}
-
-/** A clip's sound in a mix (a backing track, and the kid's notes on straight eighths, swing with it). */
-const mixSound = (c, mix) => soundOf(c, mix.key, clipSwing(mix, c));
-
-/** Where a sound at a speed is kept among the rendered ones. */
-const soundKey = (s, bpm) => [s.kind, s.song || s.pattern || s.nid, s.part || '', bpm, s.voice, s.kit, s.shift, s.loop || '', s.tonic ?? '', s.swing || 0, s.kind === 'notes' ? `${s.beats}:${s.notes.length}:${s.role || ''}:${s.pace || ''}` : ''].join('|');
-
 /** The sounds a mix plays (soundKey), worked out once a mix. */
 const keysMade = new WeakMap();
 function mixKeys(mix) {
@@ -1291,30 +1267,6 @@ function wanted(key) {
   return A.hearKey === key || mixKeys(S.mix).has(key) || Boolean(A.play && mixKeys(A.play.mix).has(key));
 }
 
-/**
- * Render a ready-made clip's sound once through. A song's part in its own sound, not moved,
- * is the song itself (music.js renderPart); anything else is played from its notes.
- */
-function renderSound(s, bpm, rate, alive = null) {
-  if (s.kind === 'notes') {
-    // (never longer than a loop can be, whatever was stored)
-    return renderEvents(s.notes, { bpm, steps: Math.min(s.beats, mostNotesBeats(4)) * 2, swing: s.swing || 0, sampleRate: rate, alive, voice: s.voice || NOTES_VOICE, shift: s.shift, peak: 0.5 * roleLevel(s.role) });
-  }
-  if (s.kind === 'part') {
-    if (!s.voice && !s.kit && !s.shift) return renderPart(s.song, s.part, bpm, rate, 0.5, alive);
-    const style = partStyle(s.song, s.part);
-    const events = partEvents(s.song, s.part);
-    const common = { bpm, steps: style.steps, swing: style.swing, sampleRate: rate, alive };
-    if (clipSound(s) === 'drums') return renderEvents(events, { ...common, kit: s.kit || null, vol: style.drumVol });
-    // its own sound keeps the song's echo; a new voice plays without it
-    return renderEvents(events, { ...common, voice: s.voice || style.voice, shift: s.shift, echo: s.voice ? 0 : style.echo });
-  }
-  const b = BACKING[s.pattern];
-  const steps = backingBeats(s.pattern) * 2;
-  const common = { bpm, steps, swing: s.swing || 0, sampleRate: rate, alive };
-  if (b.kind === 'drums') return renderEvents(backingEvents(s.pattern), { ...common, kit: s.kit || null });
-  return renderEvents(backingEvents(s.pattern, { loop: s.loop, tonic: s.tonic }), { ...common, voice: s.voice || b.voice, shift: s.shift });
-}
 
 /**
  * A clip's sound at a speed, rendered once and kept (null when it can't be made). A sound that

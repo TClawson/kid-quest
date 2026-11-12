@@ -25,7 +25,8 @@ import { kidHudHtml, statusHtml, menuHtml, STATUS_TABS } from './hud.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, tierInfo } from './musicrules.js';
-import { spotById, homeLayout, isPlaced, placeFurniture } from './furniture.js';
+import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse } from './furniture.js';
+import { houseRecord, openTurntable, spinning, stopRecord, setTurntableSync } from './turntable.js';
 import { applyGrants, restoreFromRecord, restoreBackup, restoreTasks, mergeBackup } from './grants.js';
 import { furnitureThumb } from './houseart.js';
 import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
@@ -34,7 +35,7 @@ import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
 import { leaderboard, weekOf } from './leaderboard.js';
 import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
-import { startMusic, stopMusic, playShowAudio } from './music.js';
+import { startMusic, stopMusic, playShowAudio, muffleMusic } from './music.js';
 import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHtml } from './songbook.js';
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
@@ -632,6 +633,7 @@ document.addEventListener('visibilitychange', () => {
     stopEars();
     leaveTimer();
     stopMusic();
+    stopRecord();
     if (listenTest.run) stopListenTest();
     if (listening) render();
   }
@@ -1276,6 +1278,8 @@ const houseHandlers = {
   onLeaderboard: () => openLeaderboard(kidById(ui.kidId)),
   onTank: () => openTankPicker(kidById(ui.kidId)),
   onFishBook: () => openFishBook(kidById(ui.kidId)),
+  onTurntable: () => openTurntable(ui.kidId),
+  spinning: (kidId) => spinning(kidId),
   onGarden: () => goGarden('house'),
   onExit: () => {
     const kid = kidById(ui.kidId);
@@ -2053,6 +2057,7 @@ function viewWardrobe() {
       <div class="items">
         ${items.map((item) => {
     const open = isUnlocked(item, prog);
+    const shut = !open && needsMusicHouse(item) && !musicTier(prog); // sold once the music house opens
     const on = item.home ? isPlaced(kid, item) : kid.buddy.outfit[item.slot] === item.id;
     // the wand's picture is lit all the way, to show what it does
     const preview = { ...kid.buddy, wand: 1, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
@@ -2064,7 +2069,7 @@ function viewWardrobe() {
             ${item.home ? `<span class="spot-tag">${spotById(item.spot).icon} ${esc(spotById(item.spot).name)}</span>` : ''}
             <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : item.noHold ? `<img class="home-thumb" src="${boatThumb()}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
-            <small>${open ? wearing : price || `🔒 ${esc(needLabel(item))}`}</small>
+            <small>${open ? wearing : shut ? '🔒 Opens with your music house' : price || `🔒 ${esc(needLabel(item))}`}</small>
             ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
           </button>`;
   }).join('')}
@@ -2952,13 +2957,23 @@ function render() {
   greetCheers();
 }
 
-/** Map music plays only on the quest map, with sound on and music not muted, while the app is visible. */
+/**
+ * Map music plays only on the quest map, with sound on and music not muted, while the app is
+ * visible. Inside the buddy's house it is muffled, as if heard from outside, unless the kid's
+ * turntable is playing (turntable.js): then that plays instead (even with the map music muted,
+ * since the kid put it on).
+ */
 function syncMusic() {
   const onMap = ui.view === 'kid';
-  const wanted = onMap && state.settings.sound && state.settings.music !== false && document.visibilityState === 'visible';
-  if (wanted) startMusic(kidTheme(kidById(ui.kidId) || {}));
+  const kid = kidById(ui.kidId);
+  const heard = onMap && state.settings.sound && document.visibilityState === 'visible';
+  const inHouse = Boolean(heard && kid && placeOf(kid.id, today()) === 'house');
+  muffleMusic(inHouse);
+  if (houseRecord(kid, inHouse)) { stopMusic(); return; }
+  if (heard && state.settings.music !== false) startMusic(kidTheme(kid || {}));
   else stopMusic();
 }
+setTurntableSync(() => syncMusic());
 
 let resizeTimer = 0;
 window.addEventListener('resize', () => {
@@ -3085,6 +3100,7 @@ const actions = {
     const item = itemById(el.dataset.id);
     if (!item || !fitsSpecies(item, kid.buddy.species)) return;
     const prog = progressFor(kid);
+    if (!isUnlocked(item, prog) && needsMusicHouse(item) && !musicTier(prog)) { sounds.error(); toast('🔒 This opens with your music house. Keep up your piano streak to earn your first piano!'); return; }
     if (!isUnlocked(item, prog) && (item.price || item.gems)) { buyItem(kid, item, prog); return; }
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
     if (item.home) {
@@ -3180,6 +3196,7 @@ const actions = {
     const item = itemById(el.dataset.id);
     const prog = progressFor(kid);
     if (!item || prog.owned.includes(item.id) || !fitsSpecies(item, kid.buddy.species)) { closeModal(); return; }
+    if (needsMusicHouse(item) && !musicTier(prog)) { closeModal(); return; }
     if (item.gems) {
       if (prog.gems < item.gems) { closeModal(); return; }
       kid.gemsSpent = (kid.gemsSpent || 0) + item.gems;
