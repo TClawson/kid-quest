@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.argv[2];
 const site = await serve('.');
@@ -44,7 +45,7 @@ try {
     await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
     await page.reload();
 
-    await page.click('[data-action="open-kid"]');
+    await openKid(page, '[data-action="open-kid"]');
     await page.click(`[data-action="task"][data-id="${piano.id}"]`);
     assert.ok(await page.isVisible('.timer-buddy'), 'buddy on the timer page');
     assert.match(await page.locator('.timer').textContent(), /Note Rush/);
@@ -96,7 +97,7 @@ try {
       localStorage.setItem('kidquest.v1', JSON.stringify(s));
     }, ['kid_sam', piano.id]);
     await page.reload();
-    await page.click('[data-action="open-kid"]');
+    await openKid(page, '[data-action="open-kid"]');
     await page.click(`[data-action="task"][data-id="${piano.id}"]`);
     await page.click('[data-action="timer-start"]');
     await page.clock.runFor(MIN);

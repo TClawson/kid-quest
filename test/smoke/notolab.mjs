@@ -18,6 +18,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, fallbackHash, addDays, dateKey } from '../../js/logic.js';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews/note-o-matic/lab').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -106,7 +107,7 @@ async function setFamily(page, st) {
 }
 /** Into Ava's music house. */
 async function intoHouse(page) {
-  await page.click(`[data-action="open-kid"][data-id="${KID}"]`);
+  await openKid(page, `[data-action="open-kid"][data-id="${KID}"]`);
   await page.waitForSelector('.music-house');
   // what pops up on the way in (news for the day, the music house's hello): closed
   await page.waitForTimeout(1500);
@@ -434,10 +435,12 @@ async function recordToPick(page, name = '', stop = 'limit') {
 // 2. Settings: a test desk right after the studio's, behind the PIN, with its own shelf
 {
   const { ctx, page } = await start(TABLET, family());
+  await toPicker(page);
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
-  await page.waitForSelector('.tabs');
+  await page.waitForSelector('.pnav');
   await page.click('[data-action="tab"][data-tab="settings"]');
+if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
   const order = await page.evaluate(() => [...document.querySelectorAll('.card h2')].map((h) => h.textContent.trim()));
   const at = order.indexOf('🤖 Try the Note-o-Matic');
   assert.ok(at > 0, 'the card is there');
@@ -502,12 +505,12 @@ async function recordToPick(page, name = '', stop = 'limit') {
   }, [TEST_DESK, KID]);
   assert.deepEqual(kept, [1, 0], 'the test desk keeps its own tunes; Ava has none');
   await page.click('[data-action="lab-back"]');
-  await page.waitForSelector('.tabs [data-tab="settings"].on');
+  await page.waitForSelector('.pnav [data-tab="settings"].on');
   // the test studio's shelf has it
   await page.click('[data-action="studio-test"]');
   await page.waitForSelector('#studio .st-tunes [data-action="st-tune-add"]');
   await page.click('[data-action="studio-back"]');
-  await page.waitForSelector('.tabs [data-tab="settings"].on');
+  await page.waitForSelector('.pnav [data-tab="settings"].on');
   await ctx.close();
 }
 

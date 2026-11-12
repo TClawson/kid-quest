@@ -2,6 +2,7 @@
 // Run: node test/smoke/turns.mjs  (SHOTS=dir also saves screenshots)
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { toPicker } from '../helpers/open-kid.mjs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash, weekParity, tasksForDay, addDays } from '../../js/logic.js';
 
@@ -26,11 +27,14 @@ try {
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
 
+  await toPicker(page);
+
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="kids"]');
   await page.click('[data-action="edit-kid"][data-id="kid_ava"]');
   const row = '.task-edit[data-task="task_bath"]';
+  await page.click(`${row} .task-line`);
   assert.equal(await page.locator(`${row} [data-action="task-turns"]`).count(), 0, 'no turn buttons on an every-week task');
   await page.selectOption(`${row} select[data-action-change="task-repeat"]`, 'this');
   await page.click(`${row} [data-action="task-turns"][data-kid="kid_ben"]`);
@@ -53,6 +57,8 @@ try {
   await page.click('[data-action="edit-kid-done"]');
   await page.click('[data-action="edit-kid"][data-id="kid_ben"]');
   const benRow = `.task-edit[data-task="${b.id}"]`;
+  assert.match(await page.locator(`${benRow} .task-line`).innerText(), /every other week/);
+  await page.click(`${benRow} .task-line`);
   assert.equal(await page.locator(`${benRow} select[data-action-change="task-repeat"]`).inputValue(), 'next');
   assert.match(await page.locator(benRow).innerText(), /Takes turns with\s+Ava/);
   if (shots) {

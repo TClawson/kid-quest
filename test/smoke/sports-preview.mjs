@@ -7,6 +7,7 @@ import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays, newId, fallbackHash } from '../../js/logic.js';
 import { pickVisitors, planVisits } from '../../js/visits.js';
 import { bestGear } from '../../js/items.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 const part = process.argv[3] || 'all';
@@ -22,6 +23,7 @@ function family(theme, gear = null) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
+  s.settings.questView = 'map'; // the old map (a new device starts in the village)
   const start = addDays(day, -50);
   const mk = (id, name, color, species, extra) => {
     const tasks = defaultTasks();
@@ -72,7 +74,7 @@ const closeModal = async (page) => { while (await page.locator('#modal:not([hidd
 try {
   if (part === 'all' || part === 'screens') {
     const { ctx, page } = await open({ width: 800, height: 1280 }, 'bg-meadow');
-    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
     await page.clock.runFor(1500);
     await page.screenshot({ path: `${out}/new-moves.png` });
     await closeModal(page);
@@ -87,7 +89,7 @@ try {
     for (const [label, viewport] of [['tablet', { width: 800, height: 1280 }], ['phone', { width: 412, height: 915 }]]) {
       for (const theme of THEMES) {
         const { ctx, page } = await open(viewport, theme);
-        await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+        await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
         await page.clock.runFor(1500);
         await closeModal(page);
         await page.clock.runFor(1000);
@@ -112,7 +114,7 @@ try {
       const vp = { width: 800, height: 340 };
       const { ctx: c2, page: p2 } = await open(vp, theme, true);
       await p2.clock.resume();
-      await p2.click('[data-action="open-kid"][data-id="kid_ava"]');
+      await openKid(p2, '[data-action="open-kid"][data-id="kid_ava"]');
       await p2.waitForTimeout(800);
       await closeModal(p2);
       const box = await p2.locator('.quest-map').boundingBox();
@@ -146,7 +148,7 @@ try {
       const vp = { width: 800, height: 340 };
       const { ctx, page } = await open(vp, theme, true, gear);
       await page.clock.resume();
-      await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+      await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
       await page.waitForTimeout(800);
       await closeModal(page);
       const box = await page.locator('.quest-map').boundingBox();
@@ -156,7 +158,7 @@ try {
       fs.renameSync(await page.video().path(), `${out}/raw/games-${name}.webm`);
       // and a still on a phone
       const { ctx: c2, page: p2 } = await open({ width: 412, height: 915 }, theme, false, gear);
-      await p2.click('[data-action="open-kid"][data-id="kid_ava"]');
+      await openKid(p2, '[data-action="open-kid"][data-id="kid_ava"]');
       await p2.clock.runFor(1500);
       await closeModal(p2);
       await p2.clock.runFor(1200);

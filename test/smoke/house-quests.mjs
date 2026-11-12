@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2]?.replace(/\/$/, '');
 if (out) fs.mkdirSync(out, { recursive: true });
@@ -37,7 +38,7 @@ async function open(viewport, st) {
   // the buddy was left outside today
   await page.evaluate((s) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify({ kid_ava: { day: '2026-11-11', inside: false } })); }, st);
   await page.reload();
-  await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
   await page.clock.runFor(1500);
   for (let i = 0; i < 6 && await page.locator('#modal:not([hidden])').count(); i += 1) {
     const close = page.locator('#modal [data-action="modal-close"]');

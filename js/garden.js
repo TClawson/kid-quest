@@ -32,6 +32,7 @@ const rect = (x, y, w, h, extra = '') => `left:${Math.round(x)}px;top:${Math.rou
  *   view: gardenrules.js gardenView(state, kid, today),
  *   thirsty: ids of plants waiting for water, tasks: [{ id, name, icon }] the chores a plant can stand for,
  *   seeds: { seedId: packets }, theme: the kid's map (some maps put the garden in a dome), today,
+ *   hud: markup laid over a corner of the garden (the Today button), or '',
  * }
  */
 export function gardenHtml(g) {
@@ -60,6 +61,7 @@ export function gardenHtml(g) {
         <button class="g-water" data-water ${n ? '' : 'hidden'}>💧 Water${n ? ` (${n})` : ''}</button>
         <div class="v-dialog" hidden></div>
       </div>
+      ${g.hud || ''}
     </section>`;
 }
 

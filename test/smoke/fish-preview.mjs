@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
 import { FISH_SPECIES } from '../../js/fishbook.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews').replace(/\/$/, '');
 const video = process.argv.includes('--video');
@@ -70,7 +71,7 @@ async function open(viewport, st, { record = false, cloud = false } = {}) {
     }
   }, [st, { kid_ava: { day, inside: !cloud } }, cloud]);
   await page.reload();
-  await page.click('[data-action="open-kid"]');
+  await openKid(page, '[data-action="open-kid"]');
   await page.clock.runFor(1500);
   await closeModals(page);
   if (!cloud) { await page.locator('.house').scrollIntoViewIfNeeded(); await page.clock.runFor(1200); }

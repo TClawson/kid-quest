@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, addDays } from '../../js/logic.js';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const pinHash = (pin) => `sha256:${createHash('sha256').update(`kidquest:${pin}`).digest('hex')}`;
 const site = await serve('.');
@@ -39,8 +40,12 @@ async function typePin(page, pin) {
 
 async function openSettings(page, pin) {
   if (await page.locator('[data-action="parent-exit"]').count()) await page.click('[data-action="parent-exit"]');
+  await toPicker(page);
   await page.click('[data-action="parent"]');
-  await typePin(page, pin);
+  // a phone signed in to the family as a parent opens Parents without the PIN; any other device asks for it
+  const role = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud') || 'null')?.role);
+  if (role === 'parent') assert.equal(await page.locator('#modal .pin').count(), 0, 'no PIN on a parent phone');
+  else await typePin(page, pin);
   await page.click('[data-action="tab"][data-tab="settings"]');
 }
 
@@ -125,7 +130,7 @@ try {
 
   // ---- Ava ticks a task; mom sees it
   if (await ava.page.locator('[data-action="parent-exit"]').count()) await ava.page.click('[data-action="parent-exit"]');
-  await ava.page.click('[data-action="open-kid"]');
+  await openKid(ava.page, '[data-action="open-kid"]');
   await ava.page.click(`[data-action="task"][data-id="${teeth.id}"]`);
   await until('teeth on mom’s phone', async () => (await stateOf(mom.page)).log[today]?.kid_ava?.tasks[teeth.id]?.status === 'done');
   log('✓ kid change reaches parent');

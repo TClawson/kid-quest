@@ -9,6 +9,7 @@ import { serve } from '../helpers/serve.mjs';
 import { ITEMS } from '../../js/items.js';
 import { emptyState, defaultTasks, dateKey, addDays, fallbackHash, tasksForDay, questTasks, weekStart } from '../../js/logic.js';
 import { seenSaturday } from '../helpers/seed.mjs';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 if (shots) mkdirSync(shots, { recursive: true });
@@ -21,6 +22,7 @@ function family({ avaToday = 0, benToday = 0 } = {}) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
+  s.settings.questView = 'map'; // the old map (a new device starts in the village)
   const start = addDays(today, -70);
   s.settings.allowance = { on: true, coins: 300, xp: 300, bonus: 50, since: start, startFixed: true };
   const seen = ITEMS.map((x) => x.id);
@@ -79,7 +81,7 @@ try {
     const tag = phone ? 'phone' : 'tablet';
 
     await open(page, family({ benToday: 3 }));
-    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
 
     // 1. teeth became a mastered habit: a star, once
     await page.waitForSelector('.modal-card .celebrate h1');
@@ -154,7 +156,7 @@ try {
     const a2 = s2.kids.find((k) => k.id === 'kid_ava');
     for (const t of tasksForDay(s2, a2, today, today)) s2.log[today].kid_ava.tasks[t.id] = { status: 'done', by: 'parent' };
     await open(page, s2);
-    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
     await page.waitForSelector('.modal-card .celebrate h1');
     assert.equal(await page.textContent('.modal-card h1'), 'Welcome back!');
     await page.waitForTimeout(600);
@@ -172,7 +174,7 @@ try {
     party.kids[0].seenMastered = party.kids[0].tasks.map((t) => t.id);
     party.kids[0].lookbackSeen = s2.kids[0].lookbackSeen;
     await open(page, party);
-    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
     await page.waitForSelector('.quest-map.party');
     assert.match(await page.textContent('.family-banner'), /Family party/);
     await page.locator('.family-banner').scrollIntoViewIfNeeded();
@@ -186,7 +188,7 @@ try {
     const cheer = family({ benToday: 1 });
     for (const k of cheer.kids) { k.seenMastered = k.tasks.flatMap((t) => [t.id, `${t.id}#2`]); k.lookbackSeen = weekStart(today); }
     await open(page, cheer);
-    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
     await page.waitForSelector('.map-visitor.news .cheer-btn');
     assert.match(await page.textContent('.map-visitor.news .visitor-bubble'), /Just did 10 weeks in a row/);
     await page.waitForTimeout(500);
@@ -202,7 +204,7 @@ try {
     assert.equal(await page.$('.cheer-btn'), null);
     // Ben opens his map: Ava's buddy came to cheer
     await page.click('[data-action="home"]');
-    await page.click('[data-action="open-kid"][data-id="kid_ben"]');
+    await openKid(page, '[data-action="open-kid"][data-id="kid_ben"]');
     await page.waitForSelector('.map-visitor.cheering[data-id="kid_ava"]');
     assert.match(await page.textContent('.map-visitor.cheering .visitor-bubble'), /10 weeks in a row! Came to cheer/);
     await page.waitForSelector('.toast:has-text("Ava came to cheer for you")');
@@ -226,7 +228,7 @@ try {
     party.kids[0].lookbackSeen = weekStart(today);
     await open(page, party);
     await page.waitForTimeout(800);
-    await page.click('[data-action="open-kid"][data-id="kid_ava"]');
+    await openKid(page, '[data-action="open-kid"][data-id="kid_ava"]');
     await page.evaluate(() => { const b = document.querySelector('.family-banner'); window.scrollTo(0, b.getBoundingClientRect().top + window.scrollY - 10); });
     await page.waitForTimeout(6500);
     await ctx.close();

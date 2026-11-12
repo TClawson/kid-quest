@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -27,7 +28,7 @@ try {
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
-  await page.click('[data-action="open-kid"]');
+  await openKid(page, '[data-action="open-kid"]');
   // chores left: the buddy store stays shut
   if (!(await page.textContent('[data-action="wardrobe"]')).includes('🔒')) throw new Error('store button should show the lock');
   await page.click('[data-action="wardrobe"]');
@@ -42,13 +43,14 @@ try {
     localStorage.setItem('kidquest.v1', JSON.stringify(st));
   });
   await page.reload();
-  await page.click('[data-action="open-kid"]');
+  await openKid(page, '[data-action="open-kid"]');
   await page.click('[data-action="wardrobe"]');
   await page.click('[data-action="wardrobe-slot"][data-slot="hat"]');
   const cap = '[data-action="wardrobe-item"][data-id="hat-cap"]';
   assert.match(await page.textContent(cap), /Wearing/, 'the fox keeps the cap it had');
 
   // Switch to the bear: the cap comes off and has a price again; the ocean stays.
+  await page.click('[data-action="wardrobe-switch"]'); // the buddy picker opens on purpose
   await page.click('[data-action="wardrobe-species"][data-val="bear"]');
   assert.match(await page.textContent(cap), /🪙 40/);
   let s = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids[0]);
@@ -68,6 +70,7 @@ try {
   assert.equal(s.spent, -160);
 
   // Back to the fox: it puts its own cap back on.
+  await page.click('[data-action="wardrobe-switch"]'); // the buddy picker opens on purpose
   await page.click('[data-action="wardrobe-species"][data-val="fox"]');
   s = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids[0]);
   assert.deepEqual(s.buddy.outfit, { background: 'bg-ocean', hat: 'hat-cap' });

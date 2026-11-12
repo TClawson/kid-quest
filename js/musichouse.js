@@ -27,6 +27,7 @@ export const STATIONS = {
  *   lab: { open, left, waiting }: the same for the Note-o-Matic's screen (musicrules.js labOpen),
  *   hello: a line to say on the way in (a new look), or '',
  *   quests: quests left outside (for the door sign),
+ *   hud: markup laid over a corner of the room (the Today button), or '',
  * }
  */
 export function musicHouseHtml(m) {
@@ -46,6 +47,7 @@ export function musicHouseHtml(m) {
         <div class="h-sign">🎵 ${esc(m.kidName)}'s ${esc(info.name)}</div>
         <div class="v-dialog" hidden></div>
       </div>
+      ${m.hud || ''}
     </section>`;
 }
 

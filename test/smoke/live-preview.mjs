@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 mkdirSync(out, { recursive: true });
@@ -39,7 +40,7 @@ const caption = (text) => page.evaluate((t) => {
 
 await caption('Every buddy on the home screen is alive');
 await wait(3000);
-await page.click('[data-action="open-kid"] >> nth=0');
+await openKid(page, '[data-action="open-kid"] >> nth=0');
 await caption('Ava\'s fox: blinks, looks around, wags');
 await wait(3000);
 const box = await page.locator('.buddy-panel canvas.live-buddy').boundingBox();

@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2] || 'previews';
 fs.mkdirSync(out, { recursive: true });
@@ -20,6 +21,7 @@ try {
       const saved = emptyState();
       saved.settings.pinHash = 'sha256:test';
       saved.settings.sound = false;
+      saved.settings.questView = 'map'; // the old map (a new device starts in the village)
       const tasks = defaultTasks();
       const mk = (id, name, color, species) => ({ id, name, color, tasks, startDate: dateKey(), buddy: { species, outfit: { background: theme } } });
       saved.kids.push(mk('kid_ava', 'Ava', '#ff6b6b', 'fox'), mk('kid_ben', 'Ben', '#4dabf7', 'bear'), mk('kid_cy', 'Cy', '#69db7c', 'panda'));
@@ -28,7 +30,7 @@ try {
       saved.log = { [t]: { kid_ava: { tasks: { [tasks[0].id]: { status: 'done' }, [tasks[1].id]: { status: 'done' } } } } };
       await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
       await page.reload();
-      await page.click('[data-action="open-kid"]');
+      await openKid(page, '[data-action="open-kid"]');
       await page.waitForTimeout(400);
       const map = page.locator('.quest-map');
       await map.screenshot({ path: `${out}/map-${theme.slice(3)}-${label}.png` });

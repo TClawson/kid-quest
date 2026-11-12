@@ -140,11 +140,10 @@ input[type=checkbox] { accent-color: var(--brand); }
   .list-row:has(> .btn ~ .btn) > .grow { flex: 1 1 calc(100% - 70px); }
   .list-row:has(> .btn ~ .btn) > .btn { flex: 1 1 0; }
   /* task editor: icon and name get a full line, the move and delete buttons go below */
-  .task-edit > .row:first-child { flex-wrap: wrap; }
-  .task-edit > .row:first-child .grow { flex: 1 1 calc(100% - 80px); }
-  .task-edit > .row:first-child .btn.round:first-of-type { margin-left: auto; }
+  .task-edit > div.row:first-of-type { flex-wrap: wrap; }
+  .task-edit > div.row:first-of-type .grow { flex: 1 1 calc(100% - 80px); }
+  .task-edit > div.row:first-of-type .btn.round:first-of-type { margin-left: auto; }
   .tabs button { padding: 8px 10px; font-size: 0.95rem; }
-  .parent .tabs { display: grid; grid-template-columns: 1fr 1fr; }
   .tiles { grid-template-columns: minmax(0, 1fr); }
   .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .moves { grid-template-columns: repeat(2, minmax(0, 1fr)); }

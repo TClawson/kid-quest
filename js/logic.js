@@ -427,10 +427,10 @@ export function storeOpen(state, kid, today) {
   };
 }
 
-/** One line telling the kid why the store is shut (or that evening chores don't hold it). */
+/** One line telling the kid why the shop is shut (or that evening chores don't hold it). */
 export function storeLockText(lock) {
   if (lock.open) return '';
-  const why = lock.missed.length ? `${lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were'} missed last night, so today the store waits for every chore, evening ones too. ` : '';
+  const why = lock.missed.length ? `${lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were'} missed last night, so today the shop waits for every chore, evening ones too. ` : '';
   const what = lock.left ? `Finish today's chores first (${lock.left} to go${lock.evening ? ', not counting evening chores' : ''})` : `Opens when a parent approves your chores (${lock.waiting} waiting)`;
   return why + what;
 }
@@ -718,6 +718,142 @@ export function pendingApprovals(state, today, daysBack = 14) {
     }
   }
   return out;
+}
+
+/**
+ * One kid's day for the parents' Today view:
+ * - segments: one per quest chore today, 'done', 'waiting' or 'todo' (the bar)
+ * - done / waitingToday / toGo / total / complete / excused: today's quest chores
+ * - waiting: [{ key, task, record }] every chore waiting for a parent, today's
+ *   first, then earlier days (the same days pendingApprovals looks at)
+ * - todo: [{ task, record }] today's chores not done and not waiting, bonus exercise included
+ * - doneTasks: [{ task, record }] today's chores done, bonus exercise included
+ */
+export function kidToday(state, kid, today, daysBack = 14) {
+  const s = dayStatus(state, kid, today, today);
+  const entry = entryFor(state, kid.id, today);
+  const rec = (t) => entry?.tasks?.[t.id] || null;
+  const segments = s.tasks.map((t) => {
+    const st = rec(t)?.status;
+    return st === 'done' ? 'done' : st === 'pending' ? 'waiting' : 'todo';
+  });
+  const waiting = [];
+  for (let i = 0; i <= daysBack; i += 1) {
+    const key = addDays(today, -i);
+    for (const t of tasksForDay(state, kid, key, today)) {
+      const r = taskStatus(state, kid.id, key, t.id);
+      if (r?.status === 'pending') waiting.push({ key, task: t, record: r });
+    }
+  }
+  const todo = [];
+  const doneTasks = [];
+  for (const t of tasksForDay(state, kid, today, today)) {
+    const st = rec(t)?.status;
+    if (st === 'done') doneTasks.push({ task: t, record: rec(t) });
+    else if (st !== 'pending') todo.push({ task: t, record: rec(t) });
+  }
+  return {
+    segments,
+    total: s.total,
+    done: s.done,
+    waitingToday: s.pending,
+    toGo: s.total - s.done - s.pending,
+    complete: s.complete,
+    excused: s.excused,
+    waiting,
+    todo,
+    doneTasks,
+  };
+}
+
+/**
+ * The kid's own Today list: today's chores grouped the way the day goes, each in the kid's
+ * planned order, with what the list shows about it. Builds on kidToday (its counts and bar).
+ * - groups: { morning, afternoon, evening, exercise }: [{ task, record, state ('done', 'waiting'
+ *   or 'todo'), next, secondsLeft, cue, mastered }]. Evening chores (isEvening) are their own
+ *   group whatever their time of day; bonus exercise is last.
+ * - next: the id of the next quest: the first chore not done or waiting, mornings first, in
+ *   the kid's plan order (the village's next quest too), or null. Exercise is never next.
+ * - secondsLeft: for a timer chore not done yet, the seconds still to go, else null.
+ * - cue: the moment the kid picked for it in Plan my day, or ''; mastered: a habit star.
+ */
+export function todayQuests(state, kid, today) {
+  const day = kidToday(state, kid, today, 0);
+  const tasks = tasksForDay(state, kid, today, today);
+  const entry = entryFor(state, kid.id, today);
+  const habits = habitInfo(state, kid, today);
+  const quests = ['morning', 'afternoon'].flatMap((period) => planOrder(kid, questTasks(tasks).filter((t) => (period === 'morning' ? t.period === 'morning' : t.period !== 'morning'))));
+  const stateOf = (t) => { const st = entry?.tasks?.[t.id]?.status; return st === 'done' ? 'done' : st === 'pending' ? 'waiting' : 'todo'; };
+  const next = quests.find((t) => stateOf(t) === 'todo')?.id || null;
+  const item = (t) => {
+    const record = entry?.tasks?.[t.id] || null;
+    const st = stateOf(t);
+    return {
+      task: t,
+      record,
+      state: st,
+      next: t.id === next,
+      secondsLeft: st === 'todo' && t.minutes > 0 ? Math.max(0, t.minutes * 60 - (record?.seconds || 0)) : null,
+      cue: cueFor(kid, t),
+      mastered: Boolean(habits.get(t.id)?.mastered),
+    };
+  };
+  return {
+    ...day,
+    next,
+    groups: {
+      morning: quests.filter((t) => t.period === 'morning' && !isEvening(t)).map(item),
+      afternoon: quests.filter((t) => t.period !== 'morning' && !isEvening(t)).map(item),
+      evening: quests.filter(isEvening).map(item),
+      exercise: planOrder(kid, tasks.filter(isExercise)).map(item),
+    },
+  };
+}
+
+const copy = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Sets one chore's record on a day, the way every tick, approval and send-back
+ * does: value merges into the record, null removes it. Returns what is needed
+ * to undo exactly this change: { kidId, key, taskId, before, after }.
+ */
+export function applyTaskChange(state, kidId, key, taskId, value) {
+  const entry = entryFor(state, kidId, key, true);
+  entry.tasks ||= {};
+  const before = copy(entry.tasks[taskId]) ?? null;
+  if (value === null) delete entry.tasks[taskId];
+  else entry.tasks[taskId] = { ...(entry.tasks[taskId] || {}), ...value };
+  return { kidId, key, taskId, before, after: copy(entry.tasks[taskId]) ?? null };
+}
+
+/**
+ * Undoes changes made by applyTaskChange, newest first. Each field the change
+ * touched goes back to what it was, unless something else (another phone, the
+ * kid's timer) has changed the chore's status since: then that chore is left
+ * alone. Fields the change didn't touch (timer seconds that kept counting) stay.
+ * Returns how many chores were put back.
+ */
+export function undoTaskChanges(state, changes) {
+  let undone = 0;
+  for (const c of [...changes].reverse()) {
+    const entry = entryFor(state, c.kidId, c.key);
+    const now = entry?.tasks?.[c.taskId];
+    if ((now?.status ?? null) !== (c.after?.status ?? null)) continue;
+    const before = c.before || {};
+    const after = c.after || {};
+    const out = { ...(now || {}) };
+    for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      if (same(before[k], after[k]) || !same(out[k], after[k])) continue;
+      if (before[k] === undefined) delete out[k];
+      else out[k] = copy(before[k]);
+    }
+    if (!entry) continue;
+    if (c.before === null && !Object.keys(out).length) delete entry.tasks[c.taskId];
+    else entry.tasks[c.taskId] = out;
+    undone += 1;
+  }
+  return undone;
 }
 
 /** Simple non-cryptographic fallback hash, used only if WebCrypto is unavailable. */

@@ -9,6 +9,7 @@ import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, tasksForDay, fallbackHash } from '../../js/logic.js';
 import { TROPHIES } from '../../js/treasure.js';
+import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const TODAY = '2026-11-12';
@@ -18,6 +19,7 @@ const browser = await chromium.launch();
 function family({ yesterdayOpen = true } = {}) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
+  s.settings.questView = 'map'; // the old map (a new device starts in the village)
   s.settings.allowance = { on: false, coins: 300, xp: 300, bonus: 50, since: '2026-11-01' };
   const kid = { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks().map((t) => ({ ...t, verify: 'self' })), startDate: addDays(TODAY, -9), owned: ['bg-ocean'], spent: 0 };
   s.kids.push(kid);
@@ -50,7 +52,7 @@ async function open(viewport, saved, name) {
   await page.goto(site.url);
   await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), saved);
   await page.reload();
-  await page.click('[data-action="open-kid"]');
+  await openKid(page, '[data-action="open-kid"]');
   return { page, errors, ctx, name };
 }
 
@@ -61,6 +63,9 @@ try {
     const { page, errors, ctx } = await open({ width: 900, height: 1200 }, s);
     assert.ok(await page.isVisible('.map-node.chest.chest-silver'), 'a 10-day streak earns a silver chest');
     assert.equal(await page.isVisible('.late-chest'), false, "yesterday's chest was opened");
+    // A one-kid tablet opens straight on the kid's page, so a start-of-day pop-up can already be up: close it first.
+    await page.waitForTimeout(600);
+    while (await page.isVisible('#modal:not([hidden]) [data-action="modal-close"]')) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
     await page.click(`[data-action="task"][data-id="${last}"]`);
     await page.waitForTimeout(800);
     if (await page.isVisible('[data-action="modal-close"]')) await page.click('[data-action="modal-close"]');

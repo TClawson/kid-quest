@@ -16,6 +16,7 @@ import { pianoNotes, talking, concat, addNoise, room, wav, RATE } from '../helpe
 import { MEDIAPIPE, YAMNET } from '../../js/hear.js';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS;
 const site = await serve('.');
@@ -57,9 +58,11 @@ async function realPiano(names, gap) {
 
 /** The parent's listening test page. */
 async function openTest(page, mode) {
+  await toPicker(page);
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="settings"]');
+if (await page.locator('[data-action="test-tools"][aria-expanded="false"]').count()) await page.click('[data-action="test-tools"]'); // open Settings › Test tools
   await page.click('[data-action="listen-open"]');
   assert.equal(await page.getAttribute(`[data-action="listen-mode"][data-mode="${mode}"]`, 'aria-pressed'), 'true');
   await page.click('[data-action="listen-start"]');
@@ -69,7 +72,7 @@ async function openTest(page, mode) {
 
 /** Sam's piano timer (the task listens), started. */
 async function openTimer(page) {
-  await page.click('[data-action="open-kid"][data-id="kid_sam"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_sam"]');
   await page.click(`[data-action="task"][data-id="${PIANO}"]`);
   // no line under the buddy while all is well, and no metronome
   assert.equal(await page.isVisible('#ears-text'), false, 'no text before the timer starts');
@@ -262,10 +265,12 @@ try {
 
   // the parent setting: in the task editor, only for timer tasks
   await withMic(new Float32Array(RATE), { open: async (page) => {
+    await toPicker(page);
     await page.click('[data-action="parent"]');
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);
     await page.click('[data-action="tab"][data-tab="kids"]');
     await page.click('[data-action="edit-kid"][data-id="kid_ava"]');
+    await page.click('.task-edit .task-line:has-text("Piano")'); // each chore opens on tap
   } }, async (page) => {
     const listenBoxes = page.locator('[data-field="listen"]');
     assert.equal(await listenBoxes.count(), 1, 'one timer task, one switch');

@@ -1,8 +1,8 @@
 import {
   DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
   tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, rewardsToGive, markRewardGiven, storeOpen, storeLockText, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
-  defaultReward, parseReward, MAX_REWARD,
-  pendingApprovals, fallbackHash, pianoStreakInfo,
+  defaultReward, parseReward, MAX_REWARD, isEvening,
+  pendingApprovals, fallbackHash, pianoStreakInfo, kidToday, todayQuests, applyTaskChange, undoTaskChanges,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS, EXERCISE_KEEP_DAYS,
   defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
@@ -17,8 +17,10 @@ import { paintQuestMaps, mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
 import { dailySummaries } from './familygarden.js';
 import { bloomData, gardenLine } from './villagebloom.js';
-import { villageHtml, mountVillages, cameOut, cameOutOfMusic } from './village.js';
-import { houseHtml, mountHouses, cameIn } from './house.js';
+import { villageHtml, mountVillages, cameOut, cameOutOfMusic, placeVillagers, villagerName, villageGoal } from './village.js';
+import { villageLayout } from './villagemaps.js';
+import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
+import { todayHud, todayListHtml } from './today.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, tierInfo } from './musicrules.js';
@@ -57,7 +59,7 @@ import {
 } from './timer-ui.js';
 import {
   pendingRemote, setPendingRemote, loadCloud, onCloudStatus, startCloud, applyRemote,
-  familyCard, familyCreate, familyJoin, familyJoinGo, familyInvite, showCode, familyLeave,
+  familyCard, syncState, familyCreate, familyJoin, familyJoinGo, familyInvite, showCode, familyLeave,
 } from './sync-ui.js';
 import { showUnlocks, celebrateIfDue } from './celebrate.js';
 import { moveIds, gamesLeftFor, playableFor, visitPlan, gamesWith, pickGame, playWith } from './play-ui.js';
@@ -123,10 +125,14 @@ setSound(state.settings.sound);
 
 const ui = {
   view: state.settings.pinHash ? 'home' : 'setup',
+  autoKid: true, // on start, a device with one kid skips the picker (see render)
   kidId: null,
   taskId: null,
-  tab: 'approvals',
+  tab: 'today',
   editKidId: null,
+  todayOpen: new Set(), // kids whose card is open on the parents' Today tab
+  todayDone: new Set(), // kids whose done chores are shown there
+  openTask: null, // the one chore open in Edit kid
   historyDate: null,
   slot: 'hat',
   cheerUntil: 0,
@@ -538,11 +544,11 @@ function openTrophies(kid) {
 
 // ---------- task actions ----------
 
+// Returns what undoTaskChanges needs to put it back (a parent's tick, approval or send-back).
 function setTask(kid, key, task, value) {
-  const entry = entryFor(state, kid.id, key, true);
-  if (value === null) delete entry.tasks[task.id];
-  else entry.tasks[task.id] = { ...(entry.tasks[task.id] || {}), ...value };
+  const change = applyTaskChange(state, kid.id, key, task.id, value);
   save();
+  return change;
 }
 
 // day: the day the chore belongs to (a practice timer's day, when a parent signs off after midnight)
@@ -649,7 +655,7 @@ function viewSetup() {
       <div class="logo">⭐</div>
       <h1>Welcome to Kid Quest</h1>
       <p>Daily quests for chores and piano, with streaks and celebrations.</p>
-      <p class="muted">First, choose a 4-digit parent PIN. Kids will need a parent to type it to sign off tasks and change settings.</p>
+      <p class="muted">First, choose a 4-digit parent PIN. Kids will need a parent to type it to sign off chores and change settings.</p>
       <button class="btn huge" data-action="setup-pin">Choose parent PIN</button>
       <p class="muted small">Already set up Kid Quest on another device?</p>
       <button class="btn ghost" data-action="family-join">Join your family with a code</button>
@@ -657,16 +663,19 @@ function viewSetup() {
 }
 
 function viewHome() {
+  // a parent's phone also says how many of each kid's chores wait for a parent
+  const waiting = parentDevice() ? pendingApprovals(state, today()) : [];
   const cards = state.kids.map((kid) => {
     const { s, info } = kidSummary(kid);
     const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
+    const wait = waiting.filter((w) => w.kid.id === kid.id).length;
     return `
       <button class="kid-card" data-action="open-kid" data-id="${kid.id}" style="--kid:${kid.color}">
         ${buddyHtml(kid, moodFor(kid), 'md', { live: true })}
         <div class="kid-name">${esc(kid.name)}</div>
         <div class="streak ${info.streak ? '' : 'cold'}">🔥 ${info.streak} <small class="best" title="Best streak">🏆 ${info.best}</small></div>
         <div class="bar"><span style="width:${pct}%"></span></div>
-        <div class="muted">${s.complete ? 'Quest complete! 🌟' : `${s.done} of ${s.total} done`}</div>
+        <div class="muted">${s.complete ? 'Quest complete! 🌟' : `${s.done} of ${s.total} done`}${wait ? ` · <b class="kid-wait">${wait} waiting</b>` : ''}</div>
       </button>`;
   }).join('');
   return `
@@ -680,7 +689,7 @@ function viewHome() {
           <p>No kids yet. A parent needs to add them.</p>
         </div>`}
       <footer class="bottom">
-        <button class="btn ghost" data-action="parent">🔒 Parents${parentBadge() ? ` <span class="badge">${parentBadge()}</span>` : ''}</button>
+        <button class="btn ghost" data-action="parent">${parentDevice() ? '👪' : '🔒'} Parents${parentBadge() ? ` <span class="badge">${parentBadge()}</span>` : ''}</button>
       </footer>
     </div>`;
 }
@@ -820,7 +829,7 @@ function sendCheer(kid, v) {
 
 /** The first time a friend's buddy comes to cheer, it dances and the kid hears about it. */
 function greetCheers() {
-  if (ui.view !== 'kid' || state.settings.questView === 'list') return;
+  if (ui.view !== 'kid') return;
   const kid = kidById(ui.kidId);
   if (!kid) return;
   const fresh = [...cheersFor(kid)].filter(([from, c]) => !(kid.cheersSeen || []).includes(`${from}|${c.mid}`));
@@ -835,17 +844,24 @@ function greetCheers() {
 /** How the whole family is doing today, and whether the map should party. */
 const familyToday = () => familyDay(familyBuddies(), today());
 
+/**
+ * The village, unless this device picked the old map. A new device (no choice saved) gets the
+ * village; 'map' is the map, and so is 'list', which older versions saved for the map too.
+ */
+const villageOn = () => !['map', 'list'].includes(state.settings.questView);
+
 /** "Family: 8 of 10 chores done today" while there is more than one kid. */
 function familyBanner() {
   const all = familyBuddies();
   if (all.length < 2) return '';
   const f = familyDay(all, today());
   const goal = Math.round(FAMILY_GOAL * 100);
+  const where = villageOn() ? 'village' : 'map';
   const text = f.happy
     ? `🎉 Family party! Everyone's done ${Math.round(f.share * 100)}% of today's chores`
     : f.unknown
-      ? `👨‍👩‍👧‍👦 Family: ${f.done} chores done so far · when everyone gets to ${goal}%, the whole map celebrates`
-      : `👨‍👩‍👧‍👦 Family: ${f.done} of ${f.total} chores done · at ${goal}% the whole map celebrates`;
+      ? `👨‍👩‍👧‍👦 Family: ${f.done} chores done so far · when everyone gets to ${goal}%, the whole ${where} celebrates`
+      : `👨‍👩‍👧‍👦 Family: ${f.done} of ${f.total} chores done · at ${goal}% the whole ${where} celebrates`;
   return `<div class="family-banner ${f.happy ? 'happy' : ''}" data-action="family-party">${esc(text)}${f.happy ? '' : `<span class="bar"><span style="width:${Math.min(100, Math.round((f.share / FAMILY_GOAL) * 100))}%"></span></span>`}</div>`;
 }
 
@@ -861,7 +877,7 @@ const PARTY_MS = 5000;
 let partyDue = false;
 let partyDay = null; // the day the family party already started by itself on this screen
 function maybeParty() {
-  if (ui.view !== 'kid' || state.settings.questView === 'list') return;
+  if (ui.view !== 'kid') return;
   const happy = familyToday().happy;
   // when the family crosses the goal while the map is open, celebrate right then too
   const justNow = happy && partyDay !== today();
@@ -1068,25 +1084,53 @@ function questMap(kid, s, entry, mood) {
     </section>`;
 }
 
-// The village: the same chores as the map, as quests from villagers (see village.js).
-function villageView(kid, s, entry, mood) {
+/** A chore as a quest in the village (and its talk box): its state, its line and its plan step. */
+function questItem(kid, t, status, st, step = 0) {
+  let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'A parent checks this one' : 'Tap "I did it" when it\'s done';
+  if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
+    const sec = status?.seconds || 0;
+    const left = t.minutes * 60 - sec;
+    sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left on the timer` : `${t.minutes} minute timer`;
+  }
+  // bonus exercise says what it earns
+  if (isExercise(t) && st !== 'done' && taskGems(t)) sub += ` · earns ${taskGems(t)} 💎`;
+  const cue = cueFor(kid, t);
+  return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step, plan: cue ? planSentence(cue, t) : '' };
+}
+
+/** Today's quests as the village gives them: mornings first, each half in the kid's planned order; the first one to do is 'current'. */
+function questList(kid, s, entry) {
   const tasks = ['morning', 'afternoon'].flatMap((period) => planOrder(kid, s.tasks.filter((x) => x.period === period)));
   let current = false;
   // a kid who made their own plan sees its steps numbered, and the village follows them
   const planned = Boolean(kid.plan?.order?.length);
-  const list = tasks.map((t, i) => {
+  return tasks.map((t, i) => {
     const status = entry?.tasks?.[t.id];
     let st = status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo';
     if (st === 'todo' && !current) { st = 'current'; current = true; }
-    let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'A parent checks this one' : 'Tap "I did it" when it\'s done';
-    if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
-      const sec = status?.seconds || 0;
-      const left = t.minutes * 60 - sec;
-      sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left on the timer` : `${t.minutes} minute timer`;
-    }
-    const cue = cueFor(kid, t);
-    return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step: planned ? i + 1 : 0, plan: cue ? planSentence(cue, t) : '' };
+    return questItem(kid, t, status, st, planned ? i + 1 : 0);
   });
+}
+
+/** Today's bonus exercise, as the coach gives it (never 'current': it's a bonus, not the next quest). */
+function coachQuests(kid, entry) {
+  const t = today();
+  return planOrder(kid, tasksForDay(state, kid, t, t).filter(isExercise)).map((x) => {
+    const status = entry?.tasks?.[x.id];
+    return questItem(kid, x, status, status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo');
+  });
+}
+
+/** The ids of today's chores done in the kid's house (bed, teeth, floor), which villagers don't give out. */
+function houseQuestIds(kid) {
+  const hc = houseChores(state, kid, today());
+  return new Set(['bed', 'teeth', 'floor'].map((k) => hc[k]?.id).filter(Boolean));
+}
+
+// The village: the same chores as the map, as quests from villagers (see village.js).
+function villageView(kid, s, entry, mood) {
+  const list = questList(kid, s, entry);
+  const planned = Boolean(kid.plan?.order?.length);
   // the buddy's house: where the day starts, and wherever the kid left the buddy after that
   // (its house, the music house, or out in the village)
   const place = placeOf(kid.id, today());
@@ -1097,8 +1141,7 @@ function villageView(kid, s, entry, mood) {
   if (place === 'music' && tier) return musicView(kid, list, mood, tier);
   // chores linked to the house (bed, teeth, floor) are done in the house, not given out by
   // villagers; the house door shows what's still waiting in there
-  const hc = houseChores(state, kid, today());
-  const inHouse = new Set(['bed', 'teeth', 'floor'].map((k) => hc[k]?.id).filter(Boolean));
+  const inHouse = houseQuestIds(kid);
   const homeOpen = list.filter((q) => inHouse.has(q.id) && (q.st === 'todo' || q.st === 'current'));
   const homeNext = homeOpen.find((q) => q.st === 'current') || homeOpen[0];
   const home = homeOpen.length ? { left: homeOpen.length, icon: homeNext.icon, task: homeNext.name, step: homeNext.step, now: homeOpen.some((q) => q.st === 'current') } : null;
@@ -1126,7 +1169,15 @@ function villageView(kid, s, entry, mood) {
     garden: { thirsty: gardenThirsty(kid) },
     bloom: bloomData(gardenKids(), today()),
     today: today(),
+    coach: coachFor(kid, entry),
+    hud: kidHud(kid),
   });
+}
+
+/** The coach's quests (bonus exercise) and how the kid's strong weeks are going, or null with no exercise today. */
+function coachFor(kid, entry) {
+  const tasks = coachQuests(kid, entry);
+  return tasks.length ? { tasks, line: exWeekText(exerciseInfo(kid)) } : null;
 }
 
 // Which look of the music house each kid has seen on this device, so a new look is
@@ -1156,6 +1207,7 @@ function musicView(kid, list, mood, tier) {
     lab: labOpen(state, kid, today()),
     hello: musicHello(kid.id, tier),
     quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
+    hud: kidHud(kid),
   });
 }
 
@@ -1198,6 +1250,7 @@ function houseView(kid, list, mood) {
     fish: bookCount(kid.fishRecords).caught,
     garden: { thirsty: gardenThirsty(kid) },
     harvest: houseHarvest(state, kid, t),
+    hud: kidHud(kid),
   });
 }
 
@@ -1251,6 +1304,7 @@ function gardenScreen(kid, list, mood) {
     seeds: gardenOf(kid).seeds,
     theme: kidTheme(kid),
     today: t,
+    hud: kidHud(kid),
   });
 }
 
@@ -1495,8 +1549,141 @@ const villageHandlers = {
     cameInMusic(kid.id);
     render();
   },
+  onBuddy: (el) => actions['buddy-move'](el),
   sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
 };
+
+// ---------- the kid's Today button and Today's quests (markup in today.js) ----------
+// In the corner of the village (and the house, the garden and the music house): how many of
+// today's quests are left, and a list of all of them. The list is walk only: Go walks the buddy
+// to whoever gives the quest (into the house for the bed, teeth and floor, to the coach for
+// exercise) and the usual talk box takes it from there.
+
+/** The Today button, and the chest button beside it while an earlier day's chest is waiting. */
+function kidHud(kid) {
+  const t = today();
+  const d = kidToday(state, kid, t, 0);
+  const late = lateChest(kid);
+  return todayHud({
+    ...d,
+    waiting: d.waitingToday,
+    chest: late ? { key: late.key, html: chestSvg(late.tier.id, false, 2), when: late.key === addDays(t, -1) ? 'yesterday' : 'an earlier day' } : null,
+  });
+}
+
+/** Who gives each of today's chores: a villager's name, "In your house", or the coach. */
+function questGivers(kid) {
+  const t = today();
+  const s = dayStatus(state, kid, t, t);
+  const inHouse = houseQuestIds(kid);
+  const out = new Map([...inHouse].map((id) => [id, 'In your house']));
+  const list = questList(kid, s, entryFor(state, kid.id, t)).filter((q) => !inHouse.has(q.id));
+  for (const p of placeVillagers(list, villageLayout(kidTheme(kid)))) for (const q of p.tasks) out.set(q.id, villagerName(p.kind));
+  for (const x of tasksForDay(state, kid, t, t).filter(isExercise)) out.set(x.id, villagerName('coach'));
+  return out;
+}
+
+/** Why the shop is shut, in a few words (storeOpen's rules, the evening-chores one too). */
+function shopLine(lock) {
+  const n = (k, what) => `${k} ${what}${k === 1 ? '' : 's'}`;
+  if (lock.open) return '👕 The shop is open';
+  if (lock.left) return `🔒 Shop opens after ${n(lock.left, lock.evening ? 'more day quest' : 'more quest')}${lock.missed.length ? ' (evening ones count today)' : ''}`;
+  return `🔒 Shop opens when a parent checks ${lock.waiting === 1 ? 'your quest' : `${lock.waiting} quests`}`;
+}
+
+/** Everything the Today list shows (todayQuests in logic.js, in words). */
+function todayModel(kid) {
+  const t = today();
+  const q = todayQuests(state, kid, t);
+  const givers = questGivers(kid);
+  const lock = storeOpen(state, kid, t);
+  const ex = exerciseInfo(kid);
+  const sub = (it) => {
+    const x = it.task;
+    if (it.state === 'done') return givers.get(x.id) || '';
+    if (it.state === 'waiting') return 'Waiting for a parent';
+    const parts = [];
+    if (it.next) parts.push('Next up');
+    if (it.cue) parts.push(it.cue);
+    if (it.secondsLeft !== null) parts.push(it.secondsLeft <= 0 ? 'time done! Get a parent' : it.record?.seconds ? `${mmss(it.secondsLeft)} left on the timer` : `${x.minutes} minute timer`);
+    if (givers.get(x.id)) parts.push(givers.get(x.id));
+    if (x.verify === 'parent' && !(x.minutes > 0)) parts.push('a parent checks this one');
+    if (isExercise(x) && taskGems(x)) parts.push(`earns ${taskGems(x)} 💎`);
+    const line = parts.join(' · ');
+    return line.charAt(0).toUpperCase() + line.slice(1);
+  };
+  const rows = (list) => list.map((it) => ({
+    id: it.task.id, icon: it.task.icon, name: it.task.name, star: it.mastered, sub: sub(it), state: it.state, next: it.next,
+    action: it.state === 'todo' ? 'go' : it.state === 'waiting' ? 'ask' : '',
+  }));
+  const inHouse = houseQuestIds(kid);
+  const g = q.groups;
+  const groups = [
+    { id: 'morning', icon: '🌅', name: 'Morning', note: `by ${formatTime(state.settings.morningBy)}${g.morning.length && g.morning.every((it) => inHouse.has(it.task.id)) ? ' · in your house' : ''}`, list: g.morning },
+    { id: 'afternoon', icon: '☀️', name: 'After school', note: `by ${formatTime(state.settings.bedtime)}`, list: g.afternoon },
+    { id: 'evening', icon: '🌙', name: 'Evening', note: lock.missed.length ? 'counts for the shop today (one was missed last night)' : "doesn't keep the shop shut", list: g.evening },
+    { id: 'exercise', icon: '💪', name: 'Bonus exercise', note: ex.goal ? `${ex.thisWeek} of ${ex.goal} days this week` : 'an excused week', list: g.exercise },
+  ].filter((x) => x.list.length).map(({ list, ...x }) => ({ ...x, rows: rows(list) }));
+  const c = chestFor(kid, t);
+  const tier = `<b>${esc(c.tier.name.toLowerCase())}</b>`;
+  const chest = c.opened ? `🎁 Today's chest: ${esc(prizeText(c.opened, mapName).title)}`
+    : c.ready ? `🎁 Today's ${tier} is ready! Open it`
+      : !q.total ? '🎁 No quests today' : q.toGo ? `🎁 ${q.toGo} more for today's ${tier}` : `🎁 A parent checks ${q.waitingToday === 1 ? 'one quest' : `${q.waitingToday} quests`}, then today's ${tier}`;
+  const day = parseKey(t).toLocaleDateString(undefined, { weekday: 'long' });
+  return {
+    kidId: kid.id,
+    head: `${day} · ${q.excused ? 'day off' : `${q.done} of ${q.total} done`}${q.waitingToday ? ` · ${q.waitingToday} waiting for a parent` : ''}`,
+    groups,
+    chest: { text: chest, ready: c.ready },
+    shop: { open: lock.open, text: shopLine(lock) },
+  };
+}
+
+function openToday(kid) {
+  if (!kid) return;
+  openModal(todayListHtml(todayModel(kid)));
+  $modal.querySelector('.modal-card')?.classList.add('today-card');
+}
+
+/**
+ * Go, from the Today list: closes it and walks the buddy to whoever gives the quest, the talk
+ * box opening on arrival. A house chore walks in at the door; from indoors the buddy comes out
+ * (or goes in) first.
+ */
+function goQuest(kid, id) {
+  closeModal();
+  const t = today();
+  if (!kid || !taskById(kid, t, id)) return;
+  const hc = houseChores(state, kid, t);
+  const kind = ['bed', 'teeth', 'floor'].find((k) => hc[k]?.id === id);
+  const place = placeOf(kid.id, t);
+  const where = place === 'house' || place === 'garden' ? place : place === 'music' && musicTier(progressFor(kid)) ? 'music' : 'out';
+  if (kind) {
+    if (where === 'house') { $app.querySelector('.house:not(.music-house)')?.goChore?.(kind); return; }
+    houseGoal(kid.id, kind);
+    const village = where === 'out' && $app.querySelector('.village');
+    if (village?.goHome) { village.goHome(); return; }
+    setInside(kid.id, t, true);
+    cameIn(kid.id);
+    render();
+    return;
+  }
+  if (where === 'out' && $app.querySelector('.village')?.goTask?.(id)) return;
+  villageGoal(kid.id, { task: id });
+  setPlace(kid.id, t, 'out');
+  if (where === 'music') cameOutOfMusic(kid.id, kidTheme(kid)); else cameOut(kid.id, kidTheme(kid));
+  render();
+}
+
+/** How the strong weeks are going, in one line for the coach to say. */
+function exWeekText(ex) {
+  const left = (n) => `${n} more ${n === 1 ? 'day' : 'days'}`;
+  if (!ex.goal) return `This week is excused: your ${weeksLabel(ex.weeks)} wait for you. 🛡️`;
+  if (ex.status === 'strong') return `⭐ Strong week! You have ${weeksLabel(ex.weeks)}.`;
+  if (!ex.weeks) return `${left(ex.goal - ex.thisWeek)} of exercise this week makes a ⭐ strong week.`;
+  if (ex.status === 'safe') return `🛡️ Your ${weeksLabel(ex.weeks)} are safe. ${left(ex.goal - ex.thisWeek)} adds a ⭐.`;
+  return `${left(ex.keep - ex.thisWeek)} keeps your ${weeksLabel(ex.weeks)} safe 🛡️, and ${left(ex.goal - ex.thisWeek)} adds a ⭐.`;
+}
 
 function viewKid() {
   const kid = kidById(ui.kidId);
@@ -1508,7 +1695,7 @@ function viewKid() {
   const entry = entryFor(state, kid.id, t);
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
   const mood = moodFor(kid);
-  const villageMode = state.settings.questView === 'village';
+  const villageMode = villageOn();
   const newCount = (kid.newItems || []).length;
   const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
   const late = lateChest(kid);
@@ -1537,7 +1724,7 @@ function viewKid() {
           ${storeButton(kid, storeOpen(state, kid, t), newCount)}
         </div>
       </div>
-      ${exerciseSection(kid, exTasks, entry)}
+      ${villageMode ? '' : exerciseSection(kid, exTasks, entry)}
       <div class="view-toggle">
         <button class="${villageMode ? '' : 'on'}" data-action="quest-mode" data-mode="map">🗺️ Map</button>
         <button class="${villageMode ? 'on' : ''}" data-action="quest-mode" data-mode="village">🏘️ Village</button>
@@ -1652,14 +1839,14 @@ function exWeekHtml(ex) {
 }
 
 /** Bonus exercise: optional tiles that earn gems, and how the exercise week is going. */
-/** The kid page's store button, with a line saying why it's shut (or that evening chores can wait). */
+/** The kid page's shop button, with a line saying why it's shut (or that evening chores can wait). */
 function storeButton(kid, lock, newCount) {
   if (lock.open) {
-    return `<button class="btn ghost" data-action="wardrobe">👕 Dress up ${esc(kid.name)}'s buddy${newCount ? ` <span class="badge">new</span>` : ''}</button>`;
+    return `<button class="btn ghost" data-action="wardrobe">👕 Shop${newCount ? ` <span class="badge">new</span>` : ''}</button>`;
   }
-  const label = lock.missed.length ? "🔒 Buddy store opens when all of today's chores are done"
-    : lock.evening ? "🔒 Buddy store opens when today's day chores are done"
-      : "🔒 Buddy store opens when today's chores are done";
+  const label = lock.missed.length ? "🔒 Shop opens when all of today's chores are done"
+    : lock.evening ? "🔒 Shop opens when today's day chores are done"
+      : "🔒 Shop opens when today's chores are done";
   const note = lock.missed.length ? `<small class="muted store-why">${esc(lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were')} missed last night, so today evening chores count too.</small>`
     : lock.evening ? '<small class="muted store-why">Evening chores don\'t count.</small>' : '';
   return `<button class="btn ghost store-locked" data-action="wardrobe">${label}</button>${note}`;
@@ -1690,12 +1877,15 @@ function viewWardrobe() {
     <div class="screen wardrobe" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="wardrobe-back" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(kid.name)}'s buddy</b><small>Streak ${prog.streak} days · best ${prog.best}${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days (best ${prog.pianoBest})` : ''}</small></div>
+        <div class="kid-title"><b>👕 Shop</b><small>Streak ${prog.streak} days · best ${prog.best}${prog.pianoPerWeek ? ` · 🎹 Piano streak ${prog.piano} days (best ${prog.pianoBest})` : ''}</small></div>
       </header>
       <div class="wardrobe-top">
         <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, 'happy', 'lg', { live: true, feel: { valence: 0.8, arousal: 0.6 } })}</button>
         <div class="buddy-side">
-          <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
+          ${ui.speciesOpen
+    ? `<div class="pick species-pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
+          <button class="btn ghost small-btn switch-buddy" data-action="wardrobe-switch">Keep my ${esc(speciesName(kid.buddy.species).toLowerCase())}</button>`
+    : `<button class="btn ghost small-btn switch-buddy" data-action="wardrobe-switch">🔁 Switch buddy</button>`}
           ${sportTab ? `<p class="gem-line">💎 <b>${prog.gems}</b> gems to spend</p>
           <p class="muted">💪 <b>${esc(weeksLabel(prog.ex.weeks))}</b> (best ${prog.ex.best})</p>
           ${exWeekHtml(prog.ex)}` : `<p class="coin-line">🪙 <b>${prog.coins}</b> coins to spend</p>
@@ -1839,15 +2029,13 @@ function parentBadge() {
 }
 
 /**
- * Weekly rewards earned and not handed over yet. It sits above the tabs on
- * every parent tab until a parent taps Given, on any parent's phone.
+ * Weekly rewards earned and not handed over yet, one row each with a Given
+ * button. They sit under the strip at the top of Today (see rewardStrip) until
+ * a parent taps Given, on any parent's phone.
  */
-function rewardReminders() {
-  const t = today();
-  const due = rewardsToGive(state, t);
-  if (!due.length) return '';
+function rewardReminders(due) {
   const name = esc(state.settings.weeklyReward.trim());
-  const thisWeek = weekStart(t);
+  const thisWeek = weekStart(today());
   return `<section class="reward-remind">
       ${due.map(({ kid, monday }) => `
         <div class="list-row">
@@ -1856,6 +2044,19 @@ function rewardReminders() {
           <button class="btn" data-action="reward-given" data-kid="${kid.id}" data-monday="${monday}">✓ Given</button>
         </div>`).join('')}
     </section>`;
+}
+
+/** "3 Friday rewards to hand out · Ayden, Esther, Edison · See": one strip that opens the Given rows. */
+function rewardStrip() {
+  const due = rewardsToGive(state, today());
+  if (!due.length) return '';
+  const names = [...new Set(due.map((d) => d.kid.name))].join(', ');
+  return `<div class="reward-strip">
+      <span class="rs-icon" aria-hidden="true">🏆</span>
+      <span class="rs-text"><b>${due.length} Friday reward${due.length === 1 ? '' : 's'} to hand out</b><small>${esc(names)}</small></span>
+      <button class="btn ghost" data-action="rewards-see" aria-expanded="${Boolean(ui.showRewards)}">${ui.showRewards ? 'Hide' : 'See'}</button>
+    </div>
+    ${ui.showRewards ? rewardReminders(due) : ''}`;
 }
 
 /** A family device still showing its own saved copy: the server's hasn't arrived yet. */
@@ -1867,51 +2068,168 @@ function waitingForFamily(why) {
     <p class="muted small">${esc(why)}${off ? ' This device is offline: connect to the internet to continue.' : ''}</p></div>`;
 }
 
+/**
+ * A phone signed in to the family as a parent opens the parent area without the
+ * PIN. The role comes from the family's own records when the device joined
+ * (js/cloud.js joinFamily / findFamily), and a kid's device signs in without a
+ * Google account, so it can never be 'parent'. Kids' devices and devices not in
+ * a family keep the PIN.
+ */
+const parentDevice = () => cloudCfg?.role === 'parent' && !cloud.signedOut;
+
+const PARENT_TABS = [['today', '☀️', 'Today'], ['kids', '🧒', 'Kids'], ['history', '📅', 'Past days'], ['settings', '⚙️', 'Settings']];
+
 function viewParent() {
-  const pending = pendingApprovals(state, today());
-  const tabs = [
-    ['approvals', `Approvals${pending.length ? ` <span class="badge">${pending.length}</span>` : ''}`],
-    ['kids', 'Kids & tasks'],
-    ['history', 'Past days'],
-    ['settings', 'Settings'],
-  ];
+  const t = today();
+  const waiting = pendingApprovals(state, t);
+  if (!PARENT_TABS.some(([id]) => id === ui.tab)) ui.tab = 'today';
   let body = '';
-  if (ui.tab === 'approvals') body = parentApprovals(pending);
-  else if (ui.tab === 'kids') body = familyBehind() ? waitingForFamily('Kids and tasks open once this phone has the family’s latest copy, so an older list here can’t undo changes made on another phone.') : ui.editKidId ? parentEditKid() : parentKids();
+  if (ui.tab === 'kids') body = familyBehind() ? waitingForFamily('Kids and chores open once this phone has the family’s latest copy, so an older list here can’t undo changes made on another phone.') : ui.editKidId ? parentEditKid() : parentKids();
   else if (ui.tab === 'history') body = parentHistory();
-  else body = parentSettings();
+  else if (ui.tab === 'settings') body = parentSettings();
+  else body = parentToday();
+  const title = PARENT_TABS.find(([id]) => id === ui.tab)[2];
+  const meta = [parseKey(t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }), syncState()].filter(Boolean).join(' · ');
   return `
-    <div class="screen parent">
-      <header class="top row">
-        <h1>Parent area</h1>
-        <button class="btn" data-action="parent-exit">Done</button>
+    <div class="screen parent tab-${ui.tab}">
+      <header class="phead">
+        <div class="phead-title"><h1>${esc(title)}</h1><small class="muted">${esc(meta)}</small></div>
+        <button class="btn ghost" data-action="parent-exit" aria-label="Done: back to the kids">Done</button>
       </header>
-      ${rewardReminders()}
-      <nav class="tabs">${tabs.map(([id, label]) => `<button class="${ui.tab === id ? 'on' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav>
       ${body}
+      ${ui.tab === 'today' && waiting.length ? approveAllBar(waiting) : ''}
+      <nav class="pnav" aria-label="Parents">
+        <div class="pnav-in">
+          ${PARENT_TABS.map(([id, icon, label]) => `<button class="${ui.tab === id ? 'on' : ''}" data-action="tab" data-tab="${id}" ${ui.tab === id ? 'aria-current="page"' : ''}><i aria-hidden="true">${icon}</i><span>${label}</span>${id === 'today' && waiting.length ? `<span class="nb" aria-label="${waiting.length} waiting">${waiting.length}</span>` : ''}</button>`).join('')}
+        </div>
+      </nav>
     </div>`;
 }
 
-// "· 12 min in other apps" when some of a timer ran while the kid was in another app.
-function awayNote(kid, key, task) {
-  const away = entryFor(state, kid.id, key)?.tasks?.[task.id]?.away || 0;
+/** "Approve all 4 · 1 from earlier days", fixed above the navigation. */
+function approveAllBar(waiting) {
+  const earlier = waiting.filter((w) => w.key !== today()).length;
+  return `<div class="approve-bar"><div class="approve-bar-in">
+      <button class="btn approve-all" data-action="approve-all"><b>✓ Approve all ${waiting.length}</b>${earlier ? `<small>· ${earlier} from earlier days</small>` : ''}</button>
+    </div></div>`;
+}
+
+// "7 min in other apps" when some of a timer ran while the kid was in another app.
+function awayText(record) {
+  const away = record?.away || 0;
+  if (!away) return '';
   const min = Math.round(away / 60);
-  return away ? ` · ${min || '<1'} min in other apps` : '';
+  return `${min || '<1'} min in other apps`;
 }
 
-function parentApprovals(pending) {
-  if (!pending.length) return '<div class="empty"><p>Nothing to check right now. 🎉</p></div>';
-  return `
-    <div class="row end"><button class="btn" data-action="approve-all">Approve all (${pending.length})</button></div>
-    <div class="list">
-      ${pending.map(({ key, kid, task }) => `
-        <div class="list-row">
-          ${buddyChip(kid)}
-          <div class="grow"><b>${esc(kid.name)}: ${esc(task.icon)} ${esc(task.name)}</b><small class="muted">${esc(friendlyDate(key))}${task.minutes ? ` · ${task.minutes} min timer finished${awayNote(kid, key, task)}` : ''}</small></div>
-          <button class="btn ghost" data-action="send-back" data-kid="${kid.id}" data-key="${key}" data-task="${task.id}">Send back</button>
-          <button class="btn" data-action="approve" data-kid="${kid.id}" data-key="${key}" data-task="${task.id}">Approve</button>
-        </div>`).join('')}
+/** "Asked 20 min ago", or the time for anything older than an hour. */
+function askedWhen(at) {
+  if (!at) return '';
+  const min = Math.round((Date.now() - at) / 60000);
+  if (min < 1) return 'Asked just now';
+  if (min < 60) return `Asked ${min} min ago`;
+  return `Asked at ${new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+/** The kid's buddy in a small framed picture, with its background. */
+const buddyPic = (kid) => `<span class="kc-pic">${buddySvg(dressed(kid), moodFor(kid))}</span>`;
+
+const periodName = (task) => (isExercise(task) ? 'Bonus exercise' : isEvening(task) ? 'Evening' : task.period === 'afternoon' ? 'After school' : 'Morning');
+
+/** One chore waiting for a parent: when it was asked, timer details, Send back and Approve. */
+function waitRow(kid, { key, task, record }) {
+  const t = today();
+  const bits = [];
+  if (key !== t) bits.push(`From <b>${key === addDays(t, -1) ? 'yesterday' : esc(friendlyDate(key))}</b>`);
+  if (task.minutes) bits.push(`${task.minutes} min done`);
+  const away = awayText(record);
+  if (away) bits.push(esc(away));
+  if (key === t && !task.minutes && record?.at) bits.push(esc(askedWhen(record.at)));
+  if (!bits.length) bits.push('Waiting for a parent');
+  const data = `data-kid="${kid.id}" data-key="${key}" data-task="${task.id}"`;
+  return `<div class="pr wait">
+      <span class="ic" aria-hidden="true">${esc(task.icon)}</span>
+      <span class="tx"><b>${esc(task.name)}</b><small>${bits.join(' · ')}</small></span>
+      <button class="btn ghost mini" data-action="send-back" ${data} aria-label="Send back ${esc(task.name)}" title="Send back">↩</button>
+      <button class="btn go" data-action="approve" ${data}>✓ Approve</button>
     </div>`;
+}
+
+/** A chore not done yet today, with a big tick box: one tap marks it done by a parent. */
+function todoRow(kid, { task, record }) {
+  let sub;
+  if (isExercise(task)) sub = `Bonus exercise · earns 💎${task.minutes ? ` · ${task.minutes} min` : ''}`;
+  else if (task.minutes) sub = record?.seconds ? `${Math.min(task.minutes, Math.floor(record.seconds / 60))} of ${task.minutes} min on the timer` : `${task.minutes} min timer`;
+  else if (task.verify === 'parent') sub = 'Needs a parent check';
+  else sub = periodName(task);
+  return `<div class="pr">
+      <span class="ic" aria-hidden="true">${esc(task.icon)}</span>
+      <span class="tx"><b>${esc(task.name)}</b><small>${esc(sub)}</small></span>
+      <button class="box" data-action="today-tick" data-kid="${kid.id}" data-task="${task.id}" aria-label="Mark ${esc(task.name)} done for ${esc(kid.name)}"></button>
+    </div>`;
+}
+
+function doneRow(kid, { task, record }) {
+  const by = record?.by === 'parent' ? 'Done · ticked by a parent' : 'Done';
+  return `<div class="pr done">
+      <span class="ic" aria-hidden="true">${esc(task.icon)}</span>
+      <span class="tx"><b>${esc(task.name)}</b><small>${by}</small></span>
+      <button class="tick" data-action="today-untick" data-kid="${kid.id}" data-task="${task.id}" aria-label="Un-tick ${esc(task.name)} for ${esc(kid.name)}">✓</button>
+    </div>`;
+}
+
+/** "4 done · 2 waiting · 3 to go", or "All 7 done 🌟 · chest opened". */
+function todayLine(kid, d) {
+  const waiting = d.waiting.length ? `<b>${d.waiting.length} waiting</b>` : '';
+  if (d.excused) return ['Excused today 💤', waiting].filter(Boolean).join(' · ');
+  if (!d.total) return ['No chores today', waiting].filter(Boolean).join(' · ');
+  if (d.complete) {
+    const chest = entryFor(state, kid.id, today())?.chest ? 'chest opened' : 'chest not opened yet';
+    return [`All ${d.total} done 🌟`, waiting, chest].filter(Boolean).join(' · ');
+  }
+  return [`${d.done} done`, waiting, d.toGo ? `${d.toGo} to go` : ''].filter(Boolean).join(' · ');
+}
+
+/** One kid's card on Today: the day at a glance, what waits for a parent, and (opened) every chore left. */
+function todayCard(kid) {
+  const t = today();
+  const d = kidToday(state, kid, t);
+  const open = ui.todayOpen.has(kid.id);
+  const showDone = ui.todayDone.has(kid.id);
+  let inside = '';
+  if (open) {
+    const w = weekEarnings(state, kid, t);
+    inside = `
+      ${d.todo.map((x) => todoRow(kid, x)).join('')}
+      ${!d.todo.length && !d.waiting.length ? '<p class="kc-note">Nothing left to tick today.</p>' : ''}
+      ${d.doneTasks.length ? `<button class="more" data-action="today-show-done" data-kid="${kid.id}" aria-expanded="${showDone}">
+        <span class="more-list">✓ ${d.doneTasks.length} done: <span class="more-icons" aria-hidden="true">${d.doneTasks.map((x) => esc(x.task.icon)).join(' ')}</span></span>
+        <span class="more-link">${showDone ? 'Hide' : 'Show'}</span></button>` : ''}
+      ${showDone ? d.doneTasks.map((x) => doneRow(kid, x)).join('') : ''}
+      <div class="kc-actions">
+        <button class="btn ghost" data-action="bonus" data-kid="${kid.id}" ${w.bonusLeft ? '' : 'disabled'}>🎁 Bonus</button>
+        <button class="btn ghost ${d.excused ? 'on' : ''}" data-action="today-excuse" data-kid="${kid.id}" aria-pressed="${d.excused}">😷 ${d.excused ? 'Excused' : 'Excuse'}</button>
+        <button class="btn ghost" data-action="today-chores" data-kid="${kid.id}">✏️ Chores</button>
+      </div>`;
+  }
+  return `
+    <section class="kc ${open ? 'open' : ''}" style="--kid:${kid.color}" data-kid="${kid.id}">
+      <button class="kc-top" data-action="today-kid" data-kid="${kid.id}" aria-expanded="${open}">
+        ${buddyPic(kid)}
+        <span class="nm"><b>${esc(kid.name)}</b><small>${todayLine(kid, d)}</small></span>
+        <span class="chev" aria-hidden="true">${open ? '▲' : '▼'}</span>
+      </button>
+      ${d.segments.length ? `<div class="seg" role="img" aria-label="${d.done} of ${d.total} done, ${d.waitingToday} waiting">${d.segments.map((s) => `<i class="${s}"></i>`).join('')}</div>` : ''}
+      ${d.waiting.map((x) => waitRow(kid, x)).join('')}
+      ${inside}
+    </section>`;
+}
+
+function parentToday() {
+  if (!state.kids.length) return '<div class="empty"><p>No kids yet. Add them in Kids.</p></div>';
+  return `
+    ${rewardStrip()}
+    <div class="today-list">${state.kids.map(todayCard).join('')}</div>`;
 }
 
 function parentKids() {
@@ -1921,7 +2239,7 @@ function parentKids() {
     <div class="list">
       ${state.kids.map((kid) => {
     const w = weekEarnings(state, kid, t);
-    const week = w.allowance ? `🪙 ${w.coins} of ${w.allowance.coins} this week${w.bonus ? ` + ${w.bonus} bonus` : ''}` : `${kid.tasks.length} tasks${w.bonus ? ` · ${w.bonus} bonus this week` : ''}`;
+    const week = w.allowance ? `🪙 ${w.coins} of ${w.allowance.coins} this week${w.bonus ? ` + ${w.bonus} bonus` : ''}` : `${kid.tasks.length} chores${w.bonus ? ` · ${w.bonus} bonus this week` : ''}`;
     const reward = state.settings.weeklyReward?.trim() && weeklyRewardInfo(state, kid, t).earned
       ? ` · 🏆 earned ${state.settings.weeklyReward.trim()}${kid.rewardsGiven?.[weekStart(t)] ? ' (given)' : ''}` : '';
     return `
@@ -1951,16 +2269,41 @@ function dayChips(task) {
   return [1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="daychip ${task.days.includes(d) ? 'on' : ''}" data-action="toggle-day" data-task="${task.id}" data-day="${d}">${DAY_NAMES[d]}</button>`).join('');
 }
 
-// "About 6 🪙 and 6 XP each time": this week's share of the allowance, from the setup as it is now.
-function payNote(kid, task) {
+// This week's share of the allowance for a chore, from the setup as it is now: { coins, xp } or null when it isn't on this week.
+function payAverage(kid, task) {
   const days = [];
   const monday = weekStart(today());
   for (let i = 0; i < 7; i += 1) days.push(addDays(monday, i));
   const on = days.filter((d) => task.days.includes(parseKey(d).getDay()) && onWeek(task, d));
-  if (!on.length) return isEveryOtherWeek(task) ? 'Off this week' : 'Not on any day';
+  if (!on.length) return null;
   const pays = on.map((d) => taskPay(state, kid, d, task, d));
   const avg = (f) => Math.round(pays.reduce((n, p) => n + p[f], 0) / pays.length);
-  return `About ${avg('coins')} 🪙 and ${avg('xp')} XP each time`;
+  return { coins: avg('coins'), xp: avg('xp') };
+}
+
+// "About 6 🪙 and 6 XP each time"
+function payNote(kid, task) {
+  const p = payAverage(kid, task);
+  if (!p) return isEveryOtherWeek(task) ? 'Off this week' : 'Not on any day';
+  return `About ${p.coins} 🪙 and ${p.xp} XP each time`;
+}
+
+/** "Mon–Fri", "Every day", "Sat"... for a chore's one-line summary. */
+function daysLabel(days) {
+  const set = [...new Set(days)].sort();
+  if (!set.length) return 'No days';
+  if (set.length === 7) return 'Every day';
+  if (set.join() === '1,2,3,4,5') return 'Mon–Fri';
+  if (set.join() === '0,6') return 'Weekends';
+  return [1, 2, 3, 4, 5, 6, 0].filter((d) => set.includes(d)).map((d) => DAY_NAMES[d]).join(', ');
+}
+
+/** What a chore earns, in a few characters: "6 🪙", "about 6 🪙" with the allowance, "10 💎" for exercise. */
+function payShort(kid, task, allowance) {
+  if (isExercise(task)) return `${taskGems(task)} 💎`;
+  if (!allowance) return `${taskCoins(task)} 🪙`;
+  const p = payAverage(kid, task);
+  return p ? `~${p.coins} 🪙` : 'off';
 }
 
 const sameTask = (a, b) => a.name.trim().toLowerCase() === b.name.trim().toLowerCase();
@@ -2006,11 +2349,21 @@ function parentEditKid() {
   if (!kid) { ui.editKidId = null; return parentKids(); }
   const allowance = allowanceFor(state, kid);
   const fam = state.settings.allowance;
-  const taskRows = (period) => kid.tasks.filter((t) => t.period === period).map((t) => `
-    <div class="task-edit" data-task="${t.id}">
+  // each chore is one line (icon, name, when, pay); tapping it opens all its settings, one at a time
+  const taskLine = (t, open) => `
+      <button class="task-line" data-action="task-open" data-task="${t.id}" aria-expanded="${open}">
+        <span class="tl-icon" aria-hidden="true">${esc(t.icon)}</span>
+        <span class="tl-text"><b>${esc(t.name)}</b><small>${esc([isEvening(t) ? 'Evening' : isExercise(t) ? '' : periodName(t), daysLabel(t.days), isEveryOtherWeek(t) ? 'every other week' : '', t.minutes > 0 ? `${t.minutes} min timer` : ''].filter(Boolean).join(' · '))}</small></span>
+        <span class="tl-pay">${esc(payShort(kid, t, allowance))}</span>
+        <span class="chev" aria-hidden="true">${open ? '▲' : '▼'}</span>
+      </button>`;
+  const taskRows = (period) => kid.tasks.filter((t) => t.period === period).map((t) => (ui.openTask !== t.id ? `
+    <div class="task-edit closed" data-task="${t.id}">${taskLine(t, false)}</div>` : `
+    <div class="task-edit open" data-task="${t.id}">
+      ${taskLine(t, true)}
       <div class="row">
         <input class="icon-input" data-field="icon" value="${esc(t.icon)}" aria-label="Icon">
-        <input class="grow" data-field="name" value="${esc(t.name)}" aria-label="Task name">
+        <input class="grow" data-field="name" value="${esc(t.name)}" aria-label="Chore name">
         <button class="btn ghost round" data-action="move-task" data-task="${t.id}" data-dir="-1" aria-label="Move up">↑</button>
         <button class="btn ghost round" data-action="move-task" data-task="${t.id}" data-dir="1" aria-label="Move down">↓</button>
         <button class="btn ghost round danger-text" data-action="delete-task" data-task="${t.id}" aria-label="Delete">✕</button>
@@ -2029,7 +2382,7 @@ function parentEditKid() {
         <label class="row"><input type="checkbox" data-field="listen" ${t.listen ? 'checked' : ''}> Listen to the piano</label>` : ''}
       </div>
       ${t.evening && !isExercise(t) ? '<small class="muted task-hint">Evening chores don\'t keep the buddy store shut, so the store can open after the day chores. If one is missed, the next day the store waits for every chore, evening ones too.</small>' : ''}
-      ${t.minutes > 0 && t.listen ? '<small class="muted task-hint">While the timer runs, the buddy listens and dances to the playing. With no piano for 30 seconds it gets bored; after a minute it falls asleep and the timer pauses until the piano starts again. It uses the microphone only on the timer screen, and nothing is recorded. Try it in Settings › Piano listening test.</small>' : ''}
+      ${t.minutes > 0 && t.listen ? '<small class="muted task-hint">While the timer runs, the buddy listens and dances to the playing. With no piano for 30 seconds it gets bored; after a minute it falls asleep and the timer pauses until the piano starts again. It uses the microphone only on the timer screen, and nothing is recorded. Try it in Settings › Test tools › Piano listening test.</small>' : ''}
       ${isExercise(t) ? `<div class="row wrap reward-edit">
         <label>Earns 💎 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="gems" value="${Number.isFinite(t.gems) ? t.gems : ''}" placeholder="${DEFAULT_GEMS}" class="num" aria-label="Gems earned"> gems</label>
         <label>and <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="xp" value="${Number.isFinite(t.xp) ? t.xp : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="XP earned"> XP</label>
@@ -2040,7 +2393,7 @@ function parentEditKid() {
         <label>Earns 🪙 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="coins" value="${Number.isFinite(t.coins) ? t.coins : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="Coins earned"> coins</label>
         <label>and <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="xp" value="${Number.isFinite(t.xp) ? t.xp : ''}" placeholder="${defaultReward(t)}" class="num" aria-label="XP earned"> XP</label>
       </div>`}
-    </div>`).join('');
+    </div>`)).join('');
   return `
     <div class="row"><button class="btn ghost" data-action="edit-kid-done">← All kids</button></div>
     <div class="card">
@@ -2052,23 +2405,23 @@ function parentEditKid() {
           <label>🪙 <input type="number" min="0" step="10" class="num" data-kidallow="coins" value="${Number.isFinite(kid.allowance?.coins) ? kid.allowance.coins : ''}" placeholder="${fam.coins}" aria-label="Coins a week"> coins</label>
           <label><input type="number" min="0" step="10" class="num" data-kidallow="xp" value="${Number.isFinite(kid.allowance?.xp) ? kid.allowance.xp : ''}" placeholder="${fam.xp}" aria-label="XP a week"> XP a week</label>
         </div>
-        <small class="muted allow-help">Leave empty to use the family's amount (Settings). A perfect week earns exactly this, split across ${esc(kid.name)}'s tasks by size.</small>
+        <small class="muted allow-help">Leave empty to use the family's amount (Settings). A perfect week earns exactly this, split across ${esc(kid.name)}'s chores by size.</small>
       </div>` : ''}
     </div>
-    <h2>🌅 Morning tasks</h2>
+    <h2>🌅 Morning chores</h2>
     ${taskRows('morning')}
-    <button class="btn ghost" data-action="add-task" data-period="morning">+ Add morning task</button>
+    <button class="btn ghost" data-action="add-task" data-period="morning">+ Add morning chore</button>
     ${houseAdds(kid)}
-    <h2>☀️ After-school tasks</h2>
+    <h2>☀️ After-school chores</h2>
     ${taskRows('afternoon')}
-    <button class="btn ghost" data-action="add-task" data-period="afternoon">+ Add after-school task</button>
+    <button class="btn ghost" data-action="add-task" data-period="afternoon">+ Add after-school chore</button>
     <h2>💪 Bonus exercise</h2>
     ${taskRows('exercise') || '<p class="muted small">None yet. Add a run, a bike ride, soccer practice or anything active.</p>'}
-    <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise task</button>
-    <p class="muted small">Exercise tasks are optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week (Monday to Sunday) makes a "strong week", and strong weeks unlock moves for the kid's buddy at 1, 3 and 6. A week with exactly ${EXERCISE_KEEP_DAYS} exercise days keeps the count without adding to it, and a week with fewer takes one strong week away. Moves already unlocked are never taken away. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day for each mark, and a week with ${EXERCISE_DAYS} or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
-    <p class="muted small">🏠 House chores show in ${esc(kid.name)}'s buddy house in the village: an unmade bed until “Make bed” is done, the toothbrush out until the morning “Brush teeth” is done, and a messy floor until “Pick up bedroom floor” is done (messier after 2 days, very messy after 4). Pick which task is which with “House chore”, or add one ready-made. Each can be linked to one task at a time. Tasks that aren't linked don't change the house.</p>
-    <p class="muted small">A task can repeat every other week (weeks run Monday to Sunday). To have two kids take turns, like cleaning the bathroom, set the task to every other week for one kid, then tap the other kid's name next to “Take turns with”: they get the same task on the opposite weeks. On a kid's off week the task isn't on their list at all, so it never counts against their streak or the day's treasure.</p>
-    <p class="muted small">Changes apply from today. Past days keep the tasks they had. A timer task (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. ${allowance ? `${esc(kid.name)} earns up to ${allowance.coins} coins and ${allowance.xp} XP a week. It is split across the week's tasks by size: a big task is worth 3 small ones, a medium one 2. A kid with more tasks doesn't earn more, each task is just worth a little less, and a missed task loses its share. Exercise is extra: it earns gems and its own XP.` : 'Each task earns 10 coins and 10 XP (30 for a timer task) unless you type other amounts; leave a box empty to use the default.'} Changes count from today, so coins already earned stay earned. Every 100 XP is a level.</p>
+    <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise</button>
+    <p class="muted small">Exercise is optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week (Monday to Sunday) makes a "strong week", and strong weeks unlock moves for the kid's buddy at 1, 3 and 6. A week with exactly ${EXERCISE_KEEP_DAYS} exercise days keeps the count without adding to it, and a week with fewer takes one strong week away. Moves already unlocked are never taken away. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day for each mark, and a week with ${EXERCISE_DAYS} or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
+    <p class="muted small">🏠 House chores show in ${esc(kid.name)}'s buddy house in the village: an unmade bed until “Make bed” is done, the toothbrush out until the morning “Brush teeth” is done, and a messy floor until “Pick up bedroom floor” is done (messier after 2 days, very messy after 4). Pick which chore is which with “House chore”, or add one ready-made. Each can be linked to one chore at a time. Chores that aren't linked don't change the house.</p>
+    <p class="muted small">A chore can repeat every other week (weeks run Monday to Sunday). To have two kids take turns, like cleaning the bathroom, set the chore to every other week for one kid, then tap the other kid's name next to “Take turns with”: they get the same chore on the opposite weeks. On a kid's off week the chore isn't on their list at all, so it never counts against their streak or the day's treasure.</p>
+    <p class="muted small">Changes apply from today. Past days keep the chores they had. A timer chore (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. ${allowance ? `${esc(kid.name)} earns up to ${allowance.coins} coins and ${allowance.xp} XP a week. It is split across the week's chores by size: a big chore is worth 3 small ones, a medium one 2. A kid with more chores doesn't earn more, each chore is just worth a little less, and a missed chore loses its share. Exercise is extra: it earns gems and its own XP.` : 'Each chore earns 10 coins and 10 XP (30 for a timer chore) unless you type other amounts; leave a box empty to use the default.'} Changes count from today, so coins already earned stay earned. Every 100 XP is a level.</p>
     <hr>
     <button class="btn danger" data-action="delete-kid">Remove ${esc(kid.name)}</button>`;
 }
@@ -2097,7 +2450,7 @@ function parentHistory() {
         <label class="row"><input type="checkbox" data-action-change="history-excuse" data-kid="${kid.id}" data-key="${key}" ${s.excused ? 'checked' : ''}> Excused day (sick, travel, recital). The streak is kept.</label>
       </div>`;
   }).join('')}
-    <p class="muted small">Streaks update right away, so approving yesterday's tasks late keeps the streak.</p>`;
+    <p class="muted small">Streaks update right away, so approving yesterday's chores late keeps the streak.</p>`;
 }
 
 function parentSettings() {
@@ -2108,7 +2461,7 @@ function parentSettings() {
       <label class="block">Weekly reward (on Friday, for a kid who did every chore Monday to Friday; excused days don't count against it)
         <input data-setting="weeklyReward" value="${esc(st.weeklyReward)}"></label>
       <div class="row wrap">
-        <label>Morning tasks by <input type="time" data-setting="morningBy" value="${esc(st.morningBy)}"></label>
+        <label>Morning chores by <input type="time" data-setting="morningBy" value="${esc(st.morningBy)}"></label>
         <label>Everything by <input type="time" data-setting="bedtime" value="${esc(st.bedtime)}"></label>
       </div>
       <div class="block">Reminder times
@@ -2122,6 +2475,29 @@ function parentSettings() {
       <label class="row"><input type="checkbox" data-setting-bool="sound" ${st.sound ? 'checked' : ''}> Sounds on</label>
     </div>
 ${allowanceCard()}
+${printCardHtml()}
+    <div class="card">
+      <h2>Parent PIN</h2>
+      ${parentDevice() ? '<p class="muted small">This phone is signed in to the family as a parent, so it opens Parents without the PIN. Kids’ devices still ask for it.</p>' : ''}
+      <button class="btn ghost" data-action="change-pin">Change PIN</button>
+    </div>
+    <div class="card">
+      <h2>Backup</h2>
+      ${backupText()}
+    </div>
+    ${familyCard()}
+    <div class="card test-tools">
+      <button class="test-tools-row" data-action="test-tools" aria-expanded="${Boolean(ui.testTools)}">
+        <span class="grow"><b>🧪 Test tools</b><small class="muted">Try the games, the studio, the Note-o-Matic and the seasons, test piano listening, save a test recording. The kids' progress is not touched.</small></span>
+        <span class="chev" aria-hidden="true">${ui.testTools ? '▲' : '▼'}</span>
+      </button>
+    </div>
+    ${ui.testTools ? testTools() : ''}`;
+}
+
+/** Settings › Test tools: shown only once the row is opened. */
+function testTools() {
+  return `
 ${gameTestCard()}
     <div class="card studio-test">
       <h2>🎚️ Try the recording studio</h2>
@@ -2136,31 +2512,33 @@ ${gameTestCard()}
 ${seasonTestCard()}
     <div class="card">
       <h2>🎹 Piano listening test</h2>
-      <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that task in Kids &amp; tasks. Nothing is recorded or saved.</p>
+      <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that chore in Kids. Nothing is recorded or saved.</p>
       <button class="btn ghost" data-action="listen-open">Open the listening test</button>
     </div>
     <div class="card rec-test">
       <h2>🎙️ Save a test recording</h2>
       <p class="muted small">Record up to 2 minutes of piano through the tablet's microphone and save it as a sound file. Nothing is kept in the game.</p>
       <div id="rec-test"></div>
-    </div>
-${printCardHtml()}
-    <div class="card">
-      <h2>Parent PIN</h2>
-      <button class="btn ghost" data-action="change-pin">Change PIN</button>
-    </div>
-    <div class="card">
-      <h2>Backup</h2>
-      ${cloudCfg ? `
-      <p class="muted small">Progress is kept in your family's cloud. A backup file is still a handy extra copy.</p>
-      <div class="row wrap"><button class="btn" data-action="export">Save backup file</button></div>` : `
-      <p class="muted small">Everything is saved only on this tablet. Save a backup file now and then (for example to Google Drive) so a reset or new tablet doesn't lose streaks.</p>
+    </div>`;
+}
+
+/**
+ * What the backup card says. The file is this device's copy (state as it is here):
+ * on a kid's device that is only that kid, on a parent's phone the whole family.
+ */
+function backupText() {
+  if (!cloudCfg) {
+    return `
+      <p class="muted small">Everything is saved only on this device. Save a backup file now and then (for example to Google Drive) so a reset or a new device doesn't lose streaks.</p>
       <div class="row wrap">
         <button class="btn" data-action="export">Save backup file</button>
         <label class="btn ghost">Restore from file<input type="file" accept="application/json,.json" data-action-change="import" hidden></label>
-      </div>`}
-    </div>
-    ${familyCard()}`;
+      </div>`;
+  }
+  const kidName = cloudCfg.role === 'kid' ? kidById(cloudCfg.kidId)?.name : null;
+  return `
+      <p class="muted small">Progress is kept in your family's cloud. A backup file is still a handy extra copy${kidName ? `. This device holds only ${esc(kidName)}'s progress, so its file has only ${esc(kidName)}; a parent's phone saves the whole family` : ' of the whole family'}.</p>
+      <div class="row wrap"><button class="btn" data-action="export">Save backup file</button></div>`;
 }
 
 function allowanceCard() {
@@ -2175,7 +2553,7 @@ function allowanceCard() {
         <label><input type="number" min="0" step="10" class="num" data-allow="xp" value="${a.xp}" aria-label="XP a week"> XP a week</label>
       </div>
       <div class="row wrap allow-row"><label>Bonus up to 🪙 <input type="number" min="0" step="5" class="num" data-allow="bonus" value="${a.bonus}" aria-label="Bonus limit"> a week per kid</label></div>
-      <small class="muted allow-help">Every kid can earn the same amount for a perfect week, however many tasks they have. It is split across each kid's tasks by size (set in Kids &amp; tasks). You can give one kid a different amount in their page. On top of it, either parent can give a 🎁 bonus with a reason, up to the bonus limit; bonuses also add the same XP. Changes count from today.</small>` : '<small class="muted">Off: each task earns the coins and XP typed on it in Kids &amp; tasks.</small>'}
+      <small class="muted allow-help">Every kid can earn the same amount for a perfect week, however many chores they have. It is split across each kid's chores by size (set in Kids). You can give one kid a different amount in their page. On top of it, either parent can give a 🎁 bonus with a reason, up to the bonus limit; bonuses also add the same XP. Changes count from today.</small>` : '<small class="muted">Off: each chore earns the coins and XP typed on it in Kids.</small>'}
     </div>`;
 }
 
@@ -2344,6 +2722,11 @@ function reconcile() {
 
 function render() {
   const scrollY = window.scrollY;
+  // a single kid's own device opens straight on their page (the back arrow still leads to the picker and Parents)
+  if (ui.view === 'home' && ui.autoKid && state.kids.length) {
+    ui.autoKid = false;
+    if (state.kids.length === 1 && !parentDevice()) { ui.view = 'kid'; ui.kidId = state.kids[0].id; setTimeout(() => { if (ui.view === 'kid') celebrateIfDue(kidById(ui.kidId)); }, 300); }
+  }
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio' || ui.view === 'lab';
@@ -2357,9 +2740,14 @@ function render() {
   if (html === lastHtml && $app.firstElementChild) { syncMusic(); maybeParty(); greetCheers(); return; }
   const sameView = lastView === ui.view;
   const side = sameView ? [...$app.querySelectorAll(SIDE_SCROLLERS)].map((el) => el.scrollLeft) : [];
+  // leaving the kid's page (the shop, the piano timer, the music house's screens) remembers where
+  // it was, and coming back puts it there again, the village in view
+  if (lastView === 'kid' && ui.view !== 'kid') ui.kidScroll = scrollY;
+  const back = ui.view === 'kid' && lastView && lastView !== 'kid' && lastView !== 'home' && ui.kidScroll != null;
   $app.innerHTML = html;
   lastHtml = html;
   lastView = ui.view;
+  if (back) window.scrollTo(0, ui.kidScroll);
   $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
   paintQuestMaps($app);
   mountVillages($app, villageHandlers);
@@ -2379,7 +2767,7 @@ function render() {
 
 /** Map music plays only on the quest map, with sound on and music not muted, while the app is visible. */
 function syncMusic() {
-  const onMap = ui.view === 'kid' && state.settings.questView !== 'list';
+  const onMap = ui.view === 'kid';
   const wanted = onMap && state.settings.sound && state.settings.music !== false && document.visibilityState === 'visible';
   if (wanted) startMusic(kidTheme(kidById(ui.kidId) || {}));
   else stopMusic();
@@ -2395,9 +2783,9 @@ window.addEventListener('resize', () => {
 
 const actions = {
   'setup-pin': () => pinPad({ title: 'Choose a parent PIN', subtitle: 'Pick 4 digits the kids don’t know', mode: 'new', onSuccess: () => { ui.view = 'parent'; ui.tab = 'kids'; render(); toast('PIN saved. Now add your kids.'); } }),
-  home: () => { ui.view = 'home'; render(); },
+  home: () => { ui.view = 'home'; ui.kidScroll = null; render(); },
   'open-kid': (el) => {
-    ui.kidId = el.dataset.id; ui.view = 'kid'; render();
+    ui.kidId = el.dataset.id; ui.view = 'kid'; ui.kidScroll = null; render();
     setTimeout(() => celebrateIfDue(kidById(ui.kidId)), 300);
   },
   task: (el) => onTaskTap(el.dataset.id, el),
@@ -2406,9 +2794,14 @@ const actions = {
   'timer-buddy': () => buddyCheer(),
   'timer-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
   'watch-back': () => { stopEars(); stopTimer(false); ui.view = 'kid'; render(); },
-  parent: () => pinPad({ title: 'Parents only', subtitle: 'Type the parent PIN', onSuccess: () => { ui.view = 'parent'; ui.tab = pendingApprovals(state, today()).length ? 'approvals' : ui.tab; render(); } }),
+  parent: () => {
+    const open = () => { ui.view = 'parent'; ui.tab = 'today'; ui.editKidId = null; render(); window.scrollTo(0, 0); };
+    if (parentDevice()) open();
+    else pinPad({ title: 'Parents only', subtitle: 'Type the parent PIN', onSuccess: open });
+  },
   'listen-open': () => { ui.view = 'listen'; ui.listenKid = ui.listenKid || state.kids[0]?.id; render(); window.scrollTo(0, 0); },
-  'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; render(); },
+  'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; ui.testTools = true; render(); },
+  'test-tools': () => { ui.testTools = !ui.testTools; render(); },
   'listen-start': () => startListenTest(),
   'listen-mode': (el) => {
     const was = !!listenTest.run;
@@ -2421,7 +2814,7 @@ const actions = {
   'listen-stop': () => { stopListenTest(); render(); },
   'listen-kid': (el) => { ui.listenKid = el.dataset.id; setLastListenMood(''); render(); },
   'parent-exit': () => { ui.view = 'home'; ui.editKidId = null; render(); },
-  tab: (el) => { ui.tab = el.dataset.tab; ui.editKidId = null; render(); },
+  tab: (el) => { const again = ui.tab === el.dataset.tab; ui.tab = el.dataset.tab; ui.editKidId = null; render(); if (!again) window.scrollTo(0, 0); },
   approve: (el) => approve(el.dataset.kid, el.dataset.key, el.dataset.task),
   'reward-given': (el) => {
     const kid = kidById(el.dataset.kid);
@@ -2432,32 +2825,74 @@ const actions = {
     toast(`${kid.name}'s reward is checked off`, { label: 'Undo', run: () => { const k = kidById(kid.id); if (k) { markRewardGiven(k, monday, null); save(); render(); } } });
   },
   'approve-all': () => {
-    for (const { kid, key, task } of pendingApprovals(state, today())) setTask(kid, key, task, { status: 'done', by: 'parent', at: Date.now() });
-    sounds.task(); render();
+    const changes = pendingApprovals(state, today()).map(({ kid, key, task }) => applyTaskChange(state, kid.id, key, task.id, { status: 'done', by: 'parent', at: Date.now() }));
+    if (!changes.length) return;
+    save(); sounds.task(); render();
+    undoToast(`Approved ${changes.length} chore${changes.length === 1 ? '' : 's'}`, changes);
   },
   'send-back': (el) => {
     const kid = kidById(el.dataset.kid);
-    const task = taskById(kid, el.dataset.key, el.dataset.task);
-    setTask(kid, el.dataset.key, task, null);
-    toast(`Sent back to ${kid.name}`); render();
+    const task = kid && taskById(kid, el.dataset.key, el.dataset.task);
+    if (!task) return;
+    const change = setTask(kid, el.dataset.key, task, null);
+    render();
+    undoToast(`${task.name} sent back to ${kid.name}`, [change]);
   },
+  'today-kid': (el) => { const id = el.dataset.kid; if (ui.todayOpen.has(id)) ui.todayOpen.delete(id); else ui.todayOpen.add(id); render(); },
+  'today-show-done': (el) => { const id = el.dataset.kid; if (ui.todayDone.has(id)) ui.todayDone.delete(id); else ui.todayDone.add(id); render(); },
+  'today-tick': (el) => {
+    const kid = kidById(el.dataset.kid);
+    const task = kid && taskById(kid, today(), el.dataset.task);
+    if (!task) return;
+    const change = setTask(kid, today(), task, { status: 'done', by: 'parent', at: Date.now() });
+    sounds.task(); render();
+    undoToast(`${task.name} done for ${kid.name}${payText(kid, today(), task)}`, [change]);
+  },
+  'today-untick': (el) => {
+    const kid = kidById(el.dataset.kid);
+    const task = kid && taskById(kid, today(), el.dataset.task);
+    if (!task) return;
+    const change = setTask(kid, today(), task, null);
+    render();
+    undoToast(`${task.name} un-ticked for ${kid.name}`, [change]);
+  },
+  'today-excuse': (el) => {
+    const kid = kidById(el.dataset.kid);
+    if (!kid) return;
+    const t = today();
+    const was = entryFor(state, kid.id, t)?.excused;
+    const setExcused = (k, v) => { const e = entryFor(state, k.id, t, true); if (v === undefined) delete e.excused; else e.excused = v; save(); render(); };
+    setExcused(kid, !was);
+    toast(was ? `${kid.name}'s day is no longer excused` : `${kid.name}'s day is excused. The streak is kept.`, { label: 'Undo', run: () => { const k = kidById(kid.id); if (k) setExcused(k, was); } });
+  },
+  'today-chores': (el) => { ui.tab = 'kids'; ui.editKidId = el.dataset.kid; ui.openTask = null; render(); window.scrollTo(0, 0); },
+  'rewards-see': () => { ui.showRewards = !ui.showRewards; render(); },
   'add-kid': () => {
     const n = state.kids.length;
     const kid = { id: newId('kid'), name: `Kid ${n + 1}`, buddy: defaultBuddy(SPECIES[n % SPECIES.length].id), seenUnlocks: [], color: COLORS[(n * 2) % COLORS.length], tasks: defaultTasks(), startDate: today() };
     state.kids.push(kid); save();
     ui.editKidId = kid.id; render();
   },
-  'edit-kid': (el) => { ui.editKidId = el.dataset.id; render(); window.scrollTo(0, 0); },
+  'edit-kid': (el) => { ui.editKidId = el.dataset.id; ui.openTask = null; render(); window.scrollTo(0, 0); },
+  'task-open': (el) => {
+    const id = el.dataset.task;
+    ui.openTask = ui.openTask === id ? null : id;
+    render();
+    // keep the chore in view: the one closed above it may have been tall
+    document.querySelector(`.task-edit[data-task="${id}"]`)?.scrollIntoView({ block: 'nearest' });
+  },
   'edit-kid-done': () => { ui.editKidId = null; render(); },
   'kid-species': (el) => { changeSpecies(kidById(ui.editKidId), el.dataset.val); save(); render(); },
   wardrobe: () => {
     const lock = storeOpen(state, kidById(ui.kidId), today());
     if (!lock.open) { sounds.error(); toast(`🔒 ${storeLockText(lock)}`); return; }
-    ui.view = 'wardrobe'; render(); window.scrollTo(0, 0);
+    ui.view = 'wardrobe'; ui.speciesOpen = false; render(); window.scrollTo(0, 0);
   },
-  'wardrobe-back': () => { ui.view = 'kid'; render(); },
+  'wardrobe-back': () => { ui.view = 'kid'; ui.speciesOpen = false; render(); },
+  // picking another kind of buddy is a choice made on purpose: the picker opens from its own button
+  'wardrobe-switch': () => { ui.speciesOpen = !ui.speciesOpen; sounds.tap(); render(); },
   'wardrobe-slot': (el) => { ui.slot = el.dataset.slot; render(); },
-  'wardrobe-species': (el) => { changeSpecies(kidById(ui.kidId), el.dataset.val); sounds.tap(); save(); render(); },
+  'wardrobe-species': (el) => { changeSpecies(kidById(ui.kidId), el.dataset.val); ui.speciesOpen = false; sounds.tap(); save(); render(); },
   'wardrobe-item': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
@@ -2506,6 +2941,16 @@ const actions = {
     render();
   },
   'music-toggle': () => { state.settings.music = state.settings.music === false; save(); render(); },
+  today: () => { sounds.tap(); openToday(kidById(ui.kidId)); },
+  'today-go': (el) => { sounds.tap(); goQuest(kidById(ui.kidId), el.dataset.id); },
+  'today-ask': (el) => {
+    const kid = kidById(ui.kidId);
+    const task = kid && taskById(kid, today(), el.dataset.id);
+    closeModal();
+    if (task) askParentNowOrLater(kid, task, null);
+  },
+  'today-chest': () => { closeModal(); const kid = kidById(ui.kidId); if (kid) openChest(kid, today()); },
+  'today-shop': () => { closeModal(); actions.wardrobe(); },
   'quest-mode': (el) => { state.settings.questView = el.dataset.mode; save(); render(); },
   chest: (el) => {
     const kid = kidById(ui.kidId);
@@ -2614,12 +3059,15 @@ const actions = {
   'delete-task': (el) => {
     const kid = kidById(ui.editKidId);
     const task = kid.tasks.find((t) => t.id === el.dataset.task);
-    confirmModal({ title: 'Delete task?', text: `Remove "${task.name}" for ${kid.name}?`, yes: 'Delete', danger: true, onYes: () => { kid.tasks = kid.tasks.filter((t) => t.id !== task.id); save(); render(); } });
+    confirmModal({ title: 'Delete chore?', text: `Remove "${task.name}" for ${kid.name}?`, yes: 'Delete', danger: true, onYes: () => { kid.tasks = kid.tasks.filter((t) => t.id !== task.id); save(); render(); } });
   },
   'add-task': (el) => {
     const ex = el.dataset.period === 'exercise';
-    kidById(ui.editKidId).tasks.push({ id: newId('task'), name: ex ? 'Exercise' : 'New task', icon: ex ? '🏃' : '⭐', period: el.dataset.period, days: [0, 1, 2, 3, 4, 5, 6], verify: ex ? 'parent' : 'self', minutes: 0 });
+    const task = { id: newId('task'), name: ex ? 'Exercise' : 'New chore', icon: ex ? '🏃' : '⭐', period: el.dataset.period, days: [0, 1, 2, 3, 4, 5, 6], verify: ex ? 'parent' : 'self', minutes: 0 };
+    kidById(ui.editKidId).tasks.push(task);
+    ui.openTask = task.id; // a new chore opens straight away
     save(); render();
+    document.querySelector(`.task-edit[data-task="${task.id}"]`)?.scrollIntoView({ block: 'center' });
   },
   'add-house-task': (el) => {
     const kid = kidById(ui.editKidId);
@@ -2628,20 +3076,25 @@ const actions = {
     const task = houseTask(role, newId('task'));
     kid.tasks.push(task);
     const cleared = setHouseRole(kid.tasks, task.id, role);
+    ui.openTask = task.id;
     save(); render();
+    document.querySelector(`.task-edit[data-task="${task.id}"]`)?.scrollIntoView({ block: 'center' });
     if (cleared.length) toast(`“${cleared[0].name}” is no longer the house's ${houseChoreById(role).label.toLowerCase()} chore`);
   },
   'delete-kid': () => {
     const kid = kidById(ui.editKidId);
-    confirmModal({ title: `Remove ${kid.name}?`, text: 'Their tasks, streak and history will be deleted from this tablet.', yes: 'Remove', danger: true, onYes: () => { state.kids = state.kids.filter((k) => k.id !== kid.id); ui.editKidId = null; save(); render(); } });
+    confirmModal({ title: `Remove ${kid.name}?`, text: cloudCfg
+      ? `${kid.name} and their chores are removed from every device in the family, kid's tablet included. Their past days stay in the family's cloud but no longer show anywhere.`
+      : 'Their chores, streak and history are removed from this device. Only a backup file can bring them back.', yes: 'Remove', danger: true, onYes: () => { state.kids = state.kids.filter((k) => k.id !== kid.id); ui.editKidId = null; save(); render(); } });
   },
   'history-toggle': (el) => {
     const kid = kidById(el.dataset.kid);
     const key = el.dataset.key;
     const task = tasksForDay(state, kid, key, today()).find((t) => t.id === el.dataset.task);
     const st = entryFor(state, kid.id, key)?.tasks?.[task.id]?.status;
-    setTask(kid, key, task, st === 'done' ? null : { status: 'done', by: 'parent', at: Date.now() });
+    const change = setTask(kid, key, task, st === 'done' ? null : { status: 'done', by: 'parent', at: Date.now() });
     render();
+    undoToast(st === 'done' ? `${task.name} un-ticked for ${kid.name}` : `${task.name} done for ${kid.name}${payText(kid, key, task)}`, [change]);
   },
   'add-reminder': () => { state.settings.reminders.push('17:00'); save(); render(); },
   'remove-reminder': (el) => { state.settings.reminders.splice(Number(el.dataset.i), 1); save(); render(); },
@@ -2691,9 +3144,34 @@ function bonusReason() {
 
 function approve(kidId, key, taskId) {
   const kid = kidById(kidId);
-  const task = taskById(kid, key, taskId);
-  setTask(kid, key, task, { status: 'done', by: 'parent', at: Date.now() });
+  const task = kid && taskById(kid, key, taskId);
+  if (!task) return;
+  const change = setTask(kid, key, task, { status: 'done', by: 'parent', at: Date.now() });
   sounds.task(); render();
+  undoToast(`${task.name} approved for ${kid.name}${payText(kid, key, task)}`, [change]);
+}
+
+/** " · +6 🪙 +6 XP": what a chore pays on a day, for the toast. */
+function payText(kid, key, task) {
+  const { xp, coins, gems } = taskPay(state, kid, key, task, today());
+  const bits = [coins && `+${coins}\u00a0🪙`, gems && `+${gems}\u00a0💎`, xp && `+${xp}\u00a0XP`].filter(Boolean);
+  return bits.length ? ` · ${bits.join(' ')}` : '';
+}
+
+/**
+ * A toast with Undo for a parent's tick, un-tick, approval or send-back. Undo
+ * puts each chore's record back as it was (so its coins and XP too), unless the
+ * chore has changed since, on this phone or another.
+ */
+function undoToast(text, changes) {
+  toast(text, {
+    label: 'Undo',
+    run: () => {
+      const n = undoTaskChanges(state, changes);
+      if (n) { save(); sounds.tap(); render(); }
+      if (n < changes.length) toast(n ? `Undone, except ${changes.length - n} that changed since` : 'That chore has changed since, so it was left as it is.');
+    },
+  });
 }
 
 document.addEventListener('click', (e) => {
@@ -2713,7 +3191,7 @@ document.addEventListener('change', (e) => {
     if (!task) return;
     let v = el.type === 'checkbox' ? el.checked : el.value;
     if (el.dataset.field === 'minutes') v = Math.max(0, Math.min(180, Math.round(Number(v) || 0)));
-    if (el.dataset.field === 'name' && !v.trim()) v = 'Task';
+    if (el.dataset.field === 'name' && !v.trim()) v = 'Chore';
     const isReward = el.dataset.field === 'coins' || el.dataset.field === 'xp' || el.dataset.field === 'gems';
     if (isReward) v = parseReward(v);
     if (el.dataset.field === 'size') v = Number(v);
@@ -2795,7 +3273,7 @@ function importFile(file) {
     }
     confirmModal({
       title: 'Restore backup?',
-      text: `This replaces everything on this tablet with the backup (${data.kids.length} kids). The parent PIN becomes the one from the backup.`,
+      text: `This replaces everything on this device with the backup (${data.kids.length} kids). The parent PIN becomes the one from the backup.`,
       yes: 'Restore', danger: true,
       onYes: () => { setState(migrate(data)); setSound(state.settings.sound); save(); ui.view = 'home'; render(); toast('Backup restored'); },
     });

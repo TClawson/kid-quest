@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, dateKey, fallbackHash, addDays, tasksForDay } from '../../js/logic.js';
+import { openKid, toPicker } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS;
 const site = await serve('.');
@@ -44,11 +45,13 @@ try {
   const editing = make(false);
   editing.kids[0].tasks.find((t) => t.id === 'task_shower').evening = false;
   await load(editing);
+  await toPicker(page);
   await page.click('[data-action="parent"]');
   for (const d of '1234') await page.click(`[data-pin="${d}"]`);
   await page.click('[data-action="tab"][data-tab="kids"]');
   await page.click('[data-action="edit-kid"][data-id="kid_sam"]');
   const row = '.task-edit[data-task="task_shower"]';
+  await page.click(`${row} .task-line`);
   await page.check(`${row} input[data-field="evening"]`);
   await page.waitForTimeout(200);
   assert.match(await page.locator(row).innerText(), /don't keep the buddy store shut/);
@@ -58,7 +61,7 @@ try {
 
   // shower done last night: the store is open before tonight's shower
   await load(make(false));
-  await page.click('[data-action="open-kid"][data-id="kid_sam"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_sam"]');
   await page.waitForTimeout(300);
   assert.equal(await page.locator('.store-locked').count(), 0, 'store open with only the evening chore left');
   assert.ok(await page.locator('[data-action="wardrobe"]').count());
@@ -66,7 +69,7 @@ try {
 
   // shower missed last night: today the store waits for the shower too
   await load(make(true));
-  await page.click('[data-action="open-kid"][data-id="kid_sam"]');
+  await openKid(page, '[data-action="open-kid"][data-id="kid_sam"]');
   await page.waitForTimeout(300);
   assert.match(await page.locator('.buddy-panel').innerText(), /Shower was missed last night/);
   await page.click('[data-action="wardrobe"]');
