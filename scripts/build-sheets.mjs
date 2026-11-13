@@ -6,7 +6,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
-import { printSheets, printAbc, fingerprint, SHEETS_DIR } from '../js/printsheets.js';
+import { printSheets, printAbc, SHEETS_DIR } from '../js/printsheets.js';
 import { COMPOSER } from '../js/composer.js';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -34,7 +34,7 @@ const sheets = printSheets();
 let made = 0;
 for (const s of sheets) {
   const abc = printAbc(s);
-  const print = fingerprint(abc);
+  const { print } = s;
   const file = path.join(root, s.file);
   if (!all && had.get(s.file) === print && fs.existsSync(file)) continue;
   const warnings = await page.evaluate((text) => {
@@ -71,7 +71,7 @@ for (const s of sheets) {
 }
 await browser.close();
 
-const manifest = { composer: COMPOSER, sheets: sheets.map((s) => ({ id: s.id, level: s.level, name: s.name, file: s.file, fingerprint: fingerprint(printAbc(s)) })) };
+const manifest = { composer: COMPOSER, sheets: sheets.map((s) => ({ id: s.id, level: s.level, name: s.name, file: s.file, fingerprint: s.print })) };
 fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 1)}\n`);
 // PDFs no piece makes any more (a renamed piece, a dropped level)
 const keep = new Set(sheets.map((s) => path.basename(s.file)));

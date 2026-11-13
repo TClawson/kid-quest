@@ -5,421 +5,421 @@
    "id": "bg-space",
    "level": "easy",
    "name": "Moon Base",
-   "file": "sheets/moon-base-easy.pdf",
-   "fingerprint": "abe8f523"
+   "file": "sheets/moon-base-easy-bf09e4.pdf",
+   "fingerprint": "bf09e42b"
   },
   {
    "id": "bg-space",
    "level": "medium",
    "name": "Moon Base",
-   "file": "sheets/moon-base-medium.pdf",
-   "fingerprint": "8b650bb4"
+   "file": "sheets/moon-base-medium-d5f1dc.pdf",
+   "fingerprint": "d5f1dc2c"
   },
   {
    "id": "bg-space",
    "level": "hard",
    "name": "Moon Base",
-   "file": "sheets/moon-base-hard.pdf",
-   "fingerprint": "2343450a"
+   "file": "sheets/moon-base-hard-f9ebf8.pdf",
+   "fingerprint": "f9ebf802"
   },
   {
    "id": "bg-galaxy",
    "level": "easy",
    "name": "Golden Stars",
-   "file": "sheets/golden-stars-easy.pdf",
-   "fingerprint": "d07a0568"
+   "file": "sheets/golden-stars-easy-91ca14.pdf",
+   "fingerprint": "91ca1400"
   },
   {
    "id": "bg-galaxy",
    "level": "medium",
    "name": "Golden Stars",
-   "file": "sheets/golden-stars-medium.pdf",
-   "fingerprint": "0e254453"
+   "file": "sheets/golden-stars-medium-29eccd.pdf",
+   "fingerprint": "29eccd6b"
   },
   {
    "id": "bg-galaxy",
    "level": "hard",
    "name": "Golden Stars",
-   "file": "sheets/golden-stars-hard.pdf",
-   "fingerprint": "bf0b7a61"
+   "file": "sheets/golden-stars-hard-be9522.pdf",
+   "fingerprint": "be952279"
   },
   {
    "id": "bg-meadow",
    "level": "easy",
    "name": "Forest Village",
-   "file": "sheets/forest-village-easy.pdf",
-   "fingerprint": "c48fa0d3"
+   "file": "sheets/forest-village-easy-856d16.pdf",
+   "fingerprint": "856d160b"
   },
   {
    "id": "bg-meadow",
    "level": "medium",
    "name": "Forest Village",
-   "file": "sheets/forest-village-medium.pdf",
-   "fingerprint": "9e404027"
+   "file": "sheets/forest-village-medium-512c4a.pdf",
+   "fingerprint": "512c4acf"
   },
   {
    "id": "bg-meadow",
    "level": "hard",
    "name": "Forest Village",
-   "file": "sheets/forest-village-hard.pdf",
-   "fingerprint": "72af6f94"
+   "file": "sheets/forest-village-hard-276cc0.pdf",
+   "fingerprint": "276cc0ac"
   },
   {
    "id": "bg-ocean",
    "level": "easy",
    "name": "Bubble Waltz",
-   "file": "sheets/bubble-waltz-easy.pdf",
-   "fingerprint": "2b8a7e3a"
+   "file": "sheets/bubble-waltz-easy-8012d3.pdf",
+   "fingerprint": "8012d3a2"
   },
   {
    "id": "bg-ocean",
    "level": "medium",
    "name": "Bubble Waltz",
-   "file": "sheets/bubble-waltz-medium.pdf",
-   "fingerprint": "4cb66d54"
+   "file": "sheets/bubble-waltz-medium-755dba.pdf",
+   "fingerprint": "755dba3c"
   },
   {
    "id": "bg-ocean",
    "level": "hard",
    "name": "Bubble Waltz",
-   "file": "sheets/bubble-waltz-hard.pdf",
-   "fingerprint": "d5ed3aea"
+   "file": "sheets/bubble-waltz-hard-347ba9.pdf",
+   "fingerprint": "347ba992"
   },
   {
    "id": "bg-rainbow",
    "level": "easy",
    "name": "Candy Skip",
-   "file": "sheets/candy-skip-easy.pdf",
-   "fingerprint": "9ac04b3a"
+   "file": "sheets/candy-skip-easy-9cb2e5.pdf",
+   "fingerprint": "9cb2e5f2"
   },
   {
    "id": "bg-rainbow",
    "level": "medium",
    "name": "Candy Skip",
-   "file": "sheets/candy-skip-medium.pdf",
-   "fingerprint": "2dbe76a8"
+   "file": "sheets/candy-skip-medium-d3268c.pdf",
+   "fingerprint": "d3268c70"
   },
   {
    "id": "bg-rainbow",
    "level": "hard",
    "name": "Candy Skip",
-   "file": "sheets/candy-skip-hard.pdf",
-   "fingerprint": "85cbcadc"
+   "file": "sheets/candy-skip-hard-cd017c.pdf",
+   "fingerprint": "cd017c94"
   },
   {
    "id": "bg-volcano",
    "level": "easy",
    "name": "Lava Run",
-   "file": "sheets/lava-run-easy.pdf",
-   "fingerprint": "2f88fc44"
+   "file": "sheets/lava-run-easy-7a323b.pdf",
+   "fingerprint": "7a323bdc"
   },
   {
    "id": "bg-volcano",
    "level": "medium",
    "name": "Lava Run",
-   "file": "sheets/lava-run-medium.pdf",
-   "fingerprint": "633ca59d"
+   "file": "sheets/lava-run-medium-43e148.pdf",
+   "fingerprint": "43e14875"
   },
   {
    "id": "bg-volcano",
    "level": "hard",
    "name": "Lava Run",
-   "file": "sheets/lava-run-hard.pdf",
-   "fingerprint": "260012ad"
+   "file": "sheets/lava-run-hard-0eaa40.pdf",
+   "fingerprint": "0eaa4025"
   },
   {
    "id": "bg-castle",
    "level": "easy",
    "name": "Royal March",
-   "file": "sheets/royal-march-easy.pdf",
-   "fingerprint": "b438300e"
+   "file": "sheets/royal-march-easy-0ad526.pdf",
+   "fingerprint": "0ad526a6"
   },
   {
    "id": "bg-castle",
    "level": "medium",
    "name": "Royal March",
-   "file": "sheets/royal-march-medium.pdf",
-   "fingerprint": "8966fbc0"
+   "file": "sheets/royal-march-medium-e4873f.pdf",
+   "fingerprint": "e4873fe8"
   },
   {
    "id": "bg-castle",
    "level": "hard",
    "name": "Royal March",
-   "file": "sheets/royal-march-hard.pdf",
-   "fingerprint": "85b4ad7b"
+   "file": "sheets/royal-march-hard-da7c83.pdf",
+   "fingerprint": "da7c83d3"
   },
   {
    "id": "bg-sunset",
    "level": "easy",
    "name": "Island Breeze",
-   "file": "sheets/island-breeze-easy.pdf",
-   "fingerprint": "2fbb7c6d"
+   "file": "sheets/island-breeze-easy-9b10c1.pdf",
+   "fingerprint": "9b10c1c5"
   },
   {
    "id": "bg-sunset",
    "level": "medium",
    "name": "Island Breeze",
-   "file": "sheets/island-breeze-medium.pdf",
-   "fingerprint": "2ca80f18"
+   "file": "sheets/island-breeze-medium-693cf0.pdf",
+   "fingerprint": "693cf0c0"
   },
   {
    "id": "bg-sunset",
    "level": "hard",
    "name": "Island Breeze",
-   "file": "sheets/island-breeze-hard.pdf",
-   "fingerprint": "e2de7b1f"
+   "file": "sheets/island-breeze-hard-924056.pdf",
+   "fingerprint": "92405657"
   },
   {
    "id": "bg-rainforest",
    "level": "easy",
    "name": "Jungle Drums",
-   "file": "sheets/jungle-drums-easy.pdf",
-   "fingerprint": "df31332c"
+   "file": "sheets/jungle-drums-easy-9261a3.pdf",
+   "fingerprint": "9261a384"
   },
   {
    "id": "bg-rainforest",
    "level": "medium",
    "name": "Jungle Drums",
-   "file": "sheets/jungle-drums-medium.pdf",
-   "fingerprint": "d89090dc"
+   "file": "sheets/jungle-drums-medium-f9eb17.pdf",
+   "fingerprint": "f9eb17e4"
   },
   {
    "id": "bg-rainforest",
    "level": "hard",
    "name": "Jungle Drums",
-   "file": "sheets/jungle-drums-hard.pdf",
-   "fingerprint": "daced500"
+   "file": "sheets/jungle-drums-hard-c115c8.pdf",
+   "fingerprint": "c115c858"
   },
   {
    "id": "show:bg-galaxy",
    "level": "easy",
    "name": "Star Whale Dream",
-   "file": "sheets/star-whale-dream-easy.pdf",
-   "fingerprint": "466c1771"
+   "file": "sheets/star-whale-dream-easy-1b5f1d.pdf",
+   "fingerprint": "1b5f1d29"
   },
   {
    "id": "show:bg-galaxy",
    "level": "medium",
    "name": "Star Whale Dream",
-   "file": "sheets/star-whale-dream-medium.pdf",
-   "fingerprint": "cde266e5"
+   "file": "sheets/star-whale-dream-medium-55ce2f.pdf",
+   "fingerprint": "55ce2f5d"
   },
   {
    "id": "show:bg-galaxy",
    "level": "hard",
    "name": "Star Whale Dream",
-   "file": "sheets/star-whale-dream-hard.pdf",
-   "fingerprint": "d1f0ad0b"
+   "file": "sheets/star-whale-dream-hard-a11fcb.pdf",
+   "fingerprint": "a11fcb33"
   },
   {
    "id": "show:bg-castle",
    "level": "easy",
    "name": "Dragon King Fanfare",
-   "file": "sheets/dragon-king-fanfare-easy.pdf",
-   "fingerprint": "4f8ed2cd"
+   "file": "sheets/dragon-king-fanfare-easy-3fb864.pdf",
+   "fingerprint": "3fb864c5"
   },
   {
    "id": "show:bg-castle",
    "level": "medium",
    "name": "Dragon King Fanfare",
-   "file": "sheets/dragon-king-fanfare-medium.pdf",
-   "fingerprint": "9dcc59fb"
+   "file": "sheets/dragon-king-fanfare-medium-2cf91b.pdf",
+   "fingerprint": "2cf91b93"
   },
   {
    "id": "show:bg-castle",
    "level": "hard",
    "name": "Dragon King Fanfare",
-   "file": "sheets/dragon-king-fanfare-hard.pdf",
-   "fingerprint": "5bf941be"
+   "file": "sheets/dragon-king-fanfare-hard-eef7bb.pdf",
+   "fingerprint": "eef7bb36"
   },
   {
    "id": "show:bg-volcano",
    "level": "easy",
    "name": "Phoenix Fire",
-   "file": "sheets/phoenix-fire-easy.pdf",
-   "fingerprint": "630ab039"
+   "file": "sheets/phoenix-fire-easy-638c20.pdf",
+   "fingerprint": "638c2021"
   },
   {
    "id": "show:bg-volcano",
    "level": "medium",
    "name": "Phoenix Fire",
-   "file": "sheets/phoenix-fire-medium.pdf",
-   "fingerprint": "a808c487"
+   "file": "sheets/phoenix-fire-medium-cb99b0.pdf",
+   "fingerprint": "cb99b03f"
   },
   {
    "id": "show:bg-volcano",
    "level": "hard",
    "name": "Phoenix Fire",
-   "file": "sheets/phoenix-fire-hard.pdf",
-   "fingerprint": "528121fb"
+   "file": "sheets/phoenix-fire-hard-aa4bd1.pdf",
+   "fingerprint": "aa4bd1b3"
   },
   {
    "id": "show:bg-rainforest",
    "level": "easy",
    "name": "Rain Dance",
-   "file": "sheets/rain-dance-easy.pdf",
-   "fingerprint": "9a55d315"
+   "file": "sheets/rain-dance-easy-eacba4.pdf",
+   "fingerprint": "eacba46d"
   },
   {
    "id": "show:bg-rainforest",
    "level": "medium",
    "name": "Rain Dance",
-   "file": "sheets/rain-dance-medium.pdf",
-   "fingerprint": "91ec65b2"
+   "file": "sheets/rain-dance-medium-0b89fa.pdf",
+   "fingerprint": "0b89fa7a"
   },
   {
    "id": "show:bg-rainforest",
    "level": "hard",
    "name": "Rain Dance",
-   "file": "sheets/rain-dance-hard.pdf",
-   "fingerprint": "53bf9386"
+   "file": "sheets/rain-dance-hard-c9bb5d.pdf",
+   "fingerprint": "c9bb5dce"
   },
   {
    "id": "show:bg-rainbow",
    "level": "easy",
    "name": "Rainbow Slide",
-   "file": "sheets/rainbow-slide-easy.pdf",
-   "fingerprint": "5eac030d"
+   "file": "sheets/rainbow-slide-easy-4032a3.pdf",
+   "fingerprint": "4032a385"
   },
   {
    "id": "show:bg-rainbow",
    "level": "medium",
    "name": "Rainbow Slide",
-   "file": "sheets/rainbow-slide-medium.pdf",
-   "fingerprint": "dd11a489"
+   "file": "sheets/rainbow-slide-medium-b5248b.pdf",
+   "fingerprint": "b5248bc1"
   },
   {
    "id": "show:bg-rainbow",
    "level": "hard",
    "name": "Rainbow Slide",
-   "file": "sheets/rainbow-slide-hard.pdf",
-   "fingerprint": "d2e20658"
+   "file": "sheets/rainbow-slide-hard-b5a0d9.pdf",
+   "fingerprint": "b5a0d900"
   },
   {
    "id": "show:bg-sunset",
    "level": "easy",
    "name": "Ghost Ship Shanty",
-   "file": "sheets/ghost-ship-shanty-easy.pdf",
-   "fingerprint": "44b942aa"
+   "file": "sheets/ghost-ship-shanty-easy-12222c.pdf",
+   "fingerprint": "12222c72"
   },
   {
    "id": "show:bg-sunset",
    "level": "medium",
    "name": "Ghost Ship Shanty",
-   "file": "sheets/ghost-ship-shanty-medium.pdf",
-   "fingerprint": "74355150"
+   "file": "sheets/ghost-ship-shanty-medium-0e0080.pdf",
+   "fingerprint": "0e0080b8"
   },
   {
    "id": "show:bg-sunset",
    "level": "hard",
    "name": "Ghost Ship Shanty",
-   "file": "sheets/ghost-ship-shanty-hard.pdf",
-   "fingerprint": "c66cfa9d"
+   "file": "sheets/ghost-ship-shanty-hard-71f7e0.pdf",
+   "fingerprint": "71f7e025"
   },
   {
    "id": "show:bg-ocean",
    "level": "easy",
    "name": "The Kraken Wakes",
-   "file": "sheets/the-kraken-wakes-easy.pdf",
-   "fingerprint": "e84affa9"
+   "file": "sheets/the-kraken-wakes-easy-a790e1.pdf",
+   "fingerprint": "a790e151"
   },
   {
    "id": "show:bg-ocean",
    "level": "medium",
    "name": "The Kraken Wakes",
-   "file": "sheets/the-kraken-wakes-medium.pdf",
-   "fingerprint": "5afad334"
+   "file": "sheets/the-kraken-wakes-medium-174d7e.pdf",
+   "fingerprint": "174d7e2c"
   },
   {
    "id": "show:bg-ocean",
    "level": "hard",
    "name": "The Kraken Wakes",
-   "file": "sheets/the-kraken-wakes-hard.pdf",
-   "fingerprint": "89f405b1"
+   "file": "sheets/the-kraken-wakes-hard-7f40ee.pdf",
+   "fingerprint": "7f40eec9"
   },
   {
    "id": "show:bg-space",
    "level": "easy",
    "name": "Moon Worm Coaster",
-   "file": "sheets/moon-worm-coaster-easy.pdf",
-   "fingerprint": "54013748"
+   "file": "sheets/moon-worm-coaster-easy-da726e.pdf",
+   "fingerprint": "da726e20"
   },
   {
    "id": "show:bg-space",
    "level": "medium",
    "name": "Moon Worm Coaster",
-   "file": "sheets/moon-worm-coaster-medium.pdf",
-   "fingerprint": "b3a4ea17"
+   "file": "sheets/moon-worm-coaster-medium-554db6.pdf",
+   "fingerprint": "554db64f"
   },
   {
    "id": "show:bg-space",
    "level": "hard",
    "name": "Moon Worm Coaster",
-   "file": "sheets/moon-worm-coaster-hard.pdf",
-   "fingerprint": "ce0d1b9f"
+   "file": "sheets/moon-worm-coaster-hard-252f81.pdf",
+   "fingerprint": "252f8107"
   },
   {
    "id": "show:bg-meadow",
    "level": "easy",
    "name": "Great Oak Lights",
-   "file": "sheets/great-oak-lights-easy.pdf",
-   "fingerprint": "8384cc7c"
+   "file": "sheets/great-oak-lights-easy-a3cb17.pdf",
+   "fingerprint": "a3cb17f4"
   },
   {
    "id": "show:bg-meadow",
    "level": "medium",
    "name": "Great Oak Lights",
-   "file": "sheets/great-oak-lights-medium.pdf",
-   "fingerprint": "aaad1bd1"
+   "file": "sheets/great-oak-lights-medium-9a116c.pdf",
+   "fingerprint": "9a116c39"
   },
   {
    "id": "show:bg-meadow",
    "level": "hard",
    "name": "Great Oak Lights",
-   "file": "sheets/great-oak-lights-hard.pdf",
-   "fingerprint": "53ed7f29"
+   "file": "sheets/great-oak-lights-hard-d7726f.pdf",
+   "fingerprint": "d7726f41"
   },
   {
    "id": "long:bg-ocean",
    "level": "easy",
    "name": "Bubble Waltz/Mermaid's Lullaby",
-   "file": "sheets/bubble-waltz-mermaids-lullaby-easy.pdf",
-   "fingerprint": "76b8abf7"
+   "file": "sheets/bubble-waltz-mermaids-lullaby-easy-627393.pdf",
+   "fingerprint": "6273932f"
   },
   {
    "id": "long:bg-ocean",
    "level": "medium",
    "name": "Bubble Waltz/Mermaid's Lullaby",
-   "file": "sheets/bubble-waltz-mermaids-lullaby-medium.pdf",
-   "fingerprint": "daca928e"
+   "file": "sheets/bubble-waltz-mermaids-lullaby-medium-1027c5.pdf",
+   "fingerprint": "1027c5e6"
   },
   {
    "id": "long:bg-ocean",
    "level": "hard",
    "name": "Bubble Waltz/Mermaid's Lullaby",
-   "file": "sheets/bubble-waltz-mermaids-lullaby-hard.pdf",
-   "fingerprint": "43eec069"
+   "file": "sheets/bubble-waltz-mermaids-lullaby-hard-c543d6.pdf",
+   "fingerprint": "c543d631"
   },
   {
    "id": "long:bg-meadow",
    "level": "easy",
    "name": "Forest Village/The Walk to the Oak",
-   "file": "sheets/forest-village-the-walk-to-the-oak-easy.pdf",
-   "fingerprint": "bd1b4c96"
+   "file": "sheets/forest-village-the-walk-to-the-oak-easy-9d7259.pdf",
+   "fingerprint": "9d72593e"
   },
   {
    "id": "long:bg-meadow",
    "level": "medium",
    "name": "Forest Village/The Walk to the Oak",
-   "file": "sheets/forest-village-the-walk-to-the-oak-medium.pdf",
-   "fingerprint": "568806b1"
+   "file": "sheets/forest-village-the-walk-to-the-oak-medium-34e2e8.pdf",
+   "fingerprint": "34e2e859"
   },
   {
    "id": "long:bg-meadow",
    "level": "hard",
    "name": "Forest Village/The Walk to the Oak",
-   "file": "sheets/forest-village-the-walk-to-the-oak-hard.pdf",
-   "fingerprint": "1087e9b6"
+   "file": "sheets/forest-village-the-walk-to-the-oak-hard-71971a.pdf",
+   "fingerprint": "71971a0e"
   }
  ]
 }
