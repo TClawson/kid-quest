@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { ITEMS } from '../../js/items.js';
-import { emptyState, defaultTasks, dateKey, addDays, fallbackHash, tasksForDay, questTasks, weekStart } from '../../js/logic.js';
+import { emptyState, defaultTasks, addDays, fallbackHash, tasksForDay, questTasks, weekStart } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { openKid, closePops, toPicker } from '../helpers/open-kid.mjs';
 
@@ -15,7 +16,7 @@ const shots = process.env.SHOTS_DIR;
 if (shots) mkdirSync(shots, { recursive: true });
 const site = await serve('.');
 const browser = await chromium.launch();
-const today = dateKey();
+const today = TEST_DAY;
 
 /** A family of two (avaToday/benToday: tasks done today; -1 means all but one). Ava has 10 weeks of history: teeth every day, her bed more and more often, and yesterday missed. */
 function family({ avaToday = 0, benToday = 0 } = {}) {
@@ -73,6 +74,7 @@ try {
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
       : { viewport: { width: 900, height: 1200 }, deviceScaleFactor: 2 });
     const page = await ctx.newPage();
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
@@ -225,6 +227,7 @@ try {
     const dir = join(shots, 'video');
     const ctx = await browser.newContext({ viewport: { width: 600, height: 900 }, recordVideo: { dir, size: { width: 600, height: 900 } } });
     const page = await ctx.newPage();
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     // (weekends have fewer chores: when one left would drop below 85%, Ava finishes too)
     const probe = family();
     const n = (k) => questTasks(tasksForDay(probe, probe.kids[k], today, today)).length;

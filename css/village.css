@@ -219,7 +219,7 @@
 
 /* the family party: everyone in the village hops (the kid's buddy too) */
 .village.party .villager .v-sprite, .village.party .v-visitor .v-vbuddy { animation: v-hop 0.4s steps(2, end) infinite; }
-/* a landmark's show (mapshow.js): the visitors and the kid's buddy hop, as on the old map. The hop
+/* a landmark's show (mapshow.js): the visitors and the kid's buddy hop. The hop
    moves with `translate`, so it adds to a left-facing visitor's `scale:-1 1`, the buddy's facing
    (an inline transform on .v-flip) and its walk; fishbowls ride along inside them. */
 .village.show-on .v-visitor .v-vbuddy, .village.show-on .v-buddy .v-flip, .village.party .v-buddy .v-flip { animation: v-show-hop 0.5s steps(2, end) infinite; }

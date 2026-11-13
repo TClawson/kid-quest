@@ -11,12 +11,13 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, fallbackHash, addDays, dateKey } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash, addDays } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews/turntable').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
-const day = dateKey();
+const day = TEST_DAY;
 const TABLET = { width: 1280, height: 800 };
 const PHONE = { width: 412, height: 915 };
 const KID = 'kid_ava';
@@ -45,6 +46,7 @@ const errors = [];
 async function start(viewport, st, place = 'house') {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/favicon|ERR_|net::/.test(m.text())) errors.push(m.text()); });
   await page.goto(site.url);
@@ -174,6 +176,7 @@ try {
   {
     const ctx = await browser.newContext({ viewport: TABLET, deviceScaleFactor: 2 });
     const page = await ctx.newPage();
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
     await page.evaluate(([s, house, deck]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.house', JSON.stringify(house)); localStorage.setItem('kidquest.turntable', JSON.stringify(deck)); }, [family({ turntable: true }), { [KID]: { day, inside: true, place: 'house' } }, { [KID]: { loop: 'mix:0', vol: 6 } }]);

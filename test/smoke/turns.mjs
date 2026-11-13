@@ -4,13 +4,15 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { openParents } from '../helpers/open-kid.mjs';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash, weekParity, tasksForDay, addDays } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash, weekParity, tasksForDay, addDays } from '../../js/logic.js';
+import { TEST_DAY, at, useTestDay } from '../helpers/clock.mjs';
 
 const shots = process.env.SHOTS;
 const site = await serve('.');
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 800, height: 1100 } });
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -18,7 +20,7 @@ try {
   const saved = emptyState();
   saved.settings.pinHash = fallbackHash('kidquest:1234');
   saved.settings.questView = 'list';
-  const today = dateKey();
+  const today = TEST_DAY;
   const ava = defaultTasks();
   ava.push({ id: 'task_bath', name: 'Clean the bathroom', icon: '🛁', period: 'afternoon', days: [6], verify: 'parent', minutes: 0 });
   saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: ava, startDate: today });
@@ -47,7 +49,7 @@ try {
   assert.equal(b.everyOtherWeek, 1 - weekParity(today));
   assert.deepEqual(b.days, [6]);
   // the Saturday in this Mon-Sun week (turns follow the week's parity, so on a Sunday it is yesterday)
-  const sat = addDays(today, 5 - ((new Date().getDay() + 6) % 7));
+  const sat = addDays(today, 5 - ((at(today).getDay() + 6) % 7));
   const has = (i, key) => tasksForDay(after, after.kids[i], key, key).some((t) => t.name === 'Clean the bathroom');
   assert.ok(has(0, sat) && !has(1, sat), 'Ava this Saturday');
   assert.ok(!has(0, addDays(sat, 7)) && has(1, addDays(sat, 7)), 'Ben next Saturday');

@@ -13,7 +13,8 @@ import { openParents } from '../helpers/open-kid.mjs';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, fallbackHash, dateKey } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
+import { pageDay } from '../helpers/clock.mjs';
 
 const out = (process.argv[2] || 'previews/testrec').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
@@ -21,7 +22,7 @@ const TABLET = { width: 1280, height: 800 };
 
 const s = emptyState();
 s.settings.pinHash = fallbackHash('kidquest:1234');
-s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), seenUnlocks: [], seenMoves: [], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } });
+s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: null, seenUnlocks: [], seenMoves: [], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } });
 
 const site = await serve('.');
 const browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
@@ -55,6 +56,8 @@ const page = await ctx.newPage();
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/favicon|ERR_|net::/.test(m.text())) errors.push(m.text()); });
 await page.goto(site.url);
+// the recording runs on the page's real clock, so the kid starts on the page's today (not Node's)
+s.kids[0].startDate = await pageDay(page);
 await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), s);
 await page.reload();
 

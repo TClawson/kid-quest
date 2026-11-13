@@ -177,7 +177,7 @@ export function visitorSpots(visit, L = villageLayout('bg-meadow')) {
   return out;
 }
 
-// The visitors walk in once a day per kid on this device (like the old map's arrival): the day
+// The visitors walk in once a day per kid on this device: the day
 // they last did, per kid, kept in the browser (and in memory when there is no storage).
 const ARRIVED_KEY = 'kidquest.visitorsIn';
 const arrivedMem = new Map();

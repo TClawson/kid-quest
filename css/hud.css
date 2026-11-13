@@ -188,10 +188,6 @@ html.kid-full .toast { bottom: calc(110px + env(safe-area-inset-bottom)); }
   .m-item { min-height: 56px; font-size: 1.25rem; }
 }
 
-/* ---------- the old map page (Menu > Old map, for one release) ---------- */
-.old-map-back { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
-.old-map-back .btn { flex: none; }
-
 /* ---------- the shop's tabs: kinds of things, then (for clothes and the house) which ones ---------- */
 .shop-tabs { display: grid; gap: 8px; margin-bottom: 16px; }
 .shop-tabs .tabs { flex-wrap: nowrap; overflow-x: auto; margin: 0; padding: 2px 2px 6px; scrollbar-width: thin; }

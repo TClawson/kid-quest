@@ -4,13 +4,14 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash, tasksForDay } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash, tasksForDay } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
 const browser = await chromium.launch();
-const day = dateKey();
+const day = TEST_DAY;
 
 function stateWith(done, outfit = { background: 'bg-meadow' }, buddyOwned = {}) {
   const s = emptyState();
@@ -43,6 +44,7 @@ async function tipLight(page) {
 try {
   for (const [label, viewport] of [['tablet', { width: 900, height: 1200 }], ['phone', { width: 390, height: 844 }]]) {
     const page = await browser.newPage({ viewport, deviceScaleFactor: shots ? 2 : 1 });
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });

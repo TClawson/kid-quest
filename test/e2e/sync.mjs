@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, addDays } from '../../js/logic.js';
+import { emptyState, defaultTasks, addDays } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid, openParents, doChore, closePops } from '../helpers/open-kid.mjs';
 
 const pinHash = (pin) => `sha256:${createHash('sha256').update(`kidquest:${pin}`).digest('hex')}`;
@@ -18,6 +19,7 @@ const log = (m) => console.log(`[${((Date.now() - T0) / 1000).toFixed(1)}s] ${m}
 
 async function device(name, { email, saved } = {}) {
   const ctx = await browser.newContext();
+  await useTestDay(ctx); // every device's clock starts at noon on the test's day (see clock.mjs)
   await ctx.addInitScript(([testEmail]) => {
     localStorage.setItem('kidquest.emulator', '1');
     if (testEmail) window.__kidQuestTestEmail = testEmail;
@@ -74,7 +76,7 @@ async function joinWith(page, code) {
 }
 
 try {
-  const today = dateKey();
+  const today = TEST_DAY;
   // ---- Only allowed Google accounts can start a family (set up in the console in real life)
   await fetch('http://127.0.0.1:8180/v1/projects/demo-kid-quest/databases/(default)/documents/allowedParents?documentId=mom@example.com', {
     method: 'POST', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' }, body: '{"fields":{}}',

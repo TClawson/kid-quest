@@ -1,6 +1,6 @@
-// Things that move on the quest map: fish, aliens and a rocket, an erupting volcano, a dragon
+// Things that move in the village: fish, aliens and a rocket, an erupting volcano, a dragon
 // and a knight, a unicorn, flying saucers, the rainforest's sloth, toucan, monkey and jaguar. Drawn
-// on a second canvas over the land (under the stops), with the same pixel size as the map. Events
+// on a canvas of their own over the land, with the same pixel size as the map. Events
 // happen where the kid is looking.
 
 import { sounds, setRain } from './fx.js';
@@ -1140,18 +1140,6 @@ const CAPY_EEK = sprite(swap(CAPY_BODY, 1, ['.....cceeccc', '....cceKeccccc', '.
 const CAPY_FALL = sprite(['....c.cc.cc.c', '...c.ccccccc.c', '....cceKeccccc', '....cceeecccnn', '.....ccccccccK', '..rrwwrrrwwrr', '.rrwwrrrwwrrrr', '..rrwwrrrwwrr']);
 
 /**
- * Where the rainforest waterfall is, in map pixels: it pours out of the forest wall on one side
- * into the river, and whatever comes over it floats off down the river (maparts.js paints the rock).
- * band: the river (see drawRiver in maparts.js), side: -1 left wall, 1 right wall.
- */
-export function waterfallAt(band, wall, side) {
-  const { aw } = band;
-  const x0 = side < 0 ? wall - 3 : aw - wall - 6;
-  const riverY = band.wave(x0) ;
-  return { side, x0, x1: x0 + 9, lip: riverY - 34, base: riverY - 2, dir: -side, aw, wave: band.wave, bridge: [band.bx0, band.bx1] };
-}
-
-/**
  * The rainforest: a sloth takes a whole minute to cross on a vine (tap it for a slow wave), a toucan
  * steals the monkey's banana (tap it to make it drop it), a rain shower sends everyone under the
  * jaguar's leaf, and now and then something comes over the waterfall.
@@ -1596,33 +1584,24 @@ const running = new WeakMap();
 const kept = new Map();
 
 /**
- * Start the moving things for a painted map.
- * m: { section, aw, ah, scale, life, wall, goal: {x, y}, knightPost: {x, y, side}, openSpot({top, bottom}) }
+ * Start the moving things for the village (see startLife in village.js).
+ * m: { section, canvas, host, view(), toMap(e), key, aw, ah, z, life, wall, goal: {x, y},
+ *   knightPost: {x, y, side}, openSpot({top, bottom}), ... }
+ * The village brings its own canvas, says what the kid can see (m.view) and where a tap lands (m.toMap).
  */
 export function startMapLife(m) {
   const old = running.get(m.section);
   if (old) clearInterval(old);
-  // the village brings its own canvas (m.canvas) and says what the kid can see (m.view)
-  let canvas = m.canvas || m.section.querySelector('canvas.map-life');
-  if (!LIVES[m.life]) { if (!m.canvas) canvas?.remove(); return; }
-  if (!canvas) {
-    canvas = document.createElement('canvas');
-    canvas.className = 'map-life';
-    canvas.setAttribute('aria-hidden', 'true');
-    m.section.querySelector('canvas.map-land').after(canvas);
-  }
-  // twice the map's pixels, like the land: sprites are drawn with half-size pixels
+  const { canvas } = m;
+  if (!LIVES[m.life]) return;
+  // z: fine pixels per map pixel (sprites can be drawn with half-size pixels)
   const Z = m.z || 1;
   canvas.width = m.aw * Z;
   canvas.height = m.ah * Z;
-  if (!m.canvas) {
-    canvas.style.width = `${m.aw * m.scale}px`;
-    canvas.style.height = `${m.ah * m.scale}px`;
-  }
   const ctx = canvas.getContext('2d');
   ctx.setTransform(Z, 0, 0, Z, 0, 0);
   ctx.fine = Z;
-  const key = m.key || `${m.section.dataset.seed || ''}|${m.life}`;
+  const { key } = m;
   let keep = kept.get(key);
   if (keep) {
     Object.assign(keep.geo, m); // the actors read the map's size and spots from here
@@ -1633,20 +1612,15 @@ export function startMapLife(m) {
   }
   const { actor, t0 } = keep;
   m.section.mapLife = actor; // lets the preview script find the unicorn
-  const view = m.view || (() => {
-    const r = m.section.getBoundingClientRect();
-    const top = Math.max(0, -r.top) / m.scale;
-    const bottom = Math.min(r.height, (window.innerHeight || r.height) - r.top) / m.scale;
-    return bottom > top + 30 ? { top, bottom } : { top: 0, bottom: m.ah };
-  });
+  const { view } = m;
   if (actor.poke) {
     // the village's view handles its own taps, so it listens on the way down (m.host, capture)
-    (m.host || m.section).addEventListener('click', (e) => {
+    m.host.addEventListener('click', (e) => {
       if (e.target.closest('button, .map-visitor, .v-dialog')) return;
-      const at = m.toMap ? m.toMap(e) : (() => { const r = m.section.getBoundingClientRect(); return { x: (e.clientX - r.left) / m.scale, y: (e.clientY - r.top) / m.scale }; })();
+      const at = m.toMap(e);
       // in the village a tap on a critter only pokes it; the buddy stays put
-      if (actor.poke(at.x, at.y) && m.host) { e.stopPropagation(); e.preventDefault(); }
-    }, Boolean(m.host));
+      if (actor.poke(at.x, at.y)) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
   }
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const tick = () => {

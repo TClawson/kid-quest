@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid, openParents, doChore } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
@@ -11,6 +12,7 @@ const site = await serve('.');
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 900, height: 1200 } });
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -18,9 +20,9 @@ try {
   const saved = emptyState();
   saved.settings.pinHash = fallbackHash('kidquest:1234');
   saved.settings.questView = 'list';
-  saved.settings.allowance = { on: false, coins: 300, xp: 300, bonus: 50, since: dateKey() }; // typed amounts per task
+  saved.settings.allowance = { on: false, coins: 300, xp: 300, bonus: 50, since: TEST_DAY }; // typed amounts per task
   const tasks = defaultTasks();
-  saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: dateKey(), owned: [], spent: 0 });
+  saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: TEST_DAY, owned: [], spent: 0 });
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();

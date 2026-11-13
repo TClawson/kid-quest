@@ -17,12 +17,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, fallbackHash, addDays, dateKey } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash, addDays } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid, openParents } from '../helpers/open-kid.mjs';
 
 const out = (process.argv[2] || 'previews/note-o-matic/lab').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
-const day = dateKey();
+const day = TEST_DAY;
 const TABLET = { width: 1280, height: 800 };
 const PHONE = { width: 360, height: 740 };
 const KID = 'kid_ava';
@@ -95,6 +96,7 @@ async function start(viewport, st) {
     md.getUserMedia = async (c) => { const x = await gum(c); window.kqStreams.push(x); return x; };
   });
   const page = await ctx.newPage();
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/favicon|ERR_|net::/.test(m.text())) errors.push(m.text()); });
   await page.goto(site.url);

@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { seenSaturday } from '../helpers/seed.mjs';
-import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { emptyState, defaultTasks } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid, closePops } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
@@ -13,14 +14,15 @@ const browser = await chromium.launch();
 try {
   const ctx = await browser.newContext({ ...devices['Pixel 7'] });
   const page = await ctx.newPage();
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(site.url);
   const s = emptyState();
   s.settings.pinHash = 'sha256:test';
   s.settings.sound = false;
-  s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: { background: 'bg-ocean' } } });
-  s.log[dateKey()] = { kid_sam: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
+  s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: TEST_DAY, buddy: { species: 'fox', outfit: { background: 'bg-ocean' } } });
+  s.log[TEST_DAY] = { kid_sam: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
   // a kid's tablet in a family, with two other kids' buddies cached for visiting
   await page.evaluate((st) => {
     localStorage.setItem('kidquest.v1', JSON.stringify(st));

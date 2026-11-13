@@ -659,7 +659,7 @@ export const SECRETS = {
   },
 };
 
-/** The hidden spot's SVG: three frames stacked, CSS shows one at a time (see .map-secret). */
+/** The hidden spot's SVG: three frames stacked, CSS shows one at a time (the village's landmark draws one frame). */
 export function secretSvg(themeId, scale = 4, { smooth = 1 } = {}) {
   const s = SECRETS[themeId];
   if (!s) return '';

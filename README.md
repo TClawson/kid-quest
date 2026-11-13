@@ -11,7 +11,7 @@ v1 runs entirely on one Android tablet. There is no server and no account: every
 - **Parent PIN** to sign off tasks on the spot, or "ask a parent later", which puts the task in the parent's approval queue.
 - **Piano timer** that only counts while the app is open on screen and keeps the screen awake.
 - **Streaks**: a day counts when every scheduled task is done. 7 perfect days in a row earn a streak freeze (max 2), used automatically on a missed day. Parents can mark a day as excused, and approving tasks late repairs the streak.
-- **Quest map**: tasks are stops on a winding board-game path with the buddy standing on the next one and a treasure chest at the end (a list view is one tap away).
+- **The village**: the kid's screen is a full-screen village the buddy walks around. Each chore is a quest from a villager, with the buddy's house, the garden and the music house to go into, and a treasure chest once the day's quests are done.
 - **Celebrations**: sound and XP for each task, confetti for a complete day, and a big celebration with the parent-chosen weekly reward every 7 days.
 - **Reminders** at set times (sound and banner while the app is open, a notification if it's in the background and notifications are allowed).
 - **Animated buddies**: each kid picks a fox, bear, panda, cat or dino. Drawn as 16-bit style pixel art. It is sleepy before the first task, cheers when a task is done, dances when the day is complete, and looks sad after a missed day.
@@ -36,7 +36,7 @@ Devices can share one family in Firebase (Firestore + Auth), so progress is safe
 2. **Add a kid's device** shows a code. On each kid's tablet (each Android user), Parents › Settings › Family sync › **Join with a code**. That kid's progress uploads, is read back and checked, and a backup file is saved first. The kid's original local copy is never deleted.
 3. **Add a parent** shows a parent code for the other parent's phone.
 
-**Visiting buddies:** every day, 1 to 4 other kids' buddies show up by the village houses at the top of each kid's quest map, wearing whatever outfit their owner picked. Who visits is random but fixed per kid per day (`js/visits.js`), so every device agrees. They take turns saying preset lines; tap one to hear it. This works on a shared device with several kids, and across devices once they sync with the family.
+**Visiting buddies:** every day, 1 to 4 other kids' buddies show up on the green in each kid's village, wearing whatever outfit their owner picked. Who visits is random but fixed per kid per day (`js/visits.js`), so every device agrees. They take turns saying preset lines; tap one to hear it. This works on a shared device with several kids, and across devices once they sync with the family.
 
 Firebase setup (once): the project in `js/firebase-config.js` needs Google and Anonymous sign-in enabled, `tclawson.github.io` as an authorized domain, and the rules in `firestore.rules` published (Firestore › Rules, paste, Publish). Re-publish whenever `firestore.rules` changes.
 

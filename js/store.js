@@ -13,6 +13,9 @@ import { defaultBuddy, speciesFromEmoji, moveWornToBuddy } from './items.js';
 export const STORAGE_KEY = 'kidquest.v1';
 
 // Settings that belong to one device (or one Android user), not the family.
+// questView ('map', 'list' or 'village') is no longer read: the kid's screen is always the village.
+// Older saves still carry it, so it stays here to keep it on this device and out of the family's
+// cloud copy, as before.
 export const DEVICE_SETTINGS = ['sound', 'music', 'questView'];
 
 // Bring saved data from any older version up to the current shape.

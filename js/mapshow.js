@@ -831,7 +831,7 @@ const running = new WeakMap();
 export const showPlaying = (section) => running.has(section);
 
 /**
- * Play the show for a map theme on a painted .quest-map section.
+ * Play the show for a map theme on the village's show layer (.v-show, with its canvas.map-land).
  * opts: { buddy: Image or null, spot: { x, y } landmark center in CSS pixels in the map, onDone,
  * spotNow: () => the same, asked again each frame by a show that hangs on the landmark (V.now) }.
  * Returns the show (for its sfx) or null if there is none or one is playing.

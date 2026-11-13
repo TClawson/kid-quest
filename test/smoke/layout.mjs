@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY, TEST_NOW, useTestDay } from '../helpers/clock.mjs';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { closePops, toPicker } from '../helpers/open-kid.mjs';
 
@@ -17,7 +18,7 @@ const SIZES = [
   { name: 'tablet', width: 800, height: 1280 },
 ];
 
-const today = dateKey();
+const today = TEST_DAY;
 function seed() {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
@@ -26,7 +27,7 @@ function seed() {
   ava.push({ id: 'task_bath', name: 'Clean the bathroom with a really long chore name', icon: '🛁', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'parent', minutes: 0 });
   s.kids.push({ id: 'kid_ava', name: 'Annabelle', color: '#ff6b6b', tasks: ava, startDate: today, owned: [], spent: -2400, buddy: { species: 'fox', outfit: {} } });
   s.kids.push({ id: 'kid_ben', name: 'Ben', color: '#4dabf7', tasks: defaultTasks(), startDate: today, owned: [], spent: -2400, buddy: { species: 'panda', outfit: {} } });
-  s.log[today] = { kid_ava: { tasks: { task_bath: { status: 'pending', at: Date.now() } } } };
+  s.log[today] = { kid_ava: { tasks: { task_bath: { status: 'pending', at: TEST_NOW } } } };
   s.log[today].kid_ben = { tasks: {}, excused: true }; // the buddy store opens once the day's chores are done
   return s;
 }
@@ -64,6 +65,7 @@ try {
   for (const size of SIZES) {
     const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2, hasTouch: size.width < 600, isMobile: size.width < 600 });
     const page = await ctx.newPage();
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
@@ -95,12 +97,7 @@ try {
     await go('#modal [data-action="modal-close"]');
     await go('.k-hud [data-action="menu"]');
     await check('kid-menu');
-    // the old map, from the Menu
-    await go('#modal [data-action="old-map"]');
-    await page.waitForSelector('.quest-map');
-    await check('kid-map');
-    await go('[data-action="old-map-back"]');
-    await page.waitForSelector('.village .villager');
+    await go('#modal [data-action="modal-close"]');
     // the piano's villager: walk over, then start the timer from what they say
     // (weekdays only: the default piano task has no Saturday or Sunday). The piano's villager
     // can be off screen, where a real click can't reach it, so the tap is sent to it directly.

@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash, addDays, tasksForDay } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash, addDays, tasksForDay } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid, openParents, closePops } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS;
@@ -12,11 +13,12 @@ const site = await serve('.');
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 800, height: 1100 } });
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-  const today = dateKey();
+  const today = TEST_DAY;
   const yday = addDays(today, -1);
   const tasks = defaultTasks();
   tasks.push({ id: 'task_shower', name: 'Shower', icon: '🚿', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0 });

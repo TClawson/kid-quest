@@ -6,8 +6,8 @@
 //   buddy is live (it moves untouched) and goes with the pop-up
 // - a visitor arriving while a pop-up is open is in the village as soon as the pop-up closes
 // - visitors' speech bubbles never sit under the HUD or the arrows (walking round, three sizes)
-// - the Menu: music and sounds switch, the old map opens and comes back, Switch kid only with
-//   more than one kid, Parents asks for the PIN
+// - the Menu: music and sounds switch (no Old map any more), Switch kid only with more than one
+//   kid, Parents asks for the PIN
 // - a tap on the ground lands where it was tapped, and a tap on a villager walks there and talks
 //   (the HUD hides meanwhile)
 // - the house is drawn at a whole-number scale that fits (4x at 1280x800) and its chores work
@@ -18,11 +18,12 @@ import fs from 'node:fs';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { parentFamily } from '../helpers/parent-family.mjs';
-import { emptyState, addDays, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, addDays, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY } from '../helpers/clock.mjs';
 
 const out = process.argv[2]?.replace(/\/$/, '');
 if (out) fs.mkdirSync(out, { recursive: true });
-const DAY = dateKey();
+const DAY = TEST_DAY; // the page's clock is installed at a time of this day (see clock.mjs)
 const ALL = [0, 1, 2, 3, 4, 5, 6];
 const SIZES = [{ width: 1280, height: 800 }, { width: 800, height: 1280 }, { width: 412, height: 915 }];
 
@@ -31,7 +32,7 @@ function soloFamily() {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
-  s.settings.questView = 'map'; // she chose the old map once: the village opens anyway
+  s.settings.questView = 'map'; // saved when there was an old map to choose: ignored, the village opens
   const tasks = [
     { id: 'e_bed', name: 'Make bed', icon: '🛏️', period: 'morning', days: ALL, verify: 'self', minutes: 0, house: 'bed' },
     { id: 'e_cat', name: 'Feed the cat', icon: '🐱', period: 'morning', days: ALL, verify: 'self', minutes: 0 },
@@ -245,7 +246,7 @@ try {
     await page.click('.k-menu');
     await page.waitForSelector('.menu-pop');
     const items = await page.$$eval('.menu-pop .m-item', (els) => els.map((e) => e.dataset.action));
-    assert.deepEqual(items, ['menu-music', 'menu-sound', 'plan', 'old-map', 'menu-switch', 'menu-parents'], 'the Menu, with Switch kid for four kids');
+    assert.deepEqual(items, ['menu-music', 'menu-sound', 'plan', 'menu-switch', 'menu-parents'], 'the Menu, with Switch kid for four kids');
     assert.match(await page.locator('[data-action="menu-parents"]').innerText(), /PIN · \d+ waiting/, 'Parents shows how many wait');
     assert.match(await page.locator('[data-action="menu-sound"]').innerText(), /Off/);
     await shot(page, 'menu');
@@ -260,18 +261,7 @@ try {
     assert.notEqual((await saved(page)).settings.music, false, 'and back on');
     await page.click('[data-action="menu-sound"]');
     assert.equal((await saved(page)).settings.sound, false, 'sounds off again');
-
-    // the old map, and back
-    await page.click('[data-action="old-map"]');
-    await page.waitForSelector('.quest-map');
-    assert.equal(await page.locator('.village').count(), 0, 'the old map page');
-    assert.equal(await page.evaluate(() => document.documentElement.classList.contains('kid-full')), false, 'it scrolls as before');
-    assert.ok(await page.locator('.map-node').count(), 'with its quests');
-    assert.ok(await page.locator('[data-action="old-map-back"]').isVisible(), 'and an obvious way back');
-    await shot(page, 'old-map');
-    await page.click('[data-action="old-map-back"]');
-    await page.waitForSelector('.village .k-hud');
-    await fullScreen(page, '.village', 'back from the old map');
+    await closeModals(page);
 
     // Switch kid, then Parents (PIN)
     await page.click('.k-menu');
@@ -369,7 +359,7 @@ try {
     await ctx.close();
   }
 
-  // ---- one kid on her own tablet: no Switch kid; a device that chose the map opens the village
+  // ---- one kid on her own tablet: no Switch kid; a device that once chose the old map opens the village
   {
     const { ctx, page } = await open(SIZES[2], soloFamily(), { time: '07:30' });
     await page.waitForSelector('.screen.kid');
@@ -380,10 +370,8 @@ try {
     assert.equal(await page.locator('.k-fam').count(), 0, 'no family pill for one kid');
     await page.click('.k-menu');
     assert.equal(await page.locator('[data-action="menu-switch"]').count(), 0, 'no Switch kid');
-    await page.click('[data-action="old-map"]');
-    await page.waitForSelector('.quest-map');
-    await page.click('[data-action="old-map-back"]');
-    await page.waitForSelector('.village .k-hud');
+    assert.equal(await page.locator('[data-action="old-map"]').count(), 0, 'no Old map');
+    await closeModals(page);
 
     // the live buddy in Status goes when Status closes, so nothing moves behind the village
     await page.click('.k-plate');

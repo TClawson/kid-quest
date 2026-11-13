@@ -9,12 +9,14 @@ import { chromium } from 'playwright';
 import { toPicker, openParents, openMenu } from '../helpers/open-kid.mjs';
 import { serve } from '../helpers/serve.mjs';
 import { parentFamily } from '../helpers/parent-family.mjs';
-import { dateKey, addDays, totalCoins, totalXp } from '../../js/logic.js';
+import { addDays, totalCoins, totalXp } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
 const browser = await chromium.launch();
-const t = dateKey();
+// the page's clock starts at noon on the test's day, so a run across midnight stays on one day
+const t = TEST_DAY;
 const y = addDays(t, -1);
 
 async function open(viewport, setup, { family = false } = {}) {
@@ -24,8 +26,9 @@ async function open(viewport, setup, { family = false } = {}) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   // no Firebase in this test: a family device just can't reach it
   if (family) await page.route('**/js/vendor/firebase.js', (r) => r.abort());
+  await useTestDay(page);
   await page.goto(site.url);
-  await page.evaluate(setup, parentFamily());
+  await page.evaluate(setup, parentFamily(t));
   await page.reload();
   return { page, errors };
 }
