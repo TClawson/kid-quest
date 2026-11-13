@@ -85,13 +85,3 @@ export async function visitorsHere(page, { clock = false } = {}) {
   }
   if (clock) await page.clock.runFor(300); else await page.waitForTimeout(300);
 }
-
-/**
- * The old map, from the kid's Menu (there for one release while kids get used to the village).
- * Only for tests of the old map itself (they go when it goes).
- */
-export async function openOldMap(page) {
-  await openMenu(page);
-  await page.click('#modal [data-action="old-map"]');
-  await page.waitForSelector('.quest-map');
-}

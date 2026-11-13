@@ -1,4 +1,4 @@
-// The village's own versions of the three effects only the old map had:
+// The village's walk-in and show effects:
 // - visitors walk in to their spots the first time they show on a day (they move, then stand on
 //   their spots), and a second open the same day has no walk-in
 // - a landmark's show shakes the village (not the HUD) while the show says so (map-quake)

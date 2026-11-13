@@ -95,12 +95,7 @@ try {
     await go('#modal [data-action="modal-close"]');
     await go('.k-hud [data-action="menu"]');
     await check('kid-menu');
-    // the old map, from the Menu
-    await go('#modal [data-action="old-map"]');
-    await page.waitForSelector('.quest-map');
-    await check('kid-map');
-    await go('[data-action="old-map-back"]');
-    await page.waitForSelector('.village .villager');
+    await go('#modal [data-action="modal-close"]');
     // the piano's villager: walk over, then start the timer from what they say
     // (weekdays only: the default piano task has no Saturday or Sunday). The piano's villager
     // can be off screen, where a real click can't reach it, so the tap is sent to it directly.

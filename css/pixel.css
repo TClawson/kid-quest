@@ -1,6 +1,6 @@
 /* ---------- 16-bit look for the whole app, plus phone layout fixes ----------
    Loaded after style.css and moves.css, so it restyles the plain app to match the
-   pixel buddies and the quest map: chunky dark outlines, square corners, hard drop
+   pixel buddies and the village: chunky dark outlines, square corners, hard drop
    shadows with no blur, beveled buttons and a pixel font. */
 
 @font-face { font-family: 'Jersey 10'; src: url('../fonts/jersey-10-latin-400-normal.woff2') format('woff2'); font-display: swap; }
@@ -27,12 +27,12 @@ body { background-image: repeating-conic-gradient(#efeaff 0 25%, transparent 0 5
 html, body { overflow-x: clip; }
 .screen { overflow-wrap: break-word; }
 
-h1, h2, .kid-name, .streak, .tile-text b, .item-name, .timer-left, .join-code, .celebrate h1 { font-family: var(--px-font); font-weight: 700; letter-spacing: 0.01em; }
+h1, h2, .kid-name, .streak, .item-name, .timer-left, .join-code, .celebrate h1 { font-family: var(--px-font); font-weight: 700; letter-spacing: 0.01em; }
 h1 { font-size: 2rem; text-shadow: 2px 2px 0 var(--px-line); }
 h2 { font-size: 1.35rem; }
 /* long help text and form fields stay in an easy-to-read font */
-small, .small, p.muted, .parent label, .parent .block, .muted.small, input, select, .block > small, .list-row small, .tile-text small { font-family: var(--px-text); }
-.tile-text small, .list-row small, .item small { font-size: 0.85rem; }
+small, .small, p.muted, .parent label, .parent .block, .muted.small, input, select, .block > small, .list-row small { font-family: var(--px-text); }
+.list-row small, .item small { font-size: 0.85rem; }
 
 /* ---------- buttons ---------- */
 .btn { border: 3px solid var(--px-ink); border-radius: 6px; font-family: var(--px-font); font-weight: 700; letter-spacing: 0.02em; box-shadow: var(--px-bevel), 0 4px 0 var(--px-ink); transition: none; }
@@ -46,25 +46,16 @@ small, .small, p.muted, .parent label, .parent .block, .muted.small, input, sele
 .badge { border-radius: 3px; border: 2px solid var(--px-ink); padding: 0 6px; font-family: var(--px-font); }
 
 /* ---------- panels ---------- */
-.card, .tile, .list-row, .task-edit, .buddy-panel, .wardrobe-top, .exercise, .item, .move, .kid-card, .modal-card, .quest-progress:not(.buddy-panel .quest-progress) {
+.card, .list-row, .task-edit, .wardrobe-top, .item, .move, .kid-card, .modal-card {
   border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink);
 }
-.card, .list-row, .task-edit, .buddy-panel, .wardrobe-top, .exercise, .modal-card { background: var(--px-paper); }
+.card, .list-row, .task-edit, .wardrobe-top, .modal-card { background: var(--px-paper); }
 .card .list-row { border: 0; box-shadow: none; background: none; }
-.buddy-panel .quest-progress { border: 0; background: none; }
 
 .kid-card { border-top-width: 3px; padding-top: 30px; position: relative; background: var(--px-paper); box-shadow: 0 6px 0 var(--px-ink); }
 .kid-card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 14px; background: var(--kid); border-bottom: 3px solid var(--px-ink); box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.35); }
 .kid-card:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--px-ink); }
-.kid-card .buddy, .buddy-panel .buddy, .wardrobe-top .buddy { border: 3px solid var(--px-ink); border-radius: 4px; }
-
-.tile { background: #fff; transition: none; }
-.tile:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--px-ink); }
-.tile-check { border-radius: 4px; box-shadow: none; border: 3px solid var(--px-ink); background: #fff; }
-.tile.done { background: #e6f8ea; box-shadow: 0 4px 0 var(--px-ink); }
-.tile.done .tile-check { background: var(--done); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2); }
-.tile.pending { background: #fff1d6; }
-.tile.pending .tile-check { box-shadow: none; border-color: #b86e00; background: #ffe0a3; }
+.kid-card .buddy, .wardrobe-top .buddy { border: 3px solid var(--px-ink); border-radius: 4px; }
 
 .item { background: #fff; }
 .item.on { box-shadow: 0 0 0 3px var(--brand), 0 4px 0 var(--px-ink); }
@@ -75,21 +66,12 @@ small, .small, p.muted, .parent label, .parent .block, .muted.small, input, sele
 .move { box-shadow: 0 3px 0 var(--px-ink); border-width: 2px; }
 .move:not(.locked) { background: #f3f0ff; }
 
-/* speech bubbles: cream paper with an ink outline, like the timer and visitor bubbles */
-.bubble { background: #fff3d6; color: var(--px-ink); border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 3px 3px 0 var(--px-shade); font-family: var(--px-font); font-weight: 700; }
-@media (min-width: 561px) { .bubble::before { left: -12px; border-right-color: var(--px-ink); } }
-@media (max-width: 560px) { .bubble::before { top: -12px; border-bottom-color: var(--px-ink); } }
-
-/* ---------- chips, tabs, toggles ---------- */
+/* ---------- chips and tabs ---------- */
 .chip { border-radius: 4px; box-shadow: none; border: 2px solid var(--px-ink); font-family: var(--px-font); font-weight: 700; background: #fff; }
 .chip.coin { background: #ffe9a3; }
-.chip.gem { background: #e5dbff; }
 .tabs { flex-wrap: wrap; overflow: visible; gap: 8px; }
 .tabs button { border-radius: 4px; border: 2px solid var(--px-ink); background: var(--px-paper); color: var(--px-ink); font-family: var(--px-font); font-weight: 700; box-shadow: 0 3px 0 var(--px-ink); padding: 8px 14px; }
 .tabs button.on { background: var(--brand); color: #fff; box-shadow: var(--px-bevel), 0 3px 0 var(--px-ink); }
-.view-toggle { border-radius: 6px; border: 3px solid var(--px-ink); box-shadow: 0 3px 0 var(--px-ink); padding: 3px; background: var(--px-paper); }
-.view-toggle button { border-radius: 3px; font-family: var(--px-font); font-weight: 700; color: var(--px-ink); }
-.view-toggle button.on { box-shadow: var(--px-bevel); }
 .daychip { border-radius: 4px; border: 2px solid var(--px-ink); font-family: var(--px-font); background: #fff; color: var(--muted); }
 .daychip.on { box-shadow: var(--px-bevel); }
 .pick-item { border-radius: 4px; border: 2px solid var(--px-line); }
@@ -100,7 +82,6 @@ small, .small, p.muted, .parent label, .parent .block, .muted.small, input, sele
 .bar { border-radius: 2px; border: 2px solid var(--px-ink); background: #fff; height: 14px; }
 .bar.big { height: 22px; }
 .bar span { border-radius: 0; background: repeating-linear-gradient(90deg, var(--kid) 0 12px, color-mix(in srgb, var(--kid) 70%, #000) 12px 14px); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.35); }
-.xpbar { border-radius: 2px; border: 2px solid var(--px-ink); height: 10px; background: #fff; }
 .dot span { border-radius: 4px; border: 2px solid var(--px-ink); font-family: var(--px-font); }
 .dot.today span { box-shadow: inset 0 0 0 3px var(--kid); }
 .dot.future span { border-color: var(--px-line); box-shadow: none; }
@@ -144,7 +125,6 @@ input[type=checkbox] { accent-color: var(--brand); }
   .task-edit > div.row:first-of-type .grow { flex: 1 1 calc(100% - 80px); }
   .task-edit > div.row:first-of-type .btn.round:first-of-type { margin-left: auto; }
   .tabs button { padding: 8px 10px; font-size: 0.95rem; }
-  .tiles { grid-template-columns: minmax(0, 1fr); }
   .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .moves { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .week { gap: 4px; }
