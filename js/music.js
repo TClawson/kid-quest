@@ -1,7 +1,9 @@
-// Background music for the quest map: one original 16-bar chiptune loop per map theme,
-// synthesized live with Web Audio (pulse waves, a triangle bass and noise drums, like old
-// consoles). No audio files. A small look-ahead scheduler keeps the timing steady.
+// Background music for the quest map: one original 16-bar chiptune loop per map theme (or a
+// longer loop in sections, maploops.js), synthesized live with Web Audio (pulse waves, a
+// triangle bass and noise drums, like old consoles). No audio files. A small look-ahead
+// scheduler keeps the timing steady.
 import { SONGS, SHOW_SONGS, barChords } from './songs.js';
+import { LOOPS } from './maploops.js';
 import { VOICES, KITS, DRUM_HALVES } from './studiokit.js';
 
 const VOLUME = 0.07;
@@ -311,10 +313,121 @@ function scheduleStep(r, song, s, t, only = null) {
   }
 }
 
+// ---------- the long loops (maploops.js) ----------
+
+/**
+ * A map theme's long loop as its bars, in order: { sec (its section), k (the bar within the
+ * section), n (the section's bars), beat (steps), step (seconds a step), lead, lead2 (tokens),
+ * tones (the chord's tones at every step) }. Null for a theme without one.
+ */
+const expanded = new Map();
+export function loopScore(id) {
+  const song = LOOPS[id];
+  if (!song) return null;
+  if (expanded.has(id)) return expanded.get(id);
+  const base = 60 / song.bpm / 2;
+  const bars = [];
+  for (const sec of song.sections) {
+    const beat = sec.beat || song.beat || 8;
+    // a section can fit its steps into a bar of another length (barEighths of the song's eighths)
+    const step = ((sec.barEighths || beat) * base) / beat;
+    const n = sec.lead.length;
+    for (const key of ['chords', 'lead2', 'inv']) if (sec[key] && sec[key].length !== n) throw new Error(`${sec.name}: ${key} has ${sec[key].length} bars, lead has ${n}`);
+    sec.lead.forEach((line, k) => {
+      const lead = line.split(' ');
+      const lead2 = sec.lead2?.[k] ? sec.lead2[k].split(' ') : null;
+      for (const l of [lead, lead2]) if (l && l.length !== beat) throw new Error(`${sec.name} bar ${k + 1}: ${l.length} steps, wants ${beat}`);
+      bars.push({ sec, k, n, beat, step, lead, lead2, tones: stepChords(sec.chords[k], beat) });
+    });
+  }
+  expanded.set(id, bars);
+  return bars;
+}
+
+/** Schedule step i of a long loop's bar b (see loopScore) at time t. */
+function scheduleLoopStep(r, song, b, i, t) {
+  const { sec, step } = b;
+  // a section's own setting, else the loop's
+  const pick = (key) => (sec[key] !== undefined ? sec[key] : song[key]);
+  const wave = pick('leadWave') || 'square';
+  const vol = pick('leadVol') ?? 0.32;
+  const tones = b.tones[i];
+  const n = b.lead[i];
+  if (n !== '-' && n !== '.') voice(r, wave, hz(midi(n)), t, holdLength(b.lead, i) * step * 0.95, vol, pick('leadEnv'), r.lead);
+  const m = b.lead2?.[i];
+  if (m && m !== '-' && m !== '.') voice(r, wave, hz(midi(m)), t, holdLength(b.lead2, i) * step * 0.95, vol * (pick('lead2Vol') ?? 0.4), pick('leadEnv'), r.lead);
+
+  const arp = pick('arp');
+  if (arp && b.k >= (arp.from || 0)) {
+    const order = arp.order === 'updown' ? [0, 1, 2, 1] : [0, 2, 1, 2];
+    const half = step / 2;
+    for (let k = 0; k < 2; k += 1) {
+      const tone = tones[order[(i * 2 + k) % order.length]];
+      voice(r, arp.wave || 'square', hz(tone + ((arp.octave ?? 4) + 1) * 12), t + k * half, half * 0.8, arp.vol ?? 0.07, arp.env);
+    }
+  }
+
+  const bb = pick('bass')[i];
+  if (bb) {
+    let tone = bb[0];
+    let shift = 0;
+    // inv: the bar's bass takes another chord tone (or octave) where the pattern has the root
+    const inv = sec.inv?.[b.k];
+    if (tone === 0 && inv) [tone, shift] = Array.isArray(inv) ? inv : [inv, 0];
+    voice(r, 'triangle', hz(tones[tone] + (bb[1] + 1 + shift) * 12), t, step * (bb[2] || 0.9), pick('bassVol') ?? 0.55);
+  }
+
+  const comp = pick('comp');
+  if (comp && comp.steps.includes(i) && (!comp.bars || comp.bars.includes(b.k))) {
+    // each chord tone folded into the octave above lo, so the chords sit close together
+    const lo = comp.lo ?? 53;
+    for (const tone of tones) voice(r, comp.wave || 'triangle', hz(lo + ((((tone - lo) % 12) + 12) % 12)), t, step * (comp.len || 1.6), comp.vol ?? 0.1, comp.env || 'pluck');
+  }
+
+  const flow = pick('flow');
+  const fp = flow && !flow.off?.includes(b.k) ? flow.pattern[i] : null;
+  if (fp) voice(r, flow.wave || 'triangle', hz(tones[fp[0]] + (fp[1] + 1) * 12), t, step * (flow.len || 1), flow.vol ?? 0.2, flow.env);
+
+  const sets = pick('drums');
+  const set = sets[Math.min(sets.length - 1, Math.floor((b.k * sets.length) / b.n))];
+  const fill = pick('fill') && b.k === b.n - 1 ? pick('fill') : null;
+  for (const line of fill || set) {
+    const ch = line[i];
+    if (ch && ch !== '.') drum(r, t, ch, pick('drumVol') ?? 1);
+  }
+}
+
+/**
+ * Render a theme's long loop once round, then `extra` more bars from the top (to hear the
+ * seam). Returns { buf (an AudioBuffer), marks ([section name, second it starts]), seconds }.
+ */
+export async function renderLoop(theme, extra = 0, sampleRate = 44100) {
+  const song = LOOPS[theme];
+  const bars = loopScore(theme);
+  const plan = [...bars, ...bars.slice(0, extra)];
+  const seconds = plan.reduce((a, b) => a + b.beat * b.step, 0) + 1.5;
+  const off = new OfflineAudioContext(1, Math.ceil(seconds * sampleRate), sampleRate);
+  const master = off.createGain();
+  master.gain.value = VOLUME * (song.gain || 1) * 4;
+  master.connect(off.destination);
+  const r = rig(off, master, song, 60 / song.bpm / 2);
+  let t = 0.05;
+  const marks = [];
+  for (const b of plan) {
+    if (b.k === 0) marks.push([b.sec.name, t]);
+    for (let i = 0; i < b.beat; i += 1) scheduleLoopStep(r, song, b, i, t + i * b.step);
+    t += b.beat * b.step;
+  }
+  const buf = await off.startRendering();
+  return { buf, marks, seconds: t };
+}
+
 // ---------- live playback ----------
 
 let ac = null;
-let live = null; // { r, song, id, master, timer, step, nextTime }
+// { r, song, id, master, timer, step, nextTime }; a long loop also has bars (loopScore), bar
+// (the bar being scheduled) and barTime (when it starts), and step counts within that bar
+let live = null;
 
 /** The game's AudioContext (made the first time it is needed), shared with the turntable. Null without sound. */
 export function musicContext() {
@@ -366,6 +479,22 @@ export const isMuffled = () => muffled;
 
 function tick() {
   const p = live;
+  if (p.bars) {
+    // a long loop: its steps differ from section to section, so each is timed from the start
+    // of its bar (and each bar from the end of the last), never by adding up steps
+    for (;;) {
+      const b = p.bars[p.bar];
+      const at = p.barTime + p.step * b.step;
+      if (at >= ac.currentTime + 0.25) return;
+      scheduleLoopStep(p.r, p.song, b, p.step, at);
+      p.step += 1;
+      if (p.step === b.beat) {
+        p.step = 0;
+        p.barTime += b.beat * b.step;
+        p.bar = (p.bar + 1) % p.bars.length;
+      }
+    }
+  }
   while (p.nextTime < ac.currentTime + 0.25) {
     scheduleStep(p.r, p.song, p.step, p.nextTime);
     p.step = (p.step + 1) % (p.song.lead.length * p.song.beat);
@@ -384,12 +513,15 @@ export function startMusic(theme = 'bg-meadow') {
     return;
   }
   if (ac.state === 'suspended') ac.resume().catch(() => {});
-  const song = compile(id);
+  // the long loop in sections where the theme has one (maploops.js), else the 16-bar song
+  const bars = loopScore(id);
+  const song = bars ? LOOPS[id] : compile(id);
   const master = ac.createGain();
   master.gain.setValueAtTime(0.0001, ac.currentTime);
   master.gain.linearRampToValueAtTime(VOLUME * (song.gain || 1), ac.currentTime + 1.2);
   master.connect(musicOut());
   live = { id, song, master, r: rig(ac, master, song, 60 / song.bpm / 2), step: 0, nextTime: ac.currentTime + 0.1, timer: 0 };
+  if (bars) Object.assign(live, { bars, bar: 0, barTime: live.nextTime });
   ducked = 0;
   tick();
   live.timer = setInterval(tick, 100);
