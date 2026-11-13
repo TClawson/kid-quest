@@ -165,7 +165,7 @@ async function litBar(page, n, ms = 8000) {
   await page.screenshot({ path: `${out}/2-piece-tablet.png`, fullPage: true });
   // Print opens the piece's PDF at the level on screen, and the file is there
   const print = await page.locator('.song-print').getAttribute('href');
-  assert.match(print, /^sheets\/moon-base-(easy|medium|hard)\.pdf$/);
+  assert.match(print, /^sheets\/moon-base-(easy|medium|hard)-[0-9a-f]{6}\.pdf$/);
   const pdf = await page.request.get(new URL(print, page.url()).href);
   assert.ok(pdf.ok() && (await pdf.body()).subarray(0, 5).toString() === '%PDF-', `${print} is served`);
   await page.click('[data-action="song-play"]');

@@ -17,6 +17,11 @@ import { COMPOSER } from './composer.js';
 export const SHEETS_DIR = 'sheets';
 /** Bars on a printed line. */
 export const PRINT_PER_LINE = 4;
+/**
+ * The page layout's version: raise it when scripts/build-sheets.mjs changes how a page looks,
+ * so every PDF gets a new fingerprint (and file name) even though its music didn't change.
+ */
+export const PRINT_LAYOUT = 2;
 
 const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
 
@@ -25,17 +30,31 @@ export const slug = (name) => String(name).toLowerCase().replace(/['’]/g, '').
 
 const mapName = (map) => itemById(map)?.name || 'map';
 
-/** Every printable sheet: [{ id, level, name, kind ('map'|'show'|'long'), file, from }]. */
+let sheets = null;
+/**
+ * Every printable sheet: [{ id, level, name, kind ('map'|'show'|'long'), file, print, from }].
+ * The file name ends with the start of the sheet's fingerprint (print), so a PDF made again
+ * from changed music or a new layout has a new name: a phone or tablet that downloaded the
+ * old one (Android keeps it in Downloads and may open that copy again) can't show it in its place.
+ */
 export function printSheets() {
+  sheets ||= sheetList().map((s) => {
+    const print = fingerprint(`${PRINT_LAYOUT}\n${printAbc(s)}`);
+    return { ...s, print, file: `${s.file}-${print.slice(0, 6)}.pdf` };
+  });
+  return sheets;
+}
+
+function sheetList() {
   const out = [];
   for (const p of SONGBOOK) {
     for (const level of LEVELS.filter((l) => hasLevel(p.id, l))) {
-      out.push({ id: p.id, level, name: p.name, kind: p.kind, file: `${SHEETS_DIR}/${slug(p.name)}-${level}.pdf`, from: p.kind === 'show' ? `The secret show on the ${mapName(p.map)} map` : `The ${mapName(p.map)} map song` });
+      out.push({ id: p.id, level, name: p.name, kind: p.kind, file: `${SHEETS_DIR}/${slug(p.name)}-${level}`, from: p.kind === 'show' ? `The secret show on the ${mapName(p.map)} map` : `The ${mapName(p.map)} map song` });
     }
   }
   for (const p of CONCERT) {
     for (const level of longLevels(p.id)) {
-      out.push({ id: p.id, level, name: p.name, kind: 'long', file: `${SHEETS_DIR}/${slug(p.name)}-${level}.pdf`, from: `A concert piece from the ${mapName(p.map)} map song` });
+      out.push({ id: p.id, level, name: p.name, kind: 'long', file: `${SHEETS_DIR}/${slug(p.name)}-${level}`, from: `A concert piece from the ${mapName(p.map)} map song` });
     }
   }
   return out;

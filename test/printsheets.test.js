@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { printSheets, printAbc, fingerprint, sheetFor, slug } from '../js/printsheets.js';
+import { printSheets, printAbc, fingerprint, sheetFor, slug, PRINT_LAYOUT } from '../js/printsheets.js';
 import { SONGBOOK } from '../js/sheetmusic.js';
 import { CONCERT, longLevels } from '../js/concert.js';
 import { COMPOSER } from '../js/composer.js';
@@ -18,7 +18,7 @@ test('every piece has a sheet at every level, each with its own file', () => {
   for (const p of CONCERT) for (const l of longLevels(p.id)) assert.ok(sheetFor(p.id, l), `${p.id} ${l}`);
   assert.equal(new Set(sheets.map((s) => s.file)).size, sheets.length);
   assert.equal(slug("Bubble Waltz/Mermaid's Lullaby"), 'bubble-waltz-mermaids-lullaby');
-  assert.equal(sheetFor('long:bg-meadow', 'hard').file, 'sheets/forest-village-the-walk-to-the-oak-hard.pdf', 'apart from the map song\'s forest-village sheets');
+  assert.match(sheetFor('long:bg-meadow', 'hard').file, /^sheets\/forest-village-the-walk-to-the-oak-hard-[0-9a-f]{6}\.pdf$/, 'apart from the map song\'s forest-village sheets');
 });
 
 test('the print has a title, level, composer and speed', () => {
@@ -33,7 +33,7 @@ test('every PDF is there and up to date (else: npm run build:sheets)', () => {
   assert.equal(manifest.composer, COMPOSER, 'the composer changed: print the PDFs again');
   for (const s of printSheets()) {
     assert.ok(existsSync(s.file), `${s.file} is missing`);
-    assert.equal(made.get(s.file)?.fingerprint, fingerprint(printAbc(s)), `${s.file} is out of date`);
+    assert.equal(made.get(s.file)?.fingerprint, fingerprint(`${PRINT_LAYOUT}\n${printAbc(s)}`), `${s.file} is out of date`);
     assert.equal(readFileSync(s.file).subarray(0, 5).toString(), '%PDF-');
   }
   const want = new Set(printSheets().map((s) => s.file.split('/')[1]));
