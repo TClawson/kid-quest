@@ -14,7 +14,10 @@
 // No trained network and nothing to download. Pure arithmetic: no DOM and no sound, so it
 // runs in a Worker (listener-worker.js) and in Node (the tests).
 //
-//   listen(samples, rate, { clicks, progress }) -> [{ midi, on, off, vel }]   (seconds, 0-1)
+//   listen(samples, rate, { clicks, progress, taught }) -> [{ midi, on, off, vel }]   (seconds, 0-1)
+//
+// `taught` is the piano as it was taught key by key (pianoteach.js), when it was: those keys'
+// fingerprints then start from their own sound pictures instead of the usual guess.
 
 import { clickWave } from './studio-audio.js';
 
@@ -57,6 +60,10 @@ export const SETTINGS = {
   tone: 5.5, // a note's overtones stand this many times out of the picture around them, or it is noise and not a string (see toneOf)
   toneMost: 0.2, // when fewer than this share of the would-be notes sound like a string, the take is mostly noise: then only notes twice as clear stay
   toneTo: 16, toneWide: 16, // ... measured from susFrom to this many looks after the strike, against this many bins on each side
+  taughtFrom: 45, // taught fingerprints are used from this key (A2) up: a lower string's own lowest tones are under what the tablet hears, and what is left of it looks like the keys above it
+  taughtWide: 2, // a taught fingerprint keeps the picture this many bins around each overtone (0: all of it)
+  taughtFloor: 0.01, // ... where it is at least this fraction of its tallest peak
+  taughtFree: 1, // how far a taught key's overtone strengths may still be tuned to the recording (0: not at all, 1: freely)
 };
 
 // ---------- getting the recording ready ----------
@@ -202,10 +209,12 @@ function lobe(d) {
 }
 
 /** The fingerprints: for each key, its (bin, overtone number, shape) entries and overtone strengths. */
-export function fingerprints(spec, tuneCents, S = SETTINGS) {
+export function fingerprints(spec, tuneCents, S = SETTINGS, taught = null) {
   const { K, df } = spec;
   const keys = [];
   for (let p = S.lo; p <= S.hi; p += 1) {
+    const mine = taught ? taughtKey(spec, taught, p, S) : null;
+    if (mine) { keys.push(mine); continue; }
     const f0 = 440 * 2 ** ((p - 69 + tuneCents / 100) / 12);
     const B = stretchOf(p);
     const bins = []; const part = []; const shape = [];
@@ -230,6 +239,50 @@ export function fingerprints(spec, tuneCents, S = SETTINGS) {
     keys.push({ midi: p, f0, bins: Int32Array.from(bins), part: Int32Array.from(part), shape: Float32Array.from(shape), a, nPart, w: new Float32Array(bins.length) });
   }
   return keys;
+}
+
+/**
+ * The fingerprint of a key this very piano has taught us ("teach me your piano", pianoteach.js):
+ * the key's own sound picture as it was heard alone, cut into its overtones (where each one
+ * really sits on this piano). How strong each overtone is can still be tuned to a recording,
+ * since a key struck harder sounds brighter. null when the key was not taught.
+ * `taught`: { df, keys: { [midi]: { pic, cents, B } } }.
+ */
+export function taughtKey(spec, taught, p, S = SETTINGS) {
+  const t = p >= S.taughtFrom ? taught?.keys?.[p] : null;
+  if (!t?.pic?.length || !(taught.df > 0)) return null;
+  const { K, df } = spec;
+  const f0 = 440 * 2 ** ((p - 69 + (t.cents || 0) / 100) / 12);
+  const B = t.B > 0 ? t.B : stretchOf(p);
+  // the picture, on this recording's own bins
+  const pic = new Float32Array(K);
+  let top = 0;
+  for (let b = 1; b < K; b += 1) {
+    const x = (b * df) / taught.df; const i = Math.floor(x);
+    if (i + 1 >= t.pic.length) break;
+    pic[b] = t.pic[i] + (x - i) * (t.pic[i + 1] - t.pic[i]);
+    if (pic[b] > top) top = pic[b];
+  }
+  if (!(top > 0)) return null;
+  const centre = [];
+  for (let k = 1; k <= S.maxPartials; k += 1) {
+    const fk = k * f0 * Math.sqrt(1 + B * k * k);
+    if (fk > S.fmax) break;
+    centre.push(fk / df);
+  }
+  if (!centre.length) return null;
+  const bins = []; const part = []; const shape = [];
+  let k = 0;
+  for (let b = 1; b < K; b += 1) {
+    while (k + 1 < centre.length && Math.abs(centre[k + 1] - b) < Math.abs(centre[k] - b)) k += 1;
+    if (pic[b] < S.taughtFloor * top) continue;
+    if (S.taughtWide > 0 && Math.abs(centre[k] - b) > S.taughtWide) continue;
+    bins.push(b); part.push(k); shape.push(pic[b]);
+  }
+  if (!bins.length) return null;
+  const nPart = centre.length;
+  const a = new Float64Array(nPart).fill(1);
+  return { midi: p, f0, B, taught: true, bins: Int32Array.from(bins), part: Int32Array.from(part), shape: Float32Array.from(shape), a, nPart, w: new Float32Array(bins.length) };
 }
 
 function setWeights(keys) {
@@ -367,11 +420,17 @@ export function factor(spec, keys, S = SETTINGS, { rate = S.rate, pitches = [], 
         for (let k = 0; k < key.nPart; k += 1) {
           let lw = 0; let ws = 0;
           for (let q = Math.max(0, p - S.smooth); q <= Math.min(nK - 1, p + S.smooth); q += 1) {
-            if (k >= keys[q].nPart) continue;
+            if (k >= keys[q].nPart || Boolean(keys[q].taught) !== Boolean(key.taught)) continue;
             const wgt = (use[q] / maxUse + 0.02) / (1 + Math.abs(q - p));
             lw += wgt * Math.log(fresh[q][k] + 1e-6); ws += wgt;
           }
           if (ws > 0) key.a[k] = Math.exp(lw / ws);
+        }
+        // a taught key starts from what was taught (every strength 1) and may move this far from it
+        if (key.taught && S.taughtFree < 1) {
+          let g = 0; for (let k = 0; k < key.nPart; k += 1) g += Math.log(key.a[k] + 1e-9);
+          g /= key.nPart;
+          for (let k = 0; k < key.nPart; k += 1) key.a[k] = Math.exp(S.taughtFree * (Math.log(key.a[k] + 1e-9) - g));
         }
       });
       setWeights(keys);
@@ -391,7 +450,7 @@ export function factor(spec, keys, S = SETTINGS, { rate = S.rate, pitches = [], 
 export function toneOf(spec, key, t, S = SETTINGS) {
   const { V, T, K, df } = spec;
   const from = Math.min(T - 1, t + S.susFrom); const to = Math.min(T - 1, t + S.toneTo);
-  const B = stretchOf(key.midi);
+  const B = key.B ?? stretchOf(key.midi);
   const at = (b) => { let s = 0; for (let u = from; u <= to; u += 1) s += V[u * K + b]; return s; };
   const scores = [];
   const near = [];
@@ -419,7 +478,7 @@ function ownLine(spec, keys, n, others, S) {
   const { V, T, K, df } = spec;
   const from = Math.min(T - 1, n.t + S.susFrom); const to = Math.min(T - 1, n.t + S.susTo);
   const at = (b) => { let s = 0; for (let u = from; u <= to; u += 1) s += V[u * K + b]; return s; };
-  const hzOf = (key, k) => k * key.f0 * Math.sqrt(1 + stretchOf(key.midi) * k * k);
+  const hzOf = (key, k) => k * key.f0 * Math.sqrt(1 + (key.B ?? stretchOf(key.midi)) * k * k);
   const theirs = [];
   for (const o of others) for (let j = 1; j <= 12; j += 1) theirs.push(hzOf(keys[o.p], j));
   const near = [];
@@ -449,7 +508,7 @@ function ownLine(spec, keys, n, others, S) {
  */
 export function freshOf(spec, key, t, S = SETTINGS) {
   const { V, T, K, df } = spec;
-  const B = stretchOf(key.midi);
+  const B = key.B ?? stretchOf(key.midi);
   const mean = (b, from, to) => { let s = 0; let n = 0; for (let u = Math.max(0, from); u <= Math.min(T - 1, to); u += 1) { s += V[u * K + b - 1] + V[u * K + b] + V[u * K + b + 1]; n += 1; } return n ? s / n : 0; };
   const near = [];
   let seen = 0; let fresh = 0; let first = null;
@@ -640,8 +699,9 @@ export function pickNotes(fac, keys, spec, rate, S = SETTINGS, clickTimes = []) 
  * [{ midi, on, off, vel }] with times in seconds from its start and vel from 0 to 1.
  * `clicks`: [{ at (seconds), hz }], the metronome clicks the recording may hold and that are
  * not notes. `progress(0..1)` is called as the work goes on. `settings` changes any of SETTINGS.
+ * `taught`: the taught piano (pianoteach.js), or null.
  */
-export function listen(samples, rate, { clicks = [], progress = null, settings = null } = {}) {
+export function listen(samples, rate, { clicks = [], progress = null, settings = null, taught = null } = {}) {
   const S = settings ? { ...SETTINGS, ...settings } : SETTINGS;
   const ready = prepare(samples, rate, S);
   if (ready.samples.length < S.win) return [];
@@ -651,7 +711,7 @@ export function listen(samples, rate, { clicks = [], progress = null, settings =
   if (progress) progress(0.02);
   const spec = spectrogram(ready.samples, ready.rate, S);
   if (progress) progress(0.08);
-  const keys = fingerprints(spec, tuningOf(spec, S), S);
+  const keys = fingerprints(spec, tuningOf(spec, S), S, taught);
   const pitches = [...new Set(clicks.map((c) => c.hz))];
   const fac = factor(spec, keys, S, { rate: ready.rate, pitches, progress: progress && ((f) => progress(0.08 + 0.9 * f)) });
   const notes = pickNotes(fac, keys, spec, ready.rate, S, clicks.map((c) => c.at).sort((a, b) => a - b));

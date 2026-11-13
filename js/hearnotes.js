@@ -4,14 +4,18 @@
 // "Listening…" screen can be drawn first. Used by the studio's panel (studio.js) and the
 // Note-o-Matic's own screen (notolab.js).
 
+import { usablePiano } from './teachrules.js';
+
 /**
  * Listen to a recording (one channel at `rate`; the caller's samples are copied, never
  * changed). `clicks`: [{ at, hz }], metronome clicks it may hold (listener.js). progress(f)
  * is called now and then with 0..1; done(notes, failed) once at the end, with listener.js
- * notes, or (null, true) when it went wrong. Returns { stop(), worker (true while a Worker
+ * notes, or (null, true) when it went wrong. `taught`: the piano as it was taught key by key
+ * (teachrules.js), when it was (it is used once enough of it is taught). Returns { stop(), worker (true while a Worker
  * listens) }: after stop() nothing more is called.
  */
-export function hearNotes(samples, rate, clicks, { progress = () => {}, done }) {
+export function hearNotes(samples, rate, clicks, { progress = () => {}, done, taught: piano = null }) {
+  const taught = usablePiano(piano); // (a piano only partly taught is not used yet)
   let w = null;
   let over = false;
   const finish = (notes, failed) => {
@@ -33,7 +37,7 @@ export function hearNotes(samples, rate, clicks, { progress = () => {}, done }) 
       try {
         const { listen } = await import('./listener.js');
         if (over) return;
-        const notes = listen(samples, rate, { clicks });
+        const notes = listen(samples, rate, { clicks, taught });
         finish(notes, !Array.isArray(notes));
       } catch { finish(null, true); }
     }, 60);
@@ -56,6 +60,6 @@ export function hearNotes(samples, rate, clicks, { progress = () => {}, done }) 
     else finish(null, true);
   };
   const copy = samples.slice(); // the caller keeps its own sound
-  try { me.postMessage({ samples: copy, rate, clicks }, [copy.buffer]); } catch { here(); }
+  try { me.postMessage({ samples: copy, rate, clicks, taught }, [copy.buffer]); } catch { here(); }
   return job;
 }

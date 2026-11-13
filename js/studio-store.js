@@ -1,4 +1,4 @@
-// Where the recording studio keeps a kid's mixes, takes and Note-o-Matic tunes: on this tablet only (IndexedDB),
+// Where the recording studio keeps a kid's mixes, takes, Note-o-Matic tunes and taught piano: on this tablet only (IndexedDB),
 // since a recording is big and private. Each kid has MIX_SLOTS saved mixes and one draft (the
 // mix on the desk, slot 'draft'). A take is the kid's own recording: one channel of sound as
 // 16-bit numbers, with its sample rate. Without IndexedDB (a private window) everything is
@@ -6,6 +6,7 @@
 
 import { MIX_SLOTS, cleanMix, takesIn } from './studiorules.js';
 import { TUNE_SLOTS, cleanTune } from './tunerules.js';
+import { cleanPiano } from './teachrules.js';
 
 const DB = 'kidquest-studio';
 const memory = { mixes: new Map(), takes: new Map() };
@@ -118,6 +119,26 @@ export function saveTune(kid, slot, tune) {
 /** Empty a tune slot. */
 export function deleteTune(kid, slot) {
   return run('mixes', 'readwrite', (s) => (s ? s.delete(tuneKey(kid, slot)) : void memory.mixes.delete(tuneKey(kid, slot))));
+}
+
+// The piano as a kid taught it to the Note-o-Matic key by key (teachrules.js) sits there too.
+const pianoKey = (kid) => `${kid}|piano`;
+
+/** A kid's taught piano, checked, or null when there is none (or it can't be read). */
+export async function loadPiano(kid) {
+  const row = await run('mixes', 'readonly', (s) => (s ? s.get(pianoKey(kid)) : memory.mixes.get(pianoKey(kid))));
+  return row?.piano ? cleanPiano(row.piano) : null;
+}
+
+/** Keep a kid's taught piano. Rejects when it couldn't be kept. */
+export function savePiano(kid, piano) {
+  const row = { kid, piano, at: Date.now() };
+  return run('mixes', 'readwrite', (s) => (s ? s.put(row, pianoKey(kid)) : void memory.mixes.set(pianoKey(kid), row)));
+}
+
+/** Forget a kid's taught piano. */
+export function deletePiano(kid) {
+  return run('mixes', 'readwrite', (s) => (s ? s.delete(pianoKey(kid)) : void memory.mixes.delete(pianoKey(kid))));
 }
 
 /**

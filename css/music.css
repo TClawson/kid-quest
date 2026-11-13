@@ -366,6 +366,69 @@
 .lab-slot-buttons .btn { flex: 1 1 auto; padding: 6px 10px; }
 .lab-ask { flex: 1 1 100%; font-weight: 700; }
 
+/* "Teach me your piano" on the robot's screen (teachgame.js) */
+.lab-teach { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); }
+.lab-teach h3 { margin: 0; }
+.lab-teach p { margin: 2px 0 0; font-weight: 700; }
+.lab-teach-go { min-height: 48px; min-width: 150px; }
+.lab-map { display: grid; gap: 6px; padding: 10px 12px; background: #fff; border: 3px solid var(--px-ink); border-radius: 6px; box-shadow: 0 4px 0 var(--px-ink); min-width: 0; }
+.lab-map h3 { margin: 0; }
+.lab-piano-wrap { position: relative; padding-bottom: 1.3em; }
+.lab-piano { display: block; width: 100%; height: clamp(56px, 11vw, 104px); }
+.pk-w { fill: #fff; stroke: var(--px-ink); stroke-width: 1; }
+.pk-b { fill: #343a40; stroke: var(--px-ink); stroke-width: 1; }
+.pk-w.known { fill: var(--kid, var(--brand)); }
+.pk-b.known { fill: var(--kid, var(--brand)); filter: brightness(0.7); }
+.pk-w.deep { fill: #e9ecef; }
+.pk-b.deep { fill: #adb5bd; }
+.lab-map-c { position: absolute; bottom: 0; transform: translateX(-50%); font-size: 0.8rem; font-weight: 700; white-space: nowrap; color: var(--muted); }
+.lab-map-note, .lab-map-use { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.lab-map-use { color: var(--px-ink); font-weight: 700; }
+.lab-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr)); gap: 10px; padding-top: 4px; }
+.lab-tile { position: relative; display: grid; gap: 2px; align-content: start; min-height: 64px; padding: 8px 10px; text-align: left; background: #fffaf0; border: 2px solid var(--px-ink); border-radius: 6px; box-shadow: 0 3px 0 var(--px-ink); color: var(--px-ink); font: inherit; cursor: pointer; }
+.lab-tile b { font: 700 1.2rem/1.1 var(--px-font); }
+.lab-tile small { font-weight: 700; font-variant-numeric: tabular-nums; }
+.lab-tile.all { background: #ebfbee; }
+.lab-tile.next { background: #fff3d6; box-shadow: inset 0 0 0 3px var(--kid, var(--brand)), 0 3px 0 var(--px-ink); }
+.lab-tile:disabled { opacity: 0.6; cursor: default; }
+.lab-tile-next { position: absolute; top: -10px; right: 8px; padding: 0 6px; background: var(--kid, var(--brand)); color: #fff; border: 2px solid var(--px-ink); border-radius: 4px; font: 400 1rem/1.2 var(--px-font); font-style: normal; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
+.lab-map-foot { justify-content: space-between; align-items: center; }
+.lab-map-foot .btn { min-height: 44px; }
+.lab-map-forget { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.lab-teach-ask { font-weight: 700; }
+.lab-forget { opacity: 0.8; }
+.lab-teach-round { display: grid; gap: 12px; }
+.lab-teach-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font: 700 1.35rem var(--px-font); }
+.lab-teach-count { font-variant-numeric: tabular-nums; }
+.lab-keys { position: relative; width: 100%; max-width: 760px; margin: 0 auto; height: clamp(150px, 36vw, 250px); }
+.tk { position: absolute; top: 0; box-sizing: border-box; overflow: hidden; border: 2px solid var(--px-ink); border-radius: 0 0 6px 6px; }
+.tk-w { z-index: 1; height: 100%; background: #fff; }
+.tk-b { z-index: 3; height: 62%; background: #212529; }
+.tk-w.ctx { background: #e9ecef; border-color: #adb5bd; }
+.tk-b.ctx { background: #868e96; border-color: #868e96; }
+.tk-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--kid, var(--brand)); }
+.tk.taken .tk-fill { height: 100%; }
+.tk-b .tk-fill { filter: brightness(0.7); }
+.tk.striking .tk-fill { animation: tk-fill 0.7s linear forwards; }
+.tk.skipped { background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0, 0, 0, 0.12) 6px 9px); }
+.tk-label { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font: 400 clamp(1.1rem, 4vw, 1.9rem)/1 var(--px-font); color: var(--px-ink); text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.tk-b .tk-label { bottom: 6px; font-size: clamp(0.9rem, 2.6vw, 1.3rem); color: #fff; text-shadow: 0 0 3px #000; }
+.tk-w.want { z-index: 2; background: #fff3bf; }
+.tk-b.want { background: #5c4a00; }
+.tk.want { animation: tk-glow 0.9s ease-in-out infinite alternate; }
+@keyframes tk-fill { from { height: 0; } to { height: 100%; } }
+@keyframes tk-glow { from { box-shadow: 0 0 0 2px #fab005; } to { box-shadow: 0 0 0 4px #fab005, 0 0 18px 4px #ffd43b; } }
+.lab-teach-buttons { justify-content: center; }
+.lab-teach-buttons .btn { min-height: 48px; min-width: 150px; }
+@media (max-width: 600px) {
+  .lab-teach-buttons .btn { flex: 1 1 0; min-width: 0; }
+  .lab-teach-go { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk.want { animation: none; box-shadow: 0 0 0 4px #fab005; }
+  .tk.striking .tk-fill { animation: none; height: 50%; }
+}
+
 /* phones: tighter, and the transport's extra buttons get their own row */
 @media (max-width: 600px) {
   .st-bar { gap: 8px; padding: 8px; }

@@ -34,7 +34,7 @@ import { READINGS, readings } from './notomatic.js';
 import { hearNotes } from './hearnotes.js';
 import { VOICES, KITS, LOOPS, LOOP_IDS, BACKING, BACKING_GROUPS, backingEvents } from './studiokit.js';
 import { partEvents, clipSound, backingKey, keyTonic } from './remix.js';
-import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes, loadTunes } from './studio-store.js';
+import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes, loadTunes, loadPiano } from './studio-store.js';
 import {
   CLICK, normalise, findOnsets, joinBlocks, guessDelay, sliceSchedule, pct, beatAt, waveLine, echoDelay, countInDelay,
   clickWave, clickPlan, makeTake, fadeEnds, phonesDelay, softClip, usableDelay, stopPoint, firstPass, MOST_DELAY,
@@ -1984,7 +1984,11 @@ function listenTo(nom, samples, rate, clicks) {
     if (failed || !Array.isArray(notes)) { nom.phase = 'broken'; paint(); updateWake(); return; }
     heardIn(nom, notes);
   };
-  N.job = hearNotes(samples, rate, clicks, { progress: (f) => { nom.progress = f; showProgress(nom); }, done });
+  // (with the piano as this kid taught it to the robot, when they did: teachgame.js)
+  loadPiano(S.kid).catch(() => null).then((taught) => {
+    if (S.nom !== nom || nom.phase !== 'listen' || N.job) return; // stopped meanwhile
+    N.job = hearNotes(samples, rate, clicks, { progress: (f) => { nom.progress = f; showProgress(nom); }, done, taught });
+  });
 }
 
 /** Stop the listening under way, if there is one. */

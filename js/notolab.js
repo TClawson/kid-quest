@@ -8,7 +8,8 @@
 // the test studio's: no kid's tunes are touched.
 //
 // app.js draws viewLab() and calls mountLab() after each redraw: it fills #lab from the state
-// kept here, and lets everything go when the screen is gone. Stages: ready, rec, listen, pick.
+// kept here, and lets everything go when the screen is gone. Stages: ready, rec, listen, pick,
+// and teach ("Teach me your piano", drawn by teachgame.js).
 
 import { ui, state, esc, kidById, render, viewKid, today, toast } from './ctx.js';
 import { labOpen } from './musicrules.js';
@@ -20,7 +21,8 @@ import { READINGS, tuneReadings } from './notomatic.js';
 import { VOICES, VOICE_IDS } from './studiokit.js';
 import { READING_VOICES, roleLevel } from './studiorules.js';
 import { TUNE_SLOTS, TUNE_BPM, stepSpeed, makeTune, startVoice, shiftFits, tuneName, tuneAbout, freeSlot } from './tunerules.js';
-import { loadTunes, saveTune, deleteTune } from './studio-store.js';
+import { loadTunes, saveTune, deleteTune, loadPiano } from './studio-store.js';
+import { teachGame } from './teachgame.js';
 
 export const LAB_MOST = 30;
 /** How long a save or a throw-away may take before the kid is told it didn't work (ms). */
@@ -92,7 +94,7 @@ const L = {
   on: false,
   desk: null,       // whose tunes: a kid's id or TEST_DESK
   shelf: null,      // [tune|null × TUNE_SLOTS], null while loading
-  stage: 'ready',   // 'ready', 'rec', 'listen' or 'pick'
+  stage: 'ready',   // 'ready', 'rec', 'listen', 'pick' or 'teach'
   robot: '',        // what the robot says instead of the stage's usual line
   note: '',         // a plain message under the buttons
   noteKind: '',
@@ -162,6 +164,7 @@ async function openDesk(id) {
   reset();
   L.desk = id;
   L.shelf = null;
+  teach.open(id);
   paint();
   const shelf = await loadTunes(id).catch(() => Array(TUNE_SLOTS).fill(null));
   if (L.desk !== id) return;
@@ -172,6 +175,7 @@ async function openDesk(id) {
 /** The screen went away: stop recording, listening and playing; forget the recording; close the sound. */
 function leave() {
   reset();
+  teach.leave();
   L.on = false;
   L.desk = null;
   // the sound clock for listening goes too (audio() makes a new one next time)
@@ -182,6 +186,7 @@ function leave() {
 
 /** Back to Ready with nothing under way. */
 function reset() {
+  teach.stop(); // (what a round got is kept)
   stopRec('');
   stopListening();
   stopSound(false);
@@ -215,7 +220,7 @@ function paint() {
   const line = robotLine();
   el.innerHTML = `
     <div class="lab-robot"><span class="lab-bot" aria-hidden="true">🤖</span><p class="lab-bubble" role="status">${esc(line)}</p></div>
-    ${{ ready: readyHtml, rec: recHtml, listen: listenHtml, pick: pickHtml }[L.stage]()}
+    ${{ ready: readyHtml, rec: recHtml, listen: listenHtml, pick: pickHtml, teach: teach.html }[L.stage]()}
     ${L.note ? `<p class="lab-note ${L.noteKind}" role="alert">${esc(L.note)}</p>` : ''}
     ${L.stage === 'ready' || (L.stage === 'pick' && shelfFull()) ? shelfHtml() : ''}`;
   if (L.stage === 'rec') live();
@@ -226,11 +231,12 @@ const shelfFull = () => Boolean(L.shelf) && freeSlot(L.shelf) < 0;
 /** What the robot says: news, else the stage's line (on Ready with a full shelf, that it is full). */
 function robotLine() {
   if (L.robot) return L.robot;
+  if (L.stage === 'teach') return teach.line();
   return L.stage === 'ready' && shelfFull() ? ROBOT.full : ROBOT[L.stage];
 }
 
 function readyHtml() {
-  return '<div class="lab-go"><button class="btn lab-rec" data-lab="rec">● Record</button></div>';
+  return `<div class="lab-go"><button class="btn lab-rec" data-lab="rec">● Record</button></div>${teach.entryHtml()}`;
 }
 
 function recHtml() {
@@ -346,6 +352,7 @@ function onClick(e) {
   const b = e.target.closest('[data-lab]');
   if (!b || b.disabled) return;
   const what = b.dataset.lab;
+  if (what.startsWith('teach')) { teach.click(what, b); return; }
   // while a tune is being kept, nothing that would drop it or change it
   if (L.keeping && !['hear', 'throw-no'].includes(what)) return;
   if (what === 'rec') { startRec().catch(() => { if (L.run) failRec(SAY.micBroken); }); return; }
@@ -634,14 +641,19 @@ function listenTo(sound) {
   L.progress = 0;
   paint();
   updateWake();
-  L.job = hearNotes(sound.samples, sound.rate, [], {
-    progress: (f) => { L.progress = f; showProgress(); },
-    done: (notes, failed) => {
-      L.job = null;
-      if (L.sound !== sound) return;
-      if (failed) { forget(); L.stage = 'ready'; say(SAY.broken, 'bad'); paint(); updateWake(); return; }
-      heardIn(notes);
-    },
+  // (with the piano as it was taught to the robot at this desk, when it was: teachgame.js)
+  loadPiano(L.desk).catch(() => null).then((taught) => {
+    if (L.sound !== sound || L.stage !== 'listen' || L.job) return; // stopped meanwhile
+    L.job = hearNotes(sound.samples, sound.rate, [], {
+      taught,
+      progress: (f) => { L.progress = f; showProgress(); },
+      done: (notes, failed) => {
+        L.job = null;
+        if (L.sound !== sound) return;
+        if (failed) { forget(); L.stage = 'ready'; say(SAY.broken, 'bad'); paint(); updateWake(); return; }
+        heardIn(notes);
+      },
+    });
   });
 }
 
@@ -780,10 +792,30 @@ function stopSound(draw = true) {
   if (was && draw) paint();
 }
 
-// ---------- the screen stays on while recording and listening ----------
+// ---------- "Teach me your piano" (teachgame.js), with what it needs of this screen ----------
+
+const teach = teachGame({
+  desk: () => L.desk,
+  stage: () => L.stage,
+  go(stage, robot = '') { L.stage = stage; L.robot = robot; L.confirm = -1; say(''); },
+  robot(text) { L.robot = text; },
+  say,
+  noteIs: (text) => L.note === text,
+  paint,
+  updateWake,
+  quiet() { stopMusic(); stopSound(false); },
+  micTrouble,
+  contextFor,
+  inTime,
+  LATE,
+  wait: () => LAB.wait,
+  SAY,
+});
+
+// ---------- the screen stays on while recording, listening and being taught ----------
 
 function updateWake() {
-  if (L.stage === 'rec' || L.stage === 'listen') keepAwake();
+  if (L.stage === 'rec' || L.stage === 'listen' || teach.listening()) keepAwake();
   else letSleep();
 }
 
@@ -809,6 +841,7 @@ document.addEventListener('visibilitychange', () => {
     return;
   }
   if (L.run) failRec(SAY.hidden);
+  teach.hidden();
   if (L.hearing) stopSound();
 });
 
@@ -817,6 +850,7 @@ document.addEventListener('visibilitychange', () => {
 export const labActions = {
   'lab-back': () => {
     if (L.keeping) return; // (a moment: the tune is on its way to the tablet)
+    if (L.stage === 'teach') { teach.back(); return; } // (to the robot's Ready, keeping what a round got)
     const back = deskOf(deskId())?.back || { view: 'kid' };
     leave();
     Object.assign(ui, back, { labTest: false });
@@ -856,5 +890,6 @@ export function labState() {
     recording: Boolean(L.run),
     seconds: L.run?.ac ? L.run.frames / L.run.ac.sampleRate : 0,
     kept: L.kept,
+    teach: teach.state(),
   };
 }
