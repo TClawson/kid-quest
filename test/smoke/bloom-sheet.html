@@ -7,11 +7,13 @@
 //   ?map=bg-meadow&mode=sheet             every tree (stages 0-5, wilt 0-3), flower (kinds x stages, wilt) and critter
 //   ?map=bg-meadow&mode=village&at=year   the village with what a family has grown: week2 | month4 | year | wilted | all
 //   &marks=1                              (village) the spots, numbered: trees red, flowers blue
+//   &season=winter&progress=0.5           (village) the land and the plants in that season, as the village shows them
 //   &scale=3
 import { treeArt, flowerArt, critterArt, CRITTERS } from '../../js/bloomart.js';
 import { villageLayout } from '../../js/villagemaps.js';
 import { paintVillage } from '../../js/villageprops.js';
 import { drawVillager } from '../../js/villageart.js';
+import { seasonTint, seasonSprite } from '../../js/seasonfx.js';
 
 const q = new URLSearchParams(location.search);
 const map = q.get('map') || 'bg-meadow';
@@ -19,7 +21,14 @@ const mode = q.get('mode') || 'sheet';
 const S = Number(q.get('scale') || 3);
 const out = document.getElementById('out');
 const L = villageLayout(map);
-const land = paintVillage(document.createElement('canvas'), L, { homeRoof: '#e03131', areas: [{ ...L.green.left, kind: 'pond', side: 'left' }, { ...L.green.right, kind: 'soccer', side: 'right' }] });
+const season = q.get('season') || 'summer';
+const progress = Number(q.get('progress') || 0.5);
+const areas = [{ ...L.green.left, kind: 'pond', side: 'left' }, { ...L.green.right, kind: season === 'winter' ? 'hockey' : 'soccer', side: 'right' }];
+// a map that paints its own seasons is asked for the season; the others are recoloured
+const summerLand = paintVillage(document.createElement('canvas'), L, { homeRoof: '#e03131', areas, ...(L.ownSeasons ? { season, progress } : {}) });
+const land = season === 'summer' || L.ownSeasons ? summerLand : seasonTint(summerLand, season, map, progress);
+// a plant in the season's colours, keeping where its feet are
+const inSeason = (c) => { if (season === 'summer') return c; const o = seasonSprite(c, season, progress, map); o.ax = c.ax; o.ay = c.ay; return o; };
 
 function title(t) { const h = document.createElement('h2'); h.textContent = t; out.append(h); }
 function show(c, w, h) { c.style.width = `${w * S}px`; c.style.height = `${h * S}px`; out.append(c); }
@@ -123,8 +132,13 @@ if (mode === 'village') {
   [...L.slots.morning.slice(0, 6), ...L.slots.afternoon.slice(0, 6)].forEach((s) => items.push({ y: s.y, draw: () => x.drawImage(folk, s.x - 8, s.y - folk.height) }));
   items.push({ y: L.shop.y, draw: () => x.drawImage(keeper, L.shop.x - 8, L.shop.y - keeper.height) });
   const put = (a, px, py) => items.push({ y: py, draw: () => x.drawImage(a, Math.round(px - a.ax), Math.round(py - a.ay)) });
-  for (const t of G.trees) { const p = spots.trees[t.spot]; if (p) put(treeArt(map, t.spot, t.stage, G.wilt), p.x, p.y); }
-  for (const f of G.flowers) { const p = spots.flowers[f.spot]; if (p) put(flowerArt(map, f.kind, f.stage, G.wilt, f.age, f.spot), p.x, p.y); }
+  for (const t of G.trees) { const p = spots.trees[t.spot]; if (p) put(inSeason(treeArt(map, t.spot, t.stage, G.wilt)), p.x, p.y); }
+  // the flowers go on one layer, as in the village, so the season treats them the same way
+  const beds = document.createElement('canvas'); beds.width = L.W; beds.height = L.H; beds.ax = 0; beds.ay = 0;
+  const bx = beds.getContext('2d');
+  for (const f of [...G.flowers].sort((a, b) => (spots.flowers[a.spot]?.y || 0) - (spots.flowers[b.spot]?.y || 0))) { const p = spots.flowers[f.spot]; if (!p) continue; const a = flowerArt(map, f.kind, f.stage, G.wilt, f.age, f.spot); bx.drawImage(a, Math.round(p.x - a.ax), Math.round(p.y - a.ay)); }
+  const bedsNow = inSeason(beds);
+  items.push({ y: -1, draw: () => x.drawImage(bedsNow, 0, 0) });
   // critters out at this level, in a few fixed places near the plants
   const list = (CRITTERS[map] || []).filter((cr) => cr.level <= level);
   list.forEach((cr, i) => {
@@ -148,7 +162,7 @@ if (mode === 'village') {
     spots.flowers.forEach((p, i) => { b.fillStyle = '#2060ff'; b.fillRect(p.x * S - 3, p.y * S - 3, 6, 6); b.fillStyle = '#d0e4ff'; b.fillText(`${i}`, p.x * S + 4, p.y * S + 10); });
   }
   b.font = `bold ${8 * S}px sans-serif`; b.fillStyle = 'rgba(0,0,0,0.55)';
-  const cap = `${map} - ${at}: ${G.trees.length} trees (${G.matureTrees} grown), ${G.flowers.length} flowers (${G.blooms} in bloom), wilt ${G.wilt}, critters ${level}`;
+  const cap = `${map} - ${at}${season === 'summer' ? '' : `, ${season}`}: ${G.trees.length} trees (${G.matureTrees} grown), ${G.flowers.length} flowers (${G.blooms} in bloom), wilt ${G.wilt}, critters ${level}`;
   b.fillRect(0, 0, b.measureText(cap).width + 16, 10 * S); b.fillStyle = '#fff'; b.fillText(cap, 8, 8 * S);
   out.append(big);
 }

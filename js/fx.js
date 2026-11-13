@@ -142,6 +142,44 @@ function monkeys() {
   });
 }
 
+/** A burst of filtered noise: a whale's blow, a splash (pitch: where the hiss sits, dur in seconds). */
+function hiss(from, to, dur, vol, type = 'bandpass') {
+  const ac = audio();
+  if (!ac) return;
+  const t = ac.currentTime + 0.02;
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer(ac);
+  src.loop = true;
+  const f = ac.createBiquadFilter(); f.type = type; f.Q.value = 0.7;
+  f.frequency.setValueAtTime(from, t);
+  f.frequency.exponentialRampToValueAtTime(to, t + dur);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f).connect(g).connect(ac.destination);
+  src.start(t);
+  src.stop(t + dur + 0.05);
+}
+
+/** One note that slides from one pitch to another (a plop, an otter's eep). */
+function slide(from, to, dur, type, vol) {
+  const ac = audio();
+  if (!ac) return;
+  const t = ac.currentTime + 0.02;
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(from, t);
+  osc.frequency.exponentialRampToValueAtTime(to, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g).connect(ac.destination);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+
 export const sounds = {
   thunder,
   monkeys,
@@ -165,6 +203,12 @@ export const sounds = {
   // the rainforest toucan, startled into dropping the banana
   squeak: () => play([N.G6, N.C6 * 2, N.G6], 0.045, 0.07, 'square', 0.07),
   drop: () => play([N.E4, N.C4], 0.08, 0.12, 'triangle', 0.1),
+  // the fjord: a whale's blow (k: how big), something small dropping into the water, a tail
+  // slapping down, and a sea otter fumbling its oyster
+  spout: (k = 1) => hiss(900 + 500 * k, 2600, 0.25 + 0.45 * k, 0.05 + 0.09 * k),
+  plop: () => slide(620, 180, 0.11, 'sine', 0.14),
+  splash: () => hiss(1800, 500, 0.5, 0.12, 'lowpass'),
+  eep: () => { slide(1100, 1700, 0.07, 'square', 0.05); setTimeout(() => slide(1500, 900, 0.1, 'square', 0.05), 90); },
   goal: () => play([N.C5, N.E5, N.G5, N.C6, N.G5, N.C6], 0.08, 0.16, 'square', 0.1),
   over: (best) => (best ? play([N.C5, N.E5, N.G5, N.C6], 0.09, 0.2, 'square', 0.1) : play([N.G5, N.E5, N.C5], 0.1, 0.18, 'triangle', 0.12)),
   // a quick rising whoosh for a buddy's sports move; fishing gets a plip

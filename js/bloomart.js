@@ -3,7 +3,8 @@
 // Village, palms and hibiscus on the beach, a coral reef over bare rock under the sea, glowing
 // crystal gardens on the moon, roses and topiary at the castle, tree ferns and ember flowers on
 // the volcano, flowering giants and orchids in the rainforest, blossom trees in every colour in
-// Rainbow Land, and star blossoms and comet-tail trees in the golden galaxy.
+// Rainbow Land, star blossoms and comet-tail trees in the golden galaxy, and spruce, hemlock,
+// birch and fireweed by the Alaskan fjord.
 //
 // Drawn in each map's own style B "soft storybook" (see meadowart.js): one art pixel per village
 // pixel, warm hue-shifted ramps lit from the top left, selective outlines (each thing edged in a
@@ -40,6 +41,7 @@ const MAP = {
   'bg-rainforest': { ink: '#2e2238', shade: '8,22,20' },
   'bg-rainbow': { ink: '#3a2850', shade: '70,50,130' },
   'bg-galaxy': { ink: '#140c2c', shade: '8,4,24' },
+  'bg-fjord': { ink: '#2e2238', shade: '20,30,56' },
 };
 const mapOf = (id) => (MAP[id] ? id : 'bg-meadow');
 
@@ -171,6 +173,7 @@ const TIRED = {
   'bg-rainforest': { tint: '#8a8050', brown: ['#5a3a26', '#86582c', '#ae7c36', '#cca04a'] },
   'bg-rainbow': { tint: '#b4aec0', brown: ['#8a8098', '#a49cb2', '#c0b8cc', '#dcd6e4'] }, // the colour washes out
   'bg-galaxy': { tint: '#4a4460', brown: ['#2a2440', '#3e3858', '#56506e', '#726c88'] }, // the stars dim
+  'bg-fjord': { tint: '#8a8468', brown: ['#5a3e30', '#845a30', '#aa7a38', '#c89c50'] }, // needles rust
 };
 
 /** Wilt the living parts of a sprite: duller colour, a few leaves browning, petals dropping at 2 and 3. */
@@ -2432,6 +2435,312 @@ CRITTERS_ART['bg-galaxy'] = {
   moonmoth: (f) => critterOf('bg-galaxy', MOONMOTH[f], { A: ['#c9b8f4', 'fur'], a: ['#fff6c8', 'fur'], B: ['#6a5aa8', 'fur'], c: ['#a890e8', 'fur'] }, { glow: [4.5, 3, 6, 4, '#e0d4ff', 0.25] }),
   spacewhale: (f) => critterOf('bg-galaxy', SPACEWHALE[f], { h: '#a8b4ff', b: '#7a8af0', s: '#fff6c8', w: '#c8c0f4', f: '#5a6ad0', t: '#6a7ae0' }, { glow: [8, 3.5, 10, 6, '#a8b4ff', 0.2] }),
   stardeer: (f) => critterOf('bg-galaxy', STARSTAG[f], { f: '#3e3a9e', h: '#4e4ab8', n: '#4e4ab8', e: '#5a56c8', w: '#fff6c8', l: '#34308a', k: '#ffd43b', g: ['#ffe27a', 'fur'], s: ['#fff6c8', 'fur'] }, { feet: true, shadow: [8, 1.5], glow: [9, 8, 12, 10, '#8a7aff', 0.35] }),
+};
+
+// ---------- the Alaskan Fjord ----------
+// Evergreens mostly, as in the village's own woods: Sitka spruce and mountain hemlock, with a
+// paper birch and a mountain ash (a rowan, red with berries) here and there. Fireweed, lupine,
+// forget-me-nots and arctic poppies (or a tuft of cotton grass) in the grass. A blue butterfly,
+// ptarmigan, snowshoe hares, a hoary marmot that stands up to whistle, and a bald eagle overhead.
+
+const FJORD = {
+  spruce: ['#12303a', '#184440', '#1f5a46', '#2c744c', '#44905a', '#6cb06c', '#a0d08a'],
+  hemlock: ['#14303e', '#1b444a', '#245a54', '#31725e', '#4a8c6c', '#70a880', '#a2c89c'],
+  birch: ['#26503c', '#377044', '#4c9048', '#66aa4e', '#8cc45c', '#b4dc70', '#dcf09a'],
+  rowan: ['#1e463c', '#2c6444', '#3c8446', '#509c48', '#74b652', '#9ccc60', '#c8e88c'],
+  bark: ['#3a2a36', '#5a3e3e', '#7a5646', '#9a7456', '#b8946e', '#d0b088', '#e4cca4'],
+  white: ['#4a4456', '#7c7888', '#a8a6b4', '#cdcdd6', '#e6e6ec', '#f6f6f8', '#ffffff'],
+  soil: ['#3e3440', '#5a4a4e', '#7a6658', '#9a8468'],
+  stem: ['#2c6a4a', '#44904e', '#68b45a', '#9cd06c'],
+  cone: { a: '#6a4028', b: '#946430', c: '#b88648' },
+  under: '#102a34', // the deep shade under a bough
+};
+
+/**
+ * A conifer grown to a stage: tiers of boughs that droop at their tips, lit from the left, over a
+ * short bare trunk. o: { P, BK, H, W (how tall and wide by stage), tier (a tier's height), rag
+ * (how uneven the boughs are), nod (the top bends over: a hemlock), cones (from stage 4) }.
+ * at: { fx, fy, back } for a second, smaller tree behind the first.
+ */
+function conifer(s, stage, wilt, v, o, at = {}) {
+  const fx = at.fx ?? 40; const fy = at.fy ?? 80; const { P, BK } = o;
+  const flip = v % 2 ? -1 : 1;
+  const lf = tg('leaf', P[3]);
+  if (stage === 0) {
+    // a seedling in a ring of fresh soil, tied to its stake
+    for (let y = fy - 1; y <= fy + 1; y += 1) for (let x = fx - 5; x <= fx + 5; x += 1) if (inEll(x, y, fx + 0.5, fy + 0.5, 5.2, 1.6)) s.set(x, y, Math.abs(x - fx) > 3 || y > fy ? FJORD.soil[1] : FJORD.soil[2], 'ground');
+    s.set(fx - 2, fy - 1, FJORD.soil[3], 'ground');
+    const SK = ['#a8763e', '#c49060', '#e8c48a'];
+    for (let y = fy - 12; y <= fy; y += 1) s.set(fx + 4, y, y === fy - 12 ? SK[2] : SK[1], tg('stake', SK[0]));
+    s.set(fx, fy, BK[3], tg('wood', BK[3])); s.set(fx, fy - 1, BK[4], tg('wood', BK[3]));
+    const rows = wilt > 1 ? ['...a.', '..ab.', '.abb.', '..bc.', 'abbc.', '.bbcc'] : ['..a..', '..b..', '.abc.', '..b..', '.abc.', 'abbcc', '.abc.', 'aabcc'];
+    dab(s, fx - 2, fy - 1 - rows.length, rows, { a: P[5], b: P[4], c: P[2] }, lf);
+    s.set(fx + 2, fy - 6, '#e8505a', 'fx'); s.set(fx + 3, fy - 6, '#e8505a', 'fx');
+    s.shadow(fx + 1, fy + 1, 4, 1.2, 0.16);
+    return null;
+  }
+  const H = Math.round(o.H[stage] * (at.k || 1)); const W = o.W[stage] * (at.k || 1);
+  const bare = Math.max(2, Math.round(H * 0.09));
+  const body = H - bare; const top = fy - H;
+  const tiers = Math.max(2, Math.round(body / (o.tier || 7))); const tierH = body / tiers;
+  s.shadow(fx + 2, fy, W * 0.42 + 1.5, 2 + stage * 0.3, at.back ? 0.14 : 0.2);
+  trunk(s, fx, fy - bare - 4, fy, Math.max(1, W * 0.06), Math.max(1.6, W * 0.11), BK, { roots: stage >= 4 ? 1.1 : 0, seed: v });
+  const rag = o.rag ?? 1.1;
+  const nod = o.nod ? Math.max(2, Math.round(H * 0.09)) : 0;
+  const sag = 1 - wilt * 0.05;
+  for (let y = 0; y < body; y += 1) {
+    const tier = Math.floor(y / tierH); const ph = (y - tier * tierH) / tierH;
+    const tt = (y + 1) / body;
+    // the leader of a hemlock nods to one side
+    const mid = fx + (y < nod ? flip * Math.round((nod - y) * 0.8) : 0);
+    const base = (W / 2) * (0.08 + 0.92 * tt ** (o.pow || 1)) * (0.54 + 0.46 * ph) * sag;
+    const hl = Math.max(0.6, base + (h2(tier, 1, v + 77) - 0.5) * rag + (h2(y, v, 78) - 0.5) * 0.9);
+    const hr = Math.max(0.6, base + (h2(tier, 2, v + 77) - 0.5) * rag + (h2(y, v, 79) - 0.5) * 0.9);
+    const x0 = Math.ceil(mid - hl); const x1 = Math.floor(mid + hr);
+    for (let x = x0; x <= x1; x += 1) {
+      const u = x < mid ? (x - mid) / hl : (x - mid) / hr;
+      // a thirsty tree thins at the tips of its boughs
+      if (wilt && Math.abs(u) > 0.55 && h2(x, y, v + 81) < wilt * 0.16) continue;
+      let k = u < -0.45 ? 5 : u < 0.05 ? 4 : u < 0.5 ? 3 : 2;
+      // a dark line under each bough and a light one along the top of the next: the tiers read
+      // in summer, and in winter the snow settles along them
+      const under = y + 1 < body && Math.floor((y + 1) / tierH) !== tier && h2(x, tier, v + 5) > 0.1;
+      const over = tier > 0 && Math.floor((y - 1) / tierH) !== tier;
+      if (under) k -= 2; else if (ph > 0.76) k -= 1;
+      if (over) k += 1; else if (ph < 0.24 && u < 0.25 && tier > 0) k += 1;
+      const n = h2(x, y, 31 + v * 7);
+      if (!under && !over) { if (n > 0.86) k += 1; else if (n < 0.16) k -= 1; }
+      s.set(x, top + y, under && u >= 0.05 ? FJORD.under : P[clamp(k, 1, 6)], lf);
+    }
+    // the tips hang a little lower than the bough
+    if (y > nod + 2 && Math.floor((y + 1) / tierH) !== tier && W > 9) {
+      s.set(x0 - 1, top + y + 1 + (wilt > 1 ? 1 : 0), P[3], lf);
+      s.set(x1 + 1, top + y + 1 + (wilt > 1 ? 1 : 0), P[2], lf);
+      if (wilt) { s.set(x0 - 1, top + y + 2, P[2], lf); s.set(x1 + 1, top + y + 2, P[1], lf); }
+    }
+  }
+  s.set(fx + (nod ? flip * Math.round(nod * 0.8) + flip : 0), top - 1, P[5], lf);
+  // cones hanging under the upper boughs
+  if (o.cones && stage >= 4 && !at.back) {
+    const n = stage === 4 ? 4 : 7;
+    for (let q = 0; q < n; q += 1) {
+      if (h2(q, stage, 91) <= wilt * 0.22) continue;
+      const tier = 1 + (q % Math.max(1, Math.min(3, tiers - 2)));
+      const y = Math.round(top + (tier + 1) * tierH) - 2;
+      const half = (W / 2) * (0.08 + 0.92 * (((tier + 1) * tierH) / body)) * 0.8;
+      const x = Math.round(fx + (h2(q, v, 92) - 0.5) * 2 * half);
+      if (s.kind(x, y) !== 'leaf' || s.kind(x, y + 3) !== 'leaf') continue;
+      dab(s, x, y, o.nod ? ['b', 'a'] : ['c', 'b', 'a'], FJORD.cone, tg('fruit', FJORD.cone.b));
+    }
+  }
+  return { fx, fy, top, H, W };
+}
+
+const SPRUCE = { P: FJORD.spruce, BK: FJORD.bark, H: [0, 17, 27, 38, 48, 58], W: [0, 11, 15, 21, 27, 31], tier: 7, rag: 1.2, cones: true };
+const HEMLOCK = { P: FJORD.hemlock, BK: FJORD.bark, H: [0, 15, 24, 34, 44, 53], W: [0, 9, 13, 17, 21, 25], tier: 5.5, rag: 3, pow: 0.85, nod: true, cones: true };
+
+function fjordConifer(s, kind, stage, wilt, v) {
+  const o = kind === 'hemlock' ? HEMLOCK : SPRUCE;
+  // a grand one has a young one coming up beside it
+  if (stage === 5 && v % 2 === 0) conifer(s, 2, wilt, v + 1, o, { fx: 40 + (v % 4 ? 15 : -15), fy: 79, back: true });
+  conifer(s, stage, wilt, v, o);
+}
+
+/** A paper birch: a slim white trunk with dark marks, an airy crown; catkins when it is grand. */
+function paperBirch(s, stage, wilt, v) {
+  const P = FJORD.birch; const BK = FJORD.white;
+  const t = roundTree(s, stage, wilt, v, { P, BK, soil: FJORD.soil, tpl: OVAL, ry: 1.16, Rk: 0.74, th: 7, tw: 0.72 });
+  if (!t) return;
+  const { fx, fy, cy, R, box, inCrown, keep } = t;
+  // the bark's dark dashes, and the dark foot of an old trunk
+  for (let y = Math.round(cy); y <= fy; y += 1) {
+    const xs = [];
+    for (let x = fx - 8; x <= fx + 8; x += 1) if (s.kind(x, y) === 'wood') xs.push(x);
+    if (!xs.length) continue;
+    const r = h2(y, v, 51);
+    if (r < 0.34) { const x = xs[Math.floor(h2(v, y, 52) * xs.length)]; s.set(x, y, BK[0], tg('wood', BK[3])); if (xs.length > 2 && r < 0.16 && s.kind(x + 1, y) === 'wood') s.set(x + 1, y, BK[1], tg('wood', BK[3])); }
+    if (stage >= 4 && y > fy - 3) xs.forEach((x) => { if (h2(x, y, 53) < 0.6) s.set(x, y, BK[1], tg('wood', BK[3])); });
+  }
+  if (stage === 5) sprinkle(box, 7, v + 14, inCrown, (x, y, k) => { if (keep(k) && y > cy - R * 0.2) dab(s, x, y, ['a', 'b', 'a'], { a: '#b8a04a', b: '#dcc870' }, tg('fruit', '#b8a04a')); });
+}
+
+/** A mountain ash: a small round tree, creamy flower heads, then bunches of berries that ripen red. */
+function mountainAsh(s, stage, wilt, v) {
+  const P = FJORD.rowan; const BK = ['#342a36', '#4e4046', '#6a5856', '#857266', '#a28e7c', '#bcaa94', '#d6c6ae'];
+  const t = roundTree(s, stage, wilt, v, { P, BK, soil: FJORD.soil, tpl: ROUND, ry: 0.8, Rk: 0.82, tw: 0.8 });
+  if (!t) return;
+  const { fx, fy, flip, box, inCrown, keep } = t;
+  const bunch = (x, y, C) => dab(s, x - 1, y - 1, ['ab.', 'bcb', '.ba'], { a: C[0], b: C[1], c: C[2] }, tg('fruit', C[1]));
+  const RED = ['#8e1c2c', '#d8343a', '#ff7a5c']; const YOUNG = ['#8a8a2a', '#d4a43a', '#f6d86a'];
+  if (stage === 3) sprinkle(box, 6, v + 21, inCrown, (x, y, k) => { if (keep(k)) dab(s, x - 1, y - 1, ['.b.', 'bcb', 'aba'], { a: '#c8c4a8', b: '#f2eed8', c: '#ffffff' }, tg('fl', '#c8c4a8')); });
+  if (stage === 4) sprinkle(box, 7, v + 22, inCrown, (x, y, k) => { if (keep(k)) bunch(x, y, k % 3 === 2 ? RED : YOUNG); });
+  if (stage === 5) {
+    sprinkle(box, 6, v + 23, inCrown, (x, y, k) => { if (keep(k)) bunch(x, y, RED); });
+    [[-8, 1], [6, 2], [-2, 3], [10, 1]].forEach(([dx, dy], k) => { if (keep(k + 9)) dab(s, fx + dx * flip, fy + dy - 1, ['ab'], { a: RED[1], b: RED[2] }, tg('fruit', RED[1])); });
+  }
+}
+
+TREES['bg-fjord'] = {
+  kinds: ['spruce', 'hemlock', 'birch', 'spruce', 'rowan', 'spruce', 'hemlock', 'birch', 'spruce', 'rowan'],
+  draw(s, kind, stage, wilt, v) {
+    if (kind === 'birch') return paperBirch(s, stage, wilt, v);
+    if (kind === 'rowan') return mountainAsh(s, stage, wilt, v);
+    return fjordConifer(s, kind, stage, wilt, v);
+  },
+};
+
+const FJFL = {
+  fire: ['#7a2a5a', '#b03a7e', '#dc5a9e', '#f08abc', '#ffc4de'],
+  lupine: ['#34348a', '#5252c4', '#7c80e4', '#b0b6f8', '#eef0ff'],
+  forget: [['#2c5cc0', '#5c98f0', '#a4d0ff', '#ffe060'], ['#2c5cc0', '#5c98f0', '#a4d0ff', '#ffe060'], ['#4a6ad0', '#84a8f4', '#c4dcff', '#fff0a0']],
+  poppy: [['#b08a14', '#f2cf3a', '#fff29a', '#d88a1c'], ['#b0a890', '#f4f0e0', '#ffffff', '#f0c83a']],
+};
+
+FLOWERS['bg-fjord'] = {
+  draw(s, kind, stage, wilt, old, v) {
+    if (stage === 0) { sprouts(s, v, FJORD.stem, FJORD.soil, wilt); return; }
+    s.shadow(FX, FY + 1, 7, 1.4, 0.18);
+    const pale = (c) => (old ? mix(c, '#fff4f0', 0.14 * old) : c);
+    const G = FJORD.stem;
+    // a point on a stem, k rows down from its top
+    const down = (pts, h, k) => pts[Math.max(0, pts.length - 1 - Math.round(k * (pts.length / h)))];
+    if (kind === 0) {
+      // fireweed: tall red stems, narrow leaves up them, a spire of magenta flowers that opens from
+      // the bottom (buds at the tip); past its best the lowest flowers go to white seed fluff
+      tuft(s, 4, ['#2a5a44', '#3c7a50', '#5a9a5e', '#88bc74'], { h: stage === 1 ? 5 : 3, seed: v });
+      if (stage === 1) { [[-3, -6], [2, -7], [5, -5]].forEach(([dx, dy]) => dab(s, FX + dx - 1, FY + dy, ['a..', '.bb'], { a: '#88bc74', b: '#5a9a5e' }, tg('leaf', '#3c7a50'))); return; }
+      const F = FJFL.fire.map(pale);
+      const ST = ['#7a4650', '#9a5a5c'];
+      CLUMPS[v].forEach(([dx, hf, lean], i) => {
+        const h = Math.round(18 * hf - wilt);
+        const tx = FX + dx + (wilt >= 2 ? (lean || 1) * (wilt - 1) : 0);
+        const pts = stem(s, FX + dx, FY, tx, FY - h + 1, lean * 0.4, ST);
+        const spike = stage === 2 ? 4 : Math.min(9, Math.round(h * 0.55));
+        // the leaves, alternating up the stem under the flowers
+        for (let k = spike + 1; k < h - 1; k += 2) { const [x, y] = down(pts, h, k); const d = (k >> 1) % 2 ? 1 : -1; s.set(x + d, y, G[2], tg('leaf', G[1])); s.set(x + d * 2, y - 1 + (wilt ? 1 : 0), G[3], tg('leaf', G[1])); }
+        for (let k = 0; k < spike; k += 1) {
+          const [x, y] = down(pts, h, k);
+          if (stage === 2) { s.set(x, y, k < 2 ? '#8a5a6a' : F[1], tg('fl', F[1])); continue; }
+          if (k < 2) { s.set(x, y, k ? F[1] : '#8a4a66', tg('fl', F[1])); continue; } // buds at the tip
+          const seed = old && k >= spike - old * 2;
+          if (seed) { s.set(x, y, ST[1], tg('stem', ST[0])); s.set(x - 1, y, '#f6f0f4', tg('fl', '#d8ccd8')); if (k % 2) s.set(x + 1, y - 1, '#ffffff', tg('fl', '#d8ccd8')); continue; }
+          s.set(x, y, k % 3 === 1 ? F[1] : F[2], tg('fl', F[2]));
+          if (!(wilt >= 2 && k % 2)) { s.set(x - 1, y, k % 3 === 2 ? F[4] : F[3], tg('fl', F[2])); s.set(x + 1, y, k % 3 === 1 ? F[0] : F[1], tg('fl', F[2])); }
+          if (k > 3 && k % 3 === i % 3 && wilt < 2) s.set(x + (k % 2 ? 2 : -2), y, F[4], tg('fl', F[2]));
+        }
+      });
+      return;
+    }
+    if (kind === 1) {
+      // Nootka lupine: hands of leaves, fat spikes of blue-violet pea flowers tipped with white
+      tuft(s, 5, ['#2a5e48', '#3c7c52', '#5aa060', '#8cc47a'], { h: stage === 1 ? 4 : 3, seed: v + 7 });
+      [[-5, -5], [4, -6], [0, -4]].slice(0, stage === 1 ? 3 : 2).forEach(([dx, dy]) => dab(s, FX + dx - 1, FY + dy + (wilt ? 1 : 0), ['a.a', '.b.', 'a.a'], { a: '#8cc47a', b: '#5aa060' }, tg('leaf', '#3c7c52')));
+      if (stage === 1) return;
+      const P = FJFL.lupine.map(pale);
+      CLUMPS[v].forEach(([dx, hf, lean], i) => {
+        const h = Math.round(13 * hf - wilt);
+        const tx = FX + dx + (wilt >= 2 ? (lean || 1) * (wilt - 1) : 0);
+        const pts = stem(s, FX + dx, FY, tx, FY - h + 1, 0, G);
+        const spike = stage === 2 ? 4 : 7;
+        for (let k = 0; k < spike; k += 1) {
+          const [x, y] = down(pts, h, k);
+          if (stage === 2) { s.set(x, y, k < 2 ? '#7aa860' : P[1], tg('fl', P[1])); continue; }
+          const c = k === 0 ? P[3] : k % 3 === 0 ? P[1] : P[2];
+          s.set(x, y, c, tg('fl', P[1]));
+          if (k > 0 && !(wilt >= 2 && k % 2)) {
+            s.set(x - 1, y, k % 3 === 1 ? P[4] : P[3], tg('fl', P[1])); // the white banner of each flower
+            s.set(x + 1, y, k % 3 === 0 ? P[0] : P[1], tg('fl', P[1]));
+            if (k > 2 && k < spike - 1 && (k + i) % 2) s.set(x - 2, y, P[2], tg('fl', P[1]));
+          }
+        }
+      });
+      return;
+    }
+    if (kind === 2) {
+      // forget-me-nots: a low cushion of leaves starred with small sky-blue flowers, gold-eyed (the buds are pink)
+      const LG = ['#2a6044', '#3c8050', '#58a05c', '#86c070'];
+      const rx = stage === 1 ? 5.5 : 7.5; const ry = stage === 1 ? 2.6 : 3.8 - wilt * 0.3;
+      for (let y = FY - 8; y <= FY; y += 1) for (let x = FX - 9; x <= FX + 9; x += 1) {
+        const dx = (x + 0.5 - FX) / rx; const dy = (y + 0.5 - (FY - ry + 1)) / ry;
+        if (dx * dx + dy * dy > 1 + (h2(x, y, v + 3) - 0.5) * 0.5) continue;
+        const l = -(dx * 0.6 + dy * 0.8) + (bayer(x, y) - 0.5) * 0.4;
+        s.set(x, y, LG[l > 0.45 ? 3 : l > 0 ? 2 : l > -0.5 ? 1 : 0], tg('leaf', LG[1]));
+      }
+      if (stage === 1) return;
+      const C = FJFL.forget[v].map(pale);
+      const spots = [[-5, -2], [-1, -5], [4, -3], [1, -1], [-3, -7], [3, -7], [7, -1], [-7, 0], [0, -8]].slice(0, 6 + v + (stage === 3 ? 1 : -2));
+      spots.forEach(([dx, dy], i) => {
+        const x = FX + dx; const y = FY + dy + (wilt >= 2 ? 1 : 0);
+        if (stage === 2) { s.set(x, y, i % 2 ? '#f29ac0' : C[1], tg('fl', C[1])); return; }
+        if (wilt >= 2 && i % 3 === 0) return;
+        dab(s, x - 1, y - 1, i % 3 === 2 ? ['.b.', 'cyb', '.a.'] : ['.c.', 'byb', '.b.'], { a: C[0], b: C[1], c: C[2], y: C[3] }, tg('fl', C[1]));
+      });
+      if (old === 2) { s.set(FX - 8, FY + 1, C[2], 'ground'); s.set(FX + 7, FY, C[1], 'ground'); }
+      return;
+    }
+    if (v === 2) {
+      // cotton grass: a tussock of fine blades, white tufts nodding on thin stalks
+      tuft(s, 5, ['#3a6a4a', '#55884e', '#7aa65a', '#a8c672'], { h: stage === 1 ? 6 : 5, seed: 11 });
+      if (stage === 1) return;
+      [[-5, 0.7, -1], [4, 0.78, 1], [-1, 1, 0], [2, 0.6, 1], [-3, 0.55, -1]].forEach(([dx, hf, lean], i) => {
+        const h = Math.round(13 * hf - wilt);
+        const tx = FX + dx + lean * (1 + wilt); const ty = FY - h + wilt;
+        stem(s, FX + dx, FY, tx, ty, lean * 0.5, ['#6a8a52', '#8aa862']);
+        if (stage === 2) { dab(s, tx, ty - 1, ['a', 'b'], { a: '#c8b48a', b: '#8a7a5a' }, tg('fl', '#a8946a')); return; }
+        if (wilt >= 2 && i % 2) { s.set(tx, ty, '#e8e4ec', tg('fl', '#c8c4d0')); return; }
+        dab(s, tx - 1, ty - 2, ['.w.', 'wWw', 'aww'], { w: pale('#f0eef4'), W: '#ffffff', a: '#d0cedc' }, tg('fl', '#c8c4d0'));
+      });
+      return;
+    }
+    // arctic poppies: a rosette of feathery grey-green leaves, hairy stalks, pale yellow (or white) cups
+    tuft(s, 5, ['#34624a', '#4a8256', '#6ca266', '#9cc084'], { h: stage === 1 ? 4 : 3, seed: v + 9 });
+    if (stage === 1) return;
+    const P = FJFL.poppy[v].map(pale);
+    clump(s, v, stage, wilt, old, 11, ['#5a8a52', '#7aa862'], (x, y, i, lean) => {
+      if (stage === 2) { dab(s, x + (lean > 0 ? 1 : -1), y, ['b', 'a'], { a: '#5a8a52', b: '#4a5a3a' }, tg('fl', '#4a6a42')); return; } // the bud nods
+      if (wilt >= 2) { dab(s, x - 1, y, ['bc.', '.ab'], { a: P[0], b: P[1], c: P[2] }, tg('fl', P[1])); return; }
+      dab(s, x - 1, y - 2, ['.cc.', 'cbyb', '.ab.'], { a: P[0], b: P[1], c: P[2], y: P[3] }, tg('fl', P[1]));
+    });
+    if (old === 2) { s.set(FX - 6, FY + 1, FJFL.poppy[v][2], 'ground'); s.set(FX + 5, FY, FJFL.poppy[v][1], 'ground'); }
+  },
+};
+
+const PTARMIGAN = [
+  ['.......rh..', '......hhKo.', '..bbbbhhh..', '.bbmbbbbh..', 'tbbbmbbww..', '.bbbbwwww..', '..wwwwww...', '...f..f....'],
+  ['.......rh..', '......hhKo.', '..bbbbhhh..', '.bbmbbbbh..', 'tbbbmbbww..', '.bbbbwwww..', '..wwwwww...', '..f....f...'],
+];
+const MARMOT = [
+  ['............', '............', '............', '........ee..', '..gggggghhh.', '.gggggghhKhn', 'tgggggggwhh.', 'tggggggwww..', '.dd...dd....'],
+  ['.....ee.....', '....hhhh....', '....hKhhn...', '....hhhh....', '...gwwwg....', '...gwwwgd...', '...gwwwg....', '..tggwwg....', '.ttdd.dd....'],
+];
+const EAGLE = [
+  ['...BB................', '...BBBB..............', '....BBBBB............', '.....bBBBBBb...WW....', 'TT..bbbbbbbbbbWWKy...', 'TTTbbbbbbbbbbbWWWyy..', '.TT..bbbbbbbbbb......', '.........yy..........'],
+  ['.....................', '.....................', '...............WW....', 'TT..bbbbbbbbbbWWKy...', 'TTTbbbbBBBBbbbWWWyy..', '.TT..BBBBBBBbbb......', '....BBBBBB...yy......', '...BBBB..............'],
+];
+
+CRITTERS['bg-fjord'] = [
+  { id: 'bluebutterfly', frames: 2, size: [7, 6], moves: 'fly', level: 1, variants: 2 },
+  { id: 'ptarmigan', frames: 2, size: [11, 8], moves: 'walk', level: 2, variants: 2 },
+  { id: 'hare', frames: 2, size: [11, 10], moves: 'walk', level: 2, variants: 2 },
+  { id: 'marmot', frames: 2, size: [12, 9], moves: 'sit', level: 3 },
+  { id: 'eagle', frames: 2, size: [21, 8], moves: 'fly', level: 4 },
+];
+CRITTERS_ART['bg-fjord'] = {
+  bluebutterfly: (f, v) => {
+    const C = [['#5a9af0', '#b8dcff', '#3a6ac8'], ['#fff0a0', '#ffffff', '#e8c040']][v];
+    return critterOf('bg-fjord', BUTTERFLY[f], { A: [C[0], 'fur'], a: [C[1], 'fur'], c: [C[2], 'fur'], B: ['#2e2238', 'fur'] });
+  },
+  // brown and barred in summer, or white as the snow
+  ptarmigan: (f, v) => critterOf('bg-fjord', PTARMIGAN[f], v
+    ? { h: '#ffffff', b: '#f4f2f6', m: '#e0dce8', w: '#ffffff', t: '#3a2e36', o: '#3a2e36', f: '#e0dce8', r: ['#e03a3a', 'fur'] }
+    : { h: '#9a6a42', b: '#8a5e3c', m: '#5a3c2c', w: '#f4eee4', t: '#3a2e36', o: '#3a2e36', f: '#e8e0d4', r: ['#e03a3a', 'fur'] }, { feet: true, shadow: [4, 1.2] }),
+  // a snowshoe hare: big white feet and black-tipped ears, brown in summer or white in winter
+  hare: (f, v) => {
+    const C = v ? { f: '#f0eef4', h: '#ffffff', d: '#dcd8e4' } : { f: '#9a7652', h: '#aa8660', d: '#f2eee8' };
+    return critterOf('bg-fjord', RABBIT[f], { f: C.f, h: C.h, d: C.d, i: '#3a2e36', e: C.h, n: '#f48aa0', w: '#ffffff' }, { feet: true, shadow: [4, 1.2] });
+  },
+  marmot: (f) => critterOf('bg-fjord', MARMOT[f], { g: '#a8a4a0', h: '#6a5a52', w: '#e4dcd0', t: '#7a5a42', d: '#3a2e36', e: '#5a4a44', n: '#3a2e36' }, { feet: true, shadow: [5, 1.3] }),
+  eagle: (f) => critterOf('bg-fjord', EAGLE[f], { b: ['#4a3428', 'fur'], B: ['#35241e', 'fur'], W: ['#ffffff', 'fur'], T: ['#f4f2f0', 'fur'], y: ['#f2c22e', 'fur'] }),
 };
 
 // ---------- the API ----------

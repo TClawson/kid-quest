@@ -26,12 +26,13 @@ import { STONE, startStone } from './stoneart.js';
 import { KAPOK, startKapok } from './kapokart.js';
 import { GOLDPOT, startGoldpot } from './goldpotart.js';
 import { STARWHALE, startStarwhale } from './starwhaleart.js';
+import { LIGHTHOUSE, startLighthouse } from './lighthouseart.js';
 import { musicSign } from './musicart.js';
 import { seasonNow, tintLand, mountWeather } from './seasonlife.js';
 import { isNewSeason, seasonLine } from './seasonhints.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
-const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot }, starwhale: { size: STARWHALE, start: startStarwhale } };
+const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot }, starwhale: { size: STARWHALE, start: startStarwhale }, lighthouse: { size: LIGHTHOUSE, start: startLighthouse } };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -464,6 +465,10 @@ function startLife(section, L, data, people, cam) {
     pokeNear: true, // a tap must be on a critter to poke it (a tap on the ground walks the buddy)
     key: `village|${data.kid}|${L.id}`,
     aw: L.W, ah: L.H, scale: 1, z: 1, life, wall: 20, falls,
+    layout: L, // the fjord's swimmers and waders read the bay, the docks and the shore from it
+    season: seasonNow(data.today).season,
+    progress: seasonNow(data.today).progress,
+    landmark: lm || null, // the lighthouse's rock, when it is there: the swimmers keep off it
     goal: hints.goal || L.chest,
     knightPost: hints.knightPost || { x: L.W - 50, y: L.H / 2, side: 1 },
     pad: hints.pad,
@@ -803,8 +808,10 @@ let landCache = { key: '', canvas: null };
 function land(L, color, areas = [], se = null) {
   const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}|${se ? `${se.season}${Math.round(se.progress * 20)}` : ''}`;
   if (landCache.key !== key) {
-    const base = paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas });
-    landCache = { key, canvas: se ? tintLand(base, se, L.id) : base };
+    // a map that paints its own seasons (the fjord) is told the season; the others are tinted
+    const own = L.ownSeasons && se;
+    const base = paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas, ...(own ? { season: se.season, progress: se.progress } : {}) });
+    landCache = { key, canvas: se && !own ? tintLand(base, se, L.id) : base };
   }
   return landCache.canvas;
 }
@@ -1512,7 +1519,7 @@ function mount(section, handlers) {
 
   // ---- the loop ----
   const artEl = section.querySelector('.v-landmark canvas.v-art');
-  const artStep = artEl && lm?.art ? LANDMARK_ART[lm.art].start(artEl, artEl.parentElement) : null;
+  const artStep = artEl && lm?.art ? LANDMARK_ART[lm.art].start(artEl, artEl.parentElement, se) : null;
   let last = performance.now();
   const tick = (now) => {
     if (!section.isConnected) { mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face; window.removeEventListener('resize', onResize); return; }

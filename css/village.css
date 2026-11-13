@@ -179,6 +179,7 @@
 .v-landmark.art-kapok .v-lm-bubble { bottom: auto; top: 2px; left: 18%; } /* the kapok talks from over the left of its crown, clear of the rain cloud */
 .v-landmark.art-goldpot .v-lm-bubble { bottom: auto; top: 2px; left: 26%; } /* the pot of gold talks from the clear sky over its rainbow, clear of the coins (in view on a phone too) */
 .v-landmark.art-starwhale .v-lm-bubble { bottom: auto; top: 0; left: 30%; } /* the star whale talks from the sky over its tail, clear of the observatory and the star fountain */
+.v-landmark.art-lighthouse .v-lm-bubble { bottom: auto; top: 18px; left: 104%; } /* the lighthouse talks from the open sky beside its lantern (in view on a tablet too) */
 .v-lm-bubble { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); width: max-content; max-width: 80px; font: 700 5px/1.25 var(--px-text); background: #fff8e7; color: var(--px-ink); border: 1px solid var(--px-ink); border-radius: 2px; padding: 1.5px 2.5px; }
 .v-show { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
 .v-show canvas.map-land { display: none; }
@@ -195,7 +196,8 @@
   0% { left: 100px; top: 380px; } 25% { left: 180px; top: 420px; } 50% { left: 320px; top: 400px; }
   75% { left: 280px; top: 480px; } 100% { left: 100px; top: 380px; }
 }
-.theme-bg-sunset .v-critter { --c: #f8f9fa; height: 1px; box-shadow: 3px 0 0 var(--c), 1.5px 1px 0 #495057; }
+/* seagulls over the beach and the fjord */
+.theme-bg-sunset .v-critter, .theme-bg-fjord .v-critter { --c: #f8f9fa; height: 1px; box-shadow: 3px 0 0 var(--c), 1.5px 1px 0 #495057; }
 .theme-bg-rainforest .v-critter { --c: #3bc9db; }
 .theme-bg-rainforest .v-critter.b2 { --c: #ff922b; }
 .theme-bg-rainbow .v-critter { --c: #ffffff; }

@@ -42,7 +42,7 @@ import { mountTestRec } from './testrec.js';
 import { viewLab, mountLab, labActions, openLab } from './notolab.js';
 import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
+  SPECIES, SLOTS, ITEMS, itemById, comingSoon, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
 import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
@@ -1359,7 +1359,9 @@ function villageLandmark(el, layer) {
   img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(dressed(kid), 'excited', { background: false }))}`;
   const r = el.getBoundingClientRect(); const lr = layer.getBoundingClientRect();
   const scale = Number(layer.dataset.scale) || 3;
-  const def = playShow(layer, theme, { buddy: img, scale, spot: { x: r.left + r.width / 2 - lr.left, y: r.top + r.height / 2 - lr.top }, onDone: () => layer.closest('.village')?.classList.remove('show-on') });
+  // the village's camera may still be settling: a show that hangs on the landmark can ask where it is now
+  const spotNow = () => { const q = el.getBoundingClientRect(); const lq = layer.getBoundingClientRect(); return { x: q.left + q.width / 2 - lq.left, y: q.top + q.height / 2 - lq.top }; };
+  const def = playShow(layer, theme, { buddy: img, scale, spot: { x: r.left + r.width / 2 - lr.left, y: r.top + r.height / 2 - lr.top }, spotNow, onDone: () => layer.closest('.village')?.classList.remove('show-on') });
   if (!def) return;
   ui.lastShow = Date.now();
   layer.closest('.village')?.classList.add('show-on');
@@ -1790,6 +1792,7 @@ function viewWardrobe() {
         ${items.map((item) => {
     const open = isUnlocked(item, prog);
     const shut = !open && needsMusicHouse(item) && !musicTier(prog); // sold once the music house opens
+    const soon = !open && comingSoon(item);
     const on = item.home ? isPlaced(kid, item) : kid.buddy.outfit[item.slot] === item.id;
     // the wand's picture is lit all the way, to show what it does
     const preview = { ...kid.buddy, wand: 1, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
@@ -1801,7 +1804,7 @@ function viewWardrobe() {
             ${item.home ? `<span class="spot-tag">${spotById(item.spot).icon} ${esc(spotById(item.spot).name)}</span>` : ''}
             <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : item.noHold ? `<img class="home-thumb" src="${boatThumb()}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
-            <small>${open ? wearing : shut ? '🔒 Opens with your music house' : price || `🔒 ${esc(needLabel(item))}`}</small>
+            <small>${open ? wearing : soon ? '🔒 Coming soon' : shut ? '🔒 Opens with your music house' : price || `🔒 ${esc(needLabel(item))}`}</small>
             ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
           </button>`;
   }).join('')}
@@ -2825,6 +2828,7 @@ const actions = {
     if (!item || !fitsSpecies(item, kid.buddy.species)) return;
     const prog = progressFor(kid);
     if (!isUnlocked(item, prog) && needsMusicHouse(item) && !musicTier(prog)) { sounds.error(); toast('🔒 This opens with your music house. Keep up your piano streak to earn your first piano!'); return; }
+    if (!isUnlocked(item, prog) && comingSoon(item)) { sounds.error(); toast(`🔒 ${item.name} is coming soon. Its song is still being written!`); return; }
     if (!isUnlocked(item, prog) && (item.price || item.gems)) { buyItem(kid, item, prog); return; }
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
     if (item.home) {
@@ -2894,6 +2898,7 @@ const actions = {
     const prog = progressFor(kid);
     if (!item || prog.owned.includes(item.id) || !fitsSpecies(item, kid.buddy.species)) { closeModal(); return; }
     if (needsMusicHouse(item) && !musicTier(prog)) { closeModal(); return; }
+    if (comingSoon(item)) { closeModal(); return; }
     if (item.gems) {
       if (prog.gems < item.gems) { closeModal(); return; }
       kid.gemsSpent = (kid.gemsSpent || 0) + item.gems;

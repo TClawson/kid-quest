@@ -6,6 +6,7 @@
 import { sounds, setRain } from './fx.js';
 import { duckMusic } from './music.js';
 import { upscale, thinOutline } from './upscale.js';
+import { fjordLife } from './fjordlife.js';
 
 const OUT = '#2a1838';
 const FPS = 12.5;
@@ -1575,7 +1576,7 @@ function jungleLife(m) {
   };
 }
 
-const LIVES = { jungle: jungleLife, crab: crabLife, fish: fishLife, space: spaceLife, volcano: volcanoLife, castle: castleLife, unicorn: unicornLife, saucer: saucerLife };
+const LIVES = { jungle: jungleLife, crab: crabLife, fish: fishLife, space: spaceLife, volcano: volcanoLife, castle: castleLife, unicorn: unicornLife, saucer: saucerLife, fjord: fjordLife };
 const running = new WeakMap();
 // The screen is redrawn whenever family sync brings news, which makes a new map each time.
 // Keep each kid's moving things (and their clock) across redraws, so a fish that is halfway

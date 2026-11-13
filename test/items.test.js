@@ -212,3 +212,24 @@ test('moves unlock at 1, 3 and 6 exercise weeks, for gear the kid owns', () => {
   assert.equal(pickMove(two, 'jacks').move.id, 'cartwheel');
   assert.equal(pickMove([], null), null);
 });
+
+test('every Places background has a map, a fishing spot and a hidden spot', async () => {
+  const { MAP_THEMES } = await import('../js/maparts.js');
+  const { SPOTS } = await import('../js/fishing.js');
+  const { SECRETS } = await import('../js/treasure-art.js');
+  const bgs = ITEMS.filter((i) => i.slot === 'background').map((i) => i.id);
+  assert.deepEqual([...bgs].sort(), Object.keys(MAP_THEMES).sort());
+  for (const id of bgs) {
+    assert.ok(SPOTS[id], `${id}: fishing spot`);
+    assert.ok(SECRETS[id], `${id}: hidden spot`);
+  }
+  assert.equal(itemById('bg-fjord').price, 500);
+  assert.equal(MAP_THEMES['bg-fjord'].life, 'fjord');
+});
+
+test('the fjord is on show but not for sale until its music is written', async () => {
+  const { comingSoon } = await import('../js/items.js');
+  assert.equal(comingSoon(itemById('bg-fjord')), true);
+  assert.deepEqual(ITEMS.filter(comingSoon).map((i) => i.id), ['bg-fjord']);
+  assert.equal(isUnlocked(itemById('bg-fjord'), { owned: [], coins: 9999 }), false);
+});

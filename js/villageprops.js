@@ -16,6 +16,7 @@ import { paintGalaxy, scopeGX, moongardenGX, starpupGX, cometvaneGX, planetswing
 import { paintCastle, dummyK, rackK, targetK, anvilK, houndK, cartK, bellK } from './castleart.js';
 import { paintSpace, roverB, solarB, satelliteB, telescopeB, cheeseB, robotB, greenhouseB, printsB } from './spaceart.js';
 import { paintSunset, hammockB, rowboatB, gullB, tidepoolB, driftwoodB, tikiB, coconutsB } from './sunsetart.js';
+import { paintFjord, spruceF, cratesF, barrelsF, ropecoilF, trawlerF, skiffF, boulderF, crabpotsF, fishrackF, netrackF, kayaksF, woodpileF, huskyF, firepitF, buoypostF, lampF, benchF, driftlogF, snowmanF, beachboatF, fjordSeason } from './fjordart.js';
 
 // ---------- a lit shape ----------
 
@@ -609,6 +610,27 @@ export const PROPS = {
   planetswing: { w: 30, h: 38, foot: [1, 30, 28, 7], base: 37, draw: (px, p) => planetswingGX(px, p.x, p.y) },
   starjar: { w: 14, h: 20, foot: [1, 12, 12, 7], base: 19, draw: (px, p) => starjarGX(px, p.x, p.y) },
   meteorpit: { w: 34, h: 24, foot: [2, 10, 30, 13], base: 23, draw: (px, p) => meteorGX(px, p.x, p.y) },
+  // the Alaskan Fjord's things (fjordart.js)
+  spruce: { w: 21, h: 40, foot: [7, 33, 8, 7], base: 39, draw: (px, p) => spruceF(px, p) },
+  trawler: { w: 46, h: 36, foot: null, flat: true, draw: (px, p) => trawlerF(px, p.x, p.y, p, fjordSeason()) },
+  skiff: { w: 24, h: 9, foot: null, flat: true, draw: (px, p) => skiffF(px, p.x, p.y, p.c, fjordSeason()) },
+  crabpots: { w: 24, h: 20, foot: [1, 10, 22, 10], base: 19, draw: (px, p) => crabpotsF(px, p.x, p.y) },
+  fishrack: { w: 30, h: 24, foot: [1, 18, 28, 6], base: 23, draw: (px, p) => fishrackF(px, p.x, p.y) },
+  netrack: { w: 36, h: 22, foot: [0, 17, 36, 5], base: 21, draw: (px, p) => netrackF(px, p.x, p.y) },
+  kayaks: { w: 36, h: 18, foot: [3, 10, 30, 8], base: 17, draw: (px, p) => kayaksF(px, p.x, p.y) },
+  woodpile: { w: 30, h: 18, foot: [0, 8, 30, 10], base: 17, draw: (px, p) => woodpileF(px, p.x, p.y) },
+  husky: { w: 34, h: 24, foot: [1, 12, 32, 12], base: 23, draw: (px, p) => huskyF(px, p.x, p.y) },
+  firepit: { w: 30, h: 20, foot: [8, 9, 14, 9], base: 16, draw: (px, p) => firepitF(px, p.x, p.y) },
+  buoypost: { w: 16, h: 34, foot: [5, 28, 7, 6], base: 33, draw: (px, p) => buoypostF(px, p.x, p.y) },
+  fjordlamp: { w: 10, h: 30, foot: [3, 25, 5, 5], base: 29, draw: (px, p) => lampF(px, p.x, p.y) },
+  fjordbench: { w: 24, h: 12, foot: [0, 5, 24, 7], base: 11, draw: (px, p) => benchF(px, p.x, p.y) },
+  driftlog: { w: 26, h: 8, foot: [0, 2, 26, 6], base: 7, draw: (px, p) => driftlogF(px, p.x, p.y) },
+  snowman: { w: 14, h: 22, foot: [2, 15, 10, 7], base: 21, draw: (px, p) => snowmanF(px, p.x, p.y) },
+  beachboat: { w: 30, h: 12, foot: [1, 3, 28, 9], base: 11, draw: (px, p) => beachboatF(px, p.x, p.y) },
+  crates: { w: 16, h: 16, foot: [0, 6, 16, 10], base: 15, draw: (px, p) => cratesF(px, p.x, p.y) },
+  barrels: { w: 12, h: 14, foot: [0, 6, 12, 8], base: 13, draw: (px, p) => barrelsF(px, p.x, p.y) },
+  ropecoil: { w: 10, h: 6, foot: null, flat: true, draw: (px, p) => ropecoilF(px, p.x, p.y) },
+  boulder: { w: 12, h: 12, foot: [1, 4, 10, 7], base: 10, draw: (px, p) => boulderF(px, p.x + 6, p.y + 6, p.r || 5, fjordSeason(), p.x + p.y) },
 };
 
 // ---------- the ground ----------
@@ -825,6 +847,8 @@ export function paintVillage(canvas, L, opts = {}) {
   if (L.id === 'bg-rainbow') return paintRainbow(canvas, L, opts, { waterDepth, PROPS });
   // ...and so does the Golden Galaxy (galaxyart.js)
   if (L.id === 'bg-galaxy') return paintGalaxy(canvas, L, opts, { waterDepth, PROPS });
+  // ...and so does the Alaskan Fjord, which paints its own seasons too (fjordart.js)
+  if (L.id === 'bg-fjord') return paintFjord(canvas, L, opts, { waterDepth, PROPS });
   canvas.width = L.W;
   canvas.height = L.H;
   const ctx = canvas.getContext('2d');

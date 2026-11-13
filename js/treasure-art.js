@@ -615,6 +615,37 @@ export const SECRETS = {
     w: 56, h: 48,
     frames: () => [],
   },
+  'bg-fjord': {
+    name: 'The old lighthouse',
+    lines: ['The lighthouse lamp wakes up. Blink, blink!', 'Look up! The northern lights are dancing.', 'Splash! The orcas jump to say hi.'],
+    w: 16, h: 19,
+    // a little lighthouse on its rock: dark, lit, and lit with its beams out
+    frames: (i) => {
+      const pal = { r: '#c63e48', R: '#9c2a38', w: '#f0f2f8', W: '#c8ccdc', k: '#30344a', g: i ? '#ffd24a' : '#4a6078', G: i ? '#fffbe0' : '#7896ac', d: '#6e1826', s: '#746e7a', S: '#585462', b: '#fff0aa' };
+      const beam = i === 2 ? 'bbbb' : '....';
+      return [[0, 0, [
+        '.......r........',
+        '......rrR.......',
+        '.....rrrRR......',
+        `${beam}.kGgk.${beam}.`,
+        `${beam}.kGgk.${beam}.`,
+        '....kkkkkkk.....',
+        '.....wwwWW......',
+        '.....wwwWW......',
+        '.....rrrRR......',
+        '.....rrrRR......',
+        '....wwwwWWW.....',
+        '....wwwwWWW.....',
+        '....rrrrRRR.....',
+        '....rrrrRRR.....',
+        '....wwwdWWW.....',
+        '...wwwwdWWWW....',
+        '..sssssssSSSS...',
+        '.sssssssssSSSSS.',
+        'sssssssssSSSSSSS',
+      ], pal]];
+    },
+  },
   'bg-galaxy': {
     name: 'The star whale',
     lines: ['A space whale! It spouts stars. WHOOSH!', 'The whale sings a long, low song.', 'The whale winks. Splash!'],

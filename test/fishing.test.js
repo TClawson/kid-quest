@@ -45,7 +45,7 @@ test('bigger fish are pickier', () => {
 });
 
 test('every regular map has its own fishing spot and rare fish', () => {
-  const maps = ['bg-meadow', 'bg-castle', 'bg-sunset', 'bg-ocean', 'bg-space', 'bg-volcano', 'bg-rainforest', 'bg-rainbow', 'bg-galaxy'];
+  const maps = ['bg-meadow', 'bg-castle', 'bg-sunset', 'bg-ocean', 'bg-space', 'bg-volcano', 'bg-rainforest', 'bg-fjord', 'bg-rainbow', 'bg-galaxy'];
   assert.deepEqual(Object.keys(SPOTS).sort(), [...maps].sort());
   const rare = new Set(maps.map((m) => SPOTS[m].special.name));
   assert.equal(rare.size, maps.length);
@@ -70,6 +70,20 @@ test('every map but Forest Lake has its own fish and bait names; they keep how t
   }
   assert.equal(lookFor('bg-ocean', 'catfish').name, 'Nurse shark');
   assert.equal(lookFor('bg-rainbow', 'special').name, 'Unicorn fish');
+});
+
+test('the fjord has its own five fish and the king salmon, herring the most common', async () => {
+  const { lookFor } = await import('../js/fishing.js');
+  const sp = SPOTS['bg-fjord'];
+  assert.equal(sp.name, 'Fjord Harbor');
+  const names = Object.keys(SPECIES).map((k) => lookFor('bg-fjord', k).name);
+  assert.deepEqual(names, ['Herring', 'Dolly Varden', 'Sockeye salmon', 'Lingcod', 'Halibut']);
+  assert.equal(lookFor('bg-fjord', 'special').name, 'King salmon');
+  assert.equal(sp.special.id, 'king');
+  assert.equal(sp.special.as, 'largemouth');
+  assert.ok(Math.max(sp.special.like.jig, sp.special.like.spoon) > sp.special.like.worm, 'kings like jigs and spoons');
+  const top = Object.entries(sp.odds).sort((a, b) => b[1] - a[1])[0][0];
+  assert.equal(top, 'bluegill', 'herring turn up the most');
 });
 
 test('better rods see farther, and fish farther out are bigger', () => {

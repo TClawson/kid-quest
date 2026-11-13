@@ -1,7 +1,7 @@
 // The fish book and the fish tank in the buddy's house. Pure logic, no DOM.
 //
 // Every kind of fish the kid can catch in the fishing game is its own species here: each map's
-// lake has five kinds plus one rare fish of its own (fishing.js SPOTS), so 9 maps x 6 = 54.
+// lake has five kinds plus one rare fish of its own (fishing.js SPOTS), so 10 maps x 6 = 60.
 // The kid's biggest catch of each lives on the kid's own synced record:
 //   kid.fishRecords = { 'meadow-bluegill': { size: 9, points: 22, map: 'bg-meadow', date: '2026-11-09' } }
 // size is in inches (what the catch card shows); points break a tie between two catches of the

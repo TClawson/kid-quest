@@ -122,6 +122,8 @@ const MAPS = {
   'bg-meadow': { snow: 1, pal: 'plain', autumn: 1, ground: 'grass', blossom: 1, leaves: 1, ice: true, band: 24 },
   'bg-castle': { snow: 1, pal: 'plain', autumn: 1, ground: 'grass', blossom: 1, leaves: 1, ice: true },
   'bg-rainforest': { snow: 0.85, pal: 'plain', autumn: 0.75, ground: 'grass', blossom: 0.9, leaves: 1, ice: true },
+  // the fjord paints its own land for each season; this is for its sprites and weather (spruce stay green)
+  'bg-fjord': { snow: 1, pal: 'plain', autumn: 0.3, ground: 'grass', blossom: 0, leaves: 0.2, ice: true },
   'bg-sunset': { snow: 0.6, pal: 'sand', autumn: 0.35, ground: 'sand', blossom: 0, leaves: 0.25, ice: true },
   'bg-volcano': { snow: 0.95, pal: 'ashy', autumn: 0.9, ground: 'ash', blossom: 0.8, leaves: 0.7, lava: true, band: 38 },
   'bg-rainbow': { snow: 1, pal: 'sugar', autumn: 1, ground: 'candy', blossom: 0.8, leaves: 1, candy: true, band: 30 },
@@ -1033,13 +1035,14 @@ export function weather(season, mapId = 'bg-meadow', progress = 0.5) {
     if (mapId === 'bg-ocean') add(MARINE, { count: 50, variant: 'snow' });
     else if (mapId === 'bg-space' || mapId === 'bg-galaxy') add(METEOR, { count: 3 });
     else if (mapId === 'bg-volcano') { add(ASH); add(LEAVES, { count: 8 }); }
-    else if (!dome) add(LEAVES, { count: Math.round(LEAVES.count * (0.5 + p) * (mapId === 'bg-sunset' ? 0.35 : 1)), variant: mapId === 'bg-rainbow' ? 'candy' : 'plain' });
+    else if (!dome) add(LEAVES, { count: Math.round(LEAVES.count * (0.5 + p) * (mapId === 'bg-sunset' ? 0.35 : mapId === 'bg-fjord' ? 0.3 : 1)), variant: mapId === 'bg-rainbow' ? 'candy' : 'plain' });
   } else if (season === 'spring') {
     if (mapId === 'bg-ocean') add(MARINE, { count: 70, variant: 'plankton' });
     else if (mapId === 'bg-space') add(SPARKLE, { count: 10, variant: 'ice' });
     else if (mapId === 'bg-galaxy') add(SPARKLE, { count: 18, variant: 'star' });
     else if (!dome) {
-      add(PETALS, { count: Math.round(PETALS.count * (mapId === 'bg-volcano' ? 0.5 : 1)), variant: mapId === 'bg-sunset' ? 'hibiscus' : 'plain' });
+      // no blossom trees in the fjord's spruce woods, so no petals there
+      if (mapId !== 'bg-fjord') add(PETALS, { count: Math.round(PETALS.count * (mapId === 'bg-volcano' ? 0.5 : 1)), variant: mapId === 'bg-sunset' ? 'hibiscus' : 'plain' });
       add(SHOWERS, { count: mapId === 'bg-rainforest' ? 110 : SHOWERS.count, showers: { period: 80, share: mapId === 'bg-rainforest' ? 0.5 : 0.32 } });
     }
   } else if (['bg-meadow', 'bg-castle', 'garden'].includes(mapId)) add(FLUFF);

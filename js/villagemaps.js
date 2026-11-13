@@ -24,6 +24,8 @@ import { STONE } from './stoneart.js';
 import { KAPOK } from './kapokart.js';
 import { GOLDPOT } from './goldpotart.js';
 import { STARWHALE } from './starwhaleart.js';
+import { peakBlocks } from './fjordart.js';
+import { LIGHTHOUSE } from './lighthouseart.js';
 
 const W = 448;
 
@@ -491,6 +493,101 @@ export const VILLAGE_MAPS = {
     pond: { lip: '#5f3dc4', water: '#7950f2', deep: '#5f3dc4', light: '#9775fa', shine: '#ffffff', pads: false },
     clearing: { fill: ['#5f3dc4', '#4527a0', '#7950f2'], grass: '#3a2878' },
   },
+  // ---------- Alaskan Fjord: fishing cabins at both ends of a bay between two walls of mountains ----------
+  // The bay fills the middle: the north village sits at its head (a creek runs through it), the
+  // harbor village at its foot, where a channel runs out to the sea (the whales come in that way).
+  // A boardwalk on pilings under the west wall joins the two. peaks: the mountains down each side
+  // (cx, base: where a peak stands, hw: half its width at the foot, h: how tall), back to front.
+  'bg-fjord': {
+    H: 700,
+    ownSeasons: true, // fjordart.js paints summer, autumn, deep winter and spring itself
+    seed: 4907,
+    ground: { kind: 'grass', c: ['#55a05a', '#3f8454', '#78b862'], edge: ['#1f5a46', '#184440'] },
+    pathStyle: { edge: '#6a6676', fill: '#c6c0b8' },
+    home: { x: 130, y: 30, w: 100, h: 80, style: 'cabin' },
+    houses: [
+      { x: 338, y: 40, w: 80, h: 66, style: 'cabin', roof: '#1c9c8c', wall: '#e8b03a' },
+      { x: 30, y: 522, w: 96, h: 74, style: 'cabin', roof: '#a8323e', wall: '#3a7ab8', sign: 'note', music: true },
+    ],
+    water: [
+      { pts: [[-40, 346], [490, 346]], w: 230, kind: 'sea', bay: true },
+      { pts: [[232, 340], [236, 350]], w: 256, kind: 'sea', bay: true },
+      { pts: [[330, 430], [352, 500], [364, 570], [360, 650], [366, 740]], w: 116, kind: 'sea', bay: true },
+      { pts: [[322, -10], [310, 60], [322, 130], [304, 200], [300, 240]], w: 10, kind: 'river' },
+    ],
+    crossings: [
+      { box: [103, 222, 16, 250], dir: 'v', kind: 'boardwalk' },
+      { at: [321, 128], dir: 'h', kind: 'wood', w: 20 },
+      { box: [278, 456, 32, 188], dir: 'v', kind: 'wharf' },
+      { box: [310, 520, 46, 16], dir: 'h', kind: 'dock' },
+      { box: [310, 608, 42, 16], dir: 'h', kind: 'dock' },
+    ],
+    peaks: [
+      // the west wall: two big shoulders behind, four peaks in front
+      { cx: -8, base: 306, hw: 104, h: 226, seed: 1 }, { cx: -14, base: 430, hw: 112, h: 236, seed: 2 },
+      { cx: 32, base: 266, hw: 62, h: 138, seed: 3 }, { cx: 56, base: 344, hw: 44, h: 128, seed: 4 },
+      { cx: 24, base: 412, hw: 76, h: 176, seed: 5 }, { cx: 50, base: 488, hw: 52, h: 150, seed: 6 },
+      // the east wall, with the waterfall
+      { cx: 458, base: 312, hw: 100, h: 240, seed: 7 }, { cx: 468, base: 408, hw: 104, h: 250, seed: 8 },
+      { cx: 420, base: 270, hw: 62, h: 140, seed: 9 }, { cx: 398, base: 346, hw: 44, h: 120, seed: 10 },
+      { cx: 424, base: 432, hw: 68, h: 186, seed: 11, falls: true }, { cx: 452, base: 506, hw: 56, h: 170, seed: 12 },
+      { cx: 444, base: 596, hw: 40, h: 130, seed: 13 }, { cx: 456, base: 684, hw: 50, h: 150, seed: 14 },
+      { cx: 442, base: 770, hw: 42, h: 130, seed: 15 },
+    ],
+    // a rocky islet in the bay (the treasure map's landmark will stand on it)
+    // where the sea's visitors swim (fjordlife.js): the pod comes in through the channel, once round
+    // the bay and out again; where the whale comes up; the otters' rafts; the beach the moose and
+    // the bear wade along (out from behind the spruces at its east end)
+    life: {
+      pod: [[388, 732], [388, 650], [384, 600], [382, 575], [386, 540], [380, 505], [374, 478], [352, 440], [318, 398], [296, 340], [262, 282], [215, 256], [172, 270], [158, 322], [160, 372], [188, 398], [246, 362], [304, 366], [346, 432], [374, 478], [380, 505], [386, 540], [382, 575], [384, 600], [388, 650], [388, 732]],
+      whale: [[220, 258], [196, 330], [312, 322], [176, 436]],
+      otters: [[[232, 262], [262, 272]], [[318, 376], [326, 392]], [[366, 548], [370, 562]]],
+      // door: where the moose and the bear stand hidden (middle of the feet) behind the spruces of
+      // cover ([foot x, foot y, size, variant], painted on the land too); they wade to moose / bear
+      shore: { door: [388, 223], cover: [[368, 229, 'xl', 0], [379, 230, 'xl', 1], [390, 229, 'xl', 2], [400, 227, 'xl', 0], [373, 225, 'xl', 2], [385, 226, 'xl', 0], [395, 225, 'xl', 1]], moose: 196, bear: 306 },
+      channel: 478, // south of here the water is narrow: the pod swims in single file
+    },
+    islets: [{ x: 262, y: 404, rx: 20, ry: 9 }],
+    paths: [
+      [[180, 112], [180, 178]], [[180, 128], [377, 128], [377, 108]], [[180, 150], [111, 150], [111, 226]],
+      [[111, 468], [111, 500], [278, 500]], [[278, 640], [78, 640], [78, 602]],
+    ],
+    plazas: [[180, 178, 18], [200, 640, 20]],
+    props: [
+      p('stall', 56, 62),
+      p('laundry', 140, 594, { w: 56 }),
+      // the north village's things
+      p('firepit', 165, 168), p('woodpile', 262, 62), p('fishrack', 60, 120), p('kayaks', 124, 198), p('beachboat', 262, 196),
+      p('driftlog', 196, 204), p('fjordlamp', 198, 104), p('fjordlamp', 300, 104), p('fjordbench', 142, 182), p('snowman', 250, 128),
+      p('husky', 364, 150), p('boulder', 62, 176), p('boulder', 400, 190, { r: 6 }),
+      p('spruce', 100, 26), p('spruce', 238, 22), p('spruce', 284, 30), p('spruce', 26, 80, { s: 'xl' }), p('spruce', 420, 108), p('spruce', 384, 176),
+      p('spruce', 340, 188, { s: 'm' }), p('spruce', 84, 164, { s: 'm' }),
+      // the harbor
+      p('trawler', 314, 483, { hull: '#2a4a8a', under: true, seed: 3 }), p('trawler', 314, 569, { hull: '#a8323e', dir: -1, under: true, seed: 5 }),
+      p('skiff', 318, 624, { c: '#e0aa28' }), p('trawler', 224, 430, { hull: '#2c744c', under: true, seed: 8 }),
+      p('crates', 281, 470), p('barrels', 296, 560), p('ropecoil', 283, 624),
+      p('crabpots', 250, 508), p('netrack', 226, 588), p('buoypost', 256, 546), p('fjordlamp', 264, 474), p('fjordlamp', 262, 612),
+      p('fjordbench', 226, 664), p('driftlog', 150, 468), p('snowman', 212, 600), p('woodpile', 132, 566), p('fishrack', 30, 624),
+      p('spruce', 22, 474, { s: 'xl' }), p('spruce', 126, 480, { s: 'm' }), p('spruce', 250, 644), p('spruce', 130, 648, { s: 'm' }), p('spruce', 56, 476),
+    ],
+    shop: { x: 78, y: 108 },
+    green: {
+      left: { x: 204, y: 152, w: 88, h: 38 }, right: { x: 140, y: 526, w: 108, h: 44 },
+      idle: [{ x: 150, y: 208 }, { x: 236, y: 142 }, { x: 128, y: 170 }, { x: 276, y: 142 }],
+    },
+    // a lighthouse on the islet: it only stands there once the treasure map is whole
+    landmark: { x: 206, y: 275, w: LIGHTHOUSE.w, h: LIGHTHOUSE.h, art: 'lighthouse', foot: [14, 114, 84, 26], stand: { x: 294, y: 464 } },
+    coach: { x: 264, y: 114 },
+    chest: { x: 200, y: 646 },
+    start: { x: 180, y: 122 },
+    slots: {
+      morning: [[104, 122], [240, 116], [146, 166], [290, 114], [404, 124], [390, 152], [218, 204], [342, 172]],
+      afternoon: [[112, 614, MUSIC], [206, 618, LAUNDRY], [180, 486], [346, 530], [130, 488], [244, 626], [298, 582], [46, 606]],
+    },
+    labels: { morning: [224, 214, '⬆ 🌅 Morning quests'], afternoon: [190, 484, '⬇ ☀️ After-school quests'] },
+    pond: { lip: '#6a6676', water: '#2a8896', deep: '#1d6a82', light: '#49a7a8', shine: '#e6faf2', pads: false },
+    clearing: { fill: ['#c6c0b8', '#a8a4a6', '#e0d8c8'], grass: '#78b862' },
+  },
 };
 
 // ---------- building a layout ----------
@@ -532,6 +629,8 @@ function segDist(x, y, [x0, y0], [x1, y1]) {
 
 /** A bridge's box: across the water at `at`, from bank to bank. */
 function bridgeBox(c, water) {
+  // a boardwalk or a dock gives its own box (it doesn't run bank to bank)
+  if (c.box) return { ...c, x: c.box[0], y: c.box[1], w: c.box[2], h: c.box[3] };
   const [ax, ay] = c.at;
   const wet = (x, y) => water.some((wa) => waterDepth(wa, x, y) > -5);
   const w = c.w || 32;
@@ -573,6 +672,9 @@ export function villageLayout(theme) {
     ...props.filter((q) => q.kind === 'laundry').flatMap((q) => [[q.x, q.y + 18, 4, 8], [q.x + (q.w || 84) - 4, q.y + 18, 4, 8]]),
     // a waterfall's cliff can't be climbed
     ...(spec.falls ? [[spec.falls.cliff[0], 0, spec.falls.cliff[1] - spec.falls.cliff[0], spec.falls.base - 6]] : []),
+    // mountains can't be climbed either (the fjord's walls)
+    ...(spec.peaks ? peakBlocks(spec.peaks) : []),
+    ...(spec.blocks || []),
   ];
   const inWater = (x, y, pad = 0) => water.some((wa) => waterDepth(wa, x, y) > -3 - pad);
   const onBridge = (x, y) => crossings.some((b) => (b.dir === 'h' ? x > b.x - 6 && x < b.x + b.w + 6 && y > b.y + 2 && y < b.y + b.h - 2 : x > b.x + 2 && x < b.x + b.w - 2 && y > b.y - 6 && y < b.y + b.h + 6));
@@ -600,6 +702,9 @@ export function villageLayout(theme) {
     shop: spec.shop,
     green: spec.green,
     falls: spec.falls,
+    peaks: spec.peaks,
+    islets: spec.islets,
+    ownSeasons: Boolean(spec.ownSeasons),
     life: spec.life || {},
     landmark: lm,
     chest: spec.chest,

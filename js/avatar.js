@@ -902,10 +902,11 @@ const CATCHES = {
   'bg-castle': [['old boot', BOOT, { B: SH('#8d5524', '#b07443', '#5c3a1e') }], ['golden goblet', GOBLET, { G: SH('#fcc419', '#fff3bf', '#e67700'), g: '#ffffff' }]],
   'bg-volcano': [['lava fish', FISH, fishPal('#ff6b1a', '#ffe066', '#c92a2a')], ['fire dragon fish', FISH, fishPal('#e03131', '#ffd43b', '#862e9c')]],
   'bg-rainforest': [['piranha', FISH, fishPal('#868e96', '#ff8787', '#495057')], ['peacock bass', FISH, fishPal('#fcc419', '#94d82d', '#e8590c')]],
+  'bg-fjord': [['herring', FISH, fishPal('#c8d4dc', '#f8f9fa', '#2a5a8a')], ['king salmon', FISH, fishPal('#c8ced8', '#f8f9fa', '#3a4a5a')]],
   'bg-rainbow': [['rainbow trout', FISH, { F: SH('#ff8787', '#ffe066', '#748ffc'), E: OUT }], ['unicorn fish', FISH, fishPal('#f3d9fa', '#ffffff', '#da77f2')]],
   'bg-galaxy': [['star fish', STAR, { Y: SH('#ffd43b', '#fff9db', '#f08c00') }], ['comet fish', FISH, fishPal('#b197fc', '#e5dbff', '#5f3dc4')]],
 };
-const CATCH_ICON = { 'bg-volcano': '🔥', 'bg-space': '🚀', 'bg-castle': '🏰', 'bg-galaxy': '✨', 'bg-ocean': '🫧', 'bg-rainbow': '🌈', 'bg-sunset': '🏖️', 'bg-meadow': '🎣', 'bg-rainforest': '🌿' };
+const CATCH_ICON = { 'bg-volcano': '🔥', 'bg-space': '🚀', 'bg-castle': '🏰', 'bg-galaxy': '✨', 'bg-ocean': '🫧', 'bg-rainbow': '🌈', 'bg-sunset': '🏖️', 'bg-meadow': '🎣', 'bg-rainforest': '🌿', 'bg-fjord': '🏔️' };
 
 /**
  * A catch for a fishing visitor on this map theme. rod: 1-3, better rods land
@@ -1001,6 +1002,17 @@ const BACKGROUNDS = {
     // a toucan on a branch
     px.rect(18, 9, 6, 1, '#6e4b2a'); px.rect(19, 7, 2, 2, '#212529'); px.rect(20, 7, 1, 1, '#fff3bf'); px.rect(21, 7, 2, 1, '#ff922b');
     dots(px, '#ff6b6b', [[2, 21], [15, 22]]); dots(px, '#ffd43b', [[20, 21]]); dots(px, '#f783ac', [[5, 22], [19, 23]]);
+  },
+  'bg-fjord': (px) => {
+    bands(px, [[0, '#cfe3ee'], [8, '#e7f5ff'], [18, '#1c8a9c'], [21, '#adb5bd'], [22, '#868e96']]);
+    // two grey peaks with snow on top
+    for (let i = 0; i < 12; i += 1) px.rect(6 - i, 4 + i, 2 * i + 1, 1, i < 3 ? '#ffffff' : '#868e96');
+    for (let i = 0; i < 10; i += 1) px.rect(17 - i, 6 + i, 2 * i + 1, 1, i < 3 ? '#ffffff' : '#adb5bd');
+    // a band of dark spruce along the water
+    px.rect(0, 15, 24, 3, '#1f3d2b');
+    for (let x = 1; x < 24; x += 3) { px.rect(x - 1, 14, 3, 1, '#1f3d2b'); px.rect(x, 13, 1, 1, '#1f3d2b'); }
+    // teal water with a little shine
+    dots(px, '#c5f6fa', [[3, 19], [4, 19], [12, 20], [13, 20], [19, 19]]);
   },
   'bg-rainbow': (px) => {
     bands(px, [[0, '#d0ebff'], [20, '#74d474'], [21, '#5cc45c']]);
