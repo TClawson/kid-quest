@@ -195,7 +195,8 @@
   0% { left: 100px; top: 380px; } 25% { left: 180px; top: 420px; } 50% { left: 320px; top: 400px; }
   75% { left: 280px; top: 480px; } 100% { left: 100px; top: 380px; }
 }
-.theme-bg-sunset .v-critter { --c: #f8f9fa; height: 1px; box-shadow: 3px 0 0 var(--c), 1.5px 1px 0 #495057; }
+/* seagulls over the beach and the fjord */
+.theme-bg-sunset .v-critter, .theme-bg-fjord .v-critter { --c: #f8f9fa; height: 1px; box-shadow: 3px 0 0 var(--c), 1.5px 1px 0 #495057; }
 .theme-bg-rainforest .v-critter { --c: #3bc9db; }
 .theme-bg-rainforest .v-critter.b2 { --c: #ff922b; }
 .theme-bg-rainbow .v-critter { --c: #ffffff; }

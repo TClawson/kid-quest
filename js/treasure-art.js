@@ -615,6 +615,12 @@ export const SECRETS = {
     w: 56, h: 48,
     frames: () => [],
   },
+  'bg-fjord': {
+    name: 'The old lighthouse',
+    lines: ['The lighthouse lamp wakes up. Blink, blink!', 'Look up! The northern lights are dancing.', 'Splash! The orcas jump to say hi.'],
+    w: 22, h: 46,
+    frames: () => [],
+  },
   'bg-galaxy': {
     name: 'The star whale',
     lines: ['A space whale! It spouts stars. WHOOSH!', 'The whale sings a long, low song.', 'The whale winks. Splash!'],

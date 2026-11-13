@@ -174,6 +174,12 @@ export const SPOTS = {
     odds: { bluegill: 22, smallmouth: 14, largemouth: 20, pike: 12, catfish: 32 },
     special: { id: 'peacock', name: 'Peacock bass', as: 'largemouth', look: { back: '#5c940d', side: '#fcc419', belly: '#ff922b', mark: 'peacock', depth: 0.38, fin: '#e8590c' }, like: { worm: 0.3, jig: 0.8, spoon: 0.9 }, odds: 4 },
   },
+  'bg-fjord': {
+    name: 'Fjord Harbor', sky: ['#b8d4e3', '#e7f5ff'], water: ['#1c8a9c', '#12586e', '#0b3a4c'], bed: ['#adb5bd', '#868e96'],
+    land: ['#4a6a52', '#2b4a36', '#6c757d'], weed: ['#5c6b2a', '#94a03a'], log: ['#9a8a78', '#6c5c4c', '#c8bca8'], far: 'fjord', top: 'shine',
+    odds: { bluegill: 36, smallmouth: 18, largemouth: 20, pike: 12, catfish: 14 },
+    special: { id: 'king', name: 'King salmon', as: 'largemouth', look: { back: '#3a4a5a', side: '#c8ced8', belly: '#f8f9fa', fin: '#5c6670', depth: 0.34, mark: 'spots', spot: '#2a3040', mouth: 'big' }, like: { worm: 0.3, jig: 0.8, spoon: 0.9 }, odds: 4 },
+  },
   'bg-rainbow': {
     name: 'Candy Pond', sky: ['#c3fae8', '#fff0f6'], water: ['#f783ac', '#e64980', '#a61e4d'], bed: ['#ffffff', '#ffdeeb'],
     land: ['#69db7c', '#40c057', '#fcc2d7'], weed: ['#845ef7', '#b197fc'], log: ['#ffffff', '#e03131', '#ffffff'], far: 'rainbow', top: 'sparkle', logKind: 'cane',
@@ -253,6 +259,15 @@ const SKINS = {
       catfish: { name: 'Redtail catfish', look: look('#343a40', '#5c5f66', '#f8f9fa', '#e8590c', { depth: 0.26, mark: 'whiskers', flat: true }) },
     },
     baits: { worm: ['Grub', 'grub'], spoon: ['Spinner', 'spinner'] },
+  },
+  'bg-fjord': {
+    fish: {
+      bluegill: { name: 'Herring', look: look('#2a5a8a', '#c8d4dc', '#f8f9fa', '#868e96', { depth: 0.3, mark: 'scales' }) },
+      smallmouth: { name: 'Dolly Varden', look: look('#4a6a52', '#8aa894', '#f6c9b4', '#e8590c', { depth: 0.3, mark: 'spots', spot: '#ff8fa3' }) },
+      largemouth: { name: 'Sockeye salmon', look: look('#a61e2a', '#e03131', '#c92a2a', '#5c8a3a', { depth: 0.34, mouth: 'big' }) },
+      pike: { name: 'Lingcod', look: look('#4a4030', '#8a7a50', '#e0d4a8', '#5c5030', { depth: 0.2, mark: 'blotch', bar: '#3a3020', snout: true, fangs: true, mouth: 'big' }) },
+      catfish: { name: 'Halibut', look: look('#4a4a3a', '#7a7458', '#f0ead8', '#5c5540', { depth: 0.36, flat: true, mark: 'spots', spot: '#a8a080', tail: 'fan' }) },
+    },
   },
   'bg-rainbow': {
     fish: {
@@ -618,6 +633,17 @@ export class Fishing {
       }
       rect('#5f3dc4', this.bankX, S - 2, W, 2);
       disc('#ffd43b', W - 36, 10, 4); rect('#fff3bf', W - 38, 8, 2, 2);
+    } else if (kind === 'fjord') {
+      // two grey peaks with snow on top, and dark spruce along the far shore
+      for (const [f, hh] of [[0.5, 34], [0.8, 26]]) {
+        const cx = Math.round(W * f);
+        for (let k = 0; k < hh; k += 1) rect(k > hh - 9 ? '#f1f3f5' : '#868e96', cx - (hh - k), S - k, 2 * (hh - k), 1);
+      }
+      for (let i = this.bankX - 2; i < W; i += 4 + Math.floor(r() * 3)) {
+        const h = 5 + Math.floor(r() * 5);
+        for (let k = 0; k < h; k += 1) { const w = Math.max(1, Math.round(((h - k) / h) * 5)); rect('#1f3d2b', i + 2 - Math.floor(w / 2), S - k, w, 1); }
+      }
+      rect('#2b4a36', this.bankX, S - 2, W, 2);
     }
   }
 

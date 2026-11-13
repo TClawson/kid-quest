@@ -464,6 +464,8 @@ function startLife(section, L, data, people, cam) {
     pokeNear: true, // a tap must be on a critter to poke it (a tap on the ground walks the buddy)
     key: `village|${data.kid}|${L.id}`,
     aw: L.W, ah: L.H, scale: 1, z: 1, life, wall: 20, falls,
+    layout: L, // the fjord's swimmers and waders read the bay, the docks and the shore from it
+    season: seasonNow(data.today).season,
     goal: hints.goal || L.chest,
     knightPost: hints.knightPost || { x: L.W - 50, y: L.H / 2, side: 1 },
     pad: hints.pad,
@@ -803,8 +805,10 @@ let landCache = { key: '', canvas: null };
 function land(L, color, areas = [], se = null) {
   const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}|${se ? `${se.season}${Math.round(se.progress * 20)}` : ''}`;
   if (landCache.key !== key) {
-    const base = paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas });
-    landCache = { key, canvas: se ? tintLand(base, se, L.id) : base };
+    // a map that paints its own seasons (the fjord) is told the season; the others are tinted
+    const own = L.ownSeasons && se;
+    const base = paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas, ...(own ? { season: se.season, progress: se.progress } : {}) });
+    landCache = { key, canvas: se && !own ? tintLand(base, se, L.id) : base };
   }
   return landCache.canvas;
 }

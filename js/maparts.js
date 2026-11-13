@@ -118,6 +118,20 @@ const STILTS = [
   '..K....K..',
 ];
 
+// the fjord: a spruce in tiers, narrow at the top
+const SPRUCE = [
+  '....K....',
+  '...KgK...',
+  '..KgGdK..',
+  '...KGK...',
+  '.KgGGGdK.',
+  '..KGGdK..',
+  'KgGGGGGdK',
+  'KKKKTKKKK',
+  '....T....',
+];
+const SPRUCE_PAL = { G: '#2b5a3a', g: '#4a7a52', d: '#1a3a28', T: '#5c3a1e' };
+
 // ---------- themes ----------
 
 const temple = (pal) => (px, cx, cy) => drawTemple(px, cx, cy, pal);
@@ -262,6 +276,25 @@ export const MAP_THEMES = {
     goal: temple({ hi: '#94d82d', roof: '#868e96', lo: '#495057', crest: '#ffd43b', col: '#adb5bd', colLo: '#5c940d', step1: '#868e96', step2: '#6c757d' }),
     falls: true, // a waterfall into the river (there is always a river)
     sparkle: { colors: ['#ff6b6b', '#ffd43b', '#f783ac', '#ffffff', '#ff922b'], every: 150 },
+  },
+
+  'bg-fjord': {
+    name: 'Alaskan Fjord',
+    life: 'fjord',
+    ground: ['#5a7a5c', '#48654a', '#7a9a78'],
+    walls: [[SPRUCE, SPRUCE_PAL], [SPRUCE, { ...SPRUCE_PAL, G: '#24503a', g: '#3e6a4a' }], [BOULDER, { L: '#868e96', l: '#adb5bd', d: '#5c6670' }]],
+    scenery: [[SPRUCE, SPRUCE_PAL], [BOULDER, { L: '#868e96', l: '#adb5bd', d: '#5c6670' }], [BUSH, { G: '#3a5a40', g: '#5a7a5c', d: '#24402a' }]],
+    rocks: [ROCK, ROCK_PAL],
+    road: { layers: [[9, '#6c757d'], [7, '#adb5bd']], walked: '#dee2e6', pebble: '#6c757d' },
+    river: { bank: '#5c6670', water: '#1c8a9c', deep: '#12586e', shine: '#c5f6fa' },
+    pond: 'rocks',
+    bridge: { plank: '#8b5a2b', dark: '#5c3a1e', rail: '#6e4b2a' },
+    house: HOUSE,
+    housePals: [{ R: '#a61e2a', r: '#e03131' }, { R: '#5c3a1e', r: '#8b5a2b' }, { R: '#2b5a6e', r: '#4a8a9c' }],
+    houseBase: { W: '#c98a4b', B: '#ffd43b', D: '#5c3a1e' },
+    fence: '#6e4b2a',
+    goal: (px, cx, cy) => drawFort(px, cx, cy, { stone: '#adb5bd', hi: '#dee2e6', lo: '#868e96', flag: '#e03131' }, false),
+    sparkle: { colors: ['#f06595', '#ffffff', '#e599f7'], every: 200, flowers: true }, // fireweed and little white flowers
   },
 
   'bg-rainbow': {

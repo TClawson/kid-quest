@@ -499,6 +499,7 @@ export const VILLAGE_MAPS = {
   // (cx, base: where a peak stands, hw: half its width at the foot, h: how tall), back to front.
   'bg-fjord': {
     H: 700,
+    ownSeasons: true, // fjordart.js paints summer, autumn, deep winter and spring itself
     seed: 4907,
     ground: { kind: 'grass', c: ['#55a05a', '#3f8454', '#78b862'], edge: ['#1f5a46', '#184440'] },
     pathStyle: { edge: '#6a6676', fill: '#c6c0b8' },
@@ -533,6 +534,15 @@ export const VILLAGE_MAPS = {
       { cx: 442, base: 770, hw: 42, h: 130, seed: 15 },
     ],
     // a rocky islet in the bay (the treasure map's landmark will stand on it)
+    // where the sea's visitors swim (fjordlife.js): the pod comes in through the channel, once round
+    // the bay and out again; where the whale comes up; the otters' rafts; the beach the moose and
+    // the bear wade along (in from the trees at `from`)
+    life: {
+      pod: [[383, 716], [383, 640], [381, 560], [376, 492], [350, 440], [318, 398], [296, 340], [262, 282], [215, 254], [166, 268], [140, 322], [146, 384], [196, 404], [250, 374], [306, 384], [346, 432], [376, 492], [381, 560], [383, 640], [383, 716]],
+      whale: [[220, 258], [200, 330], [290, 336], [176, 436]],
+      otters: [[[232, 262], [262, 272]], [[292, 388], [304, 402]], [[366, 548], [370, 562]]],
+      shore: { from: 384, moose: 196, bear: 306 },
+    },
     islets: [{ x: 262, y: 404, rx: 20, ry: 9 }],
     paths: [
       [[180, 112], [180, 178]], [[180, 128], [377, 128], [377, 108]], [[180, 150], [111, 150], [111, 226]],
@@ -690,6 +700,7 @@ export function villageLayout(theme) {
     falls: spec.falls,
     peaks: spec.peaks,
     islets: spec.islets,
+    ownSeasons: Boolean(spec.ownSeasons),
     life: spec.life || {},
     landmark: lm,
     chest: spec.chest,

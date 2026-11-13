@@ -44,6 +44,7 @@ const BASE_ITEMS = [
   { id: 'bg-castle', slot: 'background', name: 'Castle', need: { streak: 30 } },
   { id: 'bg-volcano', slot: 'background', name: 'Volcano island', price: 300 },
   { id: 'bg-rainforest', slot: 'background', name: 'Rainforest', price: 300 },
+  { id: 'bg-fjord', slot: 'background', name: 'Alaskan Fjord', price: 500 },
   { id: 'bg-rainbow', slot: 'background', name: 'Rainbow land', need: { streak: 60 } },
   { id: 'bg-galaxy', slot: 'background', name: 'Golden galaxy', need: { streak: 100 } },
 
