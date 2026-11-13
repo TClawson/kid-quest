@@ -58,6 +58,8 @@ const SHELL = [
   'js/volcanoart.js',
   'js/stoneart.js',
   'js/rainforestart.js',
+  'js/fjordart.js',
+  'js/fjordlife.js',
   'js/kapokart.js',
   'js/rainbowart.js',
   'js/goldpotart.js',
