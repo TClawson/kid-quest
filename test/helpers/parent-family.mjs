@@ -5,12 +5,14 @@
 // - Edison: 1 done, 3 to go
 // Every chore is on every day, so it looks the same whichever day the test runs.
 // Ayden, Esther and Edison did every chore Monday to Friday last week: 3 Friday rewards to hand out.
-import { emptyState, dateKey, addDays, weekStart, entryFor, tasksForDay, fallbackHash } from '../../js/logic.js';
+import { emptyState, addDays, weekStart, entryFor, tasksForDay, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY, at } from './clock.mjs';
 
 const ALL = [0, 1, 2, 3, 4, 5, 6];
 const chore = (id, name, icon, extra = {}) => ({ id, name, icon, period: 'morning', days: ALL, verify: 'self', minutes: 0, ...extra });
 
-export function parentFamily(t = dateKey(), now = Date.now()) {
+// t: the day the page is on, now: the page's time then (noon unless told; see clock.mjs).
+export function parentFamily(t = TEST_DAY, now = at(t).getTime()) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;

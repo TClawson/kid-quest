@@ -15,6 +15,7 @@ import { serve } from '../helpers/serve.mjs';
 import { pianoNotes, talking, concat, addNoise, room, wav, RATE } from '../helpers/sound.mjs';
 import { MEDIAPIPE, YAMNET } from '../../js/hear.js';
 import { seenSaturday } from '../helpers/seed.mjs';
+import { pageDay } from '../helpers/clock.mjs';
 import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
 import { openKid, openParents, doChore } from '../helpers/open-kid.mjs';
 
@@ -102,7 +103,8 @@ async function withMic(samples, { mode = 'builtin', viewport = { width: 1280, he
     saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: '2026-10-01', buddy: { species: 'fox', outfit: {} } });
     if (clock) await page.clock.install({ time: new Date(2026, 10, 2, 16, 0, 0) });
     await page.goto(site.url);
-    await page.evaluate(([s, m]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.listenMode', m); }, [seenSaturday(saved), mode]);
+    // the page listens on its real clock (unless clock): Saturday's pop-ups are marked seen for its day
+    await page.evaluate(([s, m]) => { localStorage.setItem('kidquest.v1', JSON.stringify(s)); localStorage.setItem('kidquest.listenMode', m); }, [seenSaturday(saved, await pageDay(page)), mode]);
     await page.reload();
     await open(page, mode);
     await check(page);

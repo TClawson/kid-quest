@@ -18,11 +18,12 @@ import fs from 'node:fs';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { parentFamily } from '../helpers/parent-family.mjs';
-import { emptyState, addDays, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, addDays, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY } from '../helpers/clock.mjs';
 
 const out = process.argv[2]?.replace(/\/$/, '');
 if (out) fs.mkdirSync(out, { recursive: true });
-const DAY = dateKey();
+const DAY = TEST_DAY; // the page's clock is installed at a time of this day (see clock.mjs)
 const ALL = [0, 1, 2, 3, 4, 5, 6];
 const SIZES = [{ width: 1280, height: 800 }, { width: 800, height: 1280 }, { width: 412, height: 915 }];
 

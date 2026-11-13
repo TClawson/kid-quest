@@ -9,9 +9,10 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { parentFamily } from '../helpers/parent-family.mjs';
 import { closePops, tapInVillage } from '../helpers/open-kid.mjs';
-import { dateKey, addDays } from '../../js/logic.js';
+import { addDays } from '../../js/logic.js';
+import { TEST_DAY } from '../helpers/clock.mjs';
 
-const DAY = dateKey();
+const DAY = TEST_DAY; // the page's clock is installed at a time of this day (see clock.mjs)
 
 /** The made-up family, with Ayden on the volcano island and its treasure map finished (four pieces). */
 function family() {

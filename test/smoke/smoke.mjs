@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { emptyState, defaultTasks } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid, doChore } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
@@ -18,7 +19,8 @@ try {
   saved.settings.pinHash = 'sha256:test';
   saved.settings.questView = 'list';
   const tasks = defaultTasks();
-  saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: dateKey() });
+  saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: TEST_DAY });
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
   await page.reload();
@@ -31,7 +33,7 @@ try {
   await page.waitForTimeout(300);
 
   const after = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
-  assert.equal(after.log[Object.keys(after.log)[0]].kid_ava.tasks[teeth.id].status, 'done', 'task saved as done');
+  assert.equal(after.log[TEST_DAY].kid_ava.tasks[teeth.id].status, 'done', 'task saved as done');
   assert.deepEqual(errors, [], 'no errors in the page');
   console.log('smoke test passed');
 } finally {

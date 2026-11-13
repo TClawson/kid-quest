@@ -5,7 +5,8 @@
 import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash, freeGamesOn } from '../../js/logic.js';
+import { emptyState, defaultTasks, addDays, fallbackHash, freeGamesOn } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { openKid, openParents, tapInVillage, visitorsHere } from '../helpers/open-kid.mjs';
 
@@ -29,6 +30,7 @@ async function visit(page, id, kind) {
 async function open(device, done, played = 0, held = null, tweak = null) {
   const ctx = await browser.newContext(device);
   const page = await ctx.newPage();
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(site.url);
@@ -37,14 +39,14 @@ async function open(device, done, played = 0, held = null, tweak = null) {
   s.settings.sound = false;
   s.settings.questView = 'map'; // chose the old map once: the village opens all the same
   const tasks = defaultTasks();
-  s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: ['sport-shoes-regular'], buddy: { species: 'fox', outfit: { background: 'bg-meadow', hat: 'hat-cap' } } });
+  s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: TEST_DAY, owned: ['sport-shoes-regular'], buddy: { species: 'fox', outfit: { background: 'bg-meadow', hat: 'hat-cap' } } });
   // Saturday's free games would change every count below, so use them up first
   // and yesterday's (on a Sunday they would carry over), so the counts are the same any day
-  s.kids[0].playLog = { day: dateKey(), n: played + freeGamesOn(dateKey()), prev: { day: dateKey(new Date(Date.now() - 86400000)), n: 99, cap: 4 } };
+  s.kids[0].playLog = { day: TEST_DAY, n: played + freeGamesOn(TEST_DAY), prev: { day: addDays(TEST_DAY, -1), n: 99, cap: 4 } };
   if (held) { s.kids[0].owned.push(held); s.kids[0].buddy.outfit.sport = held; }
   if (tweak) tweak(s, tasks);
   seenSaturday(s);
-  if (done) s.log[dateKey()] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
+  if (done) s.log[TEST_DAY] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
   await page.evaluate((st) => {
     localStorage.setItem('kidquest.v1', JSON.stringify(st));
     localStorage.setItem('kidquest.cloud', JSON.stringify({ familyId: 'fam', role: 'kid', kidId: 'kid_sam' }));
@@ -79,7 +81,7 @@ try {
 
   // +2 games from last night's chest: those two can be played before today's chores, then the rest wait
   {
-    const y = dateKey(new Date(Date.now() - 86400000));
+    const y = addDays(TEST_DAY, -1);
     const tweak = (s, tasks) => {
       s.kids[0].startDate = y;
       s.kids[0].playLog = { day: y, n: 4 + freeGamesOn(y), cap: 4 }; // a Saturday's free games were played
@@ -185,7 +187,7 @@ try {
     if (shots) await page.screenshot({ path: `${shots}/play-hockey-${name}.png` });
     await page.click('.play-close');
     const after = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud.cache')));
-    assert.equal(after.kids[0].playLog.n, 3 + freeGamesOn(dateKey()), 'each game started counts toward the day');
+    assert.equal(after.kids[0].playLog.n, 3 + freeGamesOn(TEST_DAY), 'each game started counts toward the day');
 
     assert.deepEqual(errors, []);
     await ctx.close();
@@ -213,6 +215,7 @@ try {
   {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true });
     const page = await ctx.newPage();
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
@@ -220,8 +223,8 @@ try {
     s.settings.pinHash = fallbackHash('kidquest:1234');
     s.settings.sound = false;
     s.settings.questView = 'map'; // chose the old map once: the village opens all the same
-    s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'fox', outfit: {} } });
-    s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), buddy: { species: 'cat', outfit: {} }, playLog: { day: dateKey(), n: 99 } });
+    s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: TEST_DAY, buddy: { species: 'fox', outfit: {} } });
+    s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: TEST_DAY, buddy: { species: 'cat', outfit: {} }, playLog: { day: TEST_DAY, n: 99 } });
     await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), seenSaturday(s));
     await page.reload();
     await openParents(page);

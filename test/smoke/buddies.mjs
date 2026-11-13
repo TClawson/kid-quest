@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
@@ -12,6 +13,7 @@ const site = await serve('.');
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 900, height: 1200 } });
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -21,7 +23,7 @@ try {
   saved.settings.questView = 'list';
   // Saved before this change: the cap and the ocean are both in `owned`. -200 spent = 200 coins to spend.
   saved.kids.push({
-    id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), seenUnlocks: [],
+    id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: TEST_DAY, seenUnlocks: [],
     owned: ['hat-cap', 'bg-ocean'], spent: -200,
     buddy: { species: 'fox', outfit: { background: 'bg-ocean', hat: 'hat-cap' } },
   });
@@ -35,13 +37,11 @@ try {
   await page.waitForTimeout(300);
   if (await page.$('.screen.wardrobe')) throw new Error('store opened with chores left');
   // an excused day opens it (done-and-approved days are covered by the unit test)
-  await page.evaluate(() => {
+  await page.evaluate((key) => {
     const st = JSON.parse(localStorage.getItem('kidquest.v1'));
-    const day = new Date();
-    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
     st.log[key] = { [st.kids[0].id]: { tasks: {}, excused: true } };
     localStorage.setItem('kidquest.v1', JSON.stringify(st));
-  });
+  }, TEST_DAY);
   await page.reload();
   await openKid(page, '[data-action="open-kid"]');
   await page.click('[data-action="wardrobe"]');
