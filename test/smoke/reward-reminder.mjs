@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { toPicker, openParents } from '../helpers/open-kid.mjs';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, addDays, weekStart, entryFor, tasksForDay, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, addDays, weekStart, entryFor, tasksForDay, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -13,11 +14,12 @@ const browser = await chromium.launch();
 try {
   for (const [name, viewport] of [['tablet', { width: 900, height: 1200 }], ['phone', { width: 390, height: 844 }]]) {
     const page = await browser.newPage({ viewport });
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-    const t = dateKey();
+    const t = TEST_DAY;
     const lastMonday = addDays(weekStart(t), -7);
     const saved = emptyState();
     saved.settings.pinHash = fallbackHash('kidquest:1234');

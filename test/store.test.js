@@ -74,6 +74,24 @@ test('store reads and writes the same local storage key as before', () => {
   assert.equal(JSON.parse(storage.data[STORAGE_KEY]).settings.weeklyReward, 'Pizza night');
 });
 
+test('an old save that chose the map or the list view still loads, and the setting stays on the device', () => {
+  for (const questView of ['map', 'list', 'village']) {
+    const state = sampleState();
+    state.settings.questView = questView;
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(state) });
+    const store = createStore(localBackend(storage));
+    const loaded = store.load();
+    assert.deepEqual(loaded, state, `questView '${questView}' loads as saved`);
+    assert.equal(loaded.settings.questView, questView, 'stored data is left alone');
+    const parts = splitState(loaded);
+    assert.equal(parts.device.questView, questView);
+    assert.equal('questView' in parts.family.settings, false, 'never sent to the family');
+    loaded.kids[0].spent += 5;
+    assert.deepEqual(store.save(loaded).changed, [`kids/${loaded.kids[0].id}`], 'saving does not touch the family settings');
+    assert.equal(JSON.parse(storage.data[STORAGE_KEY]).settings.questView, questView);
+  }
+});
+
 test('store starts fresh on missing or broken data', () => {
   assert.deepEqual(createStore(localBackend(memoryStorage())).load(), emptyState());
   assert.deepEqual(createStore(localBackend(memoryStorage({ [STORAGE_KEY]: '{oops' }))).load(), emptyState());

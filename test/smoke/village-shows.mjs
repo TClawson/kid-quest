@@ -1,4 +1,4 @@
-// The village's own versions of the three effects only the old map had:
+// The village's walk-in and show effects:
 // - visitors walk in to their spots the first time they show on a day (they move, then stand on
 //   their spots), and a second open the same day has no walk-in
 // - a landmark's show shakes the village (not the HUD) while the show says so (map-quake)
@@ -9,9 +9,10 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { parentFamily } from '../helpers/parent-family.mjs';
 import { closePops, tapInVillage } from '../helpers/open-kid.mjs';
-import { dateKey, addDays } from '../../js/logic.js';
+import { addDays } from '../../js/logic.js';
+import { TEST_DAY } from '../helpers/clock.mjs';
 
-const DAY = dateKey();
+const DAY = TEST_DAY; // the page's clock is installed at a time of this day (see clock.mjs)
 
 /** The made-up family, with Ayden on the volcano island and its treasure map finished (four pieces). */
 function family() {

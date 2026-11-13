@@ -94,7 +94,6 @@ export function menuHtml(m) {
         ${item('menu-music', m.music && m.sound ? '🎵' : '🔇', 'Music', !m.sound ? 'Off (sounds are off)' : m.music ? 'On' : 'Off', `aria-pressed="${Boolean(m.music && m.sound)}"`)}
         ${item('menu-sound', m.sound ? '🔊' : '🔈', 'Sounds', m.sound ? 'On' : 'Off', `aria-pressed="${Boolean(m.sound)}"`)}
         ${item('plan', '📝', 'Plan my day', '', `data-kid="${esc(m.kidId)}"`)}
-        ${item('old-map', '🗺️', 'Old map', 'for a little while')}
         ${m.kids > 1 ? item('menu-switch', '🔁', 'Switch kid') : ''}
         ${item('menu-parents', m.parents.open ? '👪' : '🔒', 'Parents', [m.parents.open ? '' : 'PIN', m.parents.waiting ? `${m.parents.waiting} waiting` : ''].filter(Boolean).join(' · '))}
       </div>

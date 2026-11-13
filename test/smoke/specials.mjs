@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
@@ -13,6 +14,7 @@ const browser = await chromium.launch();
 try {
   for (const [label, viewport] of [['tablet', { width: 900, height: 1200 }], ['phone', { width: 390, height: 844 }]]) {
     const page = await browser.newPage({ viewport });
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -22,10 +24,10 @@ try {
     saved.settings.questView = 'list';
     // -1200 spent = 1200 coins to spend
     saved.kids.push({
-      id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: dateKey(), seenUnlocks: [],
+      id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: TEST_DAY, seenUnlocks: [],
       owned: [], spent: -1200, buddy: { species: 'panda', outfit: { background: 'bg-meadow' } },
     });
-    saved.log[dateKey()] = { kid_ava: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
+    saved.log[TEST_DAY] = { kid_ava: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
     await page.goto(site.url);
     await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
     await page.reload();

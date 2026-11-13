@@ -1,5 +1,5 @@
 // Screenshots of the kid's full-screen village with its HUD, the Status and Menu pop-ups, the
-// house, garden and music house, the shop's tabs and the old map (from the Menu), at 1280x800,
+// house, garden and music house and the shop's tabs, at 1280x800,
 // 800x1280 and 412x915, for a made-up family (Ayden, Remington, Esther, Edison).
 // Run: node test/smoke/kid-hud-preview.mjs <outDir> [only]   (only: a name to shoot just that set)
 import fs from 'node:fs';
@@ -100,12 +100,6 @@ try {
     await page.click('.k-menu');
     await page.clock.runFor(400);
     await shot(page, `menu-${size}`);
-    // the old map, from the Menu
-    if (size !== 'portrait') {
-      await page.click('[data-action="old-map"]');
-      await page.clock.runFor(800);
-      await shot(page, `old-map-${size}`);
-    }
     await ctx.close();
   }
   // the house, the garden and the music house, full screen

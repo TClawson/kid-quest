@@ -1,4 +1,4 @@
-// Background music for the quest map: one original 16-bar chiptune loop per map theme (or a
+// Background music for the village: one original 16-bar chiptune loop per map theme (or a
 // longer loop in sections, maploops.js), synthesized live with Web Audio (pulse waves, a
 // triangle bass and noise drums, like old consoles). No audio files. A small look-ahead
 // scheduler keeps the timing steady.

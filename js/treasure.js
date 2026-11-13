@@ -1,4 +1,4 @@
-// The treasure chest at the end of the quest map. Pure rules, no DOM, so it can be tested.
+// The treasure chest at the end of the day's quests. Pure rules, no DOM, so it can be tested.
 //
 // Finishing every task (parent-approved) earns that day's chest. Opening it gives one
 // prize: a few coins or gems, extra visitor games for the day, a trophy for the shelf,

@@ -10,7 +10,8 @@
 import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey } from '../../js/logic.js';
+import { emptyState, defaultTasks } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { openKid, tapInVillage, visitorsHere } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
@@ -77,6 +78,7 @@ try {
   for (const [name, device] of [['tablet', { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, hasTouch: true }], ['phone', devices['Pixel 7']]]) {
     const ctx = await browser.newContext(device);
     const page = await ctx.newPage();
+    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
@@ -85,8 +87,8 @@ try {
     s.settings.sound = false;
     s.settings.questView = 'map'; // chose the old map once: the village opens all the same
     const tasks = defaultTasks();
-    s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: dateKey(), owned: [], buddy: { species: 'fox', outfit: { background: 'bg-volcano' } } });
-    s.log[dateKey()] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
+    s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks, startDate: TEST_DAY, owned: [], buddy: { species: 'fox', outfit: { background: 'bg-volcano' } } });
+    s.log[TEST_DAY] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
     await page.evaluate((st) => {
       localStorage.setItem('kidquest.v1', JSON.stringify(st));
       localStorage.setItem('kidquest.cloud', JSON.stringify({ familyId: 'fam', role: 'kid', kidId: 'kid_sam' }));

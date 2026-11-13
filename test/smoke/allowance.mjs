@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
-import { emptyState, defaultTasks, dateKey, addDays, fallbackHash } from '../../js/logic.js';
+import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
+import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { openKid, openParents, doChore, closePops } from '../helpers/open-kid.mjs';
 
@@ -13,6 +14,7 @@ const site = await serve('.');
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 900, height: 1200 } });
+  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -21,8 +23,8 @@ try {
   saved.settings.pinHash = fallbackHash('kidquest:1234');
   const ava = defaultTasks();
   const ben = [...defaultTasks(), { id: 'task_dish', name: 'Dishes', icon: '🍽️', period: 'afternoon', days: [0, 1, 2, 3, 4, 5, 6], verify: 'parent', minutes: 0 }];
-  saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: ava, startDate: dateKey(), owned: [], spent: 0 });
-  saved.kids.push({ id: 'kid_ben', name: 'Ben', color: '#4dabf7', tasks: ben, startDate: dateKey(), owned: [], spent: 0 });
+  saved.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: ava, startDate: TEST_DAY, owned: [], spent: 0 });
+  saved.kids.push({ id: 'kid_ben', name: 'Ben', color: '#4dabf7', tasks: ben, startDate: TEST_DAY, owned: [], spent: 0 });
   await page.goto(site.url);
   await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), seenSaturday(saved));
   await page.reload();
@@ -33,11 +35,11 @@ try {
   let s = await stored();
   assert.equal(s.settings.allowance.on, true);
   assert.equal(s.settings.allowance.coins, 300);
-  assert.equal(s.settings.allowance.since, addDays(dateKey(), 1));
+  assert.equal(s.settings.allowance.since, addDays(TEST_DAY, 1));
   assert.equal(s.settings.allowance.startFixed, true);
 
   // From here on, test a family whose allowance already runs today.
-  s.settings.allowance.since = dateKey();
+  s.settings.allowance.since = TEST_DAY;
   await page.evaluate((x) => localStorage.setItem('kidquest.v1', JSON.stringify(x)), seenSaturday(s));
   await page.reload();
 
@@ -70,7 +72,7 @@ try {
   assert.match(await page.textContent('.bonus-log'), /Ava: \+20 Extra chore/);
   if (shots) await page.screenshot({ path: `${shots}/kids-tab-bonus-log.png` });
   s = await stored();
-  const bonus = Object.values(s.log[dateKey()].kid_ava.bonus);
+  const bonus = Object.values(s.log[TEST_DAY].kid_ava.bonus);
   assert.equal(bonus.length, 1);
   assert.equal(bonus[0].coins, 20);
 

@@ -1,19 +1,19 @@
 import {
   DAY_NAMES, defaultTasks, dateKey, addDays, parseKey, newId, entryFor,
-  tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, rewardsToGive, markRewardGiven, storeOpen, storeLockText, streakInfo, totalXp, totalCoins, levelFor, taskXp, taskCoins,
+  tasksForDay, snapshotToday, dayStatus, weeklyRewardInfo, rewardsToGive, markRewardGiven, storeOpen, storeLockText, streakInfo, totalXp, totalCoins, levelFor, taskCoins,
   defaultReward, parseReward, MAX_REWARD, isEvening,
   pendingApprovals, fallbackHash, pianoStreakInfo, kidToday, todayQuests, applyTaskChange, undoTaskChanges,
   isExercise, taskGems, totalGems, exerciseStreakInfo, DEFAULT_GEMS, EXERCISE_DAYS, EXERCISE_KEEP_DAYS,
   defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
-  withMemo, monthDays, habitInfo, MASTERED_PAY, CUES, cueFor, planOrder, planSentence,
+  withMemo, monthDays, habitInfo, CUES, cueFor, planOrder, planSentence,
   todaySummary, familyDay, FAMILY_GOAL, milestoneFor, milestoneFresh,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
 import { liveHtml, live, liveStart, partyAll } from './live.js';
-import { paintQuestMaps, mapTheme } from './maparts.js';
+import { mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
 import { dailySummaries } from './familygarden.js';
 import { bloomData, gardenLine } from './villagebloom.js';
@@ -21,7 +21,7 @@ import { villageHtml, mountVillages, cameOut, cameOutOfMusic, placeVillagers, vi
 import { villageLayout } from './villagemaps.js';
 import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
 import { todayHud, todayListHtml } from './today.js';
-import { kidHudHtml, statusHtml, menuHtml, STATUS_TABS } from './hud.js';
+import { kidHudHtml, statusHtml, menuHtml } from './hud.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, tierInfo } from './musicrules.js';
@@ -52,7 +52,7 @@ import { SPOTS as FISH_SPOTS, boatThumb } from './fishing.js';
 import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
 import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, secretSize, SECRETS } from './treasure-art.js';
 import { playShow, showPlaying } from './mapshow.js';
-import { createStore, migrate, localBackend, splitState, stableJson, DEVICE_SETTINGS } from './store.js';
+import { createStore, migrate, localBackend, stableJson, DEVICE_SETTINGS } from './store.js';
 import { state, setState, provide } from './ctx.js';
 import {
   startTimer, stopTimer, leaveTimer, returnToTimer, restoreTimer, timerOnScreen, mmss, buddyCheer,
@@ -119,7 +119,7 @@ function save() {
 setState(store.load());
 if (cloudCfg && !localStorage.getItem(CLOUD_CACHE_KEY)) {
   // first start after joining on a device with nothing to bring: keep this
-  // device's own sound and map settings, wait for the family's data
+  // device's own sound and music settings, wait for the family's data
   const local = createStore().load();
   for (const k of DEVICE_SETTINGS) if (k in local.settings) state.settings[k] = local.settings[k];
 }
@@ -726,30 +726,6 @@ function weekDots(kid, info) {
   return `<div class="week">${cells.join('')}</div>`;
 }
 
-function taskTile(kid, task, status) {
-  const st = status?.status;
-  const timerTask = task.minutes > 0;
-  let state_ = 'todo';
-  let sub = task.verify === 'parent' ? 'Parent checks' : 'Tap when done';
-  if (st === 'done') { state_ = 'done'; sub = 'Done!'; } else if (st === 'pending') { state_ = 'pending'; sub = 'Waiting for a parent'; } else if (timerTask) {
-    const left = task.minutes * 60 - (status?.seconds || 0);
-    sub = left <= 0 ? 'Time done! Get a parent' : status?.seconds ? `${mmss(left)} left` : `${task.minutes} minute timer`;
-  }
-  const cue = cueFor(kid, task);
-  if (cue && state_ === 'todo') sub = `${cue} · ${sub}`;
-  const star = habitInfo(state, kid, today()).get(task.id)?.mastered ? ' ⭐' : '';
-  return `
-    <button class="tile ${state_}" data-action="task" data-id="${task.id}">
-      <span class="tile-icon">${esc(task.icon)}</span>
-      <span class="tile-text"><b>${esc(task.name)}${star}</b><small>${esc(sub)}</small></span>
-      <span class="tile-check">${st === 'done' ? '✓' : st === 'pending' ? '⏳' : ''}</span>
-    </button>`;
-}
-
-// Board-game path: one stop per task, winding down the screen, ending at a treasure chest.
-const MAP_ROW = 124;
-const VILLAGE = 225; // extra room at the top of the map when buddies are visiting
-
 // Everyone in the family who has a buddy: this device's kids plus, on a kid's
 // device, the others from the cloud.
 function familyBuddies() {
@@ -857,10 +833,6 @@ function greetCheers() {
 /** How the whole family is doing today, and whether the map should party. */
 const familyToday = () => familyDay(familyBuddies(), today());
 
-// The kid's screen is always the village now. A device that chose the old map (settings.questView
-// 'map', or 'list' from older versions) opens the village too: the old map is only reached from
-// the Menu, for this one release (ui.oldMap, never saved).
-
 /** "Family: 8 of 10 chores done today" while there is more than one kid (where: what celebrates). */
 function familyText(where) {
   const all = familyBuddies();
@@ -873,14 +845,6 @@ function familyText(where) {
       ? `👨‍👩‍👧‍👦 Family: ${f.done} chores done so far · when everyone gets to ${goal}%, the whole ${where} celebrates`
       : `👨‍👩‍👧‍👦 Family: ${f.done} of ${f.total} chores done · at ${goal}% the whole ${where} celebrates`;
   return { f, text };
-}
-
-/** The family banner on the old map page. */
-function familyBanner() {
-  const fam = familyText('map');
-  if (!fam) return '';
-  const { f, text } = fam;
-  return `<div class="family-banner ${f.happy ? 'happy' : ''}" data-action="family-party">${esc(text)}${f.happy ? '' : `<span class="bar"><span style="width:${Math.min(100, Math.round((f.share / FAMILY_GOAL) * 100))}%"></span></span>`}</div>`;
 }
 
 /** Why the village is growing (or thirsty): one small, warm line, in the Status pop-up. */
@@ -905,14 +869,12 @@ function maybeParty() {
   startParty();
 }
 function startParty() {
-  const keys = [...$app.querySelectorAll('.quest-map canvas.live-buddy, .village canvas.live-buddy')].map((c) => c.dataset.live);
+  const keys = [...$app.querySelectorAll('.village canvas.live-buddy')].map((c) => c.dataset.live);
   partyAll(keys, PARTY_MS);
   mapParty(PARTY_MS);
-  $app.querySelectorAll('.quest-map, .village').forEach((el) => el.classList.add('party'));
-  setTimeout(() => $app.querySelectorAll('.quest-map, .village').forEach((el) => el.classList.remove('party')), PARTY_MS);
+  $app.querySelectorAll('.village').forEach((el) => el.classList.add('party'));
+  setTimeout(() => $app.querySelectorAll('.village').forEach((el) => el.classList.remove('party')), PARTY_MS);
 }
-
-const visitorsArrived = new Set();
 
 // How a visiting buddy feels on the map: content, focused while fishing, and
 // bouncing to play once the host's quest is done.
@@ -923,7 +885,7 @@ function visitFeel(area, complete) {
   return { valence: 0.6, arousal: 0.55 };
 }
 
-/** Today's visitors, what each one says, and who has news (shared by the map and the village). */
+/** Today's visitors, what each one says, and who has news (for the village green). */
 function visitorInfo(kid, s) {
   const visitors = todaysVisitors(kid);
   if (!visitors.length) return { visitors, lines: [], news: {} };
@@ -954,153 +916,10 @@ function visitorInfo(kid, s) {
   return { visitors, lines, news };
 }
 
-function visitorsHtml(kid, s) {
-  const { visitors, lines, news } = visitorInfo(kid, s);
-  if (!visitors.length) return { html: '', room: 0, areas: '' };
-  // stand in front of the village houses (see paintOne in maparts.js): an outer and an inner spot each side
-  const wide = ($app.clientWidth || window.innerWidth) > 600;
-  const X = wide ? { left: [20, 33], right: [80, 67] } : { left: [25, 40], right: [75, 60] };
-  // players stand at the two ends of their field; placePlayers in maparts.js puts them exactly on it
-  const GX = wide ? { left: [16, 42], right: [84, 58] } : { left: [16, 41], right: [84, 59] };
-  const gearOf = (v) => bestGear(v.owned);
-  const plan = visitPlan(kid, visitors);
-  const areaOf = (id) => plan.areas.find((a) => a.members.includes(id));
-  const version = (tier) => ['regular', 'good', 'super'][tier - 1];
-  const html = visitors.map((v, i) => {
-    const spot = plan.spots[v.id];
-    const area = areaOf(v.id);
-    const x = (area && area.kind !== 'pond' ? GX : X)[spot.side][spot.slot];
-    const solo = area && area.kind !== 'pond' && area.members.length === 1;
-    const gear = gearOf(v);
-    let look = dressedVisitor(v);
-    let cls = '';
-    let extra = '';
-    let data = '';
-    if (area?.kind === 'pond') {
-      // fishing in the village pond, facing away from the road
-      look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } });
-      cls = `fishing face-${spot.side}`;
-      data = `data-rod="${gear.rod}"`;
-      extra = '<div class="fish-line" aria-hidden="true"><span class="bobber"></span></div><div class="fish-catch" aria-hidden="true"></div>';
-    } else if (area) {
-      // playing a game: the one nearer the left edge is player a. Sticks are held, balls are shared.
-      // on their own, they practice from the outer end (a borrowed stick if they have none)
-      const a = x === Math.min(...area.members.map((id) => GX[plan.spots[id].side][plan.spots[id].slot]));
-      const outfit = { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined };
-      look = dressedVisitor(v, { ...v.buddy, outfit });
-      const facesIn = solo ? spot.side === 'right' : a && area.kind === 'hockey';
-      cls = `playing play-${area.kind} ${solo ? 'solo' : `player-${a ? 'a' : 'b'}`} ${facesIn ? 'face-left' : ''}`;
-    }
-    return `
-      <div class="map-visitor ${i === 0 || news[v.id] ? 'talking' : ''} ${news[v.id] || ''} ${spot.slot ? 'inner' : ''} ${x < 20 ? 'edge-left' : x > 80 ? 'edge-right' : ''} ${cls}" data-action="visitor" data-id="${esc(v.id)}" ${data} ${area && area.kind !== 'pond' ? `data-play-side="${spot.side}" data-slot="${solo ? 0 : spot.slot}"` : ''} style="left:${x}%;--kid:${esc(v.color || '#4dabf7')}">
-        <div class="visitor-buddy">${liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` })}</div>
-        ${extra}
-        <div class="visitor-name">${esc(v.name)}</div>
-        <div class="visitor-bubble">${esc(lines[i])}${news[v.id] === 'news' ? `<button class="cheer-btn" data-action="send-cheer" data-id="${esc(v.id)}">🎉 Cheer</button>` : ''}</div>
-      </div>`;
-  }).join('');
-  // the ball (or puck) goes back and forth between the two players
-  // on their own, a player juggles, shoots at the far goal or throws it up and catches it.
-  // The kid's own field can be tapped to play right away.
-  const playable = playableFor(kid, s.complete);
-  const games = plan.areas.filter((a) => a.kind !== 'pond').map((a) => {
-    const xs = [...GX[a.side]].sort((p, q) => p - q);
-    const tiers = a.members.map((id) => gearOf(visitors.find((v) => v.id === id))[a.kind] || 1);
-    if (a.host) tiers.push(bestGear(kid.owned || [])[a.kind] || 1);
-    const solo = a.members.length === 1 ? `solo from-${a.side}` : '';
-    const tap = a.host && playable > 0 ? `data-action="visitor" data-id="${esc(a.members[0])}" data-pick="${a.kind}" role="button" aria-label="Play ${GAME_NAMES[a.kind]}"` : 'aria-hidden="true"';
-    return `<div class="map-game game-${a.kind} ${solo} ${a.host ? 'host-field' : ''}" data-side="${a.side}" style="left:${xs[0]}%;width:${xs[1] - xs[0]}%" ${tap}><span class="game-ball">${ballSvg(a.kind, Math.max(...tiers))}</span></div>`;
-  }).join('');
-  const areas = plan.areas.map((a) => `${a.side}:${a.kind}`).join(',');
-  // they walk in once a day per kid; later redraws show them already there
-  const key = `${kid.id}|${today()}`;
-  const arrive = !visitorsArrived.has(key);
-  visitorsArrived.add(key);
-  return { html: `<div class="map-visitors ${arrive ? 'arrive' : ''}" data-host="${esc(kid.id)}" aria-label="Visiting buddies">${games}${html}</div>`, room: VILLAGE, areas };
-}
 /** The map theme follows the kid's Places background. */
 const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
-const MAP_WAVE = [0, 22, 30, 18, -4, -24, -30, -16];
-/** Room at the bottom of the map for the secret landmark. */
-const SECRET_ROOM = 280;
 /** A show can play again a minute after the last one. */
 const SHOW_AGAIN_MS = 60000;
-
-function questMap(kid, s, entry, mood) {
-  const rows = [];
-  const add = (period, label) => {
-    const tasks = planOrder(kid, s.tasks.filter((x) => x.period === period));
-    if (!tasks.length) return;
-    rows.push({ type: 'sign', label });
-    for (const t of tasks) rows.push({ type: 'task', task: t, status: entry?.tasks?.[t.id]?.status });
-  };
-  add('morning', `🌅 Morning · by ${formatTime(state.settings.morningBy)}`);
-  add('afternoon', `☀️ After school · by ${formatTime(state.settings.bedtime)}`);
-  rows.push({ type: 'chest' });
-
-  // where the buddy stands: the first task not done or waiting; the chest when all are
-  let here = rows.findIndex((r) => r.type === 'task' && r.status !== 'done' && r.status !== 'pending');
-  if (here < 0) here = rows.length - 1;
-
-  const visit = visitorsHtml(kid, s);
-  const top = 70 + visit.room;
-  const pts = rows.map((r, i) => ({ x: 50 + (r.type === 'task' || r.type === 'chest' ? MAP_WAVE[i % MAP_WAVE.length] : 0), y: top + i * MAP_ROW }));
-  // a finished treasure map shows this map's secret landmark below the treasure
-  const theme = kidTheme(kid);
-  const secret = SECRETS[theme] && treasureFound(state.log, kid.id).maps.has(theme) ? SECRETS[theme] : null;
-  const height = top + rows.length * MAP_ROW + (secret ? SECRET_ROOM : 0);
-  // the river runs just above the after-school sign, so crossing the bridge means school's out
-  const pmSign = rows.findIndex((r, i) => i > 0 && r.type === 'sign');
-  const riverY = pmSign > 0 ? pts[pmSign].y - 42 : '';
-  const mapData = esc(JSON.stringify(pts.map((p, i) => [p.x, p.y, rows[i].type])));
-
-  // keep labels inside the map: the space on the label's side, minus the node
-  const labelWidth = (x) => `max-width:min(240px, calc(${x > 50 ? x : 100 - x}% - 66px))`;
-  const nodes = rows.map((r, i) => {
-    const p = pts[i];
-    const pos = `left:${p.x}%;top:${p.y}px`;
-    if (r.type === 'sign') return `<div class="map-sign" style="${pos}">${esc(r.label)}</div>`;
-    if (r.type === 'chest') {
-      const c = chestFor(kid, today());
-      const title = c.opened ? 'Quest complete!' : c.ready ? 'Tap to open!' : `${c.tier.name}!`;
-      const sub = c.opened ? `You got: ${prizeText(c.opened, mapName).title.replace(/!$/, '')}` : c.ready ? `A ${c.tier.name.toLowerCase()} for you` : s.complete ? 'See you tomorrow' : 'Finish every task';
-      return `<button class="map-node chest chest-${c.tier.id} ${c.ready ? 'open ready' : c.opened ? 'opened' : ''}" style="${pos}" data-action="chest" aria-label="Treasure">
-          <span class="node-icon">${chestSvg(c.tier.id, Boolean(c.opened), 3)}</span></button>
-        <div class="map-label ${p.x > 50 ? 'left' : 'right'}" style="${pos};${labelWidth(p.x)}"><b>${esc(title)}</b><small>${esc(sub)}</small></div>`;
-    }
-    const t = r.task;
-    const st = r.status === 'done' ? 'done' : r.status === 'pending' ? 'pending' : i === here ? 'current' : 'todo';
-    let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'Parent checks' : 'Tap when done';
-    if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
-      const sec = entry?.tasks?.[t.id]?.seconds || 0;
-      const left = t.minutes * 60 - sec;
-      sub = left <= 0 ? 'Time done! Get a parent' : sec ? `${mmss(left)} left` : `${t.minutes} minute timer`;
-    }
-    const cue = cueFor(kid, t);
-    if (cue && st !== 'done' && st !== 'pending') sub = `${cue} · ${sub}`;
-    const star = habitInfo(state, kid, today()).get(t.id)?.mastered ? ' ⭐' : '';
-    return `<button class="map-node ${st}" style="${pos}" data-action="task" data-id="${t.id}" aria-label="${esc(t.name)}">
-        <span class="node-icon">${esc(t.icon)}</span>
-        ${st === 'done' ? '<span class="node-badge">✓</span>' : st === 'pending' ? '<span class="node-badge wait">⏳</span>' : ''}
-      </button>
-      <div class="map-label ${p.x > 50 ? 'left' : 'right'}" style="${pos};${labelWidth(p.x)}"><b>${esc(t.name)}${star}</b><small>${esc(sub)}</small></div>`;
-  }).join('');
-
-  const hp = pts[here];
-  const walker = `<div class="map-buddy ${mood === 'excited' ? 'hop' : ''}" style="left:${hp.x}%;top:${hp.y}px" data-action="buddy-move" data-kid="${kid.id}">
-      ${buddyHtml(kid, mood, 'mini', { background: false, live: true, idle: true })}
-    </div>`;
-
-  return `
-    <section class="quest-map" style="height:${height}px;background:${mapTheme(kidTheme(kid)).ground[0]}" data-theme="${esc(kidTheme(kid))}" data-pts="${mapData}" data-here="${here}" data-river="${riverY}" data-areas="${esc(visit.areas)}" data-seed="${esc(kid.id)}">
-      <canvas class="map-land" aria-hidden="true"></canvas>
-      <div class="map-start" style="left:50%;top:0">🚩 Start</div>
-      ${visit.html}
-      ${nodes}
-      ${secret ? `<button class="map-secret" style="top:${height - SECRET_ROOM / 2}px" data-action="secret" aria-label="${esc(secret.name)}">${secretSvg(theme, 4)}<span class="secret-name">${esc(secret.name)}</span><span class="secret-bubble" hidden></span></button>` : ''}
-      ${walker}
-    </section>`;
-}
 
 /** A chore as a quest in the village (and its talk box): its state, its line and its plan step. */
 function questItem(kid, t, status, st, step = 0) {
@@ -1145,7 +964,7 @@ function houseQuestIds(kid) {
   return new Set(['bed', 'teeth', 'floor'].map((k) => hc[k]?.id).filter(Boolean));
 }
 
-// The village: the same chores as the map, as quests from villagers (see village.js).
+// The village: the kid's chores, as quests from villagers (see village.js).
 function villageView(kid, s, entry, mood) {
   const list = questList(kid, s, entry);
   const planned = Boolean(kid.plan?.order?.length);
@@ -1498,7 +1317,7 @@ function openLeaderboard(kid, mode = ui.lbMode || 'week') {
     </div>`);
 }
 
-/** Today's visitors for the village green: the same ones, lines, games and gear as on the map. */
+/** Today's visitors for the village green: who comes, what they say, their games and gear. */
 function villageVisit(kid, s) {
   const { visitors, lines, news } = visitorInfo(kid, s);
   if (!visitors.length) return null;
@@ -1686,7 +1505,7 @@ function openToday(kid) {
 // ---------- the Status and Menu pop-ups (markup in hud.js) ----------
 // Everything the old kid page showed around the village: the buddy and what it says, streak,
 // freezes, coins and gems, the week, the Friday reward, the month, piano and exercise streaks,
-// the habits and the trophies; and the Menu's music, sounds, plan, old map, switch kid, Parents.
+// the habits and the trophies; and the Menu's music, sounds, plan, switch kid, Parents.
 
 const daysText = (n) => `${n} ${n === 1 ? 'day' : 'days'}`;
 
@@ -1832,78 +1651,16 @@ function exWeekText(ex) {
 /**
  * The kid's screen: the village (or wherever the buddy is: the house, the garden, the music
  * house), full screen, with the HUD over it. Everything that used to be on the page around it
- * is in the Status and Menu pop-ups. The old map page is still there for now, from the Menu.
+ * is in the Status and Menu pop-ups.
  */
 function viewKid() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
-  if (ui.oldMap) return viewOldMap(kid);
   const t = today();
   const { s } = kidSummary(kid);
   return `
     <div class="screen kid kid-full" style="--kid:${kid.color}">
       ${villageView(kid, s, entryFor(state, kid.id, t), moodFor(kid))}
-    </div>`;
-}
-
-/**
- * The old kid page with the quest map: header, buddy panel, exercise, the map, This week and
- * Habits. Kept for one release, reached from the Menu, with a button back to the village.
- */
-function viewOldMap(kid) {
-  const t = today();
-  const { s, info } = kidSummary(kid);
-  const xp = totalXp(state, kid, t);
-  const lv = levelFor(xp);
-  const entry = entryFor(state, kid.id, t);
-  const pct = s.total ? Math.round((s.done / s.total) * 100) : 100;
-  const mood = moodFor(kid);
-  const newCount = (kid.newItems || []).length;
-  const exTasks = tasksForDay(state, kid, t, t).filter(isExercise);
-  const late = lateChest(kid);
-  return `
-    <div class="screen kid" style="--kid:${kid.color}">
-      <header class="kid-head">
-        <button class="btn ghost round" data-action="home" aria-label="Back">←</button>
-        <div class="kid-title"><b>${esc(kid.name)}</b><small>Level ${lv.level} · <span class="xpbar"><span style="width:${lv.into}%"></span></span></small></div>
-        <div class="chips">
-          <span class="chip fire ${info.streak ? '' : 'cold'}" title="Streak (best ${info.best})">🔥 ${info.streak}</span>
-          <span class="chip ice" title="Streak freezes">❄️ ${info.freezes}</span>
-          <span class="chip coin" title="Coins">🪙 ${Math.max(0, totalCoins(state, kid, t) - (kid.spent || 0))}</span>
-          ${exTasks.length || kid.gemsSpent ? `<span class="chip gem" title="Gems">💎 ${Math.max(0, totalGems(state, kid, t) - (kid.gemsSpent || 0))}</span>` : ''}
-        </div>
-      </header>
-      <div class="old-map-back">
-        <button class="btn huge" data-action="old-map-back">🏘️ Back to the village</button>
-        <small class="muted">The old map stays here for a little while.</small>
-      </div>
-      <div class="buddy-panel">
-        <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, mood, 'lg', { live: true, idle: true })}</button>
-        <div class="buddy-side">
-          <div class="bubble">${esc(buddyLine(mood, kid.name))}</div>
-          <div class="quest-progress">
-            <div class="bar big"><span style="width:${pct}%"></span></div>
-            <div>${s.complete ? '<b>Quest complete! 🌟</b>' : `<b>${s.done} of ${s.total}</b> done${s.pending ? ` · ${s.pending} waiting for a parent` : ''}`}</div>
-          </div>
-          ${late ? `<button class="btn late-chest" data-action="chest" data-day="${late.key}">${chestSvg(late.tier.id, false, 2)} A chest from ${late.key === addDays(t, -1) ? 'yesterday' : 'earlier'} is waiting! Open it</button>` : ''}
-          <button class="btn ghost" data-action="trophies">🏆 Trophies &amp; treasure maps</button>
-          ${storeButton(kid, storeOpen(state, kid, t), newCount)}
-        </div>
-      </div>
-      ${exerciseSection(kid, exTasks, entry)}
-      ${!state.settings.sound ? '' : `<button class="btn ghost round music-toggle" data-action="music-toggle" aria-label="${state.settings.music === false ? 'Turn music on' : 'Turn music off'}">${state.settings.music === false ? '🔇' : '🎵'}</button>`}
-      ${familyBanner()}
-      ${questMap(kid, s, entry, mood)}
-      <section>
-        <h2>This week</h2>
-        ${streakLine(kid, info)}
-        ${weekDots(kid, info)}
-        ${rewardLine(kid)}
-        ${monthLine(kid)}
-        ${weekCoinsHtml(kid)}
-        <p class="muted small">Finish 7 days in a row to earn a streak freeze ❄️ (you can save up to 2). A freeze protects your streak if you miss a day. Miss a day without one and you lose a quarter of your streak (at least 1 day), not all of it, and finishing the next day earns a welcome-back bonus.</p>
-      </section>
-      ${habitsSection(kid)}
     </div>`;
 }
 
@@ -1997,31 +1754,6 @@ function exWeekHtml(ex) {
   else if (ex.status === 'safe') text = `<b>🛡️ Your ${esc(weeksLabel(ex.weeks))} are safe.</b> ${left(ex.goal - ex.thisWeek)} adds a ⭐`;
   else text = `${left(ex.keep - ex.thisWeek)} keeps your ${esc(weeksLabel(ex.weeks))} safe 🛡️ · ${left(ex.goal - ex.thisWeek)} adds a ⭐`;
   return `<div class="ex-week"><div class="ex-dots" aria-label="${ex.thisWeek} exercise days this week: ${ex.keep} keeps your strong weeks, ${ex.goal} adds one">${dots}</div><small>${text}</small></div>`;
-}
-
-/** Bonus exercise: optional tiles that earn gems, and how the exercise week is going. */
-/** The kid page's shop button, with a line saying why it's shut (or that evening chores can wait). */
-function storeButton(kid, lock, newCount) {
-  if (lock.open) {
-    return `<button class="btn ghost" data-action="wardrobe">👕 Shop${newCount ? ` <span class="badge">new</span>` : ''}</button>`;
-  }
-  const label = lock.missed.length ? "🔒 Shop opens when all of today's chores are done"
-    : lock.evening ? "🔒 Shop opens when today's day chores are done"
-      : "🔒 Shop opens when today's chores are done";
-  const note = lock.missed.length ? `<small class="muted store-why">${esc(lock.missed.length === 1 ? `${lock.missed[0]} was` : 'Evening chores were')} missed last night, so today evening chores count too.</small>`
-    : lock.evening ? '<small class="muted store-why">Evening chores don\'t count.</small>' : '';
-  return `<button class="btn ghost store-locked" data-action="wardrobe">${label}</button>${note}`;
-}
-
-function exerciseSection(kid, tasks, entry) {
-  if (!tasks.length) return '';
-  const ex = exerciseInfo(kid);
-  return `
-      <section class="exercise">
-        <h2>💪 Bonus exercise <small class="muted">earns 💎 gems</small></h2>
-        ${exWeekHtml(ex)}
-        <div class="tiles">${tasks.map((x) => taskTile(kid, x, entry?.tasks?.[x.id])).join('')}</div>
-      </section>`;
 }
 
 function viewWardrobe() {
@@ -2921,8 +2653,8 @@ function render() {
   const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio' || ui.view === 'lab';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
   const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
-  // the kid's screen fills the whole screen and the page doesn't scroll (the old map page still does)
-  const full = ui.view === 'kid' && !ui.oldMap;
+  // the kid's screen fills the whole screen and the page doesn't scroll
+  const full = ui.view === 'kid';
   if (document.documentElement.classList.contains('kid-full') !== full) document.documentElement.classList.toggle('kid-full', full);
   // load the sign-in code early, so a sign-in popup opens straight from the tap
   if (ui.view === 'setup' || (ui.view === 'parent' && ui.tab === 'settings')) loadCloud().catch(() => {});
@@ -2941,7 +2673,6 @@ function render() {
   lastView = ui.view;
   if (full) { if (window.scrollY) window.scrollTo(0, 0); } else if (back) window.scrollTo(0, ui.kidScroll);
   $app.querySelectorAll(SIDE_SCROLLERS).forEach((el, i) => { if (side[i]) el.scrollLeft = side[i]; });
-  paintQuestMaps($app);
   mountVillages($app, villageHandlers);
   mountHouses($app, houseHandlers);
   mountGardens($app, gardenHandlers);
@@ -2958,8 +2689,8 @@ function render() {
 }
 
 /**
- * Map music plays only on the quest map, with sound on and music not muted, while the app is
- * visible. Inside the buddy's house it is muffled, as if heard from outside, unless the kid's
+ * Map music plays only on the kid's screen (the village and its buildings), with sound on and
+ * music not muted, while the app is visible. Inside the buddy's house it is muffled, as if heard from outside, unless the kid's
  * turntable is playing (turntable.js): then that plays instead (even with the map music muted,
  * since the kid put it on).
  */
@@ -2975,22 +2706,15 @@ function syncMusic() {
 }
 setTurntableSync(() => syncMusic());
 
-let resizeTimer = 0;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => paintQuestMaps($app), 150);
-});
-
 // ---------- events ----------
 
 const actions = {
   'setup-pin': () => pinPad({ title: 'Choose a parent PIN', subtitle: 'Pick 4 digits the kids don’t know', mode: 'new', onSuccess: () => { ui.view = 'parent'; ui.tab = 'kids'; render(); toast('PIN saved. Now add your kids.'); } }),
-  home: () => { ui.view = 'home'; ui.kidScroll = null; ui.oldMap = false; render(); },
+  home: () => { ui.view = 'home'; ui.kidScroll = null; render(); },
   'open-kid': (el) => {
-    ui.kidId = el.dataset.id; ui.view = 'kid'; ui.kidScroll = null; ui.oldMap = false; render();
+    ui.kidId = el.dataset.id; ui.view = 'kid'; ui.kidScroll = null; render();
     setTimeout(() => celebrateIfDue(kidById(ui.kidId)), 300);
   },
-  task: (el) => onTaskTap(el.dataset.id, el),
   'timer-start': () => { wakeEars(); startTimer(true); startEars(); },
   'timer-pause': () => { stopEars(); stopTimer(); },
   'timer-buddy': () => buddyCheer(),
@@ -3143,7 +2867,6 @@ const actions = {
     toast(kind === 'seed' ? `${item.name} seeds are yours! Plant them in your garden.` : `${item.name} is in your garden!`);
     render();
   },
-  'music-toggle': () => { state.settings.music = state.settings.music === false; save(); render(); },
   today: () => { sounds.tap(); openToday(kidById(ui.kidId)); },
   'today-go': (el) => { sounds.tap(); goQuest(kidById(ui.kidId), el.dataset.id); },
   'today-ask': (el) => {
@@ -3154,7 +2877,6 @@ const actions = {
   },
   'today-chest': () => { closeModal(); const kid = kidById(ui.kidId); if (kid) openChest(kid, today()); },
   'today-shop': () => { closeModal(); actions.wardrobe(); },
-  'quest-mode': (el) => { ui.oldMap = el.dataset.mode === 'map'; render(); },
   chest: (el) => {
     const kid = kidById(ui.kidId);
     const key = el.dataset.day || today();
@@ -3166,31 +2888,6 @@ const actions = {
     else toast(`${c.s.total - c.s.done} more to reach the ${c.tier.name.toLowerCase()}!`);
   },
   trophies: () => openTrophies(kidById(ui.kidId)),
-  secret: (el) => {
-    const kid = kidById(ui.kidId);
-    const theme = kidTheme(kid);
-    const info = SECRETS[theme];
-    const section = el.closest('.quest-map');
-    if (!info || !section) return;
-    // the landmark wakes up and says something
-    el.classList.add('awake');
-    clearTimeout(el.sleepTimer);
-    el.sleepTimer = setTimeout(() => el.classList.remove('awake'), 3500);
-    const bubble = el.querySelector('.secret-bubble');
-    bubble.textContent = info.lines[(ui.secretLine = ((ui.secretLine ?? -1) + 1) % info.lines.length)];
-    bubble.hidden = false;
-    clearTimeout(bubble.hideTimer);
-    bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
-    if (showPlaying(section) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
-    const img = new Image();
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(dressed(kid), 'excited', { background: false }))}`;
-    const spot = { x: el.offsetLeft + el.offsetWidth / 2, y: el.offsetTop + el.offsetHeight / 2 };
-    const def = playShow(section, theme, { buddy: img, spot, onDone: () => section.classList.remove('show-on') });
-    if (!def) return;
-    ui.lastShow = Date.now();
-    section.classList.add('show-on');
-    if (state.settings.sound !== false) playShowAudio(theme, { music: state.settings.music !== false, sfx: def.sfx });
-  },
   'buy-confirm': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
@@ -3496,16 +3193,6 @@ Object.assign(actions, {
   'family-leave': () => familyLeave(),
 });
 
-// Visitors take turns talking, one speech bubble at a time. Tapping one makes it talk.
-function nextVisitorTalks(pick) {
-  const all = [...document.querySelectorAll('.map-visitor')];
-  if (all.length < 2 && !pick) return;
-  const now = all.findIndex((el) => el.classList.contains('talking'));
-  const next = pick || all[(now + 1) % all.length];
-  // a visitor with news (or who came to cheer) keeps talking
-  all.forEach((el) => el.classList.toggle('talking', el === next || el.classList.contains('news') || el.classList.contains('cheering')));
-}
-setInterval(() => { if (document.visibilityState === 'visible') nextVisitorTalks(); }, 4000);
 actions.visitor = (el) => {
   const v = familyBuddies().find((b) => b.id === el.dataset.id);
   const kid = kidById(el.closest('.map-visitors')?.dataset.host);
@@ -3527,7 +3214,6 @@ actions.visitor = (el) => {
       el.querySelector('.visitor-bubble').textContent = `Finish your quest and let's play! ${left} to go`;
     }
   }
-  nextVisitorTalks(el);
   if (!v || !doMove(el, { ...v, buddy: dressedVisitor(v) })) { sounds.tap(); live(`visit:${el.dataset.id}`).giggle(); }
 };
 
@@ -3642,25 +3328,6 @@ actions['game-test'] = (el) => {
     sounds,
   });
 };
-
-// Fishing visitors now and then reel in something from the pond: what bites depends on the map.
-function fishBite() {
-  const fishers = [...document.querySelectorAll('.map-visitor.fishing:not(.reeling)')].filter((el) => !el.dataset.moving);
-  if (!fishers.length) return;
-  const el = fishers[Math.floor(Math.random() * fishers.length)];
-  const theme = el.closest('.quest-map')?.dataset.theme;
-  const got = catchFor(theme, Number(el.dataset.rod) || 1);
-  const $catch = el.querySelector('.fish-catch');
-  $catch.innerHTML = got.svg;
-  el.classList.add('reeling');
-  setTimeout(() => {
-    if (!el.isConnected) return;
-    el.querySelector('.visitor-bubble').textContent = `${got.rare ? 'WOW! ' : ''}I caught ${/^[aeiou]/.test(got.name) ? 'an' : 'a'} ${got.name}! ${got.icon}`;
-    nextVisitorTalks(el);
-  }, 900);
-  setTimeout(() => el.classList.remove('reeling'), 3400);
-}
-setInterval(() => { if (document.visibilityState === 'visible' && Math.random() < 0.6) fishBite(); }, 6000);
 
 // ---------- sports moves ----------
 
@@ -3802,7 +3469,6 @@ Object.assign(actions, {
     render();
     toast('Plan saved! 📝');
   },
-  'family-party': () => { if (familyToday().happy) startParty(); },
   // the HUD's family pill: the party once it's earned, otherwise how the family is doing
   'family-pill': () => {
     if (familyToday().happy) { startParty(); return; }
@@ -3831,9 +3497,6 @@ Object.assign(actions, {
   },
   'menu-switch': () => { closeModal(); actions.home(); },
   'menu-parents': () => { closeModal(); actions.parent(); },
-  // the old map page, for one release: from the Menu, with a big button back to the village
-  'old-map': () => { closeModal(); ui.oldMap = true; ui.kidScroll = null; render(); window.scrollTo(0, 0); },
-  'old-map-back': () => { ui.oldMap = false; ui.kidScroll = null; render(); },
   'send-cheer': (el) => {
     const kid = kidById(el.closest('.map-visitors')?.dataset.host);
     sendCheer(kid, familyBuddies().find((b) => b.id === el.dataset.id));
