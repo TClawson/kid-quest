@@ -651,16 +651,18 @@ const mix = (stops, u) => {
   const k = Math.max(0, Math.min(0.9999, u)) * (stops.length - 1); const i = Math.floor(k); const f = k - i;
   return stops[i].map((v, j) => Math.round(v + (stops[i + 1][j] - v) * f));
 };
-// the orcas of the show: [starts, takes, from x, to x (off the lighthouse), where on the water,
-// how high, size, the buddy rides it]
+// the orcas of the show: [its middle breaks the surface at, from x, to x (off the lighthouse),
+// where on the water, how high, size, the buddy rides it]
 const FJORD_LEAPS = [
-  [2.2, 1.1, -108, -58, -4, 34, 1], [3.0, 1.1, 46, 90, 2, 30, 1], [3.9, 1.0, -80, -40, 12, 22, 1], [4.6, 1.2, 92, 44, 8, 36, 1],
-  [5.6, 1.9, -104, 84, 20, 60, 1.5, true],
-  [6.9, 1.0, -72, -30, 6, 26, 1], [7.1, 1.0, 36, 80, 12, 28, 1],
+  [2.2, -110, -32, -4, 23, 1], [2.95, 12, 82, 8, 21, 1], [3.75, -46, -114, 13, 21, 1], [4.55, 82, 12, 12, 22, 1],
+  [5.5, -106, 74, 20, 50, 1.5, true],
+  [7.05, -108, -34, 5, 22, 1], [7.3, 10, 80, 14, 21, 1],
 ];
+const LEAP_G = 170; // how hard the leaps fall, in map pixels a second each second (gentler than life, to watch them)
+const LEAP_BEND = 0.9; // the most a body arches from nose to tail, in radians
 SHOWS['bg-fjord'] = {
   dur: 9.5,
-  sfx: [[0, 'whoosh'], [1.1, 'sparkle'], [2.2, 'splash'], [3.0, 'whale'], [3.3, 'splash'], [4.1, 'splash'], [4.9, 'splash'], [5.6, 'whee'], [5.7, 'splash'], [7.4, 'splash'], [7.9, 'sparkle']],
+  sfx: [[0, 'whoosh'], [1.1, 'sparkle'], [2.1, 'splash'], [2.9, 'whale'], [3.1, 'splash'], [3.8, 'splash'], [4.6, 'splash'], [5.4, 'whee'], [5.5, 'splash'], [7.0, 'splash'], [7.9, 'sparkle'], [8.3, 'splash']],
   init(S) {
     S.stars = Array.from({ length: 46 }, () => [Math.random(), Math.random(), Math.random()]);
     S.wet = {};
@@ -759,37 +761,48 @@ SHOWS['bg-fjord'] = {
     ctx.fillStyle = halo;
     ctx.fillRect(lamp.x - 18, lamp.y - 18, 36, 36);
     ctx.restore();
-    // the orcas: each one's body follows the curve of its own leap, nose first out of the water
-    // and nose first back in, so it bends over the top
-    FJORD_LEAPS.forEach(([t0, dur, fx, tx, dy, high, size, rides], i) => {
-      const u = (t - t0) / dur;
+    // the orcas: the middle of each one flies like a thrown ball (steady across, slowing to the top
+    // and falling away again), and its body arches gently along that path without ever stretching
+    FJORD_LEAPS.forEach(([t0, fx, tx, dy, high, size, rides], i) => {
+      const u = (t - t0) / Math.sqrt((8 * high) / LEAP_G);
       const base = sea + dy;
       const x0 = Math.max(24, Math.min(V.aw - 24, spot.x + fx)); const x1 = Math.max(24, Math.min(V.aw - 24, spot.x + tx));
+      const dir = x1 < x0 ? -1 : 1; const run = Math.abs(x1 - x0);
+      const W = ORCA_LEAP[0].length * size; const H = ORCA_LEAP.length * size;
+      // how long before its middle the nose is through the surface (and after it, the tail)
+      const lead = W / 2 / Math.hypot(run, 4 * high);
       const wet = (key, x) => {
         if (S.wet[key]) return;
         S.wet[key] = true;
         for (let k = 0; k < 18 * size; k += 1) S.parts.add({ x: x + rand(-6, 6) * size, y: base, vx: rand(-1.4, 1.4), vy: rand(-3.2, -0.8), g: 0.22, max: Math.floor(rand(12, 22)), c: k % 3 ? '#dff4fa' : '#ffffff' });
       };
-      if (u >= -0.05) wet(`out${i}`, x0);
-      if (u >= 0.9) wet(`in${i}`, x1);
-      if (u < -0.3 || u > 1.3) return;
-      const at = (v) => ({ x: x0 + (x1 - x0) * v, y: base - Math.sin(v * Math.PI) * high });
-      const run = Math.abs(x1 - x0);
+      if (u >= -lead) wet(`out${i}`, x0);
+      if (u >= 1 - lead) wet(`in${i}`, x1);
+      if (u < -lead - 0.08 || u > 1 + lead + 0.08) return;
+      // the middle: a straight run up to the surface, the leap, a straight run down from it
+      const air = Math.max(0, Math.min(1, u));
+      const vy = -4 * high * (1 - 2 * air);
+      const mid = { x: run * u, y: u < 0 ? vy * u : u > 1 ? vy * (u - 1) : -4 * high * u * (1 - u) };
+      const head = Math.atan2(vy, run);
+      // the arch: as tight as the path where the middle is, up to what a body can do, and easing in
+      // and out as the body passes through the surface
+      const arch = span(u, -lead, lead) - span(u, 1 - lead, 1 + lead);
+      const curve = Math.min(LEAP_BEND / W, (run * 8 * high) / Math.hypot(run, vy) ** 3) * arch;
       const img = big('orca-leap', ORCA_LEAP, FJORD_PAL.orca, size === 1 ? 1 : 3);
       const rim = lit(img, 'orca-leap', size === 1 ? 1 : 3);
       const k = img.width / ORCA_LEAP[0].length; // the picture's pixels per art pixel
-      const W = ORCA_LEAP[0].length * size; const H = ORCA_LEAP.length * size;
       ctx.save();
       ctx.beginPath(); ctx.rect(0, V.top, V.aw, base + 2 - V.top); ctx.clip(); // it comes out of the water
       const STRIP = 2; // art pixels in each slice of the body
       let saddle = null;
       const slices = [];
       for (let c = 0; c < ORCA_LEAP[0].length; c += STRIP) {
-        // how far along the body this slice is (the nose leads), and so where on the leap it is now
-        const along = (c + STRIP / 2 - ORCA_LEAP[0].length / 2) * size;
-        const rise = Math.PI * high * Math.cos(Math.max(0, Math.min(1, u)) * Math.PI);
-        const v = u + along / Math.hypot(run, rise);
-        const sl = { c, p: at(v), tilt: Math.atan2(-Math.PI * high * Math.cos(v * Math.PI), run) };
+        // how far ahead of the middle this slice is (the nose leads), along a body of fixed length
+        const s = (c + STRIP / 2 - ORCA_LEAP[0].length / 2) * size;
+        const tilt = head + curve * s;
+        const px = curve > 1e-5 ? mid.x + (Math.sin(tilt) - Math.sin(head)) / curve : mid.x + s * Math.cos(head);
+        const py = curve > 1e-5 ? mid.y - (Math.cos(tilt) - Math.cos(head)) / curve : mid.y + s * Math.sin(head);
+        const sl = { c, p: { x: x0 + dir * px, y: base + py }, tilt };
         slices.push(sl);
         if (rides && !saddle && c >= 18) saddle = sl;
       }
@@ -817,8 +830,7 @@ SHOWS['bg-fjord'] = {
         ctx.restore();
       }
       ctx.restore();
-      const mid = at(Math.max(0, Math.min(1, u)));
-      if (u > 0 && u < 1 && frame % 2 === 0) S.parts.add({ x: mid.x - (x1 > x0 ? 1 : -1) * W * 0.4, y: mid.y + 3, vy: 0.6, g: 0.1, max: 12, c: '#cfeaf2' });
+      if (u > 0 && u < 1 && frame % 2 === 0) S.parts.add({ x: x0 + dir * (mid.x - W * 0.4), y: base + mid.y + 3, vy: 0.6, g: 0.1, max: 12, c: '#cfeaf2' });
     });
     // a last shower of light as the night lifts
     if (t > 7.7 && t < 8.7 && frame % 2 === 0) for (let k = 0; k < 3; k += 1) { const c = pick(pick(AURORA)[2]); S.parts.add({ x: rand(0, V.aw), y: V.top + rand(0, V.h * 0.5), vy: 0.7, max: 18, star: true, c: `rgb(${c[0]}, ${c[1]}, ${c[2]})` }); }
