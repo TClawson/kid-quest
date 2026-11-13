@@ -177,6 +177,10 @@ export function celebrateIfDue(kid) {
   const rewardNew = Boolean(reward?.earned && seen?.reward !== reward.monday);
   const dayNew = info.todayComplete && seen?.day !== t;
   if (!rewardNew && !dayNew) return showUnlocks(kid);
+  // today's chest may be open already (a parent's late check, a celebration seen on another
+  // device): then the words say so instead of sending the kid to it
+  const chestOpen = Boolean(state.log?.[t]?.[kid.id]?.chest);
+  const chestLine = chestOpen ? ' Your treasure chest is already open: good job!' : ' Tap the treasure chest to open it!';
   const next = { ...(seen || {}) };
   if (info.todayComplete) { next.day = t; next.streak = info.streak; }
   if (rewardNew) next.reward = reward.monday;
@@ -188,7 +192,7 @@ export function celebrateIfDue(kid) {
       onClose: after,
       emoji: '🏆',
       title: 'WEEKLY REWARD!',
-      text: `You did every chore Monday to Friday! Your reward: ${state.settings.weeklyReward}. Show a parent!${dayNew ? ' Then tap your treasure chest!' : ''}`,
+      text: `You did every chore Monday to Friday! Your reward: ${state.settings.weeklyReward}. Show a parent!${dayNew && !chestOpen ? ' Then tap your treasure chest!' : ''}`,
       sound: sounds.week,
       big: true,
     });
@@ -199,7 +203,7 @@ export function celebrateIfDue(kid) {
       onClose: after,
       emoji: '🔥',
       title: weeks === 1 ? 'A WHOLE WEEK!' : `${weeks} WEEKS IN A ROW!`,
-      text: `${info.inARow} days in a row!${info.freezes ? ' You have a streak freeze ❄️ saved up.' : ''} Tap your treasure chest!`,
+      text: `${info.inARow} days in a row!${info.freezes ? ' You have a streak freeze ❄️ saved up.' : ''}${chestOpen ? '' : ' Tap your treasure chest!'}`,
       sound: sounds.week,
       big: true,
     });
@@ -209,7 +213,7 @@ export function celebrateIfDue(kid) {
       onClose: after,
       emoji: '💪',
       title: 'Welcome back!',
-      text: `You bounced back after a missed day. That's how habits are built! +${COMEBACK_BONUS} 🪙 bonus. Your streak is ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 Tap the treasure chest to open it!`,
+      text: `You bounced back after a missed day. That's how habits are built! +${COMEBACK_BONUS} 🪙 bonus. Your streak is ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥${chestLine}`,
       sound: sounds.day,
     });
   } else {
@@ -218,7 +222,7 @@ export function celebrateIfDue(kid) {
       onClose: after,
       emoji: '🌟',
       title: 'Quest complete!',
-      text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 ${effortNote(kid)} Tap the treasure chest to open it!`,
+      text: `Everything is done for today. Your streak is now ${info.streak} ${info.streak === 1 ? 'day' : 'days'} 🔥 ${effortNote(kid)}${chestLine}`,
       sound: sounds.day,
     });
   }

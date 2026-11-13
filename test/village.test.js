@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { villageLayout, VILLAGE_THEMES } from '../js/villagemaps.js';
-import { placeVillagers, folkCaps, activeQuest, makeGrid, findPath, standSpot, visitorSpots, landmarkBlock, arrowSpots, labelSpot, bubbleSpot, ARROW_BAND } from '../js/village.js';
+import { placeVillagers, folkCaps, activeQuest, makeGrid, findPath, standSpot, visitorSpots, landmarkBlock, arrowSpots, labelSpot, bubbleSpot, ARROW_BAND, arrivalStart } from '../js/village.js';
 import { VILLAGER_KINDS, headRows, villagerGrid } from '../js/villageart.js';
 import { secretSize } from '../js/treasure-art.js';
 import { MAP_THEMES } from '../js/maparts.js';
@@ -44,6 +44,15 @@ for (const theme of VILLAGE_THEMES) {
     reach('the music house door', L.music.door);
     Object.entries(spots).forEach(([id, sp]) => reach(`visitor ${id}`, sp.role === 'fish' ? { x: sp.x - sp.face * 22, y: sp.y + 2 } : standSpot(grid, sp.x, sp.y, from.x)));
     reach('the play patch', { x: L.green.right.x + L.green.right.w / 2, y: L.green.right.y + L.green.right.h + 12 });
+    // each visitor can walk in for the day: from past an edge or from a path, at least a little way off
+    for (const [id, sp] of Object.entries(spots)) {
+      const start = arrivalStart(L, grid, sp);
+      assert.ok(start, `${theme}: visitor ${id} has somewhere to walk in from`);
+      assert.ok(Math.hypot(start.x - sp.x, start.y - sp.y) >= 20, `${theme}: visitor ${id} walks in from further off than ${Math.round(Math.hypot(start.x - sp.x, start.y - sp.y))} px`);
+      const path = findPath(grid, start, sp);
+      const end = path[path.length - 1];
+      assert.ok(end && Math.hypot(end.x - sp.x, end.y - sp.y) < 20, `${theme}: visitor ${id} can walk in to its spot`);
+    }
   });
 
   test(`${theme}: quest spots stand on open ground, apart from each other and the green`, () => {
@@ -169,4 +178,14 @@ test('a quest-time sign moves out from under a speech bubble', () => {
   const moved = labelSpot(sign, [[185, 296, 30, 12]], L);
   assert.notDeepEqual(moved.slice(0, 2), [200, 300]);
   assert.equal(moved[2], 'Morning quests');
+});
+
+test('a quest-time sign stays whole in the view it opens with (a narrow phone)', () => {
+  const L = villageLayout('bg-meadow');
+  const sign = [158, 216, '⬆ 🌅 Morning quests'];
+  // a bubble on the sign's left: a wide view moves it as before; a phone's window keeps it inside
+  const win = { l: 151, r: 297 };
+  const [x, , text] = labelSpot(sign, [[100, 200, 60, 30]], L, { w: 70, win });
+  assert.ok(x - 37 >= win.l && x + 37 <= win.r, `whole in the window (${x})`);
+  assert.equal(text, sign[2]);
 });

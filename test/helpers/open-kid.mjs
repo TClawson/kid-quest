@@ -75,6 +75,18 @@ export async function tapInVillage(page, sel, { clock = false, then = null } = {
 }
 
 /**
+ * Waits until today's visitors stand on their spots: the first time they show on a day they walk
+ * in (village.js), and their bubbles show once they're there. clock: the page's clock is installed.
+ */
+export async function visitorsHere(page, { clock = false } = {}) {
+  const sel = '.village[data-arrive="done"], .village[data-arrive="no"]';
+  for (let i = 0; i < 60 && !(await page.locator(sel).count()); i += 1) {
+    if (clock) await page.clock.runFor(250); else await page.waitForTimeout(250);
+  }
+  if (clock) await page.clock.runFor(300); else await page.waitForTimeout(300);
+}
+
+/**
  * The old map, from the kid's Menu (there for one release while kids get used to the village).
  * Only for tests of the old map itself (they go when it goes).
  */
