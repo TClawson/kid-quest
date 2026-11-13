@@ -104,6 +104,25 @@ export const ORCA_FIN = sprite([
   '.bbbbg..',
   'bbbbbbg.',
 ]);
+/** A whole orca in the air, facing right: tail flukes, the tall fin, a white belly and chin. For the northern lights show. */
+export const ORCA_LEAP = sprite([
+  '....................bb........................',
+  '...................bbbg.......................',
+  '..................bbbbg.......................',
+  '.................bbbbbg.......................',
+  'bb.............ggbbbbbbgggggggg...............',
+  'bbb.........gggbbbbbbbbbbbbbbbbbbgggg.........',
+  '.bbb.....ggbbbbbbbbbsssbbbbbbbbbbbbbbbgg......',
+  '.bbbb..gbbbbbbbbbbbbbssbbbbbbbbbbbwwwbbbbg....',
+  '..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbwwwwwbebbb...',
+  '..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..',
+  '.bbbb.bbbbbbbbbbbbwwwwwwwwwwwwwwwwwwwwwwwwww..',
+  'bbb.....bbbbbwwwwwwwwwwwwwwwwwwwwwwwwwwwww....',
+  'bb.........wwwwwwwwwbbbbwwwwwwwwwwwwww........',
+  '.....................bbbbb....................',
+  '......................bbbb....................',
+  '.......................bb.....................',
+]);
 /** An orca's short, bushy blow. */
 export const ORCA_BLOW = sprite(['.a.a.', 'awwwa', '.www.', '..w..', '..w..'], false);
 
@@ -458,7 +477,13 @@ export function fjordLife(m) {
   const L = m.layout;
   if (!L) return { step() {}, draw() {} };
   const hints = L.life || {};
-  const open = openWater(L);
+  const sea = openWater(L);
+  // with the lighthouse up, its rock is in the way too
+  const open = (x, y) => {
+    const lm = m.landmark;
+    if (lm?.foot && x > lm.x + lm.foot[0] - 8 && x < lm.x + lm.foot[0] + lm.foot[2] + 8 && y > lm.y + lm.foot[1] - 10 && y < lm.y + lm.foot[1] + lm.foot[3] + 8) return false;
+    return sea(x, y);
+  };
   const fits = (x, y, w) => [0, 0.25, 0.5, 0.75, 1].every((k) => open(x + w * k, y));
   const falls = fjordFalls(L);
   const winter = () => m.season === 'winter';

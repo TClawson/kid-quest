@@ -60,6 +60,7 @@ const SHELL = [
   'js/rainforestart.js',
   'js/fjordart.js',
   'js/fjordlife.js',
+  'js/lighthouseart.js',
   'js/kapokart.js',
   'js/rainbowart.js',
   'js/goldpotart.js',

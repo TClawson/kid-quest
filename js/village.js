@@ -26,12 +26,13 @@ import { STONE, startStone } from './stoneart.js';
 import { KAPOK, startKapok } from './kapokart.js';
 import { GOLDPOT, startGoldpot } from './goldpotart.js';
 import { STARWHALE, startStarwhale } from './starwhaleart.js';
+import { LIGHTHOUSE, startLighthouse } from './lighthouseart.js';
 import { musicSign } from './musicart.js';
 import { seasonNow, tintLand, mountWeather } from './seasonlife.js';
 import { isNewSeason, seasonLine } from './seasonhints.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
-const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot }, starwhale: { size: STARWHALE, start: startStarwhale } };
+const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot }, starwhale: { size: STARWHALE, start: startStarwhale }, lighthouse: { size: LIGHTHOUSE, start: startLighthouse } };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -466,6 +467,7 @@ function startLife(section, L, data, people, cam) {
     aw: L.W, ah: L.H, scale: 1, z: 1, life, wall: 20, falls,
     layout: L, // the fjord's swimmers and waders read the bay, the docks and the shore from it
     season: seasonNow(data.today).season,
+    landmark: lm || null, // the lighthouse's rock, when it is there: the swimmers keep off it
     goal: hints.goal || L.chest,
     knightPost: hints.knightPost || { x: L.W - 50, y: L.H / 2, side: 1 },
     pad: hints.pad,
@@ -1516,7 +1518,7 @@ function mount(section, handlers) {
 
   // ---- the loop ----
   const artEl = section.querySelector('.v-landmark canvas.v-art');
-  const artStep = artEl && lm?.art ? LANDMARK_ART[lm.art].start(artEl, artEl.parentElement) : null;
+  const artStep = artEl && lm?.art ? LANDMARK_ART[lm.art].start(artEl, artEl.parentElement, se) : null;
   let last = performance.now();
   const tick = (now) => {
     if (!section.isConnected) { mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face; window.removeEventListener('resize', onResize); return; }

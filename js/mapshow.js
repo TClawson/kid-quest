@@ -9,6 +9,7 @@ import {
   MONKEY_DANCE, NOTE, TOUCAN, TOUCAN_WING_UP, TOUCAN_WING_DOWN, JAGUAR, SLOTH_WAVE, CAPY_CALM,
 } from './maplife.js';
 import { upscale, thinOutline } from './upscale.js';
+import { ORCA_LEAP, FJORD_PAL } from './fjordlife.js';
 import { outlined, SHIP, WHALE, CHEST_CLOSED, CHEST_PALS } from './treasure-art.js';
 
 const OUT = '#2a1838';
@@ -618,6 +619,112 @@ export const SHOWS = {
       else if (t > 1.6) buddyAt(ctx, S, V.cx - 10, my - 8 - ((Math.floor(t * 6)) % 2 ? 4 : 0));
       if (t > 6.8 && t < 7.6 && frame % 2 === 0) S.parts.add({ x: rand(0, V.aw), y: V.top + rand(0, V.h * 0.5), max: 16, star: true, c: pick(RAINBOW) });
     },
+  },
+};
+
+// The Alaskan Fjord: night falls, the lighthouse's beam sweeps round, the northern lights
+// ripple across the sky in three curtains, and the orcas leap out of the bay one after another.
+// The last one, the big bull, jumps right across with the buddy on its back.
+const AURORA = [
+  [0.06, [70, 255, 170], [60, 190, 255]],
+  [0.2, [130, 255, 140], [190, 120, 255]],
+  [0.34, [70, 240, 205], [255, 120, 205]],
+];
+SHOWS['bg-fjord'] = {
+  dur: 9.5,
+  sfx: [[0, 'whoosh'], [1.1, 'sparkle'], [2.3, 'splash'], [3.0, 'whale'], [3.5, 'splash'], [4.5, 'splash'], [5.6, 'whee'], [5.7, 'splash'], [7.4, 'splash'], [7.9, 'sparkle']],
+  init(S) {
+    S.stars = Array.from({ length: 46 }, () => [Math.random(), Math.random(), Math.random()]);
+    S.wet = {};
+  },
+  step(ctx, t, V, S, frame) {
+    const night = span(t, 0, 1.2) - span(t, 8, 9.2);
+    const glow = span(t, 0.9, 2.4) - span(t, 7.6, 8.9);
+    ctx.fillStyle = `rgba(8, 14, 44, ${(0.64 * night).toFixed(3)})`;
+    ctx.fillRect(0, V.top, V.aw, V.h);
+    for (const [sx, sy, ph] of S.stars) {
+      const tw = Math.sin(t * 3 + ph * 20);
+      if (tw < -0.3) continue;
+      ctx.fillStyle = `rgba(255, 255, 255, ${(night * (0.45 + 0.5 * tw)).toFixed(3)})`;
+      ctx.fillRect(Math.round(sx * V.aw), Math.round(V.top + sy * V.h * 0.5), 1, 1);
+    }
+    // the northern lights: each curtain is columns of light, bright along its foot and fading
+    // upward into another colour, its rays flickering as it sways
+    AURORA.forEach(([at, lo, hi], b) => {
+      for (let x = 0; x < V.aw; x += 2) {
+        const sway = Math.sin(x / 46 + t * 0.9 + b * 2.1) * 10 + Math.sin(x / 19 - t * 1.4 + b) * 4;
+        const foot = V.top + V.h * at + 26 + sway;
+        const tall = (24 + 12 * Math.sin(x / 27 + t * 1.8 + b * 1.3)) * (0.5 + 0.5 * glow);
+        const ray = glow * (0.5 + 0.5 * Math.sin(x / 7 + t * 5 + b * 3) * Math.sin(x / 31 - t * 2));
+        if (ray <= 0.02) continue;
+        for (let k = 0; k < 6; k += 1) {
+          const u = k / 5;
+          const c = lo.map((v, i) => Math.round(v + (hi[i] - v) * u));
+          ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${(ray * (1 - u * 0.85) * 0.62).toFixed(3)})`;
+          ctx.fillRect(x, Math.round(foot - (tall * (k + 1)) / 6), 2, Math.ceil(tall / 6));
+        }
+        ctx.fillStyle = `rgba(230, 255, 236, ${(ray * 0.7).toFixed(3)})`;
+        ctx.fillRect(x, Math.round(foot), 2, 1);
+      }
+    });
+    // the lights shimmer on the water round the lighthouse
+    const sea = Math.min(V.bottom - 30, V.spot.y + 74);
+    for (let i = 0; i < 26; i += 1) {
+      const g = Math.floor((frame + i * 3) / 5);
+      const h = Math.sin(i * 127.1 + g * 311.7) * 43758.5453; const r = h - Math.floor(h);
+      const h2 = Math.sin(i * 269.5 + g * 183.3) * 43758.5453; const r2 = h2 - Math.floor(h2);
+      const c = AURORA[i % 3][1];
+      ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${(glow * 0.4).toFixed(3)})`;
+      ctx.fillRect(Math.round(V.spot.x - 130 + r * 260), Math.round(sea - 70 + r2 * 96), 3 + (i % 3), 1);
+    }
+    // the lighthouse's beam, sweeping right round
+    const lamp = { x: V.spot.x, y: V.spot.y - 38 };
+    const turn = t * 2.3;
+    for (const side of [0, Math.PI]) {
+      const a = turn + side;
+      const reach = V.aw * 0.9 * Math.abs(Math.cos(a)) + 8;
+      const dir = Math.cos(a) > 0 ? 1 : -1;
+      ctx.fillStyle = `rgba(255, 242, 180, ${(0.2 * night).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(lamp.x + dir * 6, lamp.y - 2);
+      ctx.lineTo(lamp.x + dir * reach, lamp.y - 3 - reach * 0.1);
+      ctx.lineTo(lamp.x + dir * reach, lamp.y + 3 + reach * 0.1);
+      ctx.lineTo(lamp.x + dir * 6, lamp.y + 2);
+      ctx.fill();
+    }
+    // the orcas: [starts, takes, from x, to x (off the lighthouse), where on the water, how high, size]
+    const pod = [[2.3, 1.25, -128, -58, -6, 56, 2], [3.5, 1.2, 96, 52, 4, 48, 2], [4.5, 1.0, -96, -50, 14, 34, 1], [5.7, 1.8, -118, 104, 22, 76, 2]];
+    pod.forEach(([t0, dur, fx, tx, dy, high, size], i) => {
+      const u = (t - t0) / dur;
+      const base = sea + dy;
+      const x0 = Math.max(24, Math.min(V.aw - 24, V.spot.x + fx)); const x1 = Math.max(24, Math.min(V.aw - 24, V.spot.x + tx));
+      const wet = (key, x) => {
+        if (S.wet[key]) return;
+        S.wet[key] = true;
+        for (let k = 0; k < 26 * size; k += 1) S.parts.add({ x: x + rand(-8, 8) * size, y: base, vx: rand(-1.6, 1.6), vy: rand(-3.6, -0.8), g: 0.22, max: Math.floor(rand(14, 26)), c: k % 3 ? '#dff4fa' : '#ffffff' });
+      };
+      if (u >= 0) wet(`out${i}`, x0);
+      if (u >= 0.92) wet(`in${i}`, x1);
+      if (u < 0 || u > 1) return;
+      const x = x0 + (x1 - x0) * u;
+      const y = base - Math.sin(u * Math.PI) * high;
+      const right = x1 > x0;
+      const img = big('orca-leap', ORCA_LEAP, FJORD_PAL.orca, size);
+      // nose up on the way out, level at the top, nose down on the way in
+      const tilt = Math.atan2(-Math.cos(u * Math.PI) * Math.PI * high, Math.abs(x1 - x0));
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, V.top, V.aw, base + 3 - V.top); ctx.clip(); // it comes out of the water
+      ctx.translate(Math.round(x), Math.round(y));
+      if (!right) ctx.scale(-1, 1);
+      ctx.rotate(tilt);
+      ctx.drawImage(img, -Math.round(img.width / 2), -Math.round(img.height / 2));
+      // the buddy rides the last one, holding on behind its fin
+      if (i === 3) buddyAt(ctx, S, -22, -img.height / 2 - 13);
+      ctx.restore();
+      if (frame % 2 === 0) S.parts.add({ x: x - (right ? 1 : -1) * 18 * size, y: y + 4, vy: 0.6, g: 0.1, max: 12, c: '#cfeaf2' });
+    });
+    // a last shower of light as the night lifts
+    if (t > 7.7 && t < 8.7 && frame % 2 === 0) for (let k = 0; k < 3; k += 1) { const c = pick(AURORA)[1]; S.parts.add({ x: rand(0, V.aw), y: V.top + rand(0, V.h * 0.5), vy: 0.7, max: 18, star: true, c: `rgb(${c[0]}, ${c[1]}, ${c[2]})` }); }
   },
 };
 

@@ -25,6 +25,7 @@ import { KAPOK } from './kapokart.js';
 import { GOLDPOT } from './goldpotart.js';
 import { STARWHALE } from './starwhaleart.js';
 import { peakBlocks } from './fjordart.js';
+import { LIGHTHOUSE } from './lighthouseart.js';
 
 const W = 448;
 
@@ -539,8 +540,8 @@ export const VILLAGE_MAPS = {
     // the bear wade along (in from the trees at `from`)
     life: {
       pod: [[383, 716], [383, 640], [381, 560], [376, 492], [350, 440], [318, 398], [296, 340], [262, 282], [215, 254], [166, 268], [140, 322], [146, 384], [196, 404], [250, 374], [306, 384], [346, 432], [376, 492], [381, 560], [383, 640], [383, 716]],
-      whale: [[220, 258], [200, 330], [290, 336], [176, 436]],
-      otters: [[[232, 262], [262, 272]], [[292, 388], [304, 402]], [[366, 548], [370, 562]]],
+      whale: [[220, 258], [196, 330], [312, 322], [176, 436]],
+      otters: [[[232, 262], [262, 272]], [[310, 380], [318, 396]], [[366, 548], [370, 562]]],
       shore: { from: 384, moose: 196, bear: 306 },
     },
     islets: [{ x: 262, y: 404, rx: 20, ry: 9 }],
@@ -572,7 +573,7 @@ export const VILLAGE_MAPS = {
       idle: [{ x: 150, y: 208 }, { x: 236, y: 142 }, { x: 128, y: 170 }, { x: 276, y: 142 }],
     },
     // a lighthouse on the islet: it only stands there once the treasure map is whole
-    landmark: { x: 238, y: 318, w: 48, h: 96, art: 'lighthouse', foot: [2, 78, 44, 18], stand: { x: 300, y: 464 } },
+    landmark: { x: 206, y: 275, w: LIGHTHOUSE.w, h: LIGHTHOUSE.h, art: 'lighthouse', foot: [14, 114, 84, 26], stand: { x: 294, y: 464 } },
     coach: { x: 264, y: 114 },
     chest: { x: 200, y: 646 },
     start: { x: 180, y: 122 },
