@@ -30,6 +30,7 @@ const SHELL = [
   'js/maparts.js',
   'js/music.js',
   'js/songs.js',
+  'js/maploops.js',
   'js/maplife.js',
   'js/upscale.js',
   'js/village.js',

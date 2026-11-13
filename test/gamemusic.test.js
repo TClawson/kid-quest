@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SONGS } from '../js/songs.js';
+import { LOOPS } from '../js/maploops.js';
 import { fakeAudio } from './helpers/fake-audio.mjs';
 
 // the music engine plays through the browser's AudioContext: give it one that writes the notes down
 const { FakeAudioContext, played, contexts } = fakeAudio();
 globalThis.window = { AudioContext: FakeAudioContext };
-const { playPiece, startMusic, stopMusic } = await import('../js/music.js');
+const { playPiece, startMusic, stopMusic, loopScore } = await import('../js/music.js');
 
 const START = 0.15; // playPiece starts this long after the clock's time
 
@@ -95,17 +96,21 @@ test('the closing bar leaves the loop\'s drums alone: the build and the fill sta
 });
 
 test('the game\'s loop never plays the closing bar', async () => {
+  // a 16-bar song with a closing bar on paper (Bubble Waltz has a long loop in the village now)
+  const id = 'bg-space';
+  assert.ok(SONGS[id].ending && !LOOPS[id]);
+  const { beat = 8 } = SONGS[id];
   for (const c of contexts) c.currentTime = 0;
   played.length = 0;
-  startMusic('bg-ocean');
-  const step = 60 / SONGS['bg-ocean'].bpm / 2;
+  startMusic(id);
+  const step = 60 / SONGS[id].bpm / 2;
   // two times round and a bit, scheduled at the next turn of the engine's clock
-  contexts[0].currentTime = 0.1 + step * 6 * 34;
+  contexts[0].currentTime = 0.1 + step * beat * 34;
   await new Promise((resolve) => { setTimeout(resolve, 150); });
   stopMusic();
   const notes = played.filter((n) => !n.swept && !n.noise).map((n) => {
     const k = Math.round(((n.t - 0.1) / step) * 100); // hundredths of an eighth from the start
-    return { midi: n.midi, bar: Math.floor(k / 600), at: k % 600 };
+    return { midi: n.midi, bar: Math.floor(k / (beat * 100)), at: k % (beat * 100) };
   });
   const bar = (b) => notes.filter((n) => n.bar === b).map((n) => `${n.at}:${n.midi}`).sort().join(' ');
   assert.ok(bar(0).length > 0 && bar(33).length > 0, 'it played all the way');
@@ -113,4 +118,115 @@ test('the game\'s loop never plays the closing bar', async () => {
   assert.equal(bar(17), bar(1));
   assert.equal(bar(32), bar(0));
   assert.notEqual(bar(16), bar(15));
+});
+
+// ---------- the long village loops (maploops.js) ----------
+
+/**
+ * Play a theme's map music in the village for `seconds`. Returns everything it played, timed
+ * from its first step: { midi, t, swept (a kick or a tom), noise (a snare or a hat) }.
+ */
+async function village(theme, seconds) {
+  for (const c of contexts) c.currentTime = 0;
+  played.length = 0;
+  startMusic(theme);
+  contexts[0].currentTime = 0.1 + seconds;
+  await new Promise((resolve) => { setTimeout(resolve, 150); });
+  stopMusic();
+  return played.map((n) => ({ ...n, t: n.t - 0.1 }));
+}
+
+/** What a stretch of the music plays, as text, its times in hundredths of `unit` from `from`. */
+function heardIn(sounds, from, len, unit) {
+  return sounds.filter((n) => n.t > from - 1e-6 && n.t < from + len - 1e-6)
+    .map((n) => `${Math.round(((n.t - from) / unit) * 100)}:${n.noise ? 'noise' : n.midi}${n.swept ? 'k' : ''}`).sort().join(' ');
+}
+
+test('every bar of the long loops fits its section', () => {
+  assert.deepEqual(Object.keys(LOOPS).sort(), ['bg-meadow', 'bg-ocean']);
+  for (const [id, song] of Object.entries(LOOPS)) {
+    for (const sec of song.sections) {
+      const beat = sec.beat || song.beat || 8;
+      const n = sec.lead.length;
+      for (const key of ['chords', 'lead2', 'inv']) if (sec[key]) assert.equal(sec[key].length, n, `${id} ${sec.name}: ${key}`);
+      sec.lead.forEach((bar, k) => assert.equal(bar.split(' ').length, beat, `${id} ${sec.name} bar ${k + 1}`));
+      (sec.lead2 || []).forEach((bar, k) => { if (bar) assert.equal(bar.split(' ').length, beat, `${id} ${sec.name} second voice, bar ${k + 1}`); });
+      if (sec.inv) for (const v of sec.inv) assert.ok([0, 1, 2].includes(Array.isArray(v) ? v[0] : v));
+    }
+    assert.equal(loopScore(id).length, song.sections.reduce((a, s) => a + s.lead.length, 0));
+  }
+  assert.equal(loopScore('bg-ocean').length, 49);
+  assert.equal(loopScore('bg-meadow').length, 62);
+  assert.equal(loopScore('bg-space'), null);
+});
+
+test('Bubble Waltz in the village: the waltz, the lullaby, the full current, then round again', async () => {
+  const step = 60 / LOOPS['bg-ocean'].bpm / 2;
+  const L = 6 * step; // every bar is a waltz bar of six eighths
+  const sounds = await village('bg-ocean', 51 * L);
+  const bar = (b) => heardIn(sounds, b * L, L, step);
+  for (let b = 0; b <= 50; b += 1) assert.ok(bar(b).length > 0, `bar ${b + 1} plays`);
+  // the lullaby (bars 17 to 33): no drums at all, the waltz around it has its kick every bar
+  const kicks = (b) => sounds.filter((n) => n.swept && n.t > b * L - 1e-6 && n.t < (b + 1) * L - 1e-6).length;
+  for (let b = 16; b < 33; b += 1) assert.equal(kicks(b) + sounds.filter((n) => n.noise && n.t > b * L - 1e-6 && n.t < (b + 1) * L - 1e-6).length, 0, `lullaby bar ${b - 15}: no drums`);
+  assert.equal(kicks(15), 1);
+  assert.equal(kicks(33), 1);
+  // its bass walks G A Ab G F# G under bars 3 to 8
+  const bass = (b) => Math.min(...sounds.filter((n) => !n.swept && !n.noise && Math.abs(n.t - b * L) < 1e-6).map((n) => n.midi));
+  assert.deepEqual([18, 19, 20, 21, 22, 23].map(bass), [43, 45, 44, 43, 42, 43]);
+  // after bar 49 comes bar 1 again, on time: no gap, no bar twice
+  assert.equal(bar(49), bar(0));
+  assert.equal(bar(50), bar(1));
+  assert.notEqual(bar(48), bar(0));
+  assert.notEqual(bar(33), bar(0), 'the full current is not the plain waltz');
+});
+
+test('Forest Village in the village: the Great Oak sways in two in a village bar, and the loop is 62 bars', async () => {
+  const eighth = 60 / LOOPS['bg-meadow'].bpm / 2;
+  const L = 8 * eighth;
+  const score = loopScore('bg-meadow');
+  assert.equal(score.length, 62);
+  const oak = score.filter((b) => b.sec.name === 'The Great Oak');
+  assert.equal(oak.length, 16);
+  for (const b of oak) {
+    assert.equal(b.beat, 6, 'six steps a bar');
+    assert.ok(Math.abs(b.beat * b.step - L) < 1e-9, 'as long as a village bar');
+  }
+  const first = score.indexOf(oak[0]);
+  assert.equal(first, 22);
+  const sounds = await village('bg-meadow', 63 * L);
+  // the Oak's first bar: F4 A4 D5 C5 on its steps 1, 3, 4 and 6 (of six), over everything lower
+  const sway = L / 6;
+  const tune = heardIn(sounds.filter((n) => !n.noise && n.midi >= 60), first * L, L, sway);
+  assert.equal(tune, ['0:65', '200:69', '300:74', '500:72'].sort().join(' '));
+  // everything in the swaying bars (the Oak and the bar before it) falls on their six steps;
+  // everything else on the village's eighths (or the arpeggio's halves)
+  for (const n of sounds) {
+    const b = Math.floor(n.t / L + 1e-6) % 62;
+    const unit = score[b].beat === 6 ? sway : eighth / 2;
+    const at = (n.t - Math.floor(n.t / L + 1e-6) * L) / unit;
+    assert.ok(Math.abs(at - Math.round(at)) < 1e-6, `bar ${b + 1}: ${n.t}`);
+  }
+  // and the next section starts right after the Oak's last bar: waking up, G4 under D4
+  const wake = heardIn(sounds.filter((n) => !n.noise && Math.abs(n.t - 38 * L) < 1e-6), 38 * L, L, eighth);
+  assert.ok(wake.includes('0:67') && wake.includes('0:62'), wake);
+  // after bar 62 comes bar 1 again, on time
+  assert.equal(heardIn(sounds, 62 * L, L, eighth), heardIn(sounds, 0, L, eighth));
+  assert.notEqual(heardIn(sounds, 61 * L, L, eighth), heardIn(sounds, 0, L, eighth));
+});
+
+test('a theme without a long loop still plays its 16-bar song in the village', async () => {
+  for (const id of ['bg-castle', 'bg-sunset']) {
+    assert.ok(!LOOPS[id]);
+    const song = SONGS[id];
+    const beat = song.beat || 8;
+    const step = 60 / song.bpm / 2;
+    const L = beat * step;
+    const sounds = (await village(id, 17 * L)).filter((n) => !n.noise && !n.swept);
+    // the first bar's tune, at the first bar's steps (swing moves every second eighth a bit)
+    const first = song.lead[0].split(' ').map((tok, i) => (tok === '-' || tok === '.' ? null : i)).filter((i) => i !== null);
+    const leadAt = (b) => sounds.filter((n) => n.t > b * L - 1e-6 && n.t < (b + 1) * L - 1e-6 && n.midi >= 60).length;
+    assert.ok(leadAt(0) >= first.length);
+    assert.equal(heardIn(sounds, 16 * L, L, step), heardIn(sounds, 0, L, step), `${id}: round again after 16 bars`);
+  }
 });
