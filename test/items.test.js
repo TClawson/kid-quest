@@ -226,3 +226,10 @@ test('every Places background has a map, a fishing spot and a hidden spot', asyn
   assert.equal(itemById('bg-fjord').price, 500);
   assert.equal(MAP_THEMES['bg-fjord'].life, 'fjord');
 });
+
+test('the fjord is on show but not for sale until its music is written', async () => {
+  const { comingSoon } = await import('../js/items.js');
+  assert.equal(comingSoon(itemById('bg-fjord')), true);
+  assert.deepEqual(ITEMS.filter(comingSoon).map((i) => i.id), ['bg-fjord']);
+  assert.equal(isUnlocked(itemById('bg-fjord'), { owned: [], coins: 9999 }), false);
+});

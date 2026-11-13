@@ -52,15 +52,20 @@ const shots = await page.evaluate(async ({ season }) => {
   const bay = { top: 200, bottom: 470 };
   // the pod: the whole trip, seen from far enough to follow it
   film('pod', { top: 0, bottom: 700 }, [110, 215, 300, 500], [60, 150, 240, 330, 420, 520, 620, 720], 1, (a) => a.show('pod'));
-  film('pod-close', bay, [130, 225, 220, 110], [250, 256, 262, 268, 274, 280, 286, 292], 2, (a) => a.show('pod'));
+  film('pod-close', bay, [120, 225, 240, 200], [300, 330, 360, 390, 420, 450, 480, 510], 2, (a) => a.show('pod'));
   // the whale under the puffin
   const dice = Math.random;
   film('whale', bay, [150, 262, 150, 90], [16, 24, 30, 33, 36, 40, 46, 56, 70, 84, 98, 106], 2, (a) => { const p = a.state.puffins[0]; p.x = p.tx = 232; p.y = p.ty = 330; a.state.puffins[1].y = a.state.puffins[1].ty = 430; a.show('whale'); }, (a, f) => { Math.random = f < 8 ? () => 0.3 : dice; });
   // the otters, one tapped
   film('otters', bay, [270, 365, 80, 50], [30, 34, 38, 50, 52, 54, 57, 60, 64, 72, 78, 82, 86, 100, 126, 130, 134, 140], 4, (a) => a.show('otters'), (a, f) => { if (f === 50) a.poke(300, 384); });
   // the moose and the bear
-  film('moose', { top: 100, bottom: 370 }, [150, 190, 250, 70], [20, 60, 120, 200, 250, 270, 300, 330], 2, (a) => a.show('moose'));
-  film('bear', { top: 100, bottom: 370 }, [250, 195, 150, 60], [20, 60, 110, 125, 150, 170, 200, 230], 3, (a) => a.show('bear'));
+  film('moose', { top: 100, bottom: 370 }, [150, 170, 262, 90], [4, 20, 40, 60, 90, 150, 250, 400, 880, 900, 920, 940], 2, (a) => { a.show('moose'); a.state.land.stay = 600; });
+  film('bear', { top: 100, bottom: 370 }, [270, 170, 142, 86], [4, 24, 44, 64, 110, 125, 150, 200], 3, (a) => a.show('bear'));
+  // hidden behind the spruces, and stepping out
+  film('door', { top: 100, bottom: 370 }, [340, 172, 80, 66], [1, 6, 12, 20, 30, 42], 5, (a) => a.show('moose'));
+  film('door-bear', { top: 100, bottom: 370 }, [340, 172, 80, 66], [1, 8, 16, 26, 40, 60], 5, (a) => a.show('bear'));
+  // the pod through the channel
+  film('channel', { top: 430, bottom: 700 }, [330, 440, 118, 260], [40, 70, 100, 130, 160, 190, 220, 250], 2, (a) => a.show('pod'));
   // the waterfall
   film('falls', { top: 250, bottom: 520 }, [360, 290, 80, 160], [1, 2, 3, 4], 3, () => {});
   // the routes and the open water, to check the layout hints

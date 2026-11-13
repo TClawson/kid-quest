@@ -226,8 +226,9 @@ export function startLighthouse(canvas, host, se = null) {
         const d = Math.hypot(x - (CX + side * 4), (y - LANTERN.cy) * 0.8);
         dot(x, y, LAMP[flash && toUs ? 3 : d < 2 ? 3 : d < 4 ? 2 : d < 6 ? 1 : 0]);
       }
-      // the beam: a wedge of light out to one side, long when it points sideways
-      const len = Math.abs(side) * 54;
+      // the beam: a wedge of light out to one side, long when it points sideways (the show draws
+      // its own, right across the bay)
+      const len = show ? 0 : Math.abs(side) * 54;
       const dir = side > 0 ? 1 : -1;
       for (let i = 7; i < len; i += 1) {
         const hw = 1.5 + i * 0.16;
@@ -235,7 +236,7 @@ export function startLighthouse(canvas, host, se = null) {
         ctx.fillStyle = `rgba(255, 240, 170, ${a.toFixed(3)})`;
         ctx.fillRect(CX + dir * i - (dir < 0 ? 1 : 0), Math.round(LANTERN.cy - hw), 1, Math.round(hw * 2));
       }
-      if (flash && toUs) {
+      if (flash && toUs && !show) {
         // a star of light when it swings past
         ctx.fillStyle = 'rgba(255, 250, 210, 0.85)';
         ctx.fillRect(CX - 10, LANTERN.cy, 20, 1); ctx.fillRect(CX, LANTERN.cy - 9, 1, 18);

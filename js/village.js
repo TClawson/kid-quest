@@ -467,6 +467,7 @@ function startLife(section, L, data, people, cam) {
     aw: L.W, ah: L.H, scale: 1, z: 1, life, wall: 20, falls,
     layout: L, // the fjord's swimmers and waders read the bay, the docks and the shore from it
     season: seasonNow(data.today).season,
+    progress: seasonNow(data.today).progress,
     landmark: lm || null, // the lighthouse's rock, when it is there: the swimmers keep off it
     goal: hints.goal || L.chest,
     knightPost: hints.knightPost || { x: L.W - 50, y: L.H / 2, side: 1 },

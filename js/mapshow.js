@@ -625,22 +625,51 @@ export const SHOWS = {
 // The Alaskan Fjord: night falls, the lighthouse's beam sweeps round, the northern lights
 // ripple across the sky in three curtains, and the orcas leap out of the bay one after another.
 // The last one, the big bull, jumps right across with the buddy on its back.
+// Each curtain of light: how far down the view its foot hangs, how tall its rays stand, and its
+// colours from the foot up (green at the bottom, as the real ones are, through to violet and rose).
 const AURORA = [
-  [0.06, [70, 255, 170], [60, 190, 255]],
-  [0.2, [130, 255, 140], [190, 120, 255]],
-  [0.34, [70, 240, 205], [255, 120, 205]],
+  [0.04, 50, [[110, 255, 140], [60, 235, 255], [150, 120, 255], [255, 90, 220]]],
+  [0.15, 60, [[255, 110, 210], [205, 110, 255], [110, 150, 255], [80, 240, 255]]],
+  [0.27, 54, [[150, 255, 110], [255, 240, 120], [255, 150, 110], [255, 90, 170]]],
+  [0.39, 44, [[80, 255, 220], [110, 170, 255], [190, 110, 255], [255, 110, 200]]],
+];
+/** The shape of a picture in one pale colour: drawn a pixel out from it, it is an edge of light. */
+function lit(img, key, scale) {
+  const k = `${key}|${scale}|lit`;
+  if (scaled.has(k)) return scaled.get(k);
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0);
+  x.globalCompositeOperation = 'source-in';
+  x.fillStyle = '#a8ecf0';
+  x.fillRect(0, 0, c.width, c.height);
+  scaled.set(k, c);
+  return c;
+}
+const mix = (stops, u) => {
+  const k = Math.max(0, Math.min(0.9999, u)) * (stops.length - 1); const i = Math.floor(k); const f = k - i;
+  return stops[i].map((v, j) => Math.round(v + (stops[i + 1][j] - v) * f));
+};
+// the orcas of the show: [starts, takes, from x, to x (off the lighthouse), where on the water,
+// how high, size, the buddy rides it]
+const FJORD_LEAPS = [
+  [2.2, 1.1, -108, -58, -4, 34, 1], [3.0, 1.1, 46, 90, 2, 30, 1], [3.9, 1.0, -80, -40, 12, 22, 1], [4.6, 1.2, 92, 44, 8, 36, 1],
+  [5.6, 1.9, -104, 84, 20, 60, 1.5, true],
+  [6.9, 1.0, -72, -30, 6, 26, 1], [7.1, 1.0, 36, 80, 12, 28, 1],
 ];
 SHOWS['bg-fjord'] = {
   dur: 9.5,
-  sfx: [[0, 'whoosh'], [1.1, 'sparkle'], [2.3, 'splash'], [3.0, 'whale'], [3.5, 'splash'], [4.5, 'splash'], [5.6, 'whee'], [5.7, 'splash'], [7.4, 'splash'], [7.9, 'sparkle']],
+  sfx: [[0, 'whoosh'], [1.1, 'sparkle'], [2.2, 'splash'], [3.0, 'whale'], [3.3, 'splash'], [4.1, 'splash'], [4.9, 'splash'], [5.6, 'whee'], [5.7, 'splash'], [7.4, 'splash'], [7.9, 'sparkle']],
   init(S) {
     S.stars = Array.from({ length: 46 }, () => [Math.random(), Math.random(), Math.random()]);
     S.wet = {};
   },
   step(ctx, t, V, S, frame) {
+    const spot = V.now(); // the lighthouse, wherever the view has it now
     const night = span(t, 0, 1.2) - span(t, 8, 9.2);
-    const glow = span(t, 0.9, 2.4) - span(t, 7.6, 8.9);
-    ctx.fillStyle = `rgba(8, 14, 44, ${(0.64 * night).toFixed(3)})`;
+    const glow = span(t, 0.9, 2.2) - span(t, 7.7, 8.9);
+    ctx.fillStyle = `rgba(6, 10, 40, ${(0.68 * night).toFixed(3)})`;
     ctx.fillRect(0, V.top, V.aw, V.h);
     for (const [sx, sy, ph] of S.stars) {
       const tw = Math.sin(t * 3 + ph * 20);
@@ -648,83 +677,151 @@ SHOWS['bg-fjord'] = {
       ctx.fillStyle = `rgba(255, 255, 255, ${(night * (0.45 + 0.5 * tw)).toFixed(3)})`;
       ctx.fillRect(Math.round(sx * V.aw), Math.round(V.top + sy * V.h * 0.5), 1, 1);
     }
-    // the northern lights: each curtain is columns of light, bright along its foot and fading
-    // upward into another colour, its rays flickering as it sways
-    AURORA.forEach(([at, lo, hi], b) => {
+    // the northern lights: each curtain is columns of light that add up where they cross, bright
+    // along its foot and climbing through its colours, its rays flickering as it sways
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    AURORA.forEach(([at, height, stops], b) => {
       for (let x = 0; x < V.aw; x += 2) {
-        const sway = Math.sin(x / 46 + t * 0.9 + b * 2.1) * 10 + Math.sin(x / 19 - t * 1.4 + b) * 4;
-        const foot = V.top + V.h * at + 26 + sway;
-        const tall = (24 + 12 * Math.sin(x / 27 + t * 1.8 + b * 1.3)) * (0.5 + 0.5 * glow);
-        const ray = glow * (0.5 + 0.5 * Math.sin(x / 7 + t * 5 + b * 3) * Math.sin(x / 31 - t * 2));
-        if (ray <= 0.02) continue;
-        for (let k = 0; k < 6; k += 1) {
-          const u = k / 5;
-          const c = lo.map((v, i) => Math.round(v + (hi[i] - v) * u));
-          ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${(ray * (1 - u * 0.85) * 0.62).toFixed(3)})`;
-          ctx.fillRect(x, Math.round(foot - (tall * (k + 1)) / 6), 2, Math.ceil(tall / 6));
+        const sway = Math.sin(x / 46 + t * 0.9 + b * 2.1) * 11 + Math.sin(x / 19 - t * 1.4 + b) * 4;
+        const foot = V.top + V.h * at + 30 + sway;
+        const tall = height * (0.7 + 0.3 * Math.sin(x / 27 + t * 1.8 + b * 1.3)) * (0.4 + 0.6 * glow);
+        // slow swells of brightness along the curtain, quick flickers in its rays
+        const swell = 0.62 + 0.38 * Math.sin(x / 61 - t * 0.7 + b * 1.9);
+        const ray = glow * swell * (0.72 + 0.28 * Math.sin(x / 5 + t * 6 + b * 3));
+        if (ray <= 0.03) continue;
+        // the colours drift along the curtain too, so no two stretches match
+        const drift = 0.16 * Math.sin(x / 83 + t * 0.5 + b * 2.7);
+        const onTower = Math.abs(x + 1 - spot.x) < 13;
+        const N = 12;
+        for (let k = 0; k < N; k += 1) {
+          const u = k / (N - 1);
+          const c = mix(stops, u * 0.9 + drift + 0.05);
+          // each step ends where the next begins, so no line shows between them
+          const y1 = Math.round(foot - (tall * k) / N); const y0 = Math.round(foot - (tall * (k + 1)) / N);
+          if (y1 <= y0) continue;
+          // the lighthouse stands in front of the lights: they are faint where they cross its tower
+          const a = ray * (1 - u * 0.86) * 0.56 * (onTower && y1 > spot.y - 56 && y0 < spot.y + 50 ? 0.16 : 1);
+          ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a.toFixed(3)})`;
+          ctx.fillRect(x, y0, 2, y1 - y0);
         }
-        ctx.fillStyle = `rgba(230, 255, 236, ${(ray * 0.7).toFixed(3)})`;
+        const dim = onTower && foot > spot.y - 56 && foot < spot.y + 50 ? 0.16 : 1;
+        ctx.fillStyle = `rgba(225, 255, 230, ${(ray * 0.55 * dim).toFixed(3)})`;
         ctx.fillRect(x, Math.round(foot), 2, 1);
+        // a soft glow hanging under the foot
+        const c0 = stops[0];
+        ctx.fillStyle = `rgba(${c0[0]}, ${c0[1]}, ${c0[2]}, ${(ray * 0.13 * dim).toFixed(3)})`;
+        ctx.fillRect(x, Math.round(foot) + 1, 2, 5);
       }
     });
+    ctx.restore();
     // the lights shimmer on the water round the lighthouse
-    const sea = Math.min(V.bottom - 30, V.spot.y + 74);
-    for (let i = 0; i < 26; i += 1) {
+    const sea = Math.min(V.bottom - 30, spot.y + 74);
+    for (let i = 0; i < 40; i += 1) {
       const g = Math.floor((frame + i * 3) / 5);
       const h = Math.sin(i * 127.1 + g * 311.7) * 43758.5453; const r = h - Math.floor(h);
       const h2 = Math.sin(i * 269.5 + g * 183.3) * 43758.5453; const r2 = h2 - Math.floor(h2);
-      const c = AURORA[i % 3][1];
-      ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${(glow * 0.4).toFixed(3)})`;
-      ctx.fillRect(Math.round(V.spot.x - 130 + r * 260), Math.round(sea - 70 + r2 * 96), 3 + (i % 3), 1);
+      const c = AURORA[i % AURORA.length][2][i % 4];
+      ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${(glow * 0.6).toFixed(3)})`;
+      ctx.fillRect(Math.round(spot.x - 150 + r * 300), Math.round(sea - 76 + r2 * 108), 3 + (i % 3), 1);
     }
-    // the lighthouse's beam, sweeping right round
-    const lamp = { x: V.spot.x, y: V.spot.y - 38 };
-    const turn = t * 2.3;
+    // the lighthouse's beam: two bright arms that sweep right round the lamp like the hands of a
+    // clock, out over the bay (we look down on it a little, so the ring they sweep is flattened)
+    const lamp = { x: spot.x, y: spot.y - 38 };
+    const turn = t * 1.9;
+    const REACH = 190;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
     for (const side of [0, Math.PI]) {
       const a = turn + side;
-      const reach = V.aw * 0.9 * Math.abs(Math.cos(a)) + 8;
-      const dir = Math.cos(a) > 0 ? 1 : -1;
-      ctx.fillStyle = `rgba(255, 242, 180, ${(0.2 * night).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.moveTo(lamp.x + dir * 6, lamp.y - 2);
-      ctx.lineTo(lamp.x + dir * reach, lamp.y - 3 - reach * 0.1);
-      ctx.lineTo(lamp.x + dir * reach, lamp.y + 3 + reach * 0.1);
-      ctx.lineTo(lamp.x + dir * 6, lamp.y + 2);
-      ctx.fill();
+      const ex = lamp.x + Math.cos(a) * REACH; const ey = lamp.y + Math.sin(a) * REACH * 0.62;
+      const len = Math.hypot(ex - lamp.x, ey - lamp.y) || 1;
+      const nx = -(ey - lamp.y) / len; const ny = (ex - lamp.x) / len;
+      // a wide soft arm, and a narrow bright one inside it
+      for (const [wide, shine] of [[len * 0.15, 0.4], [len * 0.055, 0.5]]) {
+        const grad = ctx.createLinearGradient(lamp.x, lamp.y, ex, ey);
+        grad.addColorStop(0, `rgba(255, 246, 190, ${(night * shine).toFixed(3)})`);
+        grad.addColorStop(0.6, `rgba(255, 240, 170, ${(night * shine * 0.5).toFixed(3)})`);
+        grad.addColorStop(1, 'rgba(255, 236, 160, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(lamp.x + nx * 1.5, lamp.y + ny * 1.5);
+        ctx.lineTo(ex + nx * wide, ey + ny * wide);
+        ctx.lineTo(ex - nx * wide, ey - ny * wide);
+        ctx.lineTo(lamp.x - nx * 1.5, lamp.y - ny * 1.5);
+        ctx.fill();
+      }
     }
-    // the orcas: [starts, takes, from x, to x (off the lighthouse), where on the water, how high, size]
-    const pod = [[2.3, 1.25, -128, -58, -6, 56, 2], [3.5, 1.2, 96, 52, 4, 48, 2], [4.5, 1.0, -96, -50, 14, 34, 1], [5.7, 1.8, -118, 104, 22, 76, 2]];
-    pod.forEach(([t0, dur, fx, tx, dy, high, size], i) => {
+    const halo = ctx.createRadialGradient(lamp.x, lamp.y, 1, lamp.x, lamp.y, 18);
+    halo.addColorStop(0, `rgba(255, 246, 200, ${(night * 0.9).toFixed(3)})`);
+    halo.addColorStop(0.4, `rgba(255, 240, 180, ${(night * 0.4).toFixed(3)})`);
+    halo.addColorStop(1, 'rgba(255, 244, 190, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(lamp.x - 18, lamp.y - 18, 36, 36);
+    ctx.restore();
+    // the orcas: each one's body follows the curve of its own leap, nose first out of the water
+    // and nose first back in, so it bends over the top
+    FJORD_LEAPS.forEach(([t0, dur, fx, tx, dy, high, size, rides], i) => {
       const u = (t - t0) / dur;
       const base = sea + dy;
-      const x0 = Math.max(24, Math.min(V.aw - 24, V.spot.x + fx)); const x1 = Math.max(24, Math.min(V.aw - 24, V.spot.x + tx));
+      const x0 = Math.max(24, Math.min(V.aw - 24, spot.x + fx)); const x1 = Math.max(24, Math.min(V.aw - 24, spot.x + tx));
       const wet = (key, x) => {
         if (S.wet[key]) return;
         S.wet[key] = true;
-        for (let k = 0; k < 26 * size; k += 1) S.parts.add({ x: x + rand(-8, 8) * size, y: base, vx: rand(-1.6, 1.6), vy: rand(-3.6, -0.8), g: 0.22, max: Math.floor(rand(14, 26)), c: k % 3 ? '#dff4fa' : '#ffffff' });
+        for (let k = 0; k < 18 * size; k += 1) S.parts.add({ x: x + rand(-6, 6) * size, y: base, vx: rand(-1.4, 1.4), vy: rand(-3.2, -0.8), g: 0.22, max: Math.floor(rand(12, 22)), c: k % 3 ? '#dff4fa' : '#ffffff' });
       };
-      if (u >= 0) wet(`out${i}`, x0);
-      if (u >= 0.92) wet(`in${i}`, x1);
-      if (u < 0 || u > 1) return;
-      const x = x0 + (x1 - x0) * u;
-      const y = base - Math.sin(u * Math.PI) * high;
-      const right = x1 > x0;
-      const img = big('orca-leap', ORCA_LEAP, FJORD_PAL.orca, size);
-      // nose up on the way out, level at the top, nose down on the way in
-      const tilt = Math.atan2(-Math.cos(u * Math.PI) * Math.PI * high, Math.abs(x1 - x0));
+      if (u >= -0.05) wet(`out${i}`, x0);
+      if (u >= 0.9) wet(`in${i}`, x1);
+      if (u < -0.3 || u > 1.3) return;
+      const at = (v) => ({ x: x0 + (x1 - x0) * v, y: base - Math.sin(v * Math.PI) * high });
+      const run = Math.abs(x1 - x0);
+      const img = big('orca-leap', ORCA_LEAP, FJORD_PAL.orca, size === 1 ? 1 : 3);
+      const rim = lit(img, 'orca-leap', size === 1 ? 1 : 3);
+      const k = img.width / ORCA_LEAP[0].length; // the picture's pixels per art pixel
+      const W = ORCA_LEAP[0].length * size; const H = ORCA_LEAP.length * size;
       ctx.save();
-      ctx.beginPath(); ctx.rect(0, V.top, V.aw, base + 3 - V.top); ctx.clip(); // it comes out of the water
-      ctx.translate(Math.round(x), Math.round(y));
-      if (!right) ctx.scale(-1, 1);
-      ctx.rotate(tilt);
-      ctx.drawImage(img, -Math.round(img.width / 2), -Math.round(img.height / 2));
-      // the buddy rides the last one, holding on behind its fin
-      if (i === 3) buddyAt(ctx, S, -22, -img.height / 2 - 13);
+      ctx.beginPath(); ctx.rect(0, V.top, V.aw, base + 2 - V.top); ctx.clip(); // it comes out of the water
+      const STRIP = 2; // art pixels in each slice of the body
+      let saddle = null;
+      const slices = [];
+      for (let c = 0; c < ORCA_LEAP[0].length; c += STRIP) {
+        // how far along the body this slice is (the nose leads), and so where on the leap it is now
+        const along = (c + STRIP / 2 - ORCA_LEAP[0].length / 2) * size;
+        const rise = Math.PI * high * Math.cos(Math.max(0, Math.min(1, u)) * Math.PI);
+        const v = u + along / Math.hypot(run, rise);
+        const sl = { c, p: at(v), tilt: Math.atan2(-Math.PI * high * Math.cos(v * Math.PI), run) };
+        slices.push(sl);
+        if (rides && !saddle && c >= 18) saddle = sl;
+      }
+      const X = -STRIP * size / 2 - 0.5; const wide = STRIP * size + 1;
+      const each = (paint) => slices.forEach((sl) => {
+        ctx.save();
+        ctx.translate(sl.p.x, sl.p.y);
+        if (x1 < x0) ctx.scale(-1, 1);
+        ctx.rotate(sl.tilt);
+        paint(sl);
+        ctx.restore();
+      });
+      // an edge of light round it first, or its black back would be lost against the night
+      ctx.globalAlpha = night * 0.8;
+      each((sl) => { for (const [dx, dy] of [[0, -1], [0, 1]]) ctx.drawImage(rim, sl.c * k, 0, STRIP * k, img.height, X + dx, -H / 2 + dy, wide, H); });
+      ctx.globalAlpha = 1;
+      each((sl) => ctx.drawImage(img, sl.c * k, 0, STRIP * k, img.height, X, -H / 2, wide, H));
+      // the buddy rides the big one, holding on behind its fin
+      if (saddle) {
+        ctx.save();
+        ctx.translate(saddle.p.x, saddle.p.y);
+        if (x1 < x0) ctx.scale(-1, 1);
+        ctx.rotate(saddle.tilt);
+        buddyAt(ctx, S, -16, -H / 2 - 9, 16);
+        ctx.restore();
+      }
       ctx.restore();
-      if (frame % 2 === 0) S.parts.add({ x: x - (right ? 1 : -1) * 18 * size, y: y + 4, vy: 0.6, g: 0.1, max: 12, c: '#cfeaf2' });
+      const mid = at(Math.max(0, Math.min(1, u)));
+      if (u > 0 && u < 1 && frame % 2 === 0) S.parts.add({ x: mid.x - (x1 > x0 ? 1 : -1) * W * 0.4, y: mid.y + 3, vy: 0.6, g: 0.1, max: 12, c: '#cfeaf2' });
     });
     // a last shower of light as the night lifts
-    if (t > 7.7 && t < 8.7 && frame % 2 === 0) for (let k = 0; k < 3; k += 1) { const c = pick(AURORA)[1]; S.parts.add({ x: rand(0, V.aw), y: V.top + rand(0, V.h * 0.5), vy: 0.7, max: 18, star: true, c: `rgb(${c[0]}, ${c[1]}, ${c[2]})` }); }
+    if (t > 7.7 && t < 8.7 && frame % 2 === 0) for (let k = 0; k < 3; k += 1) { const c = pick(pick(AURORA)[2]); S.parts.add({ x: rand(0, V.aw), y: V.top + rand(0, V.h * 0.5), vy: 0.7, max: 18, star: true, c: `rgb(${c[0]}, ${c[1]}, ${c[2]})` }); }
   },
 };
 
@@ -735,10 +832,11 @@ export const showPlaying = (section) => running.has(section);
 
 /**
  * Play the show for a map theme on a painted .quest-map section.
- * opts: { buddy: Image or null, spot: { x, y } landmark center in CSS pixels in the map, onDone }.
+ * opts: { buddy: Image or null, spot: { x, y } landmark center in CSS pixels in the map, onDone,
+ * spotNow: () => the same, asked again each frame by a show that hangs on the landmark (V.now) }.
  * Returns the show (for its sfx) or null if there is none or one is playing.
  */
-export function playShow(section, theme, { buddy = null, spot = null, scale = 4, onDone } = {}) {
+export function playShow(section, theme, { buddy = null, spot = null, spotNow = null, scale = 4, onDone } = {}) {
   const def = SHOWS[theme];
   const land = section.querySelector('canvas.map-land');
   if (!def || !land || running.has(section)) return null;
@@ -763,6 +861,8 @@ export function playShow(section, theme, { buddy = null, spot = null, scale = 4,
   const V = { aw, top, bottom, h: bottom - top, mid: (top + bottom) / 2, cx: aw / 2, big: aw > 160 ? 3 : 2 };
   const sp = spot ? { x: spot.x / scale, y: spot.y / scale } : null;
   V.spot = sp && sp.y > top && sp.y < bottom ? sp : { x: aw / 2, y: bottom - 8 };
+  // where the landmark is this frame (the view may still be moving), or where it was at the start
+  V.now = () => { const q = spotNow?.(); return q && sp && V.spot === sp ? { x: q.x / scale, y: q.y / scale } : V.spot; };
   const S = { parts: new Parts(), shells: [], buddy };
   def.init?.(S, V);
   let frame = 0;

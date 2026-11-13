@@ -44,7 +44,8 @@ const BASE_ITEMS = [
   { id: 'bg-castle', slot: 'background', name: 'Castle', need: { streak: 30 } },
   { id: 'bg-volcano', slot: 'background', name: 'Volcano island', price: 300 },
   { id: 'bg-rainforest', slot: 'background', name: 'Rainforest', price: 300 },
-  { id: 'bg-fjord', slot: 'background', name: 'Alaskan Fjord', price: 500 },
+  // soon: on show in the shop but not for sale yet (its music is still being written)
+  { id: 'bg-fjord', slot: 'background', name: 'Alaskan Fjord', price: 500, soon: true },
   { id: 'bg-rainbow', slot: 'background', name: 'Rainbow land', need: { streak: 60 } },
   { id: 'bg-galaxy', slot: 'background', name: 'Golden galaxy', need: { streak: 100 } },
 
@@ -208,6 +209,9 @@ export const ITEMS = [...BASE_ITEMS, ...SPORT_ITEMS, ...FURNITURE].flatMap((item
 });
 
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
+
+/** On show in the shop, but not for sale yet. A kid who already has it keeps it. */
+export const comingSoon = (item) => item?.soon === true;
 
 export function isUnlocked(item, progress) {
   if (item.gems) return Boolean(progress.owned?.includes(item.id));

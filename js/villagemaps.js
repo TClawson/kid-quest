@@ -537,12 +537,15 @@ export const VILLAGE_MAPS = {
     // a rocky islet in the bay (the treasure map's landmark will stand on it)
     // where the sea's visitors swim (fjordlife.js): the pod comes in through the channel, once round
     // the bay and out again; where the whale comes up; the otters' rafts; the beach the moose and
-    // the bear wade along (in from the trees at `from`)
+    // the bear wade along (out from behind the spruces at its east end)
     life: {
-      pod: [[383, 716], [383, 640], [381, 560], [376, 492], [350, 440], [318, 398], [296, 340], [262, 282], [215, 254], [166, 268], [140, 322], [146, 384], [196, 404], [250, 374], [306, 384], [346, 432], [376, 492], [381, 560], [383, 640], [383, 716]],
+      pod: [[388, 732], [388, 650], [384, 600], [382, 575], [386, 540], [380, 505], [374, 478], [352, 440], [318, 398], [296, 340], [262, 282], [215, 256], [172, 270], [158, 322], [160, 372], [188, 398], [246, 362], [304, 366], [346, 432], [374, 478], [380, 505], [386, 540], [382, 575], [384, 600], [388, 650], [388, 732]],
       whale: [[220, 258], [196, 330], [312, 322], [176, 436]],
       otters: [[[232, 262], [262, 272]], [[318, 376], [326, 392]], [[366, 548], [370, 562]]],
-      shore: { from: 384, moose: 196, bear: 306 },
+      // door: where the moose and the bear stand hidden (middle of the feet) behind the spruces of
+      // cover ([foot x, foot y, size, variant], painted on the land too); they wade to moose / bear
+      shore: { door: [388, 223], cover: [[368, 229, 'xl', 0], [379, 230, 'xl', 1], [390, 229, 'xl', 2], [400, 227, 'xl', 0], [373, 225, 'xl', 2], [385, 226, 'xl', 0], [395, 225, 'xl', 1]], moose: 196, bear: 306 },
+      channel: 478, // south of here the water is narrow: the pod swims in single file
     },
     islets: [{ x: 262, y: 404, rx: 20, ry: 9 }],
     paths: [

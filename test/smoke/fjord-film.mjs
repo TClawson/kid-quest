@@ -1,6 +1,6 @@
-// Films the Alaskan Fjord in the real app on a tablet: the bay's visitors, the moose and the bear,
+// Films the Alaskan Fjord in the real app on a tablet: the bay's visitors, the moose, the bear,
 // and the lighthouse's northern lights show. Needs ffmpeg to cut the clips.
-// Run: node test/smoke/fjord-film.mjs <outDir> [bay|shore|show ...]
+// Run: node test/smoke/fjord-film.mjs <outDir> [bay|moose|bear|show ...]
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -58,7 +58,10 @@ async function film(name, act) {
   console.log(name, `${(cut.to - cut.from).toFixed(1)} s`, `${Math.round(fs.statSync(mp4).size / 1024)} KB`);
 }
 
-// the bay from the wharf: otters (one tapped), the pod swimming through, the whale under a puffin
+// waits until the map's life says so (or gives up after `max` seconds)
+const until = (page, test, max = 60) => page.waitForFunction(`(() => { const s = document.querySelector('.village').mapLife.state; return ${test}; })()`, null, { timeout: max * 1000, polling: 200 }).catch(() => console.log('gave up waiting for', test));
+
+// the bay from the wharf: otters (one tapped), the pod swimming through and out again, then the whale under a puffin
 await film('bay', async (page, t) => {
   await t.walk(294, 464);
   await wait(page, 14);
@@ -68,31 +71,35 @@ await film('bay', async (page, t) => {
   await wait(page, 5);
   const otter = await page.evaluate(() => { const o = document.querySelector('.village').mapLife.state.otters.members[0]; return [o.x + 6, o.y - 3]; });
   const p = await t.at(otter[0], otter[1]);
-  console.log('otter at', otter.join(','));
   await page.mouse.click(p.x, p.y);
-  await wait(page, 18);
+  await until(page, '!s.pod', 70);
+  await wait(page, 1);
   // a puffin sits where the whale is about to come up
   await page.evaluate(() => {
     const life = document.querySelector('.village').mapLife; const s = life.state;
     const puffin = s.puffins[0]; puffin.x = puffin.tx = 186; puffin.y = puffin.ty = 336;
     const dice = Math.random; Math.random = () => 0.3;
     life.show('whale');
+    s.whale.left = 1;
     setTimeout(() => { Math.random = dice; }, 500);
   });
-  await wait(page, 13);
+  await until(page, '!s.whale', 40);
+  await wait(page, 1.5);
 });
 
-// the north shore from home: the moose, then the bear
-await film('shore', async (page, t) => {
-  await t.walk(250, 150);
-  await wait(page, 4);
-  t.mark();
-  await t.life('moose');
-  await wait(page, 25);
-  await page.evaluate(() => { document.querySelector('.village').mapLife.state.land = null; });
-  await t.life('bear');
-  await wait(page, 19);
-});
+// the north shore from home: a whole visit, out from the spruces and back behind them (shorter stays than in the game)
+for (const kind of ['moose', 'bear']) {
+  await film(kind, async (page, t) => {
+    await t.walk(290, 150);
+    await wait(page, 4);
+    t.mark();
+    await wait(page, 1);
+    await t.life(kind);
+    await page.evaluate(() => { const a = document.querySelector('.village').mapLife.state.land; a.stay = Math.round(a.stay / 4); });
+    await until(page, '!s.land', 90);
+    await wait(page, 1.5);
+  });
+}
 
 // the lighthouse wakes, and its show
 await film('show', async (page, t) => {

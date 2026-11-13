@@ -584,6 +584,20 @@ function spruceAt(px, x, y, size, se, v = 0) {
 /** The spruce as a village prop (see villageprops.js PROPS): p.x, p.y its top left, 21 x 40. */
 export function spruceF(px, p, se = fjordSeason()) { spruceAt(px, p.x + 10, p.y + 39, p.s || 'l', se, (p.x + p.y) % 3); }
 
+/**
+ * Spruces on their own, with no ground shadow, for drawing over an animal that walks behind them:
+ * trees is [[foot x, foot y, size, variant]], and the cells come back as [x, y, color] on the map.
+ */
+export function spruceCover(trees, se = fjordSeason()) {
+  const out = [];
+  for (const [x, y, size, v = 0] of [...trees].sort((a, b) => a[1] - b[1])) {
+    const [w, h] = SPRUCE_SIZES[size] || SPRUCE_SIZES.l;
+    const X = Math.round(x - (w - 1) / 2); const Y = y - h + 1;
+    spruceCells(w, h, v % 3, se.deep).forEach(([cx, cy, c]) => out.push([X + cx, Y + cy, c]));
+  }
+  return out;
+}
+
 /** The forest wall along the edges of the land (not where the mountains or the water are). */
 function forestF(L, se, seed, open) {
   const { W, H } = L;
@@ -1453,7 +1467,8 @@ export function paintFjord(canvas, L, opts = {}, lib = {}) {
 
   // the peaks first (they stand behind everything at the water's edge), with the forest wall
   const back = [
-    ...forestF(L, se, seed + 12, (x, y) => !inPeak(x, y - 4, 6) && D(x, y) < -8 && D(x, y - 12) < -4 && !inCreek(x, y, 7) && !onDeck(x, y, 6)),
+    // (a tree whose foot is past the bottom edge is judged by the last row: none stand in the channel's mouth)
+    ...forestF(L, se, seed + 12, (x, y) => !inPeak(x, y - 4, 6) && D(x, Math.min(y, H - 1)) < -8 && D(x, Math.min(y, H - 1) - 12) < -4 && !inCreek(x, y, 7) && !onDeck(x, y, 6)),
     ...peaks.map((pk) => ({ y: pk.base, draw: () => peakF(out, pk, se, seed + 20 + (pk.seed || 0) * 7, wetAt, W, H) })),
   ].sort((a, b) => a.y - b.y);
   back.forEach((t) => t.draw(px));
@@ -1474,6 +1489,8 @@ export function paintFjord(canvas, L, opts = {}, lib = {}) {
     { y: home.y + home.h, draw: () => cabinF(px, home.x, home.y, home.w, home.h, { home: true, roof: opts.homeRoof || '#e03131', door: opts.homeRoof || '#e03131', seed: 11 }, se) },
     ...L.houses.map((hs, i) => ({ y: hs.y + hs.h, draw: () => cabinF(px, hs.x, hs.y, hs.w, hs.h, { roof: hs.roof, wall: hs.wall, sign: hs.sign, ...looks[i % looks.length] }, se) })),
     ...L.props.filter((p) => !flat(p)).map((p) => ({ y: baseOf(p), draw: () => draw(p) })),
+    // the spruce stand the moose and the bear come out from behind (fjordlife.js draws it again over them)
+    ...(L.life?.shore?.cover || []).map(([x, y, size, v]) => ({ y, draw: () => spruceAt(px, x, y, size, se, v) })),
   ].sort((a, b) => a.y - b.y);
   stand.forEach((t) => t.draw());
 

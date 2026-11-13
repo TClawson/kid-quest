@@ -8,7 +8,7 @@
 
 import { draw } from './maplife.js';
 import { sounds } from './fx.js';
-import { fjordFalls } from './fjordart.js';
+import { fjordFalls, fjordSeason, spruceCover } from './fjordart.js';
 
 function sprite(rows, outline = true) {
   const w = Math.max(...rows.map((r) => r.length));
@@ -575,7 +575,9 @@ export function fjordLife(m) {
       if (o.out) continue;
       any = true;
       const at = podPath.at(d);
-      o.x = at.x - at.dy * o.off; o.y = at.y + at.dx * o.off;
+      // side by side in the bay, in single file where the channel is narrow
+      const off = o.off * Math.max(0, Math.min(1, ((hints.channel ?? Infinity) - at.y) / 36));
+      o.x = at.x - at.dy * off; o.y = at.y + at.dx * off;
       if (Math.abs(at.dx) > 0.4) o.dir = at.dx > 0 ? 1 : -1;
       // a breath: up through the surface fin first, a blow, a moment in the air, and under again
       const c = (s.f + o.ph) % 64;
@@ -690,15 +692,41 @@ export function fjordLife(m) {
     moose: { stand: MOOSE, step: MOOSE_STEP, pal: P.moose, w: MOOSE[0].length, wade: 9, sink: 5, speed: 0.8 },
     bear: { stand: GRIZZLY, step: GRIZZLY_STEP, pal: P.bear, w: GRIZZLY[0].length, wade: 7, sink: 3, speed: 0.7 },
   };
+  // They come out from behind a stand of spruces at the end of the beach (the door: the middle of
+  // their feet when they are hidden) and go back behind it to leave. They never fade in or out.
+  const sh = hints.shore || {};
+  const door = sh.door || [m.aw - 60, shoreY(m.aw - 60) - 6];
+  const DOOR_RUN = 44; // how far from the door they are down at the water's edge
+  /** Where its feet are when its middle is at cx, and how far into the water it is (0 on the grass .. 1 wading). */
+  const landAt = (cx, k) => {
+    const wadeY = winter() ? shoreY(cx) - 4 : shoreY(cx) + k.wade;
+    const u = Math.max(0, Math.min(1, (cx - (door[0] - DOOR_RUN)) / DOOR_RUN));
+    const e = u * u * (3 - 2 * u);
+    return { y: wadeY + (door[1] - wadeY) * e, wet: winter() ? 0 : 1 - e };
+  };
+  let cover = null;
+  /** The spruces of the door, painted again to go over an animal standing behind them. */
+  const coverArt = () => {
+    if (cover || !sh.cover?.length || typeof document === 'undefined') return cover;
+    const cells = spruceCover(sh.cover, fjordSeason(m.season, m.progress));
+    const xs = cells.map((c) => c[0]); const ys = cells.map((c) => c[1]);
+    const x0 = Math.min(...xs); const y0 = Math.min(...ys);
+    const c = document.createElement('canvas');
+    c.width = Math.max(...xs) - x0 + 1; c.height = Math.max(...ys) - y0 + 1;
+    const g = c.getContext('2d');
+    for (const [x, y, col] of cells) { g.fillStyle = col; g.fillRect(x - x0, y - y0, 1, 1); }
+    cover = { c, x: x0, y: y0 };
+    return cover;
+  };
   const startLand = (kind) => {
-    const sh = hints.shore || { from: m.aw - 60, moose: 190, bear: mouth.x + 4 };
-    s.land = { kind, x: sh.from, from: sh.from, tx: sh[kind], state: 'in', t: 0, fade: 0, dir: -1, catches: 0, biting: 0, look: 0, stay: Math.round(FPS * rand(35, 55)), nextLeap: 20 };
+    const k = LAND[kind];
+    s.land = { kind, x: door[0] - k.w / 2, tx: sh[kind] ?? (kind === 'bear' ? mouth.x + 4 : 190), state: 'in', t: 0, dir: -1, catches: 0, biting: 0, look: 0, stay: Math.round(FPS * rand(35, 55)), nextLeap: 20 };
   };
   const stepLand = () => {
     const a = s.land; const k = LAND[a.kind];
     a.t += 1;
     if (a.state === 'in') {
-      a.x -= k.speed; a.fade = Math.min(1, a.fade + 1 / 12);
+      a.x -= k.speed;
       if (a.x <= a.tx) { a.x = a.tx; a.state = 'stay'; a.t = 0; }
     } else if (a.state === 'stay') {
       if (a.look) a.look -= 1;
@@ -714,8 +742,8 @@ export function fjordLife(m) {
       if (a.t > a.stay || a.catches >= 3) { if (!a.biting) { a.state = 'out'; a.dir = 1; a.t = 0; } }
     } else {
       a.x += k.speed;
-      if (a.x > a.from - 14) a.fade = Math.max(0, a.fade - 1 / 12);
-      if (a.x >= a.from) { s.land = null; s.nextLand = s.f + FPS * rand(45, 90); }
+      // gone once it is right behind the spruces again
+      if (a.x + k.w / 2 >= door[0]) { s.land = null; s.nextLand = s.f + FPS * rand(45, 90); }
     }
   };
 
@@ -781,18 +809,20 @@ export function fjordLife(m) {
     let rows = walking ? k.step[(a.t >> 2) & 1] : k.stand;
     if (!walking && a.kind === 'moose' && !a.look && a.t % 56 < 26) rows = MOOSE_EATS;
     if (!walking && a.kind === 'bear' && a.biting) rows = GRIZZLY_CATCH;
-    const base = shoreY(a.x + k.w / 2);
+    const at = landAt(a.x + k.w / 2, k);
     const bob = walking && (a.t >> 2) & 1 ? 1 : 0;
-    ctx.globalAlpha = a.fade;
-    if (winter()) draw(ctx, a.x, base - 4 - rows.length + bob, rows, k.pal, a.dir > 0);
-    else afloat(ctx, rows, k.pal, a.x, base + k.wade + bob, k.sink, a.dir > 0, s.f);
-    ctx.globalAlpha = 1;
+    // on the grass and the ice it stands on its feet; in the bay the water hides its legs
+    if (at.wet < 0.5) draw(ctx, Math.round(a.x), Math.round(at.y) - rows.length + bob, rows, k.pal, a.dir > 0);
+    else afloat(ctx, rows, k.pal, a.x, at.y + bob, k.sink * (at.wet - 0.5) * 2, a.dir > 0, s.f);
+    // the spruces it walks behind
+    const cv = coverArt();
+    if (cv && a.x + k.w > cv.x - 2) ctx.drawImage(cv.c, cv.x, cv.y);
   };
 
   return {
     /** For the preview script: make something happen now ('pod', 'whale', 'otters', 'moose', 'bear'). */
     show(what) {
-      if (what === 'pod') { s.whale = null; startPod(); } else if (what === 'whale') { s.pod = null; startWhale(); } else if (what === 'otters') startOtters(); else startLand(what);
+      if (what === 'pod') startPod(); else if (what === 'whale') startWhale(); else if (what === 'otters') startOtters(); else startLand(what);
     },
     state: s,
     poke(x, y) {
@@ -869,7 +899,7 @@ export function fjordLife(m) {
           else afloat(ctx, PUFFIN, P.puffin, p.x + (p.state === 'shake' && p.t % 4 < 2 ? 1 : 0), p.y + (p.state === 'sit' ? bob : 0), 0, p.dir < 0, s.f);
         }]);
       }
-      if (s.land) things.push([shoreY(s.land.x + 10) + 9, () => drawLand(ctx, s.land)]);
+      if (s.land) things.push([landAt(s.land.x + LAND[s.land.kind].w / 2, LAND[s.land.kind]).y, () => drawLand(ctx, s.land)]);
       things.sort((a, b) => a[0] - b[0]).forEach(([, paint]) => paint());
       // the salmon at the creek mouth, the oysters in the air, the blow and the spray
       for (const q of s.salmon) {
