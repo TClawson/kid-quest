@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays } from '../../js/logic.js';
-import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
+import { TEST_DAY, TEST_NOW, at } from '../helpers/clock.mjs';
 import { openKid, openParents, doChore, closePops } from '../helpers/open-kid.mjs';
 
 const pinHash = (pin) => `sha256:${createHash('sha256').update(`kidquest:${pin}`).digest('hex')}`;
@@ -19,7 +19,11 @@ const log = (m) => console.log(`[${((Date.now() - T0) / 1000).toFixed(1)}s] ${m}
 
 async function device(name, { email, saved } = {}) {
   const ctx = await browser.newContext();
-  await useTestDay(ctx); // every device's clock starts at noon on the test's day (see clock.mjs)
+  // Every device's clock starts on the test's day (see clock.mjs). The emulators keep real time,
+  // and a join code is good for 30 minutes by the server's clock (firestore.rules), so a device
+  // must not be far behind it: its clock starts at noon, or at the real time once that is later
+  // (never past 23:45, so the run still can't reach the next day).
+  await ctx.clock.install({ time: new Date(Math.min(Math.max(TEST_NOW, Date.now()), at(TEST_DAY, '23:45').getTime())) });
   await ctx.addInitScript(([testEmail]) => {
     localStorage.setItem('kidquest.emulator', '1');
     if (testEmail) window.__kidQuestTestEmail = testEmail;
