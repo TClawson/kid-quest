@@ -5,10 +5,14 @@
 // page's clock at a time of that day itself (page.clock.install({ time: at(TEST_DAY, '16:30') })).
 // A script that needs the page's real clock (real timers, audio, the sync emulators) reads the
 // day from the page instead (pageDay).
-import { dateKey } from '../../js/logic.js';
+import { dateKey, addDays, freeGamesOn } from '../../js/logic.js';
 
-/** The test's day ('YYYY-MM-DD'), worked out once when the test starts. */
-export const TEST_DAY = dateKey();
+/**
+ * The test's day ('YYYY-MM-DD'), worked out once when the test starts. Never a Saturday: on
+ * Saturday the kid's page opens with the free games pop-up (saturday.mjs tests it on days of its
+ * own), which would sit over whatever a test taps first, so a Saturday run uses the day before.
+ */
+export const TEST_DAY = freeGamesOn(dateKey()) ? addDays(dateKey(), -1) : dateKey();
 
 /** A time of a day as a Date, in local time like the app's days: at('2026-11-11', '16:30'). */
 export const at = (day = TEST_DAY, time = '12:00') => new Date(`${day}T${time}:00`);
