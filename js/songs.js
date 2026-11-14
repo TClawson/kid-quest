@@ -221,6 +221,30 @@ export const SONGS = {
     fill: ['k.......', '....s...', '..h.....', '......tt'],
     drumVol: 0.6,
   },
+
+  // Alaskan Fjord: the northern lights' waltz from the map's concert piece, D major with two
+  // borrowed chords (B flat and C) that make the sky change colour
+  'bg-fjord': {
+    name: 'Northern Lights',
+    key: 'D',
+    bpm: 128,
+    beat: 6,
+    leadWave: 'pulse25',
+    leadVol: 0.28,
+    echo: 0.4,
+    lead: [
+      'F#5 - - - C#6 -', 'D6 - A5 - F#5 -', 'D5 - - - - -', 'Bb5 - - - - -',
+      'G5 - - - - -', 'B5 - - - D6 -', 'C#6 - - - - -', 'A5 - G5 - E5 -',
+      'C#6 - - - - -', 'F#5 - E5 - D5 -', 'A5 - - - - -', 'C#5 - - - - -',
+      'Bb4 - C5 - D5 -', 'C6 - B5 - G5 -', 'A5 - D5 - - -', 'D5 - - - . .',
+    ],
+    chords: ['D', 'D', 'Bb', 'Bb', 'G', 'G', 'A', 'A', 'F#m', 'F#m', 'A', 'A', 'Bb', 'C', 'D', 'D'],
+    arp: { from: 2, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.04 }, // the sparks start when the sky turns
+    bass: [[R, 2, 2.5], null, null, null, [F, 2], null],
+    drums: [['......', '......', '..h.h.'], ['k.....', '......', '..h.h.'], ['k.....', '......', '..h.h.'], ['k.....', '......', '..h.h.']],
+    fill: ['k.....', '......', '..h.o.'],
+    drumVol: 0.6,
+  },
 };
 
 // Short songs for the secret shows (see mapshow.js): five bars, about 8 seconds, played
@@ -326,5 +350,19 @@ export const SHOW_SONGS = {
     bass: [[R, 2], null, [R, 2], [F, 1], null, [R, 2], null, [F, 1]],
     drums: [['t..t.tt.', 'k...k...', '........'], ['t.tt.tt.', 'k..k.k..', 'h.h.h.h.']],
     fill: ['t.t.t...', 'k...k...', 'h.h.o...'],
+  },
+  // the northern lights and the leaping orcas: the lighthouse's call from the concert piece,
+  // answered by the bay, D major. The climb starts as the big orca leaps.
+  'bg-fjord': {
+    name: 'Lighthouse Call', key: 'D',
+    bpm: 132, echo: 0.4,
+    leadWave: 'pulse25', leadVol: 0.3,
+    lead: ['E5 - F#5 - B5 - A5 -', 'E5 F#5 B5 A5 E5 F#5 B5 A5', 'D6 - C6 B5 G5 - - -', 'E5 F#5 B5 A5 C#6 - E6 -', 'D6 - A5 - D6 - - -'],
+    chords: ['D', 'Bm', 'G', 'A', 'D'],
+    arp: { from: 1, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.04 },
+    bass: [[R, 2, 3.5], null, null, null, [F, 2, 3.5], null, null, null],
+    drums: [['k.......', '........', '..h...h.'], ['k...k...', '....s...', 'h.h.h.h.']],
+    fill: ['k...k...', '........', 'h.h.o...'],
+    drumVol: 0.8,
   },
 };

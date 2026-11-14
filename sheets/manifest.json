@@ -86,6 +86,27 @@
    "fingerprint": "347ba992"
   },
   {
+   "id": "bg-fjord",
+   "level": "easy",
+   "name": "Northern Lights",
+   "file": "sheets/northern-lights-easy-6dad7f.pdf",
+   "fingerprint": "6dad7fe6"
+  },
+  {
+   "id": "bg-fjord",
+   "level": "medium",
+   "name": "Northern Lights",
+   "file": "sheets/northern-lights-medium-ac1ee5.pdf",
+   "fingerprint": "ac1ee545"
+  },
+  {
+   "id": "bg-fjord",
+   "level": "hard",
+   "name": "Northern Lights",
+   "file": "sheets/northern-lights-hard-59514a.pdf",
+   "fingerprint": "59514a1e"
+  },
+  {
    "id": "bg-rainbow",
    "level": "easy",
    "name": "Candy Skip",
@@ -275,6 +296,27 @@
    "fingerprint": "c9bb5dce"
   },
   {
+   "id": "show:bg-fjord",
+   "level": "easy",
+   "name": "Lighthouse Call",
+   "file": "sheets/lighthouse-call-easy-93a638.pdf",
+   "fingerprint": "93a638c4"
+  },
+  {
+   "id": "show:bg-fjord",
+   "level": "medium",
+   "name": "Lighthouse Call",
+   "file": "sheets/lighthouse-call-medium-c36d5c.pdf",
+   "fingerprint": "c36d5c63"
+  },
+  {
+   "id": "show:bg-fjord",
+   "level": "hard",
+   "name": "Lighthouse Call",
+   "file": "sheets/lighthouse-call-hard-8132bf.pdf",
+   "fingerprint": "8132bffe"
+  },
+  {
    "id": "show:bg-rainbow",
    "level": "easy",
    "name": "Rainbow Slide",
@@ -420,6 +462,27 @@
    "name": "Forest Village/The Walk to the Oak",
    "file": "sheets/forest-village-the-walk-to-the-oak-hard-71971a.pdf",
    "fingerprint": "71971a0e"
+  },
+  {
+   "id": "long:bg-fjord",
+   "level": "easy",
+   "name": "Alaskan Fjord/Northern Lights",
+   "file": "sheets/alaskan-fjord-northern-lights-easy-6b55f8.pdf",
+   "fingerprint": "6b55f8d4"
+  },
+  {
+   "id": "long:bg-fjord",
+   "level": "medium",
+   "name": "Alaskan Fjord/Northern Lights",
+   "file": "sheets/alaskan-fjord-northern-lights-medium-1b6bcb.pdf",
+   "fingerprint": "1b6bcb13"
+  },
+  {
+   "id": "long:bg-fjord",
+   "level": "hard",
+   "name": "Alaskan Fjord/Northern Lights",
+   "file": "sheets/alaskan-fjord-northern-lights-hard-778a93.pdf",
+   "fingerprint": "778a937b"
   }
  ]
 }

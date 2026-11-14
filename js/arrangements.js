@@ -301,6 +301,37 @@ export const ARRANGEMENTS = {
       ],
     },
   },
+  // Northern Lights, D major (the dance from the concert piece "Alaskan Fjord/Northern Lights")
+  'bg-fjord': {
+    medium: {
+      rh: [
+        '!mp! f4 c\'2', 'd\'2 a2 f2', 'x2 =f_b fb & d6', 'x4 d\'=f\' & _b6',
+        'x2 d\'2 x2 & g6', 'b4 d\'2', 'x2 e\'g\' a\'g\' & c\'6', 'a2 g2 e2',
+        'c\'6', 'f2 e2 d2', 'x2 c\'e\' c\'e\' & a6', 'x4 ea & c6',
+        '_B2 =c2 d2', '=c\'2 b2 g2', 'x4 fa & a2 d4-', 'x2 a2 x2 & d6',
+      ],
+      lh: [
+        'D,2 [F,A,D]2 [F,A,D]2', 'A,,2 [F,A,D]2 [F,A,D]2', '_B,,2 [=F,_B,D]4', '!arpeggio![_B,,D,=F,]6',
+        'G,,2 [G,B,D]2 [G,B,D]2', 'D,2 [G,B,D]2 [G,B,D]2', 'A,,2 [G,CE]2 [G,CE]2', 'E,2 [G,CE]2 [G,CE]2',
+        'F,,2 [F,A,C]2 [F,A,C]2', 'C,2 [F,A,C]2 [F,A,C]2', 'A,,2 [A,CE]4', '!arpeggio![A,,C,E,]6',
+        '_B,,2 [=F,_B,D]2 [F,B,D]2', '=C,2 [G,=CE]2 [G,CE]2', 'D,2 [F,A,D]4', '!arpeggio![D,F,A,]6',
+      ],
+    },
+    hard: {
+      rh: [
+        '!mp! [Af]4 [ac\']2', '[fd\']2 [da]2 [Af]2', 'x2 =f_b d\'b & d6', 'x4 d\'/=f\'/_b\'/f\'/ & _b6',
+        'x2 g\'2 x2 & g6', '[gb]4 [bd\']2', 'x2 e\'g\' a\'g\' & c\'6', '[ea]2 [eg]2 [ce]2',
+        '[ac\']6', '[Af]2 [Ae]2 [Fd]2', 'x2 c\'e\' a\'e\' & a6', 'x4 e/a/c\'/e\'/ & c6',
+        '[=F_B]2 [F=c]2 [Fd]2', '[e=c\']2 [gb]2 [eg]2', 'x4 fa & a2 d4-', 'x2 d\'2 x2 & d6',
+      ],
+      lh: [
+        'D,,2 [F,A,D]2 [F,A,D]2', 'A,,2 [F,A,D]2 [F,A,D]2', '_B,,=F, _B,D B,2', '=F,,2 [=F,_B,D]2 [F,B,D]2',
+        'G,,D, G,B, D2', 'D,,2 [G,B,D]2 [G,B,D]2', 'A,,2 [G,CE]2 [G,CE]2', 'A,,E, G,C E2',
+        'F,,2 [F,A,C]2 [F,A,C]2', 'C,,2 [F,A,C]2 [F,A,C]2', 'A,,E, A,C E2', 'E,,2 [A,CE]2 [A,CE]2',
+        '_B,,2 [=F,_B,D]2 [F,B,D]2', '=C,,2 [G,=CE]2 [G,CE]2', 'D,,A,, D,F, A,D', '!arpeggio![D,,A,,D,]6',
+      ],
+    },
+  },
   // Star Whale Dream (show tune), F major
   'show:bg-galaxy': {
     medium: {
@@ -505,6 +536,29 @@ export const ARRANGEMENTS = {
       lh: [
         'C,,2 [E,G,C]2 G,,2 [E,G,C]2', 'D,,2 [F,A,D]2 A,,2 [F,A,D]2', '[C,,C,]2 z[E,G,C] C,B,, A,,2', '[G,,G,]2 [D,G,B,]2 [G,,G,]2 [A,,A,][B,,B,]',
         '[C,,C,]2 [G,,G,]2 [C,,C,]G,, [C,,C,]2',
+      ],
+    },
+  },
+  // Lighthouse Call (show tune), D major
+  'show:bg-fjord': {
+    medium: {
+      rh: [
+        '!mp! [Ae]2 [Af]2 [db]2 [da]2', '[Be]f ba [Be]f ba', '!mf! [gd\']2 =c\'b [Bdg]4', 'ef ba [ec\']2 [ae\']2',
+        '!f! [fd\']2 [da]2 [fad\']4',
+      ],
+      lh: [
+        'D,A,F,A, D,A,F,A,', 'B,,F,D,F, B,,F,D,F,', 'G,,D,B,,D, G,,D,G,D,', 'A,,E,C,E, A,,E,A,E,',
+        'D,A,F,A, [D,A,]4',
+      ],
+    },
+    hard: {
+      rh: [
+        '!mp! [FAe]2 [FAf]2 [dfb]2 [dfa]2', '[Be]f [db]a [Be]f [db]a', '!mf! [gbd\']2 =c\'b [Bdg]2 (B/d/g/b/)', '[Ae]f [eb]a [eac\']2 [ac\'e\']2',
+        '!f! [fad\']2 [dfa]A/d/ [fad\']4',
+      ],
+      lh: [
+        'D,,A,,D,F, A,F,D,A,,', 'B,,,F,,B,,D, F,D,B,,F,,', 'G,,D,G,B, DB,G,D,', 'A,,E,A,C EC [A,,A,]2',
+        'D,,A,,D,F, [D,,A,,D,]4',
       ],
     },
   },

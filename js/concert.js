@@ -6,8 +6,9 @@
 // This file lists them, reads their bars (arrange.js readAbcBar, which knows two voices in a
 // hand), writes a whole piece as one score for abcjs (each part on a new line, with its name,
 // key, meter and speed), and works out when every note and bar sounds (the parts' bar lengths
-// and speeds differ, a speed can slide, a held bar lasts longer, a short note is cut short
-// and a rolled chord's notes come one after another), for Listen (music.js playTimeline).
+// and speeds differ, a speed can slide or change bar by bar, a held bar lasts longer, a short
+// note is cut short and a rolled chord's notes come one after another), for Listen (music.js
+// playTimeline).
 // Pure logic, no DOM.
 // The recording studio and the Note-o-Matic don't use these pieces: they read SONGBOOK and
 // songbookFor (sheetmusic.js), which hold only the map songs and the show tunes.
@@ -42,8 +43,8 @@ export const isLongPiece = (id) => typeof id === 'string' && Object.hasOwn(LONG_
 export const longLevels = (id) => (isLongPiece(id) ? LEVELS.filter((l) => LONG_PIECES[id].levels?.[l]?.length) : []);
 
 /**
- * A concert piece's sections at a level: [{ name, meter?, key, bpm, bpmTo?, rampBars?, marks?,
- * rh, lh, chords }] (see longpieces.js), or null.
+ * A concert piece's sections at a level: [{ name, meter?, key, bpm, bpmTo?, rampBars?, speeds?,
+ * marks?, rh, lh, chords }] (see longpieces.js), or null.
  */
 export const longSections = (id, level) => (longLevels(id).includes(level) ? LONG_PIECES[id].levels[level] : null);
 
@@ -84,11 +85,13 @@ export const barEighths = (s) => meterOf(s).bar;
 export const beatEighths = (s) => meterOf(s).beat;
 
 /**
- * The speed of bar k (from 0) of a section, in beats a minute: its bpm, or when it slides
- * (bpmTo), an even step nearer bpmTo each bar, reaching it on the section's rampBars-th bar
- * (on its last bar without rampBars) and staying there.
+ * The speed of bar k (from 0) of a section, in beats a minute: its own speed when the section
+ * lists one for every bar (speeds: a piece that slows for a moment and picks up again), else
+ * its bpm, or when it slides (bpmTo), an even step nearer bpmTo each bar, reaching it on the
+ * section's rampBars-th bar (on its last bar without rampBars) and staying there.
  */
 export function barBpm(s, k) {
+  if (s.speeds?.[k] > 0) return s.speeds[k];
   const n = s.rh.length;
   if (s.bpmTo == null || n < 2) return s.bpm;
   const ramp = Math.max(2, Math.min(n, s.rampBars || n));
