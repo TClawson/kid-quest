@@ -33,7 +33,7 @@ const MEDIUM = {
   lh: ['D,A,F, A,F,A,', 'G,,D,B,, A,,E,C,', 'D,A,F, A,F,A,', 'A,,E,C, E,C,E,', 'G,,D,B,, A,,E,C,', '[D,A,]6'],
 };
 
-test('a 6/8 song: six steps a bar in two beats of three; the songbook has none of its own yet', () => {
+test('a 6/8 song: six steps a bar in two beats of three; the fjord\'s is the songbook\'s only one', () => {
   const jig = meterOf(SONGS[ID]);
   assert.deepEqual(jig, { steps: 6, meter: '6/8', beat: 3, middle: 3 });
   assert.equal(songBeat(SONGS[ID]), 3);
@@ -42,7 +42,7 @@ test('a 6/8 song: six steps a bar in two beats of three; the songbook has none o
   assert.deepEqual(meterOf({}), { steps: 8, meter: '4/4', beat: 2, middle: 4 });
   assert.equal(songBeat({ beat: 6 }), 2);
   assert.throws(() => meterOf({ beat: 8, meter: '6/8' }), /six steps a bar/);
-  for (const p of SONGBOOK) assert.notEqual(meterOf(songById(p.id)).meter, '6/8', p.name);
+  assert.deepEqual(SONGBOOK.filter((p) => meterOf(songById(p.id)).meter === '6/8').map((p) => p.id), ['bg-fjord']);
 });
 
 test('the speed on the page: dotted quarters in 6/8, quarters otherwise', () => {
@@ -151,6 +151,27 @@ test('the game plays a 6/8 song an eighth at a time, the chords changing on the 
   const kicks = played.filter((n) => n.swept).map(at);
   assert.deepEqual(kicks, [0, 6, 12, 18, 24, 30]);
   assert.deepEqual(played.filter((n) => n.noise).map(at).slice(0, 4), [0, 3, 6, 9]);
+});
+
+test('Alaskan Fjord, the songbook\'s 6/8 song: the walk\'s tune, then the sea otters, and home on a long D', () => {
+  const song = SONGS['bg-fjord'];
+  assert.deepEqual([song.name, song.key, song.beat, song.meter, song.lead.length], ['Alaskan Fjord', 'D', 6, '6/8', 16]);
+  assert.deepEqual(songTempo(song), { unit: '3/8', bpm: 84 });
+  const abc = songAbc('bg-fjord', { hands: 'melody', perLine: 4 });
+  assert.match(abc, /^M:6\/8$/m);
+  const bars = abc.split('\n').slice(4).join(' ').split('|').map((b) => b.trim());
+  // (the easy sheet is an octave under the game's tune, where the walk was written)
+  // the tune's first two bars, the borrowed C in bar 7, the tie over the middle of bar 8
+  assert.deepEqual(bars.slice(0, 2), ['"D"F2 c dAF', '"Bm"D3 B3']);
+  assert.equal(bars[6], '"C"B,=CD =cBG');
+  assert.equal(bars[7], '"D"A D2- D3');
+  // the otters: five eighths and a rest in every bar
+  for (const bar of song.lead.slice(8)) assert.equal(bar.split(' ').filter((t) => t !== '.' && t !== '-').length, 5);
+  assert.equal(bars[8], '"D"DAF EzF');
+  // on paper a seventeenth bar brings it home; the game's sixteen go round
+  assert.equal(songById('bg-fjord').lead.length, 17);
+  assert.equal(bars[16], '!fermata!"D"D6');
+  assert.match(printAbc({ id: 'bg-fjord', level: 'easy', name: 'Alaskan Fjord', kind: 'map' }), /^Q:3\/8=84$/m);
 });
 
 test('the recording studio counts a 6/8 song in three, at the same speed', () => {

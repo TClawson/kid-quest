@@ -237,28 +237,29 @@ export const SONGS = {
     drumVol: 0.6,
   },
 
-  // Alaskan Fjord: the northern lights' waltz from the map's concert piece, D major with two
-  // borrowed chords (B flat and C) that make the sky change colour
+  // Alaskan Fjord, in 6/8: the walk's tune from the map's concert piece (D major, with a
+  // borrowed C in bar 7), then the sea otters' game over chords that climb by step. The otters
+  // end in the air on G; on paper one long D brings it home.
   'bg-fjord': {
-    name: 'Northern Lights',
+    name: 'Alaskan Fjord',
     key: 'D',
-    bpm: 128,
+    bpm: 126, // a dotted quarter = 84
     beat: 6,
-    leadWave: 'pulse25',
-    leadVol: 0.28,
-    echo: 0.4,
+    meter: '6/8',
+    leadVol: 0.3,
     lead: [
-      'F#5 - - - C#6 -', 'D6 - A5 - F#5 -', 'D5 - - - - -', 'Bb5 - - - - -',
-      'G5 - - - - -', 'B5 - - - D6 -', 'C#6 - - - - -', 'A5 - G5 - E5 -',
-      'C#6 - - - - -', 'F#5 - E5 - D5 -', 'A5 - - - - -', 'C#5 - - - - -',
-      'Bb4 - C5 - D5 -', 'C6 - B5 - G5 -', 'A5 - D5 - - -', 'D5 - - - . .',
+      'F#5 - C#6 D6 A5 F#5', 'D5 - - B5 - -', 'G5 - G5 B5 - D6', 'C#6 - - - - -',
+      'A4 - A4 F#5 E5 D5', 'A5 - - C#5 - C#5', 'B4 C5 D5 C6 B5 G5', 'A5 D5 - - - -',
+      'D5 A5 F#5 E5 . F#5', 'G5 . F#5 G5 B5 E5', 'F#5 C#6 A5 G5 . A5', 'G5 D6 B5 A5 . B5',
+      'D5 A5 F#5 E5 . F#5', 'E5 B5 G5 F#5 . G5', 'F#5 C#6 A5 G5 . A5', 'B5 . A5 B5 D6 G5',
     ],
-    chords: ['D', 'D', 'Bb', 'Bb', 'G', 'G', 'A', 'A', 'F#m', 'F#m', 'A', 'A', 'Bb', 'C', 'D', 'D'],
-    arp: { from: 2, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.04 }, // the sparks start when the sky turns
-    bass: [[R, 2, 2.5], null, null, null, [F, 2], null],
-    drums: [['......', '......', '..h.h.'], ['k.....', '......', '..h.h.'], ['k.....', '......', '..h.h.'], ['k.....', '......', '..h.h.']],
-    fill: ['k.....', '......', '..h.o.'],
-    drumVol: 0.6,
+    chords: ['D', 'Bm', 'Em', 'A', 'F#m', 'A', 'C', 'D', 'D', 'Em', 'F#m', 'G', 'D', 'Em', 'F#m', 'G'],
+    ending: { lead: 'D5 - - - - -', chord: 'D' },
+    arp: { from: 8, wave: 'pulse12', octave: 4, vol: 0.035 }, // the water sparkles when the otters come
+    bass: [[R, 2, 2.6], null, null, [F, 2, 2.6], null, null],
+    drums: [['k.....', '......', '...h..'], ['k.....', '......', 'h..h..'], ['k..k..', '......', 'h..h..'], ['k..k..', '......', 'h.hh.h']],
+    fill: ['k..k..', '......', 'h..o..'],
+    drumVol: 0.7,
   },
 };
 

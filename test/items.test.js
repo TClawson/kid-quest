@@ -236,7 +236,7 @@ test('the fjord is for sale now that its music is written; nothing is "coming so
   // the fjord has its own song, show tune and concert piece
   const { SONGS, SHOW_SONGS } = await import('../js/songs.js');
   const { LONG_PIECES } = await import('../js/longpieces.js');
-  assert.equal(SONGS['bg-fjord'].name, 'Northern Lights');
+  assert.equal(SONGS['bg-fjord'].name, 'Alaskan Fjord');
   assert.equal(SHOW_SONGS['bg-fjord'].name, 'Lighthouse Call');
   assert.equal(LONG_PIECES['long:bg-fjord'].map, 'bg-fjord');
 });
