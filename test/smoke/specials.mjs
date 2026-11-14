@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, fallbackHash } from '../../js/logic.js';
 import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
-import { openKid } from '../helpers/open-kid.mjs';
+import { openKid, closePops } from '../helpers/open-kid.mjs';
 
 const shots = process.env.SHOTS_DIR;
 const site = await serve('.');
@@ -32,6 +32,8 @@ try {
     await page.evaluate((s) => localStorage.setItem('kidquest.v1', JSON.stringify(s)), saved);
     await page.reload();
     await openKid(page, '[data-action="open-kid"]');
+    await page.waitForTimeout(500);
+    await closePops(page); // a start-of-day pop-up (on a Saturday: the free games) would cover the buttons
     await page.click('[data-action="wardrobe"]');
     await page.click('[data-action="wardrobe-slot"][data-slot="neck"]');
 
