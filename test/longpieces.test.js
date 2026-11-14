@@ -152,7 +152,7 @@ test('the Forest Village concert piece: seven parts in 4/4 and 6/8, 90 bars at h
   assert.equal(p.name, 'Forest Village/The Walk to the Oak');
   assert.equal(p.map, 'bg-meadow');
   assert.match(p.story, /^A long piece in seven parts: /);
-  assert.deepEqual(CONCERT.map((x) => x.id), ['long:bg-ocean', id], 'the second concert piece, after the Bubble Waltz');
+  assert.deepEqual(CONCERT.map((x) => x.id).slice(0, 2), ['long:bg-ocean', id], 'the second concert piece, after the Bubble Waltz');
   assert.equal(CONCERT[1].parts, 7);
   assert.equal(CONCERT[1].tier, CONCERT_TIER);
   assert.deepEqual(longLevels(id), ['easy', 'medium', 'hard']);
@@ -198,6 +198,68 @@ test('the Forest Village concert piece: seven parts in 4/4 and 6/8, 90 bars at h
   assert.ok(abc.includes('[V:L] [K:C clef=bass] [M:4/4] G,,2 D,2 [G,C]4'));
   assert.ok(abc.includes('!p! "F"[FA]4 "Fm"[F_A]4'), 'the second chord name in a bar, as written');
   assert.equal(longLeadSheet(id, 'hard').length, 7);
+});
+
+test('the Alaskan Fjord concert piece: thirteen parts in 6/8 with a waltz, 156 bars at hard and medium, 140 at easy', () => {
+  const id = 'long:bg-fjord';
+  const p = LONG_PIECES[id];
+  assert.equal(p.name, 'Alaskan Fjord/Northern Lights');
+  assert.equal(p.map, 'bg-fjord');
+  assert.match(p.story, /^A long piece in thirteen parts: /);
+  assert.deepEqual(CONCERT.map((x) => x.id), ['long:bg-ocean', 'long:bg-meadow', id], 'the third concert piece');
+  assert.equal(CONCERT[2].parts, 13);
+  assert.equal(CONCERT[2].tier, CONCERT_TIER);
+  assert.deepEqual(longLevels(id), ['easy', 'medium', 'hard']);
+  const sections = longSections(id, 'hard');
+  assert.deepEqual(sections.map((s) => s.name), [
+    'First light', 'The walk and the moose', 'Setting sail', 'The sea otters', 'The orcas', 'The wind rises', 'The storm breaks',
+    'The battle', 'At the helm', 'The sheltered bay', 'Nightfall', 'The northern lights', 'The lighthouse',
+  ]);
+  // medium keeps every bar of hard; easy plays setting sail and the sea otters once, not twice
+  assert.deepEqual(sections.map((s) => s.rh.length), [8, 22, 16, 16, 8, 8, 8, 9, 10, 8, 3, 32, 8]);
+  assert.deepEqual(longSections(id, 'medium').map((s) => s.rh.length), [8, 22, 16, 16, 8, 8, 8, 9, 10, 8, 3, 32, 8]);
+  assert.deepEqual(longSections(id, 'easy').map((s) => s.rh.length), [8, 22, 8, 8, 8, 8, 8, 9, 10, 8, 3, 32, 8]);
+  assert.deepEqual([longBars(id, 'hard').length, longBars(id, 'medium').length, longBars(id, 'easy').length], [156, 156, 140]);
+  // every level: the same parts, all in 6/8 but the waltz, every bar at the same speed as hard's
+  for (const level of ['easy', 'medium', 'hard']) {
+    const parts = longSections(id, level);
+    assert.deepEqual(parts.map((s) => s.name), sections.map((s) => s.name), level);
+    assert.deepEqual(parts.map(sectionMeter), [...Array(11).fill('6/8'), '3/4', '6/8'], level);
+    parts.forEach((s, k) => {
+      if (s.speeds) assert.equal(s.speeds.length, s.rh.length, `${level} ${s.name}: a speed for every bar`);
+      assert.deepEqual(s.rh.map((_, b) => barBpm(s, b)), sections[k].rh.slice(0, s.rh.length).map((_, b) => barBpm(sections[k], b)), `${level} ${s.name}`);
+    });
+    assert.equal(longFacts(id, level), '13 parts · about 4 min');
+    // it sails home: the lighthouse's call ends on A over a D chord, held
+    const { notes } = longTimeline(id, level);
+    assert.deepEqual(notes.filter((n) => n.hand === 'rh').slice(-2).map((n) => n.midi), [83, 81], level);
+    assert.equal(longBars(id, level).pop().fermata, true, level);
+  }
+  // just under four minutes at hard and medium, sixteen bars of 6/8 at 92 less at easy
+  const seconds = (level) => longTimeline(id, level).seconds;
+  assert.ok(seconds('hard') > 228 && seconds('hard') < 238, `${seconds('hard')} seconds`);
+  close(seconds('medium'), seconds('hard'));
+  close(seconds('hard') - seconds('easy'), 16 * (120 / 92));
+  // the speeds move bar by bar: the moose slows the walk, the wind rises into the storm at 108,
+  // the waltz goes at 128 and slows in its last three bars
+  const part = (name) => sections.find((s) => s.name === name);
+  assert.deepEqual([0, 13, 14, 16, 21].map((k) => barBpm(part('The walk and the moose'), k)), [76, 72, 64, 58, 90]);
+  assert.deepEqual(part('The wind rises').speeds, [92, 92, 93, 95, 98, 101, 104, 107]);
+  assert.equal(part('The storm breaks').bpm, 108);
+  assert.deepEqual([0, 28, 29, 30, 31].map((k) => barBpm(part('The northern lights'), k)), [128, 128, 120, 106, 80]);
+  // the helm: the break is held, the silence after it is a plain bar, and the glimpse of the bay is slow
+  const helm = longBars(id, 'hard').filter((b) => b.section === 8);
+  assert.deepEqual(helm.map((b) => b.fermata), [false, false, false, false, false, false, true, false, false, true]);
+  assert.deepEqual(helm.slice(7).map((b) => b.bpm), [108, 66, 82]);
+  assert.deepEqual(helm[7].rh.events.concat(helm[7].lh.events).flatMap((e) => e.notes), [], 'the silent bar');
+  // the score: 6/8 in dotted quarters, the waltz in 3/4 and back, words over the bars
+  const abc = longAbc(id, 'hard', { perLine: 4 });
+  assert.match(abc, /^M:6\/8$/m);
+  assert.ok(abc.includes('[Q:"First light" 3/8=66] !pp! "^with pedal""D5"A6-'), 'the first bar');
+  assert.ok(abc.includes('[M:3/4] [Q:"The northern lights" 1/4=128]'));
+  assert.ok(abc.includes('[M:6/8] [Q:"The lighthouse" 3/8=56]'));
+  assert.ok(abc.includes('"^The moose"'));
+  assert.equal(longLeadSheet(id, 'hard').length, 13);
 });
 
 test('chord names: slash and seventh chords, flats and sharps as signs', () => {
@@ -273,7 +335,7 @@ test('the upright piano opens the concert pieces; a treasure map doesn\'t', () =
   for (const tier of [2, 3]) assert.ok(concertBookFor(tier).every((p) => p.open && !p.secret), `tier ${tier}: open`);
   assert.ok(concertBookFor(1, ['song:bg-ocean']).every((p) => !p.open), 'owning the map song opens nothing');
   // the songs' songbook (the studio and the Note-o-Matic read it) has no concert piece
-  assert.equal(SONGBOOK.length, 18);
+  assert.equal(SONGBOOK.length, 20);
   assert.ok(!songbookFor(3, all).some((p) => isLongPiece(p.id)));
   assert.ok(!shelfSongs(3, all).some((p) => isLongPiece(p.id)), 'the studio shelf leaves them out');
 });
@@ -377,6 +439,21 @@ test('a speed that slides: a step a bar, over the whole part or over its first r
   assert.equal(barBpm({ ...whole, bpmTo: undefined }, 3), 120, 'no slide');
   // in 6/8 the slide counts dotted quarters: at 40 a bar lasts 3 seconds
   const slow = part({ n: 2, meter: '6/8', bpm: 60, bpmTo: 40, rh: ['c6', 'c6'], lh: ['C,6', 'C,6'], chords: ['C', 'C'] });
+
+test('a speed for every bar: speeds wins over the part\'s own speed, bar by bar', () => {
+  const part = { name: 'P', meter: '6/8', key: 'C', bpm: 60, speeds: [60, 60, 80, 40], rh: Array(4).fill('c6'), lh: Array(4).fill('C,6'), chords: Array(4).fill('C') };
+  assert.deepEqual([0, 1, 2, 3].map((k) => barBpm(part, k)), [60, 60, 80, 40]);
+  // a 6/8 bar lasts 120 / bpm seconds: 2, 2, 1.5 and 3
+  const t = longTimeline('x', 'hard', [part]);
+  [0, 2, 4, 5.5, 8.5].forEach((x, k) => close(t.bars[k], x, `bar ${k}`));
+  // a note keeps its bar's speed, and a held bar is held at its own speed
+  close(t.notes.find((n) => n.hand === 'rh' && Math.abs(n.t - 4) < 1e-9).dur, 1.5);
+  const held = { ...part, rh: ['c6', 'c6', '!fermata!c6', 'c6'] };
+  close(longTimeline('x', 'hard', [held]).bars[3], 4 + 1.5 * FERMATA_HOLD);
+  // a bar without a speed of its own (none written, or the list is short) keeps the part's
+  assert.equal(barBpm({ ...part, speeds: [60, 60] }, 3), 60);
+  assert.equal(barBpm({ ...part, speeds: undefined }, 2), 60);
+});
   close(longTimeline('x', 'hard', [slow]).seconds, 2 + 3);
 });
 

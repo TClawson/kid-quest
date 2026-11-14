@@ -9,10 +9,11 @@
 // out when it is 3/4), key ('C', 'Dm', 'Fm', 'Ddor': its key signature), bpm (quarter notes a
 // minute; in 6/8 dotted quarters), bpmTo and rampBars (when the speed slides: from bpm to
 // bpmTo a bar at a time, over the first rampBars bars, or over the whole section without
-// rampBars), marks (words over a bar, by its index in the section from 0: { 0: 'with pedal' }),
-// rh, lh (one string per bar), chords (one chord name per bar, shown above it: 'Gm/D', 'Cm6',
-// 'A7', 'Gsus4') }. A section's key and bars can differ between levels; the sections are the
-// same.
+// rampBars), speeds (when the speed moves bar by bar, slowing for a moment and picking up
+// again: one speed for every bar, the first being bpm), marks (words over a bar, by its index
+// in the section from 0: { 0: 'with pedal' }), rh, lh (one string per bar), chords (one chord
+// name per bar, shown above it: 'Gm/D', 'Cm6', 'A7', 'Gsus4') }. A section's key and bars can
+// differ between levels; the sections are the same.
 //
 // The bars are in the same ABC notation as arrangements.js (read by arrange.js): L:1/8 (an
 // eighth note is 1: six to a bar in 3/4 and 6/8, eight in 4/4), notes 'c' (C5), 'C' (C4),
@@ -720,6 +721,622 @@ export const LONG_PIECES = {
             '[C,,C,]8',
           ],
           chords: ['F', 'Em', 'Dm7', 'G7', 'C', 'Dm/C', 'C', 'Am', 'F', 'C/E', 'G7', 'C', 'C'],
+        },
+      ],
+    },
+  },
+  // Alaskan Fjord/Northern Lights: 13 parts
+  'long:bg-fjord': {
+    name: 'Alaskan Fjord/Northern Lights',
+    map: 'bg-fjord',
+    story: 'A long piece in thirteen parts: first light, a walk and a moose, setting sail past otters and orcas, a storm, a sheltered bay, the northern lights and the lighthouse calling you home.',
+    levels: {
+      easy: [
+        {
+          name: 'First light', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 66, 66, 66, 66, 66, 68, 73],
+          marks: { 0: 'with pedal', 6: 'waking: a little faster and louder' },
+          rh: [
+            '!pp! A6-', 'A6', 'e6-', 'ed\'b afe',
+            'f3 E=FB', 'A2B d2B', '!p! A6', 'E3 D2E',
+          ],
+          lh: [
+            '[D,A,]6', '[D,A,]6', 'D,3 A,3', 'D,3 A,3',
+            'D,3 B,3', 'D,3 B,3', 'D,3 B,3', 'A,,3 E,3',
+          ],
+          chords: ['D5', 'D5', 'Dsus2', 'Dsus2', 'D6', 'D6', 'D6', 'Asus2'],
+        },
+        {
+          name: 'The walk and the moose', meter: '6/8', key: 'D', bpm: 76,
+          speeds: [76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 72, 64, 65, 58, 74, 84, 84, 86, 90],
+          marks: { 8: 'again', 13: 'slowing a little', 14: 'The moose', 16: 'It looks away', 17: 'back to speed', 18: 'a little faster', 20: 'hurrying to the boat' },
+          rh: [
+            '!mp! F2c dAF', 'D3 B3', 'G2G B2d', 'c6',
+            'A,2A, FED', 'A3 C2C', 'B,=CD =cBG', 'AD2- D3',
+            'F2c dAF', 'D3 B3', 'G2G B2d', 'c6',
+            'A,2A, FED', 'A3 C2C', '!p! C2E G2c', '!pp! e2g !fermata!c\'3',
+            '!p! b3 a2f', 'edB AFD', '!mp! A,2A, FED', 'A3 C2C',
+            'B,=CD =cBG', 'AD2- DAd',
+          ],
+          lh: [
+            'D,3 A,3', 'B,,3 F,3', 'E,3 B,3', 'A,,3 G,3',
+            'F,,3 C,3', 'A,,3 E,3', '=C,3 G,3', 'D,6',
+            'D,3 A,3', 'B,,3 F,3', 'E,3 B,3', 'A,,3 G,3',
+            'F,,3 C,3', 'A,,3 E,3', 'A,,6', '!fermata![A,,G,]6',
+            'A,,6', 'G,,6', 'F,,3 C,3', 'A,,3 E,3',
+            '=C,3 G,3', 'D,3 A,3',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D', 'D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'A7', 'A7', 'A7', 'G', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'Setting sail', meter: '6/8', key: 'D', bpm: 92,
+          rh: [
+            '!mf! f2c\' d\'af', 'd3 b3', 'g2g b2d\'', 'c\'6',
+            'A2A fed', 'a3 c2c', 'B=cd =c\'bg', 'ad2- d3',
+          ],
+          lh: [
+            'D,2A, D2A,', 'B,,2F, B,2F,', 'E,2B, E2B,', 'A,,2E, G,2E,',
+            'F,,2C, F,2C,', 'A,,2E, A,2E,', '=C,2G, =C2G,', 'D,2A, D3',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'The sea otters', meter: '6/8', key: 'D', bpm: 92,
+          rh: [
+            '!mp! .d.a.f .ez.f', '.gz.f .g.b.e', 'z2.[Ac] z2.[Ac]', 'z2.[Bd] z2.[Bd]',
+            '.d.a.f .ez.f', 'z2.[GB] z2.[GB]', 'z2.[Ac] z2.[Ac]', '.bz.a .b.d\'.g',
+          ],
+          lh: [
+            'D,2.A, D,2.A,', 'E,2.B, E,2.B,', '.F,.C.A, .G,z.A,', '.G,.D.B, .A,z.B,',
+            'D,2.A, D,2.A,', '.E,.B,.G, .F,z.G,', '.F,.C.A, .G,z.A,', 'G,2.D G,2.D',
+          ],
+          chords: ['D', 'Em', 'F#m', 'G', 'D', 'Em', 'F#m', 'G'],
+        },
+        {
+          name: 'The orcas', meter: '6/8', key: 'D', bpm: 92,
+          rh: [
+            'z6', 'fdA FB2', 'z2.B z2.B', 'z2.A z2.A',
+            '.f.c\'.a .gz.a', '.cz.B .c.e.A', '[E=c]3 [Ec]3', '[Fd]3 [Fd]3',
+          ],
+          lh: [
+            '!mf! F,2C DA,F,', 'D,3 B,3', 'G,2G, B,2D', 'C6',
+            'A,,2A,, F,E,D,', 'A,3 C,2C,', 'B,,=C,D, =CB,G,', 'A,D,2- D,3',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'The wind rises', meter: '6/8', key: 'Dm', bpm: 92,
+          speeds: [92, 92, 93, 95, 98, 101, 104, 107],
+          marks: { 2: 'faster and louder, little by little' },
+          rh: [
+            '!p! [Ad]6', '[Bd]6', '[df]3 [df]3', '[dg]3 [dg]3',
+            '!mp! [fa]3 [fa]3', '[fb]3 [fb]3', '!mf! [^ca]3 [ca]3', '[g^c\']3 z3',
+          ],
+          lh: [
+            'D,A,D, A,D,A,', 'D,A,D, A,D,A,', 'D,A,D, A,D,A,', 'D,A,D, A,D,A,',
+            'D,A,D, A,D,A,', 'D,A,D, A,D,A,', 'A,,E,A,, E,A,,E,', 'A,,E,A,, E,A,,E,',
+          ],
+          chords: ['Dm', 'Gm', 'Dm', 'Gm', 'Dm', 'Bb', 'A', 'A7'],
+        },
+        {
+          name: 'The storm breaks', meter: '6/8', key: 'Dm', bpm: 108,
+          rh: [
+            '!f! F2^c dAF', 'D2A BFD', 'G2^f gbd\'', '[e^c\']6',
+            'z[cf][cf] z[cf][cf]', 'z[^ce][ce] z[ce][ce]', 'z[eg][eg] z[eg][eg]', 'z[fa][fa] [fa]3',
+          ],
+          lh: [
+            'D,A,D, A,D,A,', 'B,,F,B,, F,B,,F,', 'G,,D,G,, D,G,,D,', 'A,2G, F,2E,',
+            'A,,2A,, F,E,D,', 'A,,3 ^C,2C,', 'B,,C,D, CB,G,', 'A,D,2- D,3',
+          ],
+          chords: ['Dm', 'Bb', 'Gm', 'A7', 'F', 'A', 'C', 'Dm'],
+        },
+        {
+          name: 'The battle', meter: '6/8', key: 'Dm', bpm: 108,
+          rh: [
+            '!ff! F2F A2c', 'd2d f2a', 'b2b d\'2f\'', 'z6',
+            'z[df][df] z[df][df]', 'z3 "C#dim"z3', 'd2a bfd', 'b2_e dgb',
+            '^c2^g aec',
+          ],
+          lh: [
+            'D,A,D, A,D,A,', 'B,,F,B,, F,B,,F,', 'G,,D,G,, D,G,,D,', 'A,,^C,E, A,E,C,',
+            'F,2^C DA,F,', 'A,,^C,E, E,G,B,', 'D,2A, B,F,D,', 'G,,D,G,, D,G,,D,',
+            'A,,E,A,, E,A,,E,',
+          ],
+          chords: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'A', 'Bb', 'Gm', 'A'],
+        },
+        {
+          name: 'At the helm', meter: '6/8', key: 'Dm', bpm: 108,
+          speeds: [108, 108, 108, 108, 108, 108, 108, 108, 66, 82],
+          marks: { 4: 'The second round', 6: 'The break', 8: 'The bay, far off' },
+          rh: [
+            '!f! F2^c dAF', '^c2^g aec', 'B2^f gdB', 'E2=c ^cGE',
+            '!ff! F^cd "A7"c^ga', 'B^fg "C#dim"E=c^c', '!fermata![^cg]6', 'z6',
+            'z6', '!fermata![D^F]6',
+          ],
+          lh: [
+            'A,,2A,, A,,2A,,', 'A,,2A,, A,,2A,,', 'A,,2A,, A,,2A,,', 'A,,2A,, A,,2A,,',
+            'A,,3 A,,3', 'A,,3 A,,3', '!fermata!A,,6', 'z6',
+            '!pp! D,^F,A, D3', '!fermata!D,6',
+          ],
+          chords: ['Dm', 'A7', 'Gm', 'C#dim', 'Dm', 'Gm', 'A7', 'A7', 'D', 'D'],
+        },
+        {
+          name: 'The sheltered bay', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 66, 66, 66, 66, 66, 66, 56],
+          marks: { 0: 'calm, with pedal' },
+          rh: [
+            '!p! F2c dAF', 'D3 B3', 'G2G B2d', 'c3 B2F',
+            'A,2A, FED', 'A3 C2C', 'B,=CD =cBG', 'Ad2 =cBG',
+          ],
+          lh: [
+            'G,3 B,3', 'B,,3 D,3', 'G,3 B,3', 'F,3 A,3',
+            'D,3 F,3', 'A,,3 C,3', '=C,3 E,3', 'G,,3 D,3',
+          ],
+          chords: ['G', 'Bm', 'G', 'F#m', 'D', 'A', 'C', 'G'],
+        },
+        {
+          name: 'Nightfall', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 61, 55],
+          marks: { 1: 'in three' },
+          rh: [
+            '!pp! z3 _BG2', 'z6', 'zd2 cBG',
+          ],
+          lh: [
+            '_B,,3 =F,3', '=C,2 E,2 G,2', 'A,,2 E,2 G,2',
+          ],
+          chords: ['Bb', 'C', 'A7'],
+        },
+        {
+          name: 'The northern lights', key: 'D', bpm: 128,
+          speeds: [128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 120, 106, 80],
+          marks: { 0: 'with pedal', 16: 'The dance', 29: 'slowing' },
+          rh: [
+            '!pp! f6', 'd\'6', 'd6', '_b6',
+            'g6', 'b6', 'c\'6', 'a6',
+            'c\'6', 'f6', 'a6', 'c6',
+            '_B6', '=c\'6', 'a6', 'd6',
+            '!mp! f4 c\'2', 'd\'2 a2 f2', 'd6', '_b6',
+            'g6', 'b4 d\'2', 'c\'6', 'a2 g2 e2',
+            'c\'6', 'f2 e2 d2', 'a6', 'c6',
+            '_B2 =c2 d2', '=c\'2 b2 g2', 'a2 d4-', 'd6',
+          ],
+          lh: [
+            'D,2 F,2 A,2-', 'A,6', '_B,,2 D,2 =F,2-', '=F,6',
+            'G,,2 B,,2 D,2-', 'D,6', 'A,,2 C,2 E,2', 'G,6',
+            'F,,2 A,,2 C,2-', 'C,6', 'A,,2 C,2 E,2-', 'E,6',
+            '_B,,2 D,2 =F,2', '=C,2 E,2 G,2', 'D,2 F,2 A,2', 'D,6',
+            'D,2 [F,A,]2 [F,A,]2', 'D,2 [F,A,]2 [F,A,]2', '_B,,2 [D,=F,]2 [D,F,]2', '_B,,2 [D,=F,]2 [D,F,]2',
+            'G,,2 [B,,D,]2 [B,,D,]2', 'G,,2 [B,,D,]2 [B,,D,]2', 'A,,2 [E,G,]2 [E,G,]2', 'A,,2 [E,G,]2 [E,G,]2',
+            'F,,2 [A,,C,]2 [A,,C,]2', 'F,,2 [A,,C,]2 [A,,C,]2', 'A,,2 [C,E,]2 [C,E,]2', 'A,,2 [C,E,]2 [C,E,]2',
+            '_B,,2 [D,=F,]2 [D,F,]2', '=C,2 [E,G,]2 [E,G,]2', 'D,2 [F,A,]2 [F,A,]2', '[D,F,]6',
+          ],
+          chords: ['D', 'D', 'Bb', 'Bb', 'G', 'G', 'A7', 'A7', 'F#m', 'F#m', 'A', 'A', 'Bb', 'C', 'D', 'D', 'D', 'D', 'Bb', 'Bb', 'G', 'G', 'A7', 'A7', 'F#m', 'F#m', 'A', 'A', 'Bb', 'C', 'D', 'D'],
+        },
+        {
+          name: 'The lighthouse', meter: '6/8', key: 'D', bpm: 56,
+          speeds: [56, 56, 56, 56, 56, 56, 53, 42],
+          marks: { 0: 'slowly, with pedal', 6: 'fading' },
+          rh: [
+            '!pp! F2c dAF', 'D3 B3', '!p! G2G B2d', 'c2e fba',
+            'A,2A, FED', 'A3 C2C', '!pp! B,=CD =cBG', 'ADe fb!fermata!a',
+          ],
+          lh: [
+            'G,3 B,3', 'B,,3 D,3', 'G,3 B,3', 'F,3 A,3',
+            'D,3 F,3', 'A,,3 C,3', '=C,3 E,3', '[D,F,]6',
+          ],
+          chords: ['G', 'Bm', 'G', 'F#m', 'D', 'A', 'C', 'D'],
+        },
+      ],
+      medium: [
+        {
+          name: 'First light', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 66, 66, 66, 66, 66, 68, 73],
+          marks: { 0: 'with pedal', 6: 'waking: a little faster and louder' },
+          rh: [
+            '!pp! A6-', 'A6', 'e6-', 'ed\'b afe',
+            'f3 E=FB', 'A2B d2B', '!p! A6', 'E3 D2E',
+          ],
+          lh: [
+            '[D,,A,,]6', '[D,,A,,]6', 'D,,3 [A,,E,]3', 'D,,3 [A,,E,]3',
+            'D,,2A,, [E,B,]3', 'D,,2A,, [E,B,]3', 'D,,2A,, E,B,E,', 'A,,E,A, E,A,E,',
+          ],
+          chords: ['D5', 'D5', 'Dsus2', 'Dsus2', 'D6', 'D6', 'D6', 'Asus2'],
+        },
+        {
+          name: 'The walk and the moose', meter: '6/8', key: 'D', bpm: 76,
+          speeds: [76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 72, 64, 65, 58, 74, 84, 84, 86, 90],
+          marks: { 8: 'again', 13: 'slowing a little', 14: 'The moose', 16: 'It looks away', 17: 'back to speed', 18: 'a little faster', 20: 'hurrying to the boat' },
+          rh: [
+            '!mp! F2c dAF', 'D3 B3', 'G2G B2d', 'c6',
+            'A,2A, FED', 'A3 C2C', 'B,=CD =cBG', 'AD2- D3',
+            'F2c dAF', 'D3 B3', 'G2G B2d', 'c6',
+            'A,2A, FED', 'A3 C2C', '!p! C2E G2c', '!pp! e2g !fermata!c\'3',
+            '!p! b3 a2f', 'edB AFD', '!mp! A,2A, FED', 'A3 C2C',
+            'B,=CD =cBG', 'AD2- DAd',
+          ],
+          lh: [
+            'D,3 [F,A,]3', 'B,,3 [D,F,]3', 'E,3 [G,B,]3', 'A,,3 [E,G,]3',
+            'F,,3 [A,,C,]3', 'A,,3 [C,E,]3', '=C,3 [E,G,]3', 'D,3 [F,A,]3',
+            'D,3 [F,A,]3', 'B,,3 [D,F,]3', 'E,3 [G,B,]3', 'A,,3 [E,G,]3',
+            'F,,3 [A,,C,]3', 'A,,3 [C,E,]3', 'A,,3 [E,G,]3', '!fermata!!arpeggio![A,,E,G,]6',
+            'A,,3 [E,G,]3', 'G,,3 [B,,D,]3', 'F,,3 [A,,C,]3', 'A,,3 [C,E,]3',
+            '=C,3 [E,G,]3', 'D,F,A, F,A,F,',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D', 'D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'A7', 'A7', 'A7', 'G', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'Setting sail', meter: '6/8', key: 'D', bpm: 92,
+          marks: { 8: 'again, louder' },
+          rh: [
+            '!mf! [Af]2c\' d\'af', '[Bd]3 [db]3', '[eg]2g [gb]2d\'', '[egc\']6',
+            '[FA]2A fed', '[ca]3 [Ac]2c', 'B=cd =c\'bg', 'a[Fd]2- [Fd]Ad',
+            '!f! [Af]2c\' d\'af', '[Bd]3 [db]3', '[eg]2g [gb]2d\'', '[egc\']6',
+            '[FA]2A fed', '[ca]3 [Ac]2c', 'B=cd =c\'bg', 'a[Fd]2- [Fd]3',
+          ],
+          lh: [
+            'D,F,A, DA,F,', 'B,,D,F, B,F,D,', 'E,G,B, EB,G,', 'A,,C,E, G,E,C,',
+            'F,,A,,C, F,C,A,,', 'A,,C,E, A,E,C,', '=C,E,G, =CG,E,', 'D,F,A, [F,A,D]3',
+            'D,F,A, DA,F,', 'B,,D,F, B,F,D,', 'E,G,B, EB,G,', 'A,,C,E, G,E,C,',
+            'F,,A,,C, F,C,A,,', 'A,,C,E, A,E,C,', '=C,E,G, =CG,E,', 'D,F,A, [F,A,D]3',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D', 'D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'The sea otters', meter: '6/8', key: 'D', bpm: 92,
+          marks: { 8: 'again, softer' },
+          rh: [
+            '!mp! .d.a.f .ez.f', '.gz.f .g.b.e', 'z2.[Ac] z2.[Ac]', 'z2.[Bd] z2.[Bd]',
+            '.d.a.f .ez.f', 'z2.[GB] z2.[GB]', 'z2.[Ac] z2.[Ac]', '.bz.a .b.d\'.g',
+            '!p! .d.a.f .ez.f', '.gz.f .g.b.e', 'z2.[Ac] z2.[Ac]', 'z2.[Bd] z2.[Bd]',
+            '.d.a.f .ez.f', 'z2.[GB] z2.[GB]', 'z2.[Ac] z2.[Ac]', '.bz.a .b.d\'.g',
+          ],
+          lh: [
+            'D,2.[F,A,] A,,2.[F,A,]', 'E,2.[G,B,] B,,2.[G,B,]', '.F,.C.A, .G,z.A,', '.G,.D.B, .A,z.B,',
+            'D,2.[F,A,] A,,2.[F,A,]', '.E,.B,.G, .F,z.G,', '.F,.C.A, .G,z.A,', 'G,2.[B,D] D,2.[B,D]',
+            'D,2.[F,A,] A,,2.[F,A,]', 'E,2.[G,B,] B,,2.[G,B,]', '.F,.C.A, .G,z.A,', '.G,.D.B, .A,z.B,',
+            'D,2.[F,A,] A,,2.[F,A,]', '.E,.B,.G, .F,z.G,', '.F,.C.A, .G,z.A,', 'G,2.[B,D] D,2.[B,D]',
+          ],
+          chords: ['D', 'Em', 'F#m', 'G', 'D', 'Em', 'F#m', 'G', 'D', 'Em', 'F#m', 'G', 'D', 'Em', 'F#m', 'G'],
+        },
+        {
+          name: 'The orcas', meter: '6/8', key: 'D', bpm: 92,
+          rh: [
+            'z6', 'fdA FB2', 'z2.[EB] z2.[EGB]', 'z2.[EGA] z2.[EGA]',
+            '.f.c\'.a .gz.a', '.cz.B .c.e.A', '[EG=c]3 [EGc]3', '[FAd]3 [FAd]3',
+          ],
+          lh: [
+            '!mf! F,2C DA,F,', 'D,3 B,3', 'G,2G, B,2D', 'C6',
+            'A,,2A,, F,E,D,', 'A,3 C,2C,', 'B,,=C,D, =CB,G,', 'A,D,2- D,3',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'The wind rises', meter: '6/8', key: 'Dm', bpm: 92,
+          speeds: [92, 92, 93, 95, 98, 101, 104, 107],
+          marks: { 2: 'faster and louder, little by little' },
+          rh: [
+            '!p! [FAd]6', '[GBd]6', 'z[Adf][Adf] [Adf]3', 'z[Bdg][Bdg] [Bdg]3',
+            '!mp! z[dfa][dfa] z[dfa][dfa]', 'z[dfb][dfb] z[dfb][dfb]', '!mf! z[^cea][cea] z[cea][cea]', 'z[eg^c\'][egc\'] z3',
+          ],
+          lh: [
+            'D,,A,,D,, A,,D,,A,,', 'D,,A,,D,, A,,D,,A,,', 'D,,A,,D,, A,,D,,A,,', 'D,,A,,D,, A,,D,,A,,',
+            'D,,A,,D,, A,,D,,A,,', 'D,,A,,D,, A,,D,,A,,', 'A,,,E,,A,,, E,,A,,,E,,', 'A,,,E,,A,,, E,,A,,,E,,',
+          ],
+          chords: ['Dm', 'Gm', 'Dm', 'Gm', 'Dm', 'Bb', 'A', 'A7'],
+        },
+        {
+          name: 'The storm breaks', meter: '6/8', key: 'Dm', bpm: 108,
+          rh: [
+            '!f! [DF]2^c dAF', '[B,D]2A BFD', '[DG]2^f gbd\'', '[eg^c\']6',
+            'z[Acf][Acf] z[Acf][Acf]', 'z[A^ce][A^ce] z[A^ce][A^ce]', 'z[ceg][ceg] z[ceg][ceg]', 'z[dfa][dfa] [dfa]3',
+          ],
+          lh: [
+            'D,,A,,D,, A,,D,,A,,', 'B,,,F,,B,,, F,,B,,,F,,', 'G,,,D,,G,,, D,,G,,,D,,', 'A,G,F, E,D,^C,',
+            'A,,2A,, F,E,D,', 'A,,3 ^C,2C,', 'B,,C,D, CB,G,', 'A,D,2- D,3',
+          ],
+          chords: ['Dm', 'Bb', 'Gm', 'A7', 'F', 'A', 'C', 'Dm'],
+        },
+        {
+          name: 'The battle', meter: '6/8', key: 'Dm', bpm: 108,
+          rh: [
+            '!ff! [DF]2F A2c', '[Bd]2d f2a', '[gb]2b d\'2f\'', 'z6',
+            'z[Adf][Adf] z[Adf][Adf]', 'z3 "C#dim"z3', '[Bd]2a bfd', '[gb]2_e dgb',
+            '[A^c]2^g aec',
+          ],
+          lh: [
+            'D,,A,,D, A,,D,A,,', 'B,,,F,,B,, F,,B,,F,,', 'G,,D,G, D,G,D,', 'A,,^C,E, A,E,C,',
+            'F,2^C DA,F,', 'A,,^C,E, E,G,B,', 'D,2A, B,F,D,', 'G,,D,G,, D,G,,D,',
+            'A,,E,A,, E,A,,E,',
+          ],
+          chords: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'A', 'Bb', 'Gm', 'A'],
+        },
+        {
+          name: 'At the helm', meter: '6/8', key: 'Dm', bpm: 108,
+          speeds: [108, 108, 108, 108, 108, 108, 108, 108, 66, 82],
+          marks: { 4: 'The second round', 6: 'The break', 8: 'The bay, far off' },
+          rh: [
+            '!f! [DF]2^c dAF', '[A^c]2^g aec', '[GB]2^f gdB', '[^CE]2=c ^cGE',
+            '!ff! [DF]^cd "A7"[Ac]^ga', '[GB]^fg "C#dim"[^CE]=c^c', '!fermata![^ceg]6', 'z6',
+            'z6', '!fermata![A,D^F]6',
+          ],
+          lh: [
+            'A,,E,A,, E,A,,E,', 'A,,E,A,, E,A,,E,', 'A,,E,A,, E,A,,E,', 'A,,E,A,, E,A,,E,',
+            '[A,,E,]3 [A,,E,]3', '[A,,E,]3 [A,,E,]3', '!fermata![A,,E,]6', 'z6',
+            '!pp! D,,A,,D, ^F,A,D', '!fermata!D,,6',
+          ],
+          chords: ['Dm', 'A7', 'Gm', 'C#dim', 'Dm', 'Gm', 'A7', 'A7', 'D', 'D'],
+        },
+        {
+          name: 'The sheltered bay', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 66, 66, 66, 66, 66, 66, 56],
+          marks: { 0: 'calm, with pedal' },
+          rh: [
+            '!p! [DF]2c dAF', '[B,D]3 [DB]3', 'G2G [GB]2d', 'c6 & xFA B2F',
+            'A,2A, FED', '[CA]3 [A,C]2C', 'B,=CD =cBG', 'Ad2 =cBG',
+          ],
+          lh: [
+            'G,,3 D,B,D,', 'B,,,3 F,,D,F,,', 'G,,3 D,B,D,', 'F,,3 C,A,C,',
+            'D,,3 A,,F,A,,', 'A,,,3 E,,C,E,,', '=C,,3 G,,E,G,,', 'G,,3 [D,B,]3',
+          ],
+          chords: ['G', 'Bm', 'G', 'F#m', 'D', 'A', 'C', 'G'],
+        },
+        {
+          name: 'Nightfall', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 61, 55],
+          marks: { 1: 'in three' },
+          rh: [
+            '!pp! z3 _BG2', 'z6', 'zd\'2 c\'bg',
+          ],
+          lh: [
+            '_B,,3 =F,DF,', '=C,2[G,E]2[G,E]2', 'A,,2[G,C]2[G,C]2',
+          ],
+          chords: ['Bb', 'C', 'A7'],
+        },
+        {
+          name: 'The northern lights', key: 'D', bpm: 128,
+          speeds: [128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 120, 106, 80],
+          marks: { 0: 'with pedal', 16: 'The dance', 29: 'slowing' },
+          rh: [
+            '!pp! f6', 'x4 f\'a\' & d\'6', 'd6', 'x4 d\'=f\' & _b6',
+            'g6', 'x4 d\'g\' & b6', 'c\'6', 'x4 c\'e\' & a6',
+            'c\'6', 'x4 ac\' & f6', 'a6', 'x4 ea & c6',
+            '_B6', 'x4 e\'g\' & =c\'6', 'a6', 'x4 fa & d6',
+            '!mp! f4 c\'2', 'd\'2 a2 f2', 'x2 =f_b fb & d6', 'x4 d\'=f\' & _b6',
+            'x2 d\'2 x2 & g6', 'b4 d\'2', 'x2 e\'g\' a\'g\' & c\'6', 'a2 g2 e2',
+            'c\'6', 'f2 e2 d2', 'x2 c\'e\' c\'e\' & a6', 'x4 ea & c6',
+            '_B2 =c2 d2', '=c\'2 b2 g2', 'x4 fa & a2 d4-', 'x2 a2 x2 & d6',
+          ],
+          lh: [
+            '!arpeggio![D,F,A,]6', 'A,,2 [F,A,D]4', '!arpeggio![_B,,D,=F,]6', '=F,,2 [=F,_B,D]4',
+            '!arpeggio![G,,B,,D,]6', 'D,2 [G,B,D]4', '!arpeggio![A,,E,G,]6', 'E,2 [G,CE]4',
+            '!arpeggio![F,,A,,C,]6', 'C,2 [F,A,C]4', '!arpeggio![A,,C,E,]6', 'E,2 [A,CE]4',
+            '!arpeggio![_B,,D,=F,]6', '=C,2 [G,=CE]4', '!arpeggio![D,F,A,]6', 'A,,2 [F,A,D]4',
+            'D,2 [F,A,D]2 [F,A,D]2', 'A,,2 [F,A,D]2 [F,A,D]2', '_B,,2 [=F,_B,D]4', '!arpeggio![_B,,D,=F,]6',
+            'G,,2 [G,B,D]2 [G,B,D]2', 'D,2 [G,B,D]2 [G,B,D]2', 'A,,2 [G,CE]2 [G,CE]2', 'E,2 [G,CE]2 [G,CE]2',
+            'F,,2 [F,A,C]2 [F,A,C]2', 'C,2 [F,A,C]2 [F,A,C]2', 'A,,2 [A,CE]4', '!arpeggio![A,,C,E,]6',
+            '_B,,2 [=F,_B,D]2 [F,B,D]2', '=C,2 [G,=CE]2 [G,CE]2', 'D,2 [F,A,D]4', '!arpeggio![D,F,A,]6',
+          ],
+          chords: ['D', 'D', 'Bb', 'Bb', 'G', 'G', 'A7', 'A7', 'F#m', 'F#m', 'A', 'A', 'Bb', 'C', 'D', 'D', 'D', 'D', 'Bb', 'Bb', 'G', 'G', 'A7', 'A7', 'F#m', 'F#m', 'A', 'A', 'Bb', 'C', 'D', 'D'],
+        },
+        {
+          name: 'The lighthouse', meter: '6/8', key: 'D', bpm: 56,
+          speeds: [56, 56, 56, 56, 56, 56, 53, 42],
+          marks: { 0: 'slowly, with pedal', 6: 'fading' },
+          rh: [
+            '!pp! F2c dAF', 'D2e fba', '!p! G2G B2d', 'x2e fba & c6',
+            'A,2A, FED', 'x2e fba & A3 x3', '!pp! B,=CD =cBG', 'ADe fb!fermata!a',
+          ],
+          lh: [
+            'G,,3 [D,B,]3', 'B,,,3 [F,,D,]3', 'G,,3 [D,B,]3', 'F,,3 [C,A,]3',
+            'D,,3 [A,,F,]3', 'A,,3 C2C', '=C,,3 [G,,E,]3', 'D,,3 !fermata![A,,F,]3',
+          ],
+          chords: ['G', 'Bm', 'G', 'F#m', 'D', 'A', 'C', 'D'],
+        },
+      ],
+      hard: [
+        {
+          name: 'First light', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 66, 66, 66, 66, 66, 68, 73],
+          marks: { 0: 'with pedal', 6: 'waking: a little faster and louder' },
+          rh: [
+            '!pp! A6-', 'A6', 'e6-', 'ed\'b afe',
+            'f3 E=FB', 'A2B d2B', '!p! A6', 'E3 D2E',
+          ],
+          lh: [
+            '[D,,A,,]6', '[D,,A,,]6', 'D,,3 [A,,E,]3', 'D,,3 [A,,E,]3',
+            'D,,A,,E, B,3', 'D,,A,,E, B,3', 'D,,A,,E, B,E,B,', 'A,,E,A, B,A,E,',
+          ],
+          chords: ['D5', 'D5', 'Dsus2', 'Dsus2', 'D6', 'D6', 'D6', 'Asus2'],
+        },
+        {
+          name: 'The walk and the moose', meter: '6/8', key: 'D', bpm: 76,
+          speeds: [76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 72, 64, 65, 58, 74, 84, 84, 86, 90],
+          marks: { 8: 'again', 13: 'slowing a little', 14: 'The moose', 16: 'It looks away', 17: 'back to speed', 18: 'a little faster', 20: 'hurrying to the boat' },
+          rh: [
+            '!mp! F2c dAF', 'D3 B3', 'G2G B2d', 'c6',
+            'A,2A, FED', 'A3 C2C', 'B,=CD =cBG', 'AD2- D3',
+            'F2c dAF', 'D3 B3', 'G2G B2d', 'c6',
+            'A,2A, FED', 'A3 C2C', '!p! C2E G2c', '!pp! e2g !fermata!c\'3',
+            '!p! b3 a2f', 'edB AFD', '!mp! A,2A, FED', 'A3 C2C',
+            'B,=CD =cBG', 'AD2- DAd',
+          ],
+          lh: [
+            'D,,3 [A,,D,F,]3', 'B,,,3 [B,,D,F,]3', 'E,,3 [B,,E,G,]3', 'A,,3 [E,G,C]3',
+            'F,,3 [A,,C,F,]3', 'A,,3 [C,E,A,]3', '=C,3 [E,G,=C]3', '[D,,D,]3 [F,A,]3',
+            'D,,3 [A,,D,F,]3', 'B,,,3 [B,,D,F,]3', 'E,,3 [B,,E,G,]3', 'A,,3 [E,G,C]3',
+            'F,,3 [A,,C,F,]3', 'A,,3 [C,E,A,]3', 'A,,3 [E,G,]3', '!fermata!!arpeggio![A,,E,G,C]6',
+            'A,,3 [E,G,C]3', 'G,,3 [B,,D,G,]3', 'F,,3 [A,,C,F,]3', 'A,,3 [C,E,A,]3',
+            '=C,3 [E,G,=C]3', 'D,,A,,F, A,F,A,,',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D', 'D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'A7', 'A7', 'A7', 'G', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'Setting sail', meter: '6/8', key: 'D', bpm: 92,
+          marks: { 8: 'again, louder' },
+          rh: [
+            '!mf! [Af]2c\' d\'af', '[FBd]3 [dfb]3', '[Beg]2g [egb]2d\'', '[egc\']6',
+            '[FA]2A fed', '[cea]3 [EAc]2c', 'B=cd [e=c\']bg', 'a[FAd]2- [FAd]Ad',
+            '!f! [Af]2c\' d\'af', '[FBd]3 [dfb]3', '[Beg]2g [egb]2d\'', '[egc\']6',
+            '[FA]2A fed', '[cea]3 [EAc]2c', 'B=cd [e=c\']bg', 'a[FAd]2- [FAd]3',
+          ],
+          lh: [
+            'D,,A,,F, A,F,A,,', 'B,,,F,,D, F,D,F,,', 'E,,B,,G, B,G,B,,', 'A,,,E,,A,, C,E,G,',
+            'F,,C,F, A,F,C,', 'A,,E,A, CA,E,', '=C,,G,,E, G,E,G,,', 'D,,A,,F, [A,D]3',
+            'D,,A,,F, A,F,A,,', 'B,,,F,,D, F,D,F,,', 'E,,B,,G, B,G,B,,', 'A,,,E,,A,, C,E,G,',
+            'F,,C,F, A,F,C,', 'A,,E,A, CA,E,', '=C,,G,,E, G,E,G,,', 'D,,A,,F, [A,D]3',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D', 'D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'The sea otters', meter: '6/8', key: 'D', bpm: 92,
+          marks: { 8: 'again, softer' },
+          rh: [
+            '!mp! .d.a.f .ez.f', '.gz.f .g.b.e', 'z2.[Ac] z2.[Ac]', 'z2.[Bd] z2.[Bd]',
+            '.d.a.f .ez.f', 'z2.[GB] z2.[GB]', 'z2.[Ac] z2.[Ac]', '.bz.a .b.d\'.g',
+            '!p! .d.a.f .ez.f', '.gz.f .g.b.e', 'z2.[Ac] z2.[Ac]', 'z2.[Bd] z2.[Bd]',
+            '.d.a.f .ez.f', 'z2.[GB] z2.[GB]', 'z2.[Ac] z2.[Ac]', '.bz.a .b.d\'.g',
+          ],
+          lh: [
+            'D,,2.[F,A,] A,,2.[F,A,]', 'E,,2.[G,B,] B,,2.[G,B,]', '.F,.C.A, .G,z.A,', '.G,.D.B, .A,z.B,',
+            'D,,2.[F,A,] A,,2.[F,A,]', '.E,.B,.G, .F,z.G,', '.F,.C.A, .G,z.A,', 'G,,2.[B,D] D,,2.[B,D]',
+            'D,,2.[F,A,] A,,2.[F,A,]', 'E,,2.[G,B,] B,,2.[G,B,]', '.F,.C.A, .G,z.A,', '.G,.D.B, .A,z.B,',
+            'D,,2.[F,A,] A,,2.[F,A,]', '.E,.B,.G, .F,z.G,', '.F,.C.A, .G,z.A,', 'G,,2.[B,D] D,,2.[B,D]',
+          ],
+          chords: ['D', 'Em', 'F#m', 'G', 'D', 'Em', 'F#m', 'G', 'D', 'Em', 'F#m', 'G', 'D', 'Em', 'F#m', 'G'],
+        },
+        {
+          name: 'The orcas', meter: '6/8', key: 'D', bpm: 92,
+          rh: [
+            'z6', 'fdA FB2', 'z2.[EB] z2.[EGB]', 'z2.[EGA] z2.[EGA]',
+            '.f.c\'.a .gz.a', '.cz.B .c.e.A', '[EG=c]3 [EGc]3', '[FAd]3 [FAd]3',
+          ],
+          lh: [
+            '!mf! F,2C DA,F,', '[D,,D,]3 [B,,B,]3', 'G,2G, B,2D', '[C,C]6',
+            'A,,2A,, F,E,D,', '[A,,A,]3 C,2C,', 'B,,=C,D, =CB,G,', 'A,[D,,D,]2- [D,,D,]3',
+          ],
+          chords: ['D', 'Bm', 'Em', 'A7', 'F#m', 'A', 'C', 'D'],
+        },
+        {
+          name: 'The wind rises', meter: '6/8', key: 'Dm', bpm: 92,
+          speeds: [92, 92, 93, 95, 98, 101, 104, 107],
+          marks: { 2: 'faster and louder, little by little' },
+          rh: [
+            '!p! [FAd]6', '[GBd]6', 'z[Adf][Adf] [Adf]3', 'z[Bdg][Bdg] [Bdg]3',
+            '!mp! z[dfa][dfa] z[dfa][dfa]', 'z[dfb][dfb] z[dfb][dfb]', '!mf! z[^cea][cea] z[cea][cea]', 'z[eg^c\'][egc\'] z3',
+          ],
+          lh: [
+            'D,,D,D,, D,D,,D,', 'D,,D,D,, D,D,,D,', 'D,,D,D,, D,D,,D,', 'D,,D,D,, D,D,,D,',
+            'D,,D,D,, D,D,,D,', 'D,,D,D,, D,D,,D,', 'A,,,A,,A,,, A,,A,,,A,,', 'A,,,A,,A,,, A,,A,,,A,,',
+          ],
+          chords: ['Dm', 'Gm', 'Dm', 'Gm', 'Dm', 'Bb', 'A', 'A7'],
+        },
+        {
+          name: 'The storm breaks', meter: '6/8', key: 'Dm', bpm: 108,
+          rh: [
+            '!f! [A,DF]2^c dAF', '[B,D]2A BFD', '[B,DG]2^f gbd\'', '[eg^c\']6',
+            'z[Acf][Acf] z[Acf][Acf]', 'z[A^ce][A^ce] z[A^ce][A^ce]', 'z[ceg][ceg] z[ceg][ceg]', 'z[dfa][dfa] [dfad\']3',
+          ],
+          lh: [
+            'D,,D,D,, D,D,,D,', 'B,,,B,,B,,, B,,B,,,B,,', 'G,,,G,,G,,, G,,G,,,G,,', '[A,,A,][G,,G,][F,,F,] [E,,E,][D,,D,][^C,,^C,]',
+            '[A,,,A,,]2[A,,,A,,] [F,,F,][E,,E,][D,,D,]', '[A,,,A,,]3 [^C,,^C,]2[^C,,^C,]', '[B,,,B,,][C,,C,][D,,D,] [C,C][B,,B,][G,,G,]', '[A,,A,][D,,D,]2- [D,,D,]3',
+          ],
+          chords: ['Dm', 'Bb', 'Gm', 'A7', 'F', 'A', 'C', 'Dm'],
+        },
+        {
+          name: 'The battle', meter: '6/8', key: 'Dm', bpm: 108,
+          rh: [
+            '!ff! [A,DF]2F A2c', '[FBd]2d f2a', '[dgb]2b d\'2f\'', 'z6',
+            'z[Adf][Adf] z[Adf][Adf]', 'z3 "C#dim"z3', '[FBd]2a bfd', '[dgb]2_e dgb',
+            '[EA^c]2^g aec',
+          ],
+          lh: [
+            'D,,A,,D, F,D,A,,', 'B,,,F,,B,, D,B,,F,,', 'G,,D,G, B,G,D,', 'A,,,E,,A,, ^C,A,,E,,',
+            '[F,,F,]2[^C,^C] [D,D][A,,A,][F,,F,]', 'A,,,/^C,,/E,,/A,,/^C,/E,/ E,,/G,,/B,,/C,/E,/G,/', 'D,2A, B,F,D,', 'G,,,G,,G,,, G,,G,,,G,,',
+            'A,,,A,,A,,, A,,A,,,A,,',
+          ],
+          chords: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'A', 'Bb', 'Gm', 'A'],
+        },
+        {
+          name: 'At the helm', meter: '6/8', key: 'Dm', bpm: 108,
+          speeds: [108, 108, 108, 108, 108, 108, 108, 108, 66, 82],
+          marks: { 4: 'The second round', 6: 'The break', 8: 'The bay, far off' },
+          rh: [
+            '!f! [A,DF]2^c dAF', '[EGA^c]2^g aec', '[DGB]2^f gdB', '[B,^CE]2c ^cGE',
+            '!ff! [A,DF]^cd "A7"[EGAc]^ga', '[DGB]^fg "C#dim"[B,^CE]c^c', '!fermata![A^ceg]6', 'z6',
+            'z6', '!fermata![A,D^F]6',
+          ],
+          lh: [
+            'A,,,A,,A,,, A,,A,,,A,,', 'A,,,A,,A,,, A,,A,,,A,,', 'A,,,A,,A,,, A,,A,,,A,,', 'A,,,A,,A,,, A,,A,,,A,,',
+            '[A,,,A,,]3 [A,,,A,,]3', '[A,,,A,,]3 [A,,,A,,]3', '!fermata![A,,,A,,]6', 'z6',
+            '!pp! D,,A,,D, ^F,A,D', '!fermata!D,,6',
+          ],
+          chords: ['Dm', 'A7', 'Gm', 'C#dim', 'Dm', 'Gm', 'A7', 'A7', 'D', 'D'],
+        },
+        {
+          name: 'The sheltered bay', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 66, 66, 66, 66, 66, 66, 56],
+          marks: { 0: 'calm, with pedal' },
+          rh: [
+            '!p! [DF]2c dAF', '[B,D]3 [DB]3', 'G2G [GB]2d', 'c6 & xFA B2F',
+            'A,2A, FED', '[CA]3 [A,C]2C', 'B,=CD =cBG', 'xd2 =cBG & AD2- D3',
+          ],
+          lh: [
+            'G,,D,B, D,B,D,', 'B,,,F,,D, F,,D,F,,', 'G,,D,B, D,B,D,', 'F,,C,A, C,A,C,',
+            'D,,A,,F, A,,F,A,,', 'A,,,E,,C, E,,C,E,,', '=C,,G,,E, G,,E,G,,', 'G,,D,B,- B,3',
+          ],
+          chords: ['G', 'Bm', 'G', 'F#m', 'D', 'A', 'C', 'G'],
+        },
+        {
+          name: 'Nightfall', meter: '6/8', key: 'D', bpm: 66,
+          speeds: [66, 61, 55],
+          marks: { 1: 'in three' },
+          rh: [
+            '!pp! z3 _BG2', 'z6', 'zd\'2 c\'bg',
+          ],
+          lh: [
+            '_B,,=F,D F,DF,', '=C,2[G,E]2[G,E]2', 'A,,2[G,C]2[G,C]2',
+          ],
+          chords: ['Bb', 'C', 'A7'],
+        },
+        {
+          name: 'The northern lights', key: 'D', bpm: 128,
+          speeds: [128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 120, 106, 80],
+          marks: { 0: 'with pedal', 16: 'The dance', 29: 'slowing' },
+          rh: [
+            '!pp! f6', 'x4 f\'a\' & d\'6', 'd6', 'x4 d\'=f\' & _b6',
+            'g6', 'x4 d\'g\' & b6', 'c\'6', 'x4 c\'e\' & a6',
+            'c\'6', 'x4 ac\' & f6', 'a6', 'x4 ea & c6',
+            '_B6', 'x4 e\'g\' & =c\'6', 'a6', 'x4 fa & d6',
+            '!mp! f4 c\'2', 'd\'2 a2 f2', 'x2 =f_b d\'b & d6', 'x4 d\'/=f\'/_b\'/f\'/ & _b6',
+            'x2 g\'2 x2 & g6', 'b4 d\'2', 'x2 e\'g\' a\'g\' & c\'6', 'a2 g2 e2',
+            'c\'6', 'f2 e2 d2', 'x2 c\'e\' a\'e\' & a6', 'x4 e/a/c\'/e\'/ & c6',
+            '_B2 =c2 d2', '=c\'2 b2 g2', 'x4 fa & a2 d4-', 'x2 d\'2 x2 & d6',
+          ],
+          lh: [
+            '!arpeggio![D,,A,,F,]6', 'A,,2 [F,A,D]4', '!arpeggio![_B,,=F,D]6', '=F,,2 [=F,_B,D]4',
+            '!arpeggio![G,,D,B,]6', 'D,,2 [G,B,D]4', '!arpeggio![A,,E,G,C]6', 'E,,2 [G,CE]4',
+            '!arpeggio![F,,C,A,]6', 'C,,2 [F,A,C]4', '!arpeggio![A,,E,C]6', 'E,,2 [A,CE]4',
+            '!arpeggio![_B,,=F,D]6', '=C,,2 [G,=CE]4', '!arpeggio![D,,A,,F,]6', 'A,,2 [F,A,D]4',
+            'D,,2 [F,A,D]2 [F,A,D]2', 'A,,2 [F,A,D]2 [F,A,D]2', '_B,,2 [=F,_B,D]4', '!arpeggio![_B,,=F,D]6',
+            'G,,D, G,B, DG', 'D,,2 [G,B,D]2 [G,B,D]2', 'A,,2 [G,CE]2 [G,CE]2', 'A,,E, G,C EG',
+            'F,,2 [F,A,C]2 [F,A,C]2', 'C,,2 [F,A,C]2 [F,A,C]2', 'A,,2 [A,CE]4', '!arpeggio![A,,E,C]6',
+            '_B,,2 [=F,_B,D]2 [F,B,D]2', '=C,,2 [G,=CE]2 [G,CE]2', 'D,,2 [F,A,D]4', '!arpeggio![D,,A,,F,]6',
+          ],
+          chords: ['D', 'D', 'Bb', 'Bb', 'G', 'G', 'A7', 'A7', 'F#m', 'F#m', 'A', 'A', 'Bb', 'C', 'D', 'D', 'D', 'D', 'Bb', 'Bb', 'G', 'G', 'A7', 'A7', 'F#m', 'F#m', 'A', 'A', 'Bb', 'C', 'D', 'D'],
+        },
+        {
+          name: 'The lighthouse', meter: '6/8', key: 'D', bpm: 56,
+          speeds: [56, 56, 56, 56, 56, 56, 53, 42],
+          marks: { 0: 'slowly, with pedal', 6: 'fading' },
+          rh: [
+            '!pp! F2c dAF', 'x2e fba & D3 B3', '!p! G2G B2d', 'x2e fba & c6',
+            'A,2A, FED', 'x2e fba & A3 x3', '!pp! B,=CD =cBG', 'x2e fb!fermata!a & AD2- !fermata!D3',
+          ],
+          lh: [
+            'G,,D,B,- B,3', 'B,,,F,,D,- D,3', 'G,,D,B,- B,3', 'F,,C,A,- A,3',
+            'D,,A,,F,- F,3', 'A,,,E,,C, C2C', '=C,,G,,E,- E,3', 'D,,A,,F,- !fermata!F,3',
+          ],
+          chords: ['G', 'Bm', 'G', 'F#m', 'D', 'A', 'C', 'D'],
         },
       ],
     },

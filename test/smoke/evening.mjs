@@ -38,7 +38,13 @@ try {
   };
   const load = async (s) => {
     await page.goto(site.url);
-    await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), s);
+    // the app that is open now saves its own state whenever it likes (a pop-up it shows, a
+    // visitor that arrives): after ours is written it can't write any more, or a save of its
+    // own just before the reload would put the old state back
+    await page.evaluate((st) => {
+      localStorage.setItem('kidquest.v1', JSON.stringify(st));
+      Storage.prototype.setItem = () => {};
+    }, s);
     await page.reload();
   };
 

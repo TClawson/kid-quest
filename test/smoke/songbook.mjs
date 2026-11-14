@@ -87,7 +87,7 @@ async function litBar(page, n, ms = 8000) {
   return -1;
 }
 
-// 1. tablet, the little keyboard and two treasure maps: all nine map songs and those two
+// 1. tablet, the little keyboard and two treasure maps: all ten map songs and those two
 // shows' tunes are open; every one engraves cleanly
 {
   const found = ['bg-meadow', 'bg-galaxy'];
@@ -95,14 +95,14 @@ async function litBar(page, n, ms = 8000) {
   const open = await page.$$eval('.song-card:not(.locked)', (els) => els.map((e) => e.dataset.id));
   const want = songbookFor(1, new Set(found)).filter((p) => p.open).map((p) => p.id);
   assert.deepEqual(open, want, 'the map songs, and the found shows');
-  assert.equal(open.length, 11);
+  assert.equal(open.length, 12);
   assert.ok(open.includes('show:bg-galaxy') && open.includes('show:bg-meadow') && open.includes('bg-meadow'));
-  assert.equal(await page.locator('.song-card.locked').count(), 7 + CONCERT.length, 'the other shows, and the concert pieces');
+  assert.equal(await page.locator('.song-card.locked').count(), 8 + CONCERT.length, 'the other shows, and the concert pieces');
   assert.equal(await page.locator('.song-tier').count(), 3, 'three sections: map songs, show tunes and concert pieces');
   assert.match(await page.locator('.song-tier').nth(2).textContent(), /🎹 Concert pieces/);
   for (const p of CONCERT) assert.match(await page.locator('.song-tier').nth(2).textContent(), new RegExp(`${p.name}.*Opens with the upright piano`), 'its name shows, and the piano that opens it');
   // nothing bought yet: every open song shows its price, none opens
-  assert.equal(await page.locator('.song-card.buy').count(), 11, 'every open song is for sale');
+  assert.equal(await page.locator('.song-card.buy').count(), 12, 'every open song is for sale');
   assert.equal(await page.locator('[data-action="song-open"]').count(), 0, 'nothing to open before buying');
   assert.match(await page.locator('.song-card.buy').first().textContent(), /🪙 20/);
   assert.match(await page.locator('.song-intro').textContent(), /Each song costs 🪙 20/);
@@ -110,7 +110,7 @@ async function litBar(page, n, ms = 8000) {
   assert.match(await page.locator('.song-card.locked').first().textContent(), /Opens with the upright piano, or finish the \w[\w ]* treasure map/);
   // the other shows' tunes are secret: no names, and what opens them
   const list = await page.locator('.songbook').textContent();
-  assert.equal((list.match(/Secret song/g) || []).length, 7);
+  assert.equal((list.match(/Secret song/g) || []).length, 8);
   for (const [map, song] of Object.entries(SHOW_SONGS)) if (!found.includes(map)) assert.ok(!list.includes(song.name), `${song.name} stays secret`);
   await page.screenshot({ path: `${out}/1-songbook-tablet.png`, fullPage: true });
   for (const [n, id] of open.entries()) {
@@ -201,10 +201,10 @@ async function litBar(page, n, ms = 8000) {
   await ctx.close();
 }
 
-// 1b. tablet, the upright piano and no treasure maps, every song bought: all 18 open, no secret songs
+// 1b. tablet, the upright piano and no treasure maps, every song bought: all 20 open, no secret songs
 {
   const { ctx, page } = await openSongbook({ width: 1280, height: 800 }, 5, [], { songs: ALL });
-  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18 + CONCERT.length);
+  assert.equal(await page.locator('.song-card:not(.locked)').count(), 20 + CONCERT.length);
   assert.equal(await page.locator('.song-card.locked').count(), 0);
   const list = await page.locator('.songbook').textContent();
   assert.ok(!list.includes('Secret song'));
@@ -246,7 +246,7 @@ async function litBar(page, n, ms = 8000) {
 // redraw while a piece plays (family sync does that) leaves the music and the scroll alone
 {
   const { ctx, page } = await openSongbook({ width: 412, height: 915 }, 7, Object.keys(SHOW_SONGS), { songs: ALL });
-  assert.equal(await page.locator('.song-card:not(.locked)').count(), 18 + CONCERT.length);
+  assert.equal(await page.locator('.song-card:not(.locked)').count(), 20 + CONCERT.length);
   await page.screenshot({ path: `${out}/4-songbook-phone.png`, fullPage: true });
   const id = 'bg-meadow';
   await page.click(`[data-action="song-open"][data-id="${id}"]`);
@@ -323,9 +323,9 @@ const toastText = (page) => page.locator('.toast').last().textContent();
 for (const [name, viewport] of [['tablet', { width: 1024, height: 768 }], ['phone', { width: 390, height: 844 }]]) {
   const { ctx, page } = await openSongbook(viewport, 3, [], { songs: ['bg-meadow'], spent: 1320 - 25 });
   assert.equal(await page.locator('[data-action="song-open"]').count(), 1, 'the one bought song opens');
-  assert.equal(await page.locator('.song-card.buy').count(), 8, 'the other map songs are for sale');
-  assert.equal(await page.locator('.song-card.locked').count(), 9 + CONCERT.length, 'the show songs and the concert pieces stay locked');
-  assert.equal(await page.locator('.song-card.buy .song-price.can').count(), 8, '25 coins: they can be bought');
+  assert.equal(await page.locator('.song-card.buy').count(), 9, 'the other map songs are for sale');
+  assert.equal(await page.locator('.song-card.locked').count(), 10 + CONCERT.length, 'the show songs and the concert pieces stay locked');
+  assert.equal(await page.locator('.song-card.buy .song-price.can').count(), 9, '25 coins: they can be bought');
   assert.equal(await coinChip(page), 25);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: no sideways scrolling`);
   // nothing in a card is cut off: everything sits inside its card
@@ -391,7 +391,7 @@ for (const piece of CONCERT) for (const [name, viewport] of [['tablet', { width:
   const tag = id.replace('long:bg-', '');
   const top = longLevels(id).at(-1);
   assert.match(await page.locator('.song-intro').textContent(), /the long concert pieces/);
-  assert.match(await page.locator('.kid-title small').textContent(), new RegExp(`18 of ${18 + CONCERT.length} songs yours`));
+  assert.match(await page.locator('.kid-title small').textContent(), new RegExp(`20 of ${20 + CONCERT.length} songs yours`));
   assert.deepEqual(await page.$$eval('.song-tier:nth-of-type(3) .song-card', (els) => els.map((e) => e.dataset.id)), CONCERT.map((p) => p.id), 'the concert pieces, in order');
   const card = page.locator(`[data-action="song-buy"][data-id="${id}"]`);
   assert.match(await card.textContent(), /🪙 20/, 'for sale');

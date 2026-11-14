@@ -216,7 +216,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.2, `${msg}: ${a} vs ${
   await walkIn(page);
   await page.waitForSelector('#studio .st-bar');
   assert.match(await page.locator('.st-mixname').textContent(), /empty/);
-  assert.equal(await page.locator('.st-song').count(), 9, 'the nine map songs of the little keyboard');
+  assert.equal(await page.locator('.st-song').count(), 10, 'the ten map songs of the little keyboard');
   assert.match(await page.locator('.st-song[data-song="bg-meadow"] .st-song-info').textContent(), /major|minor/, 'each song shows its key');
   await page.screenshot({ path: `${out}/1-empty-tablet.png`, fullPage: true });
 

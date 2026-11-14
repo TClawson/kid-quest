@@ -227,9 +227,16 @@ test('every Places background has a map, a fishing spot and a hidden spot', asyn
   assert.equal(MAP_THEMES['bg-fjord'].life, 'fjord');
 });
 
-test('the fjord is on show but not for sale until its music is written', async () => {
+test('the fjord is for sale now that its music is written; nothing is "coming soon"', async () => {
   const { comingSoon } = await import('../js/items.js');
-  assert.equal(comingSoon(itemById('bg-fjord')), true);
-  assert.deepEqual(ITEMS.filter(comingSoon).map((i) => i.id), ['bg-fjord']);
-  assert.equal(isUnlocked(itemById('bg-fjord'), { owned: [], coins: 9999 }), false);
+  assert.equal(comingSoon(itemById('bg-fjord')), false);
+  assert.deepEqual(ITEMS.filter(comingSoon), []);
+  // an item marked soon is on show but can't be bought
+  assert.equal(comingSoon({ id: 'x', soon: true }), true);
+  // the fjord has its own song, show tune and concert piece
+  const { SONGS, SHOW_SONGS } = await import('../js/songs.js');
+  const { LONG_PIECES } = await import('../js/longpieces.js');
+  assert.equal(SONGS['bg-fjord'].name, 'Northern Lights');
+  assert.equal(SHOW_SONGS['bg-fjord'].name, 'Lighthouse Call');
+  assert.equal(LONG_PIECES['long:bg-fjord'].map, 'bg-fjord');
 });
