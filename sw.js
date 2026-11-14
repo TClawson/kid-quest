@@ -94,6 +94,7 @@ const SHELL = [
   'js/concert.js',
   'js/longpieces.js',
   'js/houseart.js',
+  'js/tankart.js',
   'js/houserules.js',
   'js/gardenrules.js',
   'js/gardenart.js',

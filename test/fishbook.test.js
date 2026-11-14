@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FISH_SPECIES, FISH_MAPS, speciesId, fishSpecies, catchSpecies, recordCatch, bookCount, bookPages, cleanNickname, makeTank, tankFish, NICK_MAX } from '../js/fishbook.js';
+import { FISH_SPECIES, FISH_MAPS, speciesId, fishSpecies, catchSpecies, recordCatch, bookCount, bookPages, cleanNickname, makeTank, tankFish, tankFishes, tankSlots, putInTank, takeFromTank, TANK_MAX, NICK_MAX } from '../js/fishbook.js';
+import { homeLayout, tankRoom, furnitureById, placeFurniture } from '../js/furniture.js';
 import { SPOTS } from '../js/fishing.js';
 
 test('the fish book has six fish for every lake: five kinds and its rare fish', () => {
@@ -107,4 +108,39 @@ test('the tank: only a caught fish goes in, and it shows its nickname (or its na
   const small = tankFish({ fishRecords: { 'meadow-pike': { size: 18 } }, tank: { species: 'meadow-pike' } });
   const big = tankFish({ fishRecords: { 'meadow-pike': { size: 44 } }, tank: { species: 'meadow-pike' } });
   assert.ok(big.len > small.len);
+});
+
+test('bigger tanks: more fish, each species once, the first stays where old copies read it', () => {
+  const recs = {};
+  for (const id of ['meadow-trout', 'meadow-pike', 'ocean-sword', 'castle-pike', 'sunset-bluegill', 'meadow-bluegill']) recs[id] = { size: 20, points: 50, map: 'bg-meadow', date: '2026-11-09' };
+  const kid = { fishRecords: recs, owned: [] };
+  assert.equal(tankRoom(kid), 1, 'the free little tank holds one');
+  assert.equal(homeLayout(kid).tank.id, 'home-tank-basic');
+  kid.tank = putInTank(kid, 0, 'meadow-trout', 'Goldie');
+  assert.deepEqual(kid.tank, { species: 'meadow-trout', nickname: 'Goldie' }, 'one fish: just as before');
+  kid.tank = putInTank(kid, 1, 'meadow-pike', 'Spike');
+  kid.tank = putInTank(kid, 4, 'ocean-sword', ''); // past the end: added at the end
+  assert.deepEqual(kid.tank, { species: 'meadow-trout', nickname: 'Goldie', more: [{ species: 'meadow-pike', nickname: 'Spike' }, { species: 'ocean-sword', nickname: '' }] });
+  assert.equal(putInTank(kid, 2, 'meadow-trout', 'Again'), null, 'a fish is in the tank once');
+  assert.equal(putInTank(kid, 0, 'galaxy-pike', 'X'), null, 'not caught');
+  assert.deepEqual(putInTank(kid, 0, 'meadow-trout', 'Sir Goldie').nickname, 'Sir Goldie', 'renaming in its own place is fine');
+  // the little tank only shows the first; the wall aquarium shows five
+  assert.deepEqual(tankFishes(kid, tankRoom(kid)).map((f) => f.nickname), ['Goldie']);
+  kid.owned.push('home-tank-wall');
+  kid.home = placeFurniture(kid, furnitureById('home-tank-wall'));
+  assert.equal(tankRoom(kid), TANK_MAX);
+  assert.deepEqual(tankFishes(kid, tankRoom(kid)).map((f) => f.nickname), ['Goldie', 'Spike', 'Swordfish']);
+  // a fish gone from the book is left out of the show, but its place keeps it
+  const gone = { ...kid, fishRecords: { ...recs, 'meadow-pike': undefined } };
+  assert.deepEqual(tankFishes(gone, 5).map((f) => f.species), ['meadow-trout', 'ocean-sword']);
+  // taking one out closes the gap; taking the last out empties it
+  kid.tank = takeFromTank(kid, 0);
+  assert.deepEqual(tankSlots(kid).map((f) => f.species), ['meadow-pike', 'ocean-sword']);
+  assert.equal(kid.tank.species, 'meadow-pike', 'the next one moves up to first');
+  assert.equal(takeFromTank({ fishRecords: recs, tank: { species: 'meadow-pike' } }, 0), null);
+  // junk in the saved tank is ignored
+  assert.deepEqual(tankSlots({ tank: { species: 'meadow-pike', more: [null, { species: 'nope' }, { species: 'meadow-pike' }, 'x'] } }).map((f) => f.species), ['meadow-pike']);
+  // taking the wall aquarium out goes back to the little tank
+  kid.home = placeFurniture(kid, furnitureById('home-tank-wall'));
+  assert.equal(homeLayout(kid).tank.id, 'home-tank-basic');
 });

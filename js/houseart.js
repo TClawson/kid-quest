@@ -11,6 +11,7 @@
 
 import { ramp, mix, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer } from './pixelkit.js';
 import { HOME_COLORS, furnitureById } from './furniture.js';
+import { tankSpec, tankArt, tankFront, tankThumb } from './tankart.js';
 
 export const INK = '#3b2235';
 const WD = ['#4a2a36', '#7a4436', '#a8663e', '#cc8a50', '#e8b674', '#f8dca0'];
@@ -904,72 +905,7 @@ function basketArt() {
 }
 
 // ---------- the fish tank ----------
-
-const WATER = ['#c8eef8', '#94d4ec', '#68b8e0', '#4a9ccc', '#3a82b8'];
-const PEBBLE = ['#e8c890', '#d4a86a', '#f0a8a0', '#a0c8f0', '#c8a8e8', '#a8784a', '#fff4dc'];
-
-/**
- * The fish tank on a low wooden cabinet, with the fish book open on a little stand beside it.
- * The fish itself, its bubbles and its name plaque are added on top by house.js (the fish
- * swims), so the tank is drawn with clear water, gravel, plants and a little castle.
- * TANK gives where those go, from the art's top-left corner.
- */
-export const TANK = { w: 62, h: 39, water: [3, 4, 41, 13], bubbler: { x: 13, y: 18 }, plaque: { x: 23, y: 31 }, book: [46, 12, 16, 13] };
-
-function tankArt() {
-  return sprite(TANK.w, TANK.h, (b) => {
-    // the water, lighter near the top, then the gravel
-    for (let y = 3; y < 22; y += 1) for (let x = 2; x < 45; x += 1) {
-      const band = Math.min(4, (y - 3) / 4);
-      const lo = Math.floor(band); const k = band - lo;
-      b.set(x, y, k > bayer(x, y) && lo < 4 ? WATER[lo + 1] : WATER[lo]);
-    }
-    for (let x = 2; x < 45; x += 1) b.set(x, 3, WATER[0]); // the surface
-    for (let y = 18; y < 22; y += 1) for (let x = 2; x < 45; x += 1) {
-      if (y === 18 && h2(x, 7) < 0.45) continue; // a bumpy top
-      b.set(x, y, PEBBLE[Math.floor(h2(x * 3 + y, y * 7) * PEBBLE.length)]);
-    }
-    // swaying weed on the left, broad leaves on the right
-    for (const [x0, top, ph] of [[4, 7, 0], [6, 10, 2], [8, 8, 1]]) {
-      for (let y = top; y < 19; y += 1) { const x = x0 + (Math.floor((y + ph) / 3) % 2); b.set(x, y, y % 3 === 0 ? LEAF[4] : LEAF[2]); }
-    }
-    grid((x, y, c) => b.set(x, y, c), 37, 7, ['..l...', '.lL.l.', '.lLlL.', 'l.lLL.', 'lLl.Ll', '.lLlL.', '..lLl.', '..ss..', '..ss..', '..ss..', '.ssss.'], { l: LEAF[3], L: LEAF[5], s: LEAF[1] });
-    // a little castle, and the stone that bubbles
-    grid((x, y, c) => b.set(x, y, c), 26, 11, ['g.g.g.', 'gGgGgg', 'gGgggg', 'ggkkgg', 'gGkkgg', 'ggkkgg', 'gggggg'], { g: '#9894aa', G: '#c0bcc8', k: '#4a4560' });
-    grid((x, y, c) => b.set(x, y, c), 11, 17, ['.ss.', 'sSss'], { s: '#6e6a86', S: '#9894aa' });
-    // the glass: a dark frame and lid with a light under it, and a couple of shines on the front
-    for (let x = 1; x < 46; x += 1) { b.set(x, 0, SAGE[3]); b.set(x, 1, SAGE[1]); b.set(x, 2, SAGE[0]); b.set(x, 22, SAGE[1]); b.set(x, 23, SAGE[0]); }
-    for (let y = 0; y < 24; y += 1) { b.set(1, y, y < 3 || y > 21 ? b.get(1, y) : SAGE[2]); b.set(45, y, y < 3 || y > 21 ? b.get(45, y) : SAGE[0]); }
-    for (let x = 14; x < 32; x += 1) b.set(x, 1, '#fff4c8'); // the lid's light
-    for (let i = 0; i < 6; i += 1) { b.set(5 + i, 11 - i, 'rgba(255,255,255,0.45)', 'soft'); b.set(7 + i, 11 - i, 'rgba(255,255,255,0.25)', 'soft'); }
-    for (let i = 0; i < 3; i += 1) b.set(40 + i, 6 - i, 'rgba(255,255,255,0.4)', 'soft');
-    // the cabinet: a top, two doors under the tank and a narrow one, little feet
-    for (let y = 24; y < 39; y += 1) for (let x = 0; x < 62; x += 1) {
-      if (y === 38 && x > 2 && x < 59) continue; // feet only at the ends
-      let c = y === 24 ? WD[5] : y === 25 ? WD[4] : y >= 37 ? WD[1] : WD[3];
-      if (y > 26 && y < 36) {
-        for (const [a, z] of [[3, 22], [24, 43], [47, 58]]) {
-          if (x === a || x === z || y === 27 || y === 35) { if (x >= a && x <= z) c = WD[2]; } else if (x > a && x < z) c = x === a + 1 || y === 28 ? WD[4] : WD[3];
-        }
-      }
-      if (x === 0 || x === 61) c = WD[2];
-      b.set(x, y, c);
-    }
-    for (const [x, y] of [[20, 31], [26, 31], [50, 31]]) { b.set(x, y, GOLD[3]); b.set(x, y + 1, GOLD[1]); }
-    // the fish book, open on a little stand: a fish drawn on one page, notes on the other
-    const B = TANK.book;
-    for (let y = 2; y < 10; y += 1) for (let x = 1; x < 15; x += 1) b.set(B[0] + x, B[1] + y, '#2f6b4a');
-    for (let y = 1; y < 9; y += 1) for (let x = 2; x < 14; x += 1) {
-      if (y === 1 && (x === 2 || x === 7 || x === 8 || x === 13)) continue;
-      b.set(B[0] + x, B[1] + y, x === 7 || x === 8 ? '#e0d0a8' : x < 7 ? '#fdf4dc' : '#fffaf0');
-    }
-    grid((x, y, c) => b.set(x, y, c), B[0] + 2, B[1] + 3, ['.oo..', 'oOoo.o', 'ooooo', '.oo..o'], { o: '#f08c3a', O: '#3b2235' });
-    for (const y of [3, 5, 7]) for (let x = 9; x < 13; x += 1) if (!(y === 7 && x > 11)) b.set(B[0] + x, B[1] + y, '#b0a090');
-    for (let x = 4; x < 12; x += 1) b.set(B[0] + x, B[1] + 10, WD[2]);
-    for (const x of [5, 10]) b.set(B[0] + x, B[1] + 11, WD[1]);
-    for (let x = 3; x < 13; x += 1) b.set(B[0] + x, B[1] + 12, WD[3]);
-  });
-}
+// tankart.js draws the tanks, from the free little one to the wall aquarium (the tank spot).
 
 // ---------- the mess ----------
 // Things left on the floor when the floor chore isn't done: [level it shows from, x, y, kind].
@@ -1091,6 +1027,7 @@ const pieceArt = (item, state = {}) => {
     case 'rug': return rugArt(item, state.lift);
     case 'art': return pictureArt(item.look);
     case 'music': return turntableArt(item);
+    case 'tank': return tankThumb(item.art);
     default: return null;
   }
 };
@@ -1113,8 +1050,9 @@ function placeOf(spot, b) {
  *   away, mess: 0-3, shelf: 0-3, gear: bestGear(owned), color: the kid's color (the door),
  * }. Returns { pieces: [{ id, x, y, w, h, foot, canvas }] } for the pieces that stand out on
  * the floor (drawn by house.js as their own canvases, in front of or behind the buddy), and
- * blocks: [[x, y, w, h]...] where the buddy can't walk. The fish tank (ROOM.at.tank, TANK) is
- * always one of the pieces.
+ * blocks: [[x, y, w, h]...] where the buddy can't walk. The fish tank (layout.tank, the free
+ * little one when none is bought; tankart.js TANKS) is always one of the pieces, plus its front
+ * plants for the biggest ones (piece 'tank-front', drawn over the fish).
  */
 export function paintRoom(canvas, o) {
   const { W, H } = R;
@@ -1207,11 +1145,21 @@ export function paintRoom(canvas, o) {
   if (lay.table) { const b = pieceArt(lay.table); const p = placeOf('table', b); stand('table', b, p.x, p.y, [p.x + 2, p.y + b.h - 12, b.w - 4, 12]); }
   if (lay.chair) { const b = pieceArt(lay.chair); const p = placeOf('chair', b); stand('chair', b, p.x, p.y, [p.x + 1, p.y + b.h - 10, b.w - 2, 10]); }
   if (lay.corner) { const b = pieceArt(lay.corner); const p = placeOf('corner', b); stand('corner', b, p.x, p.y, lay.corner.art === 'plant' ? [p.x + 3, p.y + b.h - 8, b.w - 6, 8] : [p.x, p.y + b.h - 14, b.w, 14]); }
+  // the bigger tanks take the gear's corner: the rack moves to the other side of the door
+  const tank = tankSpec(lay.tank?.art);
+  const gat = tank.gear || at.gear;
   const g = gearArt(o.gear);
-  if (g) stand('gear', g, at.gear.x, at.gear.y, [at.gear.x, at.gear.y + 24, 38, 12]);
+  if (g) stand('gear', g, gat.x, gat.y, [gat.x, gat.y + 24, 38, 12]);
   stand('basket', basketArt(), at.basket.x, at.basket.y, [at.basket.x, at.basket.y + 8, 16, 10]);
-  // the fish tank is always there (free): the buddy looks in from behind it
-  stand('tank', tankArt(), at.tank.x, at.tank.y, [at.tank.x, at.tank.y + 4, TANK.w, TANK.h - 4]);
+  // the fish tank is always there (the little one is free): the buddy looks in from behind it
+  const ta = tank.at;
+  stand('tank', tankArt(lay.tank?.art), ta.x, ta.y, [ta.x, ta.y + 4, tank.w, tank.h - 4]);
+  const front = tankFront(lay.tank?.art);
+  if (front) {
+    stand('tank-front', front, ta.x, ta.y, null);
+    blocks.pop();
+    pieces[pieces.length - 1].foot += 2; // over the fish's water (house.js puts it one above the tank)
+  }
   return { pieces, blocks };
 }
 

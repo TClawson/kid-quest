@@ -26,6 +26,7 @@ export const HOME_SPOTS = [
   { id: 'rug', name: 'Rug', icon: '🧶' },
   { id: 'art', name: 'Wall art', icon: '🖼️' },
   { id: 'music', name: 'Music corner', icon: '🎶' },
+  { id: 'tank', name: 'Fish tank', icon: '🐟', basic: 'home-tank-basic' },
 ];
 export const spotById = (id) => HOME_SPOTS.find((s) => s.id === id);
 
@@ -79,6 +80,13 @@ const BASE = [
   { id: 'home-art-map', spot: 'art', name: 'Treasure map', art: 'pic', price: 80, look: { c: 'cream', p: 'map' } },
   { id: 'home-art-rainbow', spot: 'art', name: 'Rainbow painting', art: 'pic', price: 70, look: { c: 'pink', p: 'rainbow' } },
 
+  // fish tanks: each holds more of the kid's caught fish (fish: how many), with fancier
+  // plants, rocks and critters inside. The biggest is built into the front wall (houseart.js).
+  { id: 'home-tank-basic', spot: 'tank', name: 'Little fish tank', art: 'tank', fish: 1, look: { c: 'teal', p: 'plain' } },
+  { id: 'home-tank-big', spot: 'tank', name: 'Big fish tank', art: 'tank-big', fish: 2, price: 250, look: { c: 'teal', p: 'plain' }, note: 'Room for 2 fish from your fish book, with a sunken treasure chest, a driftwood log and a snail.' },
+  { id: 'home-tank-grand', spot: 'tank', name: 'Grand aquarium', art: 'tank-grand', fish: 3, price: 500, look: { c: 'teal', p: 'plain' }, note: 'Room for 3 fish, on its own stand, with lights, a rock cave, tall water plants, shrimp and a bubble wall.' },
+  { id: 'home-tank-wall', spot: 'tank', name: 'Wall aquarium', art: 'tank-wall', fish: 5, price: 1000, look: { c: 'teal', p: 'plain' }, note: 'A whole piece of the wall turns into an ocean reef! Room for 5 fish, with coral, kelp, a starfish, a crab and sunken treasure.' },
+
   // the turntable plays the kid's own music from the music house, so it can be bought once that opens
   { id: TURNTABLE_ID, spot: 'music', name: 'Turntable and speakers', art: 'turntable', price: 300, look: { c: 'brown', p: 'plain' }, musicHouse: true, note: 'Play the mixes you make in the recording studio and the tunes you keep from the Note-o-Matic, right in your house. Play one once, or keep one playing as your house\'s music.' },
 ];
@@ -114,6 +122,10 @@ export function homeLayout(kid) {
   }
   return out;
 }
+
+/** The kid's fish tank (furniture item) and how many fish it holds. */
+export const tankOf = (kid) => homeLayout(kid).tank;
+export const tankRoom = (kid) => tankOf(kid)?.fish || 1;
 
 /** Whether this piece is the one standing in its spot now. */
 export const isPlaced = (kid, item) => homeLayout(kid)[item.spot]?.id === item.id;
