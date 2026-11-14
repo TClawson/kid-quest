@@ -40,7 +40,7 @@ export function checkArrangement(id, level, version, lower = null) {
   const notes = [];
   if (!song) return { errors: [`no song ${id}`], notes, stats: {} };
   if (!rules) return { errors: [`no level ${level}`], notes, stats: {} };
-  const steps = meterOf(song).steps;
+  const { steps, beat } = meterOf(song);
   const sig = signature(song.key);
   const bars = song.lead.length;
   const where = (hand, b) => `${level} ${hand} bar ${b + 1}`;
@@ -79,14 +79,14 @@ export function checkArrangement(id, level, version, lower = null) {
   // a bar with two chords: the right hand starts a note (or a rest) where the second one
   // starts, for its name to sit on
   song.chords.forEach((entry, b) => {
-    for (const c of barChords(entry, steps).slice(1)) {
+    for (const c of barChords(entry, steps, beat).slice(1)) {
       if (!read.rh[b].events.some((e) => Math.abs(e.start - c.pos) < 1e-6)) errors.push(`${where('rh', b)}: nothing starts on eighth ${c.pos + 1}, where the ${c.name} chord starts`);
     }
   });
   if (errors.length) return { errors, notes, stats: {} };
   /** The chord at a time t (eighths from the start of the piece). */
   const chordAt = (t) => {
-    const parts = barChords(song.chords[Math.floor(t / steps)], steps);
+    const parts = barChords(song.chords[Math.floor(t / steps)], steps, beat);
     return parts.filter((c) => c.pos <= (t % steps) + 1e-6).pop().name;
   };
 
@@ -117,7 +117,7 @@ export function checkArrangement(id, level, version, lower = null) {
   }
   // the right hand's harmony notes (under the top note), struck on a beat, belong to the chord
   for (const t of times) {
-    if (t % 2 > 1e-6) continue;
+    if ((t % steps) % beat > 1e-6) continue;
     const struck = rh.filter((n) => Math.abs(n.start - t) < 1e-6).map((n) => n.midi).sort((a, b) => a - b);
     const tones = pitchClasses(chordAt(t));
     const top = struck[struck.length - 1];
@@ -159,7 +159,7 @@ export function checkArrangement(id, level, version, lower = null) {
     let barOn = 0;
     let barAll = 0;
     // (each of a bar's chords for its own share of the bar)
-    for (const c of barChords(song.chords[b], steps)) {
+    for (const c of barChords(song.chords[b], steps, beat)) {
       const tones = pitchClasses(c.name);
       for (const n of lh) {
         const from = Math.max(n.start, b * steps + c.pos);

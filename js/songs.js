@@ -1,5 +1,10 @@
 // The map songs, one per map theme (keyed by background id). All original 16-bar loops.
 // lead: one bar per line, one token per step (an eighth note). '-' holds, '.' rests.
+// beat: steps a bar: 8 (4/4, when left out) or 6. Six steps are a waltz (3/4: three beats of
+// two eighths) unless the song says meter: '6/8' (two beats of three eighths: it sways in two).
+// bpm: quarter notes a minute in every meter: an eighth lasts 30 / bpm seconds. A 6/8 song's
+// sheet music gives its speed in dotted quarters, bpm * 2 / 3 (songTempo), so pick a bpm that
+// is a multiple of 3. The recording studio counts a 6/8 song in three, like a waltz.
 // chords: one per bar ('F E': two that share the bar, see barChords). bass: [chord tone (0 root,
 // 1 third, 2 fifth), octave] per step, or null.
 // drums: one or more patterns (k kick, s snare, h hat, o open hat, t tom), split over the bars.
@@ -9,15 +14,25 @@
 // air (on the chord that leads back to the start) goes round again in the game; on paper it
 // needs a last bar that comes home.
 
+/** Eighth notes in one beat of a song: 2 (a quarter note), or 3 in 6/8 (a dotted quarter). */
+export const songBeat = (song) => (song?.meter === '6/8' ? 3 : 2);
+
+/**
+ * A song's speed as its sheet music gives it: { unit ('1/4', or '3/8' in 6/8), bpm (beats a
+ * minute of that unit) }. The song's own bpm counts quarter notes in every meter.
+ */
+export const songTempo = (song) => (songBeat(song) === 3 ? { unit: '3/8', bpm: Math.round((song.bpm * 2) / 3) } : { unit: '1/4', bpm: song.bpm });
+
 /**
  * A bar's chords, from its entry in a song's chords: 'F' is one chord all bar, 'F E' two that
- * share it evenly. Each gets a whole number of beats, so two can't share a waltz bar (three
- * can: a beat each). Returns [{ name, pos, len }] in steps (eighth notes).
+ * share it evenly. Each gets a whole number of beats (beat: eighths a beat, songBeat), so two
+ * can't share a waltz bar (three can: a beat each), and two share a 6/8 bar (three can't).
+ * Returns [{ name, pos, len }] in steps (eighth notes).
  */
-export function barChords(entry, steps = 8) {
+export function barChords(entry, steps = 8, beat = 2) {
   const names = entry.split(' ');
   const len = steps / names.length;
-  if (names.length > 1 && len % 2) throw new Error(`the chords "${entry}" can't share a bar of ${steps / 2} beats evenly`);
+  if (names.length > 1 && len % beat) throw new Error(`the chords "${entry}" can't share a bar of ${steps / beat} beats evenly`);
   return names.map((name, k) => ({ name, pos: k * len, len }));
 }
 

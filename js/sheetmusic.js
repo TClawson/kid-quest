@@ -7,7 +7,7 @@
 // secret shows' tunes, and a finished treasure map opens its show's tune early), and buying an
 // open piece with coins (SONG_PRICE). Pure logic, no DOM.
 
-import { SONGS, SHOW_SONGS, barChords } from './songs.js';
+import { SONGS, SHOW_SONGS, barChords, songBeat } from './songs.js';
 
 const LETTERS = 'CDEFGAB';
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
@@ -85,11 +85,18 @@ export const chordLabel = (name) => name.replace(/^([A-G])#/, '$1♯').replace(/
 
 // ---------- rhythm ----------
 
-/** A song's time: steps (eighth notes) a bar, the ABC meter, and where the beats fall. */
+/**
+ * A song's time: steps (eighth notes) a bar, the ABC meter, beat (eighths a beat), and middle
+ * (the step that halves the bar, which notes and beams don't hide; null in a waltz).
+ */
 export function meterOf(song) {
   const steps = song.beat || 8;
-  if (steps === 6) return { steps, meter: '3/4', middle: null }; // the waltz: three quarter notes
-  return { steps, meter: '4/4', middle: 4 };
+  if (songBeat(song) === 3) {
+    if (steps !== 6) throw new Error(`a 6/8 song has six steps a bar, not ${steps}`);
+    return { steps, meter: '6/8', beat: 3, middle: 3 }; // two dotted quarters
+  }
+  if (steps === 6) return { steps, meter: '3/4', beat: 2, middle: null }; // the waltz: three quarter notes
+  return { steps, meter: '4/4', beat: 2, middle: 4 };
 }
 
 const WHOLE = [8, 6, 4, 3, 2, 1]; // note lengths in eighths that are a single note (dotted or not)
@@ -100,19 +107,22 @@ const WHOLE = [8, 6, 4, 3, 2, 1]; // note lengths in eighths that are a single n
  * length that isn't one note (5, 7) breaks into the biggest that fits and the rest. Rests
  * show the beats more plainly: one that starts off the beat goes only to the next beat, a
  * waltz rest after the first beat goes beat by beat, and in 4/4 a rest always breaks at the
- * middle (unless it fills the bar) and is never a dotted half.
+ * middle (unless it fills the bar) and is never a dotted half. In 6/8 the two beats always
+ * show: a note or a rest that crosses the middle breaks there, unless it fills the bar.
  */
 export function splitLength(pos, len, meter, rest = false) {
   const parts = [];
+  const beat = meter.beat || 2;
+  const compound = beat === 3;
   let p = pos;
   let left = len;
   while (left > 0) {
     let room = left;
     const crosses = meter.middle && p < meter.middle && p + left > meter.middle;
     const wholeBar = p === 0 && left === meter.steps;
-    if (crosses && (p % 2 === 1 || (rest && !wholeBar))) room = meter.middle - p;
-    if (rest && (p % 2 === 1 || (!meter.middle && p > 0))) room = Math.min(room, 2 - (p % 2));
-    const d = WHOLE.find((w) => w <= room && !(rest && meter.middle && w === 6));
+    if (crosses && (p % beat !== 0 || ((rest || compound) && !wholeBar))) room = meter.middle - p;
+    if (rest && (p % beat !== 0 || (!meter.middle && p > 0))) room = Math.min(room, beat - (p % beat));
+    const d = WHOLE.find((w) => w <= room && !(rest && meter.middle === 4 && w === 6));
     parts.push(d);
     p += d;
     left -= d;
@@ -176,7 +186,8 @@ export function difficulty(song) {
       const n = parseNote(e.note);
       notes.push({ ...n, len: e.len, written: n.midi + 12 * shift });
       const parts = splitLength(e.pos, e.len, meter);
-      if ((e.pos % 2 === 1 && e.len > 1) || parts.length > 1 || parts.includes(3)) rhythm += 1;
+      // (a dotted quarter is the plain beat in 6/8)
+      if ((e.pos % meter.beat !== 0 && e.len > 1) || parts.length > 1 || (meter.beat === 2 && parts.includes(3))) rhythm += 1;
     }
   }
   const n = Math.max(1, notes.length);
@@ -346,7 +357,7 @@ export function songAbc(id, o = {}) {
     const held = new Map();
     const tokens = [];
     const names = [];
-    const chords = barChords(song.chords[b], meter.steps);
+    const chords = barChords(song.chords[b], meter.steps, meter.beat);
     let group = -1;
     for (const e of barEvents(bar)) {
       // a note held over a chord change is cut there (and tied), so the new chord's name has a note to sit on
@@ -354,7 +365,7 @@ export function songAbc(id, o = {}) {
       const parts = cuts.slice(1).flatMap((to, k) => splitLength(cuts[k], to - cuts[k], meter, !e.note));
       let pos = e.pos;
       parts.forEach((len, k) => {
-        // beam eighth notes within each half bar (each beat in the waltz)
+        // beam eighth notes within each half bar (each beat in the waltz; a 6/8 half bar is a beat)
         const g = meter.middle ? Math.floor(pos / meter.middle) : Math.floor(pos / 2);
         const gap = tokens.length && (g !== group || len > 1 || tokens[tokens.length - 1].len > 1) ? ' ' : '';
         group = g;

@@ -215,7 +215,7 @@ export function arrangementAbc(id, level, o = {}, version = ARRANGEMENTS[id]?.[l
     let out = text;
     // each chord's name goes on the note (or rest) that starts with it, or the first one after;
     // from the bar's last chord back, so the places found in the text stay right
-    for (const c of barChords(song.chords[b], meter.steps).reverse()) {
+    for (const c of barChords(song.chords[b], meter.steps, meter.beat).reverse()) {
       const e = events.find((x) => x.start >= c.pos - 1e-6);
       if (e) out = `${out.slice(0, e.col)}"${chordLabel(c.name)}"${out.slice(e.col)}`;
     }

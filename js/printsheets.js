@@ -11,6 +11,7 @@ import { SONGBOOK, songAbc, songById, keyLabel, SWING_MARK } from './sheetmusic.
 import { LEVELS, hasLevel, arrangementAbc } from './arrange.js';
 import { CONCERT, longLevels, longAbc, longFacts } from './concert.js';
 import { itemById } from './items.js';
+import { songTempo } from './songs.js';
 import { COMPOSER } from './composer.js';
 
 /** Where the PDFs are, from the app's page. */
@@ -83,7 +84,9 @@ export function printAbc(sheet) {
     const song = songById(id);
     abc = level === 'easy' ? songAbc(id, { hands: 'roots', perLine: PRINT_PER_LINE }) : arrangementAbc(id, level, { perLine: PRINT_PER_LINE });
     facts = keyLabel(song.key);
-    tempo = song.swing ? `Q:"Swing" 1/4=${song.bpm}` : `Q:1/4=${song.bpm}`;
+    // (a 6/8 song's speed counts dotted quarters)
+    const { unit, bpm } = songTempo(song);
+    tempo = song.swing ? `Q:"Swing" ${unit}=${bpm}` : `Q:${unit}=${bpm}`;
     abc = abc.replace(`${SWING_MARK}\n`, '');
   }
   const head = [
