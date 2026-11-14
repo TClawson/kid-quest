@@ -6,7 +6,10 @@
 //   kid.fishRecords = { 'meadow-bluegill': { size: 9, points: 22, map: 'bg-meadow', date: '2026-11-09' } }
 // size is in inches (what the catch card shows); points break a tie between two catches of the
 // same size (they go up with the fish's exact size). The fish in the tank is
-//   kid.tank = { species: 'meadow-trout', nickname: 'Goldie' }.
+//   kid.tank = { species: 'meadow-trout', nickname: 'Goldie' },
+// and a bigger tank from the shop (furniture.js) holds more: the second fish on are in
+//   kid.tank.more = [{ species: 'ocean-sword', nickname: 'Pointy' }, ...]
+// (the first stays where it always was, so an older copy of the app still shows it).
 
 import { SPOTS, SPECIES, lookFor } from './fishing.js';
 
@@ -94,16 +97,73 @@ export function makeTank(records, species, nickname) {
   return { species, nickname: cleanNickname(nickname) };
 }
 
-/**
- * The fish in a kid's tank, ready to show: { species, nickname, name, look, len, record } or
- * null for an empty tank (also when the tank's fish isn't in the kid's records any more).
- * len: how long it's drawn in the tank (village pixels), bigger for a bigger record.
- */
-export function tankFish(kid) {
+/** Most fish any tank holds (the wall aquarium). */
+export const TANK_MAX = 5;
+
+/** The tank's fish as kept: [{ species, nickname }], first fish first, each species once. */
+export function tankSlots(kid) {
   const t = kid?.tank;
+  if (!t || typeof t !== 'object') return [];
+  const all = [t, ...(Array.isArray(t.more) ? t.more : [])];
+  const seen = new Set();
+  const out = [];
+  for (const f of all) {
+    if (!f || !fishSpecies(f.species) || seen.has(f.species)) continue;
+    seen.add(f.species);
+    out.push({ species: f.species, nickname: cleanNickname(f.nickname) });
+  }
+  return out.slice(0, TANK_MAX);
+}
+
+/** kid.tank from a list of { species, nickname } (null for an empty tank). */
+export function packTank(list) {
+  const [first, ...rest] = (list || []).filter(Boolean);
+  if (!first) return null;
+  return { species: first.species, nickname: first.nickname, ...(rest.length ? { more: rest.map((f) => ({ species: f.species, nickname: f.nickname })) } : {}) };
+}
+
+/**
+ * kid.tank with a fish put in slot (0 = the first fish): the kid's record fish of that species
+ * and its nickname. Null when that fish can't go in (not caught, or already in another slot).
+ * A slot past the fish already there just adds it at the end.
+ */
+export function putInTank(kid, slot, species, nickname) {
+  const fish = makeTank(kid?.fishRecords, species, nickname);
+  if (!fish) return null;
+  const list = tankSlots(kid);
+  const i = Math.max(0, Math.min(list.length, Math.floor(Number(slot) || 0)));
+  if (list.some((f, j) => j !== i && f.species === species)) return null;
+  list[i] = fish;
+  return packTank(list);
+}
+
+/** kid.tank with the fish in slot taken out (null when that empties it). */
+export function takeFromTank(kid, slot) {
+  return packTank(tankSlots(kid).filter((_, j) => j !== slot));
+}
+
+/** One kept fish ready to show (null when it isn't in the kid's records any more). */
+function showFish(kid, t) {
   const sp = fishSpecies(t?.species);
   const record = sp && kid?.fishRecords?.[sp.id];
   if (!record) return null;
   const k = Math.max(0, Math.min(1, (record.size - sp.inches[0]) / (sp.inches[1] - sp.inches[0] || 1)));
   return { species: sp.id, nickname: cleanNickname(t.nickname) || sp.name, name: sp.name, look: sp.look, rare: sp.rare, len: Math.round(12 + 6 * k), record };
+}
+
+/**
+ * The fish swimming in a kid's tank, ready to show, at most room of them (how many the kid's
+ * tank holds): [{ species, nickname, name, look, len, record }]. Fish that aren't in the kid's
+ * records any more are left out. len: how long it's drawn (village pixels), bigger for a bigger record.
+ */
+export function tankFishes(kid, room = 1) {
+  return tankSlots(kid).slice(0, Math.max(1, room)).map((t) => showFish(kid, t)).filter(Boolean);
+}
+
+/**
+ * The first fish in a kid's tank, ready to show: { species, nickname, name, look, len, record } or
+ * null for an empty tank (also when the tank's fish isn't in the kid's records any more).
+ */
+export function tankFish(kid) {
+  return showFish(kid, kid?.tank);
 }

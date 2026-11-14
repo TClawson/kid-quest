@@ -153,7 +153,7 @@ test('furniture is in the shop under Home, with unique ids, and shared by every 
     assert.ok(ids.has(f.id), f.id);
     assert.ok(HOME_SPOTS.some((s) => s.id === f.spot), f.id);
     assert.equal(LEGACY_LEVEL(f), Infinity, 'never handed out free to old kids');
-    if (f.price) assert.ok(f.price >= 30 && f.price <= 400, f.id);
+    if (f.price) assert.ok(f.price >= 30 && f.price <= (f.spot === 'tank' ? 1000 : 400), f.id);
   }
   for (const spot of ['bed', 'table', 'couch', 'chair', 'corner', 'lamp', 'rug', 'art']) assert.ok(FURNITURE.filter((f) => f.spot === spot && f.price).length >= 3, spot);
   const kid = { owned: [], buddy: { species: 'fox', outfit: {} } };

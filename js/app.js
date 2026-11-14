@@ -25,7 +25,7 @@ import { kidHudHtml, statusHtml, menuHtml } from './hud.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, deskOpen, tierInfo } from './musicrules.js';
-import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse } from './furniture.js';
+import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse, tankOf, tankRoom } from './furniture.js';
 import { houseRecord, openTurntable, spinning, stopRecord, setTurntableSync } from './turntable.js';
 import { applyGrants, restoreFromRecord, restoreBackup, restoreTasks, mergeBackup } from './grants.js';
 import { furnitureThumb } from './houseart.js';
@@ -33,7 +33,7 @@ import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout,
 import { seedThumb, decorThumb } from './gardenart.js';
 import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
 import { leaderboard, weekOf } from './leaderboard.js';
-import { bookPages, bookCount, fishSpecies, tankFish, makeTank, NICK_MAX } from './fishbook.js';
+import { bookPages, bookCount, fishSpecies, tankFishes, tankSlots, putInTank, takeFromTank, NICK_MAX } from './fishbook.js';
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio, muffleMusic } from './music.js';
 import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHtml } from './songbook.js';
@@ -1086,7 +1086,7 @@ function houseView(kid, list, mood) {
     shelf: shelfLevel(treasureFound(state.log, kid.id).trophies.size, TROPHIES.length),
     gear: bestGear(kid.owned || []),
     quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
-    tank: tankFish(kid),
+    tank: tankFishes(kid, tankRoom(kid)),
     fish: bookCount(kid.fishRecords).caught,
     garden: { thirsty: gardenThirsty(kid) },
     harvest: houseHarvest(state, kid, t),
@@ -1193,7 +1193,8 @@ const gardenHandlers = {
 
 // ---------- the fish book and the fish tank (in the house) ----------
 // The kid's biggest catch of every kind of fish (kid.fishRecords, kept by the fishing game),
-// and the one they picked and named for their tank (kid.tank). See fishbook.js.
+// and the ones they picked and named for their tank (kid.tank). See fishbook.js. A bigger tank
+// from the shop's Home tab (furniture.js) holds more of them.
 
 const fishImgCache = new Map();
 /** A fish picture as an image URL: in color, or a dark shape for one not caught yet. */
@@ -1219,6 +1220,7 @@ function openFishBook(kid) {
   if (!kid) return;
   const recs = kid.fishRecords || {};
   const { caught, total } = bookCount(recs);
+  const inTank = new Set(tankSlots(kid).slice(0, tankRoom(kid)).map((f) => f.species));
   const pages = bookPages(recs, kidTheme(kid)).map((page) => {
     const n = page.fish.filter((f) => f.record).length;
     return `
@@ -1227,7 +1229,7 @@ function openFishBook(kid) {
         <div class="fb-grid ${n ? '' : 'mini'}">
           ${page.fish.map((f) => (f.record ? `
             <div class="fb-fish ${f.rare ? 'rare' : ''}">
-              ${kid.tank?.species === f.id ? '<span class="fb-tank" title="In your tank">🐟</span>' : ''}
+              ${inTank.has(f.id) ? '<span class="fb-tank" title="In your tank">🐟</span>' : ''}
               <img src="${fishImg(f.id)}" alt="">
               <b>${esc(f.name)}</b>
               <span class="fb-size">${f.record.size} in</span>
@@ -1250,42 +1252,73 @@ function openFishBook(kid) {
     </div>`);
 }
 
-function openTankPicker(kid) {
+/**
+ * The tank's fish picker: a row of the tank's places (as many as the tank holds), then the kid's
+ * caught fish to put in the one picked, and a name for it. slot: which place to start on (the
+ * first empty one when not given).
+ */
+function openTankPicker(kid, slot = null) {
   if (!kid) return;
   const recs = kid.fishRecords || {};
+  const tank = tankOf(kid);
+  const room = tankRoom(kid);
   const mine = bookPages(recs, kidTheme(kid)).flatMap((p) => p.fish.filter((f) => f.record).map((f) => ({ ...f, mapName: p.name })));
   if (!mine.length) {
     openModal(`
       <div class="tankpick">
-        <h2>🐟 Your fish tank</h2>
-        <p>The tank is empty! Go fishing with a visiting buddy. Every fish you catch goes in your fish book, and then you can pick one to live here and give it a name.</p>
+        <h2>🐟 Your ${esc(lower(tank.name))}</h2>
+        <p>The tank is empty! Go fishing with a visiting buddy. Every fish you catch goes in your fish book, and then you can pick ${room > 1 ? `up to ${room}` : 'one'} to live here and give ${room > 1 ? 'them names' : 'it a name'}.</p>
         <button class="btn" data-action="modal-close">OK!</button>
       </div>`);
     return;
   }
-  const now = tankFish(kid);
-  ui.tankPick = now?.species || mine[0].id;
+  const shown = tankFishes(kid, room);
+  const kept = tankSlots(kid);
+  // a place holds the fish kept there if it still shows (a fish gone from the book counts as empty)
+  const at = (i) => (kept[i] && shown.find((f) => f.species === kept[i].species)) || null;
+  const firstEmpty = Array.from({ length: room }, (_, i) => i).find((i) => !at(i));
+  const pick = Math.max(0, Math.min(room - 1, slot ?? firstEmpty ?? 0));
+  // a place past the fish there now adds one at the end
+  ui.tankSlot = Math.min(pick, kept.length);
+  const now = at(pick);
+  const others = new Set(kept.filter((_, i) => i !== ui.tankSlot).map((f) => f.species));
+  ui.tankPick = now?.species || mine.find((f) => !others.has(f.id))?.id || null;
+  const places = room > 1 ? `
+      <div class="tp-slots" role="tablist" aria-label="Places in the tank">
+        ${Array.from({ length: room }, (_, i) => {
+    const f = at(i);
+    return `<button class="tp-slot ${i === pick ? 'on' : ''} ${f ? '' : 'empty'}" data-action="tank-slot" data-slot="${i}" role="tab" aria-selected="${i === pick}">
+            ${f ? `<img src="${fishImg(f.species)}" alt=""><b>${esc(f.nickname)}</b>` : `<span class="tp-plus">+</span><b>Empty</b>`}
+          </button>`;
+  }).join('')}
+      </div>` : '';
   openModal(`
     <div class="tankpick" style="--kid:${esc(kid.color)}">
-      <h2>🐟 Your fish tank</h2>
-      <p class="muted small">Pick a fish from your fish book to swim in your tank.</p>
+      <h2>🐟 Your ${esc(lower(tank.name))}</h2>
+      <p class="muted small">${room > 1 ? `It holds ${room} fish. Tap a place, then pick a fish from your fish book to swim there.` : 'Pick a fish from your fish book to swim in your tank.'}</p>
+      ${places}
       <div class="tp-grid">
-        ${mine.map((f) => `<button class="tp-fish ${f.id === ui.tankPick ? 'on' : ''}" data-action="tank-pick" data-species="${esc(f.id)}" aria-pressed="${f.id === ui.tankPick}">
+        ${mine.map((f) => {
+    const taken = others.has(f.id);
+    return `<button class="tp-fish ${f.id === ui.tankPick ? 'on' : ''} ${taken ? 'taken' : ''}" data-action="tank-pick" data-species="${esc(f.id)}" aria-pressed="${f.id === ui.tankPick}" ${taken ? 'disabled' : ''}>
             <img src="${fishImg(f.id)}" alt="">
             <b>${f.rare ? '⭐ ' : ''}${esc(f.name)}</b>
-            <small>${f.record.size} in · ${esc(f.mapName)}</small>
-          </button>`).join('')}
+            <small>${taken ? 'In the tank' : `${f.record.size} in · ${esc(f.mapName)}`}</small>
+          </button>`;
+  }).join('')}
       </div>
       <label class="tp-name">Give it a name
         <input id="tank-name" type="text" maxlength="${NICK_MAX}" autocomplete="off" spellcheck="false" placeholder="${esc(fishSpecies(ui.tankPick)?.name || '')}" value="${esc(now?.nickname && now.nickname !== now.name ? now.nickname : '')}">
       </label>
       <div class="tp-buttons">
-        <button class="btn" data-action="tank-save">Put it in the tank</button>
-        ${now ? '<button class="btn ghost" data-action="tank-empty">Empty the tank</button>' : ''}
-        <button class="btn ghost" data-action="modal-close">Cancel</button>
+        <button class="btn" data-action="tank-save" ${ui.tankPick ? '' : 'disabled'}>Put it in the tank</button>
+        ${now ? `<button class="btn ghost" data-action="tank-empty">${room > 1 ? 'Take it out' : 'Empty the tank'}</button>` : ''}
+        <button class="btn ghost" data-action="modal-close">${room > 1 && shown.length ? 'Done' : 'Cancel'}</button>
       </div>
+      ${room < 5 ? `<p class="muted small tp-more">Want more fish? Bigger tanks are in the shop, under House.</p>` : ''}
     </div>`);
 }
+const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
 
 // ---------- the family leaderboard (the chart on the house wall) ----------
 // Every family kid's best in each visitor game, this week (Sunday to Saturday) and of all time.
@@ -3246,24 +3279,39 @@ actions['tank-pick'] = (el) => {
   const input = $modal.querySelector('#tank-name');
   if (input) input.placeholder = fishSpecies(ui.tankPick)?.name || '';
 };
+actions['tank-slot'] = (el) => {
+  const kid = kidById(ui.kidId);
+  const name = $modal.querySelector('#tank-name');
+  openTankPicker(kid, Number(el.dataset.slot));
+  name?.blur();
+};
 actions['tank-save'] = () => {
   const kid = kidById(ui.kidId);
-  const tank = kid && makeTank(kid.fishRecords, ui.tankPick, $modal.querySelector('#tank-name')?.value);
+  const name = $modal.querySelector('#tank-name')?.value;
+  const tank = kid && ui.tankPick && putInTank(kid, ui.tankSlot || 0, ui.tankPick, name);
   if (!tank) return;
   kid.tank = tank;
   save();
-  closeModal();
   sounds.tap();
-  toast(`🐟 ${tankFish(kid)?.nickname || 'Your fish'} is in the tank!`);
+  const fish = tankSlots(kid)[ui.tankSlot || 0];
+  toast(`🐟 ${fish?.nickname || fishSpecies(fish?.species)?.name || 'Your fish'} is in the tank!`);
   render();
+  // a bigger tank with room left: on to the next empty place (if there's a fish to put there)
+  const room = tankRoom(kid);
+  const shown = tankFishes(kid, room);
+  const caught = Object.keys(kid.fishRecords || {}).filter((id) => fishSpecies(id)).length;
+  if (room > 1 && shown.length < room && caught > shown.length) openTankPicker(kid);
+  else closeModal();
 };
 actions['tank-empty'] = () => {
   const kid = kidById(ui.kidId);
   if (!kid) return;
-  delete kid.tank;
+  const tank = takeFromTank(kid, ui.tankSlot || 0);
+  if (tank) kid.tank = tank; else delete kid.tank;
   save();
-  closeModal();
   render();
+  if (tankRoom(kid) > 1 && tank) openTankPicker(kid, ui.tankSlot || 0);
+  else closeModal();
 };
 
 actions['play-pick'] = (el) => {

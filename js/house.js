@@ -6,7 +6,8 @@
 // book, the turntable (once bought) its records (turntable.js), and the door leads back out
 // to the village. houseart.js draws it all.
 
-import { ROOM, TANK, TURNTABLE, paintRoom } from './houseart.js';
+import { ROOM, TURNTABLE, paintRoom } from './houseart.js';
+import { tankSpec } from './tankart.js';
 import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
 import { furnitureById } from './furniture.js';
 import { fishSpecies } from './fishbook.js';
@@ -29,7 +30,6 @@ export const HOUSE_SPOTS = {
   book: { x: 186, y: 131 },
   music: { x: 66, y: 66 }, // in front of the turntable
 };
-const T = ROOM.at.tank;
 const M = ROOM.at.music;
 // the tappable things: [x, y, w, h] boxes over the art
 const HOT = {
@@ -38,10 +38,22 @@ const HOT = {
   door: [96, 158, 32, 26],
   bed: [9, 20, 36, 80],
   sink: [250, 8, 24, 52],
-  tank: [T.x + 1, T.y, 45, 39],
-  book: [T.x + TANK.book[0], T.y + TANK.book[1] - 2, TANK.book[2], 27],
   music: [M.x, M.y, TURNTABLE.w, TURNTABLE.h],
 };
+/**
+ * Where the buddy stands to look in the tank and read the fish book, and their tap boxes, for
+ * the tank in the house (a bigger one from the shop is bigger, and stands a little elsewhere).
+ */
+function tankPlaces(spec) {
+  const { at, glass, book } = spec;
+  return {
+    spots: { tank: { x: Math.round(at.x + glass[0] + glass[2] / 2), y: at.y - 2 }, book: { x: at.x + book[0] + book[2] / 2, y: at.y - 2 } },
+    hot: { tank: [at.x + glass[0], at.y, glass[2], spec.h], book: [at.x + book[0], at.y + book[1] - 2, book[2], spec.h - book[1] + 2] },
+  };
+}
+/** The house's spots for walking to, with the tank's. */
+const spotsFor = (spec) => ({ ...HOUSE_SPOTS, ...tankPlaces(spec).spots });
+
 // the floating bubbles over a chore that's still to do
 const BUBBLE = { bed: { x: 26, y: 30 }, teeth: { x: 262, y: 22 }, floor: { x: 120, y: 84 } };
 
@@ -65,28 +77,37 @@ const DONE_SAY = {
  *   kidId, kidName, color, buddy: live buddy markup,
  *   layout: homeLayout(kid), chores: { bed, teeth, floor: { id, name, icon, st, verify, timer, sub } or null },
  *   mess (0-3), shelf (0-3), gear: bestGear(owned), quests: quests left outside (for the door sign),
- *   tank: fishbook.js tankFish(kid) (the fish in the tank, null when empty), fish: how many kinds
+ *   tank: fishbook.js tankFishes(kid, room) (the fish in the tank, [] when empty; the tank itself
+ *   is layout.tank, the free little one when none is bought), fish: how many kinds
  *   of fish the kid has caught, garden: { thirsty } (plants waiting for water, for the Garden tag),
  *   harvest: gardenrules.js houseHarvest (the vases, baskets and fruit bowl the garden puts out),
  *   hud: markup laid over a corner of the room (the Today button), or '',
  * }
  */
 export function houseHtml(h) {
+  const fishes = Array.isArray(h.tank) ? h.tank : h.tank ? [h.tank] : [];
   const data = {
     kid: h.kidId, name: h.kidName, color: h.color, layout: Object.fromEntries(Object.entries(h.layout || {}).map(([k, v]) => [k, v?.id || null])),
     chores: h.chores, mess: h.mess || 0, shelf: h.shelf || 0, gear: h.gear || {},
-    tank: h.tank ? { species: h.tank.species, len: h.tank.len } : null,
+    tank: fishes.map((f) => ({ species: f.species, len: f.len, nickname: f.nickname })),
     harvest: h.harvest || null,
   };
-  const W = TANK.water;
-  // the tank's fish swims in the water (clipped to the glass), with bubbles; its name on a plaque
+  const spec = tankSpec(h.layout?.tank?.art);
+  const T = spec.at;
+  const W = spec.water;
+  const hot = { ...HOT, ...tankPlaces(spec).hot };
+  // the bubbles rise from the bubblers to the surface, so the water box reaches down to them
+  const depth = Math.max(W[3] + 4, ...spec.bubblers.map((b) => b.y - W[1] + 2));
+  const tankBubbles = spec.bubblers.flatMap((b, j) => [0, 1, 2].map((i) => `<i class="h-bubble" style="left:${b.x - W[0] + (i % 2)}px;top:${b.y - W[1] - 2}px;--rise:-${spec.rise}px;animation-delay:${(i * 0.9 + j * 0.45).toFixed(2)}s;animation-duration:${(2.7 * Math.max(1, spec.rise / 14) ** 0.6).toFixed(2)}s"></i>`)).join('');
+  // the tank's fish swim in the water (clipped to the glass), with bubbles; their names on a plaque
+  const names = fishes.map((f) => f.nickname).join(', ');
   const tank = `
-          <div class="h-water" style="left:${T.x + W[0]}px;top:${T.y + W[1]}px;width:${W[2]}px;height:${W[3] + 4}px;z-index:${T.y + TANK.h + 1}">
-            <span class="h-fish" hidden></span>
-            ${[0, 1, 2].map((i) => `<i class="h-bubble" style="left:${TANK.bubbler.x - W[0] + (i % 2)}px;animation-delay:${i * 0.9}s"></i>`).join('')}
+          <div class="h-water" style="left:${T.x + W[0]}px;top:${T.y + W[1]}px;width:${W[2]}px;height:${depth}px;z-index:${T.y + spec.h + 1}">
+            ${fishes.map(() => '<span class="h-fish" hidden></span>').join('')}
+            ${tankBubbles}
           </div>
-          <span class="h-plaque ${h.tank ? '' : 'empty'}" style="left:${T.x + TANK.plaque.x}px;top:${T.y + TANK.plaque.y}px;z-index:${T.y + TANK.h + 2}">${h.tank ? esc(h.tank.nickname) : h.fish ? 'Pick a fish!' : 'Empty tank'}</span>`;
-  const spot = (id, label, extra = '') => { const [x, y, w, hh] = HOT[id]; return `<button class="h-spot" data-spot="${id}" style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px" aria-label="${esc(label)}">${extra}</button>`; };
+          <span class="h-plaque ${fishes.length ? '' : 'empty'}" style="left:${T.x + spec.plaque.x}px;top:${T.y + spec.plaque.y}px;z-index:${T.y + spec.h + 3}">${fishes.length ? esc(fishes[0].nickname) : h.fish ? 'Pick a fish!' : 'Empty tank'}</span>`;
+  const spot = (id, label, extra = '') => { const [x, y, w, hh] = hot[id]; return `<button class="h-spot" data-spot="${id}" style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px" aria-label="${esc(label)}">${extra}</button>`; };
   const bubbles = Object.entries(BUBBLE).map(([kind, at]) => {
     const t = h.chores?.[kind];
     if (!t || t.st === 'done') return '';
@@ -100,7 +121,7 @@ export function houseHtml(h) {
           ${spot('shelf', 'Trophy shelf', '<span class="h-tag">🏆</span>')}
           ${spot('chart', 'Family game scores', '<span class="h-tag">📊</span>')}
           ${tank}
-          ${spot('tank', h.tank ? `Fish tank: ${h.tank.nickname}` : 'Fish tank', `<span class="h-tag">🐟 ${h.tank ? 'Tank' : h.fish ? 'Pick a fish' : 'Fish tank'}</span>`)}
+          ${spot('tank', fishes.length ? `Fish tank: ${names}` : 'Fish tank', `<span class="h-tag">🐟 ${fishes.length ? 'Tank' : h.fish ? 'Pick a fish' : 'Fish tank'}</span>`)}
           ${spot('book', 'Fish book', '<span class="h-tag">📖 Fish book</span>')}
           ${data.layout.music ? `${spot('music', 'Turntable', '<span class="h-tag">🎶 Turntable</span>')}
           <span class="h-spin" style="left:${M.x + TURNTABLE.record.x}px;top:${M.y + TURNTABLE.record.y}px" aria-hidden="true"><i></i></span>
@@ -193,6 +214,7 @@ function mount(section, handlers) {
   };
   const grid = makeGrid(L);
 
+  const SPOTS = spotsFor(tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art));
   const mem = memory.get(data.kid) || { ...HOUSE_SPOTS.wake, face: 1, cam: null };
   memory.set(data.kid, mem);
   // a walk carries on if the house is redrawn on the way (a chore just done, a sync)
@@ -283,7 +305,7 @@ function mount(section, handlers) {
     buddyEl.classList.add('walking');
   };
   const use = (what) => {
-    const spot = what === 'teeth' ? HOUSE_SPOTS.sink : what === 'garden' ? HOUSE_SPOTS.door : HOUSE_SPOTS[what] || HOUSE_SPOTS.floor;
+    const spot = what === 'teeth' ? SPOTS.sink : what === 'garden' ? SPOTS.door : SPOTS[what] || SPOTS.floor;
     const goal = { use: what, face: what === 'bed' ? -1 : undefined };
     if (Math.hypot(me.x - spot.x, me.y - spot.y) < 16) { me.goal = goal; arrive(); return; }
     walkTo(spot.x, spot.y, goal);
@@ -317,8 +339,10 @@ function mount(section, handlers) {
   });
 
   // the trophy, chart, tank and book tags show when the buddy is close
-  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"]')].map((el) => ({ el, at: HOUSE_SPOTS[el.dataset.spot] }));
-  const swim = tankSwimmer(section, data.tank);
+  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"]')].map((el) => ({ el, at: SPOTS[el.dataset.spot] }));
+  const tankSpecNow = tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art);
+  const swim = tankSwimmer(section, data.tank, tankSpecNow);
+  const plaque = section.querySelector('.h-plaque');
 
   let last = performance.now();
   const tick = (now) => {
@@ -341,6 +365,11 @@ function mount(section, handlers) {
     Object.assign(mem, { x: me.x, y: me.y, face: me.face, cam, S, path: me.path, goal: me.goal });
     for (const g of tags) g.el.classList.toggle('near', Math.hypot(me.x - g.at.x, me.y - g.at.y) < (g.el.dataset.spot === 'tank' || g.el.dataset.spot === 'book' ? 26 : 48));
     swim?.(now / 1000);
+    // with more than one fish, the plaque takes turns saying each one's name
+    if (data.tank.length > 1 && plaque) {
+      const name = data.tank[Math.floor(now / 3500) % data.tank.length].nickname;
+      if (plaque.textContent !== name) plaque.textContent = name;
+    }
     // the record goes round (and notes float up) while the turntable plays
     const spin = Boolean(data.layout.music && handlers.spinning?.(data.kid));
     if (spin !== section.classList.contains('tt-on')) section.classList.toggle('tt-on', spin);
@@ -402,45 +431,58 @@ const fishCache = new Map();
 // Fish are drawn with 2 fine pixels for each village pixel, as in the fishing game, so even a
 // little one has its colors, scales and fins (at 1 it would be mostly outline).
 const FZ = 2;
-/** The tank's fish as a canvas (FZ fine pixels per village pixel), small enough for the tank. */
-function tankFishPic(species, len) {
-  const key = `${species}|${len}`;
+/** A tank fish as a canvas (FZ fine pixels per village pixel), small enough for its tank's water. */
+function tankFishPic(species, len, water) {
+  const key = `${species}|${len}|${water[2]}x${water[3]}`;
   if (!fishCache.has(key)) {
     const sp = fishSpecies(species);
     if (!sp) return null;
     let n = len; let pic = fishPic(sp.look, n, FZ);
-    while (n > 8 && (pic.height / FZ > TANK.water[3] + 2 || pic.width / FZ > TANK.water[2] * 0.62)) { n -= 1; pic = fishPic(sp.look, n, FZ); }
+    while (n > 8 && (pic.height / FZ > water[3] + 2 || pic.width / FZ > water[2] * 0.62)) { n -= 1; pic = fishPic(sp.look, n, FZ); }
     fishCache.set(key, pic);
   }
   return fishCache.get(key);
 }
 
 /**
- * Puts the tank's fish in the water and returns tick(seconds) to swim it: back and forth along
- * the tank, turning round at the ends, bobbing a little. Null for an empty tank.
+ * Puts the tank's fish in the water and returns tick(seconds) to swim them: back and forth along
+ * the tank, turning round at the ends, bobbing a little. With more than one, each keeps to its
+ * own depth (drifting up and down a bit), at its own pace, and they start at different places.
+ * Null for an empty tank.
  */
-function tankSwimmer(section, tank) {
-  const holder = section.querySelector('.h-fish');
-  if (!tank || !holder) return null;
-  const pic = tankFishPic(tank.species, tank.len || 14);
-  if (!pic) return null;
-  const c = section.ownerDocument.createElement('canvas');
-  c.width = pic.width; c.height = pic.height;
-  c.getContext('2d').drawImage(pic, 0, 0);
-  holder.append(c);
-  const pw = pic.width / FZ; const ph = pic.height / FZ;
-  holder.style.width = `${pw}px`; holder.style.height = `${ph}px`;
-  holder.hidden = false;
-  const [, , w, h] = TANK.water;
-  const span = Math.max(1, w - pw + 2); // from just past the left glass to the right
-  const lap = 7 + span / 6; // seconds there and back
-  const midY = Math.max(-1, Math.min(h + 3 - ph, Math.round((h - ph) / 2)));
+function tankSwimmer(section, fishes, spec) {
+  const holders = [...section.querySelectorAll('.h-fish')];
+  const [, , w, h] = spec.water;
+  const swimmers = (fishes || []).map((f, i) => {
+    const holder = holders[i];
+    const pic = holder && tankFishPic(f.species, f.len || 14, spec.water);
+    if (!pic) return null;
+    const c = section.ownerDocument.createElement('canvas');
+    c.width = pic.width; c.height = pic.height;
+    c.getContext('2d').drawImage(pic, 0, 0);
+    holder.append(c);
+    const pw = pic.width / FZ; const ph = pic.height / FZ;
+    holder.style.width = `${pw}px`; holder.style.height = `${ph}px`;
+    holder.hidden = false;
+    const n = fishes.length;
+    const span = Math.max(1, w - pw + 2); // from just past the left glass to the right
+    const lap = (7 + span / 6) * (1 + 0.17 * ((i * 3) % 5) / 2); // seconds there and back
+    const room = Math.max(0, h + 3 - ph); // how far down the fish can go
+    const lane = n === 1 ? 0.5 : 0.1 + (0.8 * i) / (n - 1); // top to bottom
+    const midY = Math.max(-1, Math.min(room, Math.round(room * Math.min(0.9, lane))));
+    const drift = n > 1 ? Math.min(4, room * 0.12) : 0;
+    return { holder, span, lap, midY, drift, room, off: (i * 0.37) % 1, i };
+  }).filter(Boolean);
+  if (!swimmers.length) return null;
   return (t) => {
-    const k = (t % lap) / lap; // 0..1: right then back left, easing at the ends
-    const going = k < 0.5;
-    const e = 0.5 - 0.5 * Math.cos(Math.PI * (going ? k * 2 : (1 - k) * 2));
-    const x = Math.round((-1 + e * span) * FZ) / FZ;
-    const y = Math.round((midY + Math.sin(t * 1.7) * 1.4) * FZ) / FZ;
-    holder.style.transform = `translate(${x}px, ${y}px)${going ? ' scaleX(-1)' : ''}`;
+    for (const s of swimmers) {
+      const k = ((t / s.lap) + s.off) % 1; // 0..1: right then back left, easing at the ends
+      const going = k < 0.5;
+      const e = 0.5 - 0.5 * Math.cos(Math.PI * (going ? k * 2 : (1 - k) * 2));
+      const x = Math.round((-1 + e * s.span) * FZ) / FZ;
+      const yy = s.midY + Math.sin(t * 1.7 + s.i * 2.1) * 1.4 + Math.sin(t * 0.23 + s.i * 1.3) * s.drift;
+      const y = Math.round(Math.max(-1, Math.min(s.room, yy)) * FZ) / FZ;
+      s.holder.style.transform = `translate(${x}px, ${y}px)${going ? ' scaleX(-1)' : ''}`;
+    }
   };
 }
