@@ -88,6 +88,7 @@ const SHELL = [
   'js/notolab.js',
   'js/composerules.js',
   'js/composedesk.js',
+  'js/composesheet.js',
   'js/mixsound.js',
   'js/turntable.js',
   'js/notomatic.js',

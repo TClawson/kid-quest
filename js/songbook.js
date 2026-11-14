@@ -225,7 +225,7 @@ export function printCardHtml() {
 
 let abcjsLoad = null;
 /** abcjs, loaded on first use (it's big, and only the songbook needs it). */
-function loadAbcjs(doc) {
+export function loadAbcjs(doc) {
   if (globalThis.ABCJS) return Promise.resolve(globalThis.ABCJS);
   abcjsLoad ||= new Promise((resolve, reject) => {
     const s = doc.createElement('script');
