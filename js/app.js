@@ -24,7 +24,7 @@ import { todayHud, todayListHtml } from './today.js';
 import { kidHudHtml, statusHtml, menuHtml } from './hud.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
-import { musicTier, daysToMusicHouse, studioOpen, labOpen, tierInfo } from './musicrules.js';
+import { musicTier, daysToMusicHouse, studioOpen, labOpen, deskOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse } from './furniture.js';
 import { houseRecord, openTurntable, spinning, stopRecord, setTurntableSync } from './turntable.js';
 import { applyGrants, restoreFromRecord, restoreBackup, restoreTasks, mergeBackup } from './grants.js';
@@ -40,6 +40,7 @@ import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHt
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
 import { viewLab, mountLab, labActions, openLab } from './notolab.js';
+import { viewCompose, mountCompose, composeActions, openCompose } from './composedesk.js';
 import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, comingSoon, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
@@ -1042,6 +1043,7 @@ function musicView(kid, list, mood, tier) {
     tier,
     studio: studioOpen(state, kid, today()),
     lab: labOpen(state, kid, today()),
+    desk: deskOpen(state, kid, today()),
     hello: musicHello(kid.id, tier),
     quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
     hud: kidHud(kid),
@@ -1053,6 +1055,7 @@ const musicHandlers = {
   onSheets: () => openSongbook(),
   onStudio: () => openStudio(),
   onLab: () => openLab(),
+  onDesk: () => openCompose(),
   onExit: () => {
     const kid = kidById(ui.kidId);
     if (!kid) return;
@@ -2433,6 +2436,11 @@ ${gameTestCard()}
       <p class="muted small">Play the piano to the robot and see the notes it makes. This is a test desk: its tunes go on the test studio's shelf, and the kids' tunes are not touched.</p>
       <button class="btn" data-action="lab-test">Open the Note-o-Matic</button>
     </div>
+    <div class="card compose-test">
+      <h2>✍️ Try the composing desk</h2>
+      <p class="muted small">Write a song step by step, with every help level open. This is a test desk: its songs are its own, and the kids' songs are not touched.</p>
+      <button class="btn" data-action="compose-test">Open the composing desk</button>
+    </div>
 ${seasonTestCard()}
     <div class="card">
       <h2>🎹 Piano listening test</h2>
@@ -2583,7 +2591,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, lab: viewLab, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, lab: viewLab, compose: viewCompose, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -2653,7 +2661,7 @@ function render() {
   }
   // the store closes again on a new day, even if the wardrobe was left open overnight
   if (ui.view === 'wardrobe' && !storeOpen(state, kidById(ui.kidId), today()).open) ui.view = 'kid';
-  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio' || ui.view === 'lab';
+  const keepScroll = ui.view === 'parent' || ui.view === 'wardrobe' || ui.view === 'songbook' || ui.view === 'studio' || ui.view === 'lab' || ui.view === 'compose';
   if (ui.view === 'kid' && lastView !== 'kid') partyDue = true; // the map just opened
   const html = withMemo(() => { reconcile(); return (views[ui.view] || viewHome)(); });
   // the kid's screen fills the whole screen and the page doesn't scroll
@@ -2684,6 +2692,7 @@ function render() {
   mountStudio($app);
   mountTestRec($app);
   mountLab($app);
+  mountCompose($app);
   liveStart();
   syncMusic();
   if (keepScroll) window.scrollTo(0, scrollY);
@@ -3228,6 +3237,7 @@ actions.visitor = (el) => {
 Object.assign(actions, songbookActions);
 Object.assign(actions, studioActions);
 Object.assign(actions, labActions);
+Object.assign(actions, composeActions);
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
 
 actions['tank-pick'] = (el) => {
@@ -3423,7 +3433,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio' || ui.view === 'lab') return;
+    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio' || ui.view === 'lab' || ui.view === 'compose') return;
     reloading = true;
     window.location.reload();
   });

@@ -1,4 +1,4 @@
-// Where the recording studio keeps a kid's mixes, takes and Note-o-Matic tunes: on this tablet only (IndexedDB),
+// Where the recording studio keeps a kid's mixes, takes, Note-o-Matic tunes and composing desk songs: on this tablet only (IndexedDB),
 // since a recording is big and private. Each kid has MIX_SLOTS saved mixes and one draft (the
 // mix on the desk, slot 'draft'). A take is the kid's own recording: one channel of sound as
 // 16-bit numbers, with its sample rate. Without IndexedDB (a private window) everything is
@@ -6,6 +6,7 @@
 
 import { MIX_SLOTS, cleanMix, takesIn } from './studiorules.js';
 import { TUNE_SLOTS, cleanTune } from './tunerules.js';
+import { SONG_SLOTS, cleanSong } from './composerules.js';
 
 const DB = 'kidquest-studio';
 const memory = { mixes: new Map(), takes: new Map() };
@@ -118,6 +119,33 @@ export function saveTune(kid, slot, tune) {
 /** Empty a tune slot. */
 export function deleteTune(kid, slot) {
   return run('mixes', 'readwrite', (s) => (s ? s.delete(tuneKey(kid, slot)) : void memory.mixes.delete(tuneKey(kid, slot))));
+}
+
+// The composing desk's songs (composerules.js) sit there too, with the desk's draft (the song
+// on the desk, slot 'draft').
+const songKey = (kid, slot) => `${kid}|song|${slot}`;
+
+/** A kid's songs: { draft: song|null, shelf: [song|null × SONG_SLOTS] }, tidied. */
+export async function loadSongs(kid) {
+  const read = async (slot) => {
+    const row = await run('mixes', 'readonly', (s) => (s ? s.get(songKey(kid, slot)) : memory.mixes.get(songKey(kid, slot))));
+    return row?.song ? cleanSong(row.song) : null;
+  };
+  const shelf = [];
+  for (let i = 0; i < SONG_SLOTS; i += 1) shelf.push(await read(i));
+  return { draft: await read('draft'), shelf };
+}
+
+/** Keep a song in a slot (0 to SONG_SLOTS - 1, or 'draft'). Rejects when it couldn't be kept. */
+export function saveSong(kid, slot, song) {
+  if (slot !== 'draft' && (!Number.isInteger(slot) || slot < 0 || slot >= SONG_SLOTS)) return Promise.reject(new Error('no such slot'));
+  const row = { kid, slot, song, at: Date.now() };
+  return run('mixes', 'readwrite', (s) => (s ? s.put(row, songKey(kid, slot)) : void memory.mixes.set(songKey(kid, slot), row)));
+}
+
+/** Empty a song slot. */
+export function deleteSong(kid, slot) {
+  return run('mixes', 'readwrite', (s) => (s ? s.delete(songKey(kid, slot)) : void memory.mixes.delete(songKey(kid, slot))));
 }
 
 /**

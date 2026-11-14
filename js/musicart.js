@@ -4,8 +4,8 @@
 //   1 Cozy Studio (the little keyboard): knotty pine, fairy lights, a cassette 4-track,
 //   2 Music Parlor (the upright piano): damask wallpaper, parquet, a reel-to-reel mixing desk,
 //   3 Rock Arena (the rock star piano): a stage with flame pipes, light rigs, a big console.
-// Every look has the same four stations in the same places (the piano, the sheet music, the
-// studio and the Note-o-Matic sound lab), so walking round works the same in each.
+// Every look has the same five stations in the same places (the piano, the sheet music, the
+// studio, the Note-o-Matic sound lab and the composing desk), so walking round works the same in each.
 //
 // paintMusicRoom() paints the room and everything against its walls into one canvas; pieces
 // standing out on the floor come back as their own canvases (musichouse.js sorts them with the
@@ -26,6 +26,9 @@ export const MROOM = {
 const R = MROOM;
 const FT = R.floorTop;
 const FB = R.floorBottom;
+
+// where the composing desk stands on the floor (the same in every look)
+const DESK = { x: 240, y: 112 };
 
 // where each station's art goes (its top-left corner), for each look
 const AT = {
@@ -472,22 +475,6 @@ function lab1Art() {
   });
 }
 
-/** A squashy beanbag. */
-function beanbagArt(base = '#e8823a') {
-  const C = ramp(base, 3, 2);
-  return sprite(30, 22, (b) => {
-    for (let y = 0; y < 22; y += 1) for (let x = 0; x < 30; x += 1) {
-      if (!inEll(x, y, 15, 13, 15, 9) && !inEll(x, y, 15, 9, 10, 9)) continue;
-      let c = C[3];
-      if (inEll(x, y, 11, 8, 6, 4)) c = C[4];
-      if (inEll(x, y, 10, 7, 2.5, 1.6)) c = C[5];
-      if (y > 16 || x > 24) c = C[2];
-      if (inEll(x, y, 16, 12, 7, 3) && y > 11) c = C[1]; // where you sit
-      b.set(x, y, c);
-    }
-  });
-}
-
 /** A monstera in a pot. */
 function plantArt() {
   return sprite(22, 32, (b) => {
@@ -523,6 +510,84 @@ function boxesArt() {
     };
     box(0, 10, 26, 18); box(4, 0, 16, 11);
     grid((x, y, c) => b.set(x, y, c), 10, 17, ['..KK', '..KKK', '..K.K', 'KKK..', 'KKK..'], { K: NOTE });
+  });
+}
+
+// ---------- the composing desk, in each look ----------
+
+/** Manuscript paper on a desk top: a cream page with two staves and a few notes (x, y: its top-left corner). */
+function manuscript(b, X, Y, w = 16, h = 7, paper = CREAM) {
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) b.set(X + x, Y + y, y === 0 ? paper[4] : x === w - 1 ? paper[1] : paper[3]);
+  for (const ly of [2, 4]) for (let x = 1; x < w - 1; x += 1) b.set(X + x, Y + ly, '#b8a890');
+  for (const [x, y] of [[3, 1], [6, 3], [9, 2], [12, 4]]) if (x < w - 1) { b.set(X + x, Y + y, NOTE); b.set(X + x + 1, Y + y, NOTE); b.set(X + x + 1, Y + y - 1, NOTE); }
+}
+
+/** The Cozy Studio's composing desk: a little pine desk with a pad of music paper, a pencil jar and a yellow lamp. */
+function compose1Art() {
+  const W = ['#4a2a2a', '#6e4030', '#96603e', '#ba8250', '#d8a468', '#f0c890'];
+  const Y = ramp('#f0b429', 3, 2);
+  return sprite(40, 38, (b) => {
+    // the lamp: a bendy arm from a round foot up to a yellow shade
+    for (let x = 28; x < 36; x += 1) b.set(x, 18, x < 31 ? Y[4] : Y[2]);
+    line(31, 17, 34, 9, (x, y) => b.set(x, y, Y[2]));
+    line(34, 9, 27, 4, (x, y) => b.set(x, y, Y[2]));
+    for (let y = 2; y < 9; y += 1) for (let x = 22; x < 31; x += 1) if (inEll(x, y, 26, 7, 4.5, 4) && y < 8) b.set(x, y, y < 4 ? Y[5] : x < 25 ? Y[4] : Y[3]);
+    b.rect(23, 8, 7, 1, '#fff6c8');
+    // the desk top and its drawer
+    b.rect(0, 19, 40, 3, W[4]); b.rect(0, 19, 40, 1, W[5]); b.rect(0, 21, 40, 1, W[3]);
+    b.rect(2, 22, 36, 5, W[2]); b.rect(2, 26, 36, 1, W[1]);
+    b.rect(16, 23, 8, 3, W[3]); b.set(19, 24, BRASS[4]); b.set(20, 24, BRASS[3]);
+    for (const lx of [2, 35]) { b.rect(lx, 27, 3, 11, W[2]); b.rect(lx, 27, 1, 11, W[3]); b.rect(lx + 2, 27, 1, 11, W[1]); }
+    // the music pad, a pencil on it, and a jar of pencils
+    manuscript(b, 7, 12, 17, 7);
+    line(16, 15, 22, 11, (x, y) => b.set(x, y, '#f0a848'));
+    b.set(22, 11, '#e0709a'); b.set(15, 16, DARK[2]);
+    b.rect(2, 13, 4, 6, STEEL[4]); b.rect(2, 13, 4, 1, STEEL[6]); b.rect(5, 13, 1, 6, STEEL[2]);
+    for (const [x, c] of [[2, '#e03131'], [3, '#4a9a50'], [4, '#3e6ab0']]) for (let y = 9; y < 13; y += 1) b.set(x + (y < 11 ? x - 3 : 0) * 0, y, c);
+  });
+}
+
+/** The Music Parlor's composing desk: a mahogany writing desk with gold trim, an inkwell and quill and a candle. */
+function compose2Art() {
+  const M = ['#2a1012', '#46201c', '#64302a', '#84443a', '#a45c48', '#c47a5e'];
+  return sprite(42, 38, (b) => {
+    // a little shelf of pigeonholes at the back
+    b.rect(4, 4, 34, 13, M[2]); b.rect(4, 4, 34, 1, M[5]); b.rect(37, 4, 1, 13, M[1]);
+    for (let i = 0; i < 4; i += 1) { b.rect(6 + i * 8, 6, 6, 5, M[0]); b.rect(6 + i * 8, 6, 6, 1, M[1]); }
+    for (const [i, c] of [[0, CREAM[3]], [2, CREAM[4]], [3, '#e8c840']]) b.rect(7 + i * 8, 8, 4, 3, c);
+    b.rect(4, 4, 34, 1, GOLDS[4]);
+    // the desk top with a gold edge, and a drawer
+    b.rect(0, 17, 42, 3, M[4]); b.rect(0, 17, 42, 1, GOLDS[4]); b.rect(0, 19, 42, 1, M[3]);
+    b.rect(2, 20, 38, 6, M[2]); b.rect(2, 25, 38, 1, M[1]);
+    b.rect(15, 21, 12, 3, M[3]); b.set(20, 22, GOLDS[4]); b.set(21, 22, GOLDS[3]);
+    // curvy legs
+    for (const [lx, d] of [[3, 1], [37, -1]]) for (let y = 26; y < 38; y += 1) { const x = lx + Math.round(Math.sin((y - 26) / 3.5) * d); b.set(x, y, M[3]); b.set(x + 1, y, M[1]); }
+    // the manuscript, an inkwell with a quill, a candle
+    manuscript(b, 10, 11, 16, 6, CREAM);
+    b.rect(29, 13, 4, 4, DARK[1]); b.rect(29, 13, 4, 1, DARK[3]); b.set(30, 14, '#3e3a8a');
+    line(31, 13, 36, 3, (x, y) => b.set(x, y, '#fffaf0'));
+    line(32, 12, 37, 4, (x, y) => b.set(x, y, '#e8e0d0'));
+    b.rect(5, 12, 3, 5, '#fff6e0'); b.rect(4, 16, 5, 1, GOLDS[3]); b.set(6, 11, INK);
+  });
+}
+
+/** The Rock Arena's composing desk: a black desk with a neon edge, a glowing note pad and a neon lamp. */
+function compose3Art() {
+  return sprite(42, 38, (b) => {
+    // the neon lamp's arm and head
+    line(36, 18, 36, 6, (x, y) => b.set(x, y, STEEL[2]));
+    line(36, 6, 30, 3, (x, y) => b.set(x, y, STEEL[2]));
+    b.rect(24, 2, 8, 3, DARK[2]); b.rect(24, 4, 8, 1, NEON.cyan);
+    // the screen pad on a stand
+    b.rect(8, 6, 22, 12, DARK[0]); b.rect(8, 6, 22, 1, DARK[3]); b.rect(29, 6, 1, 12, DARK[2]);
+    for (const ly of [9, 11, 13, 15]) for (let x = 10; x < 28; x += 1) b.set(x, ly, 'rgba(160,110,255,0.55)');
+    b.rect(18, 18, 2, 1, STEEL[3]);
+    // the desk: black with a pink neon edge, on two chunky legs
+    b.rect(0, 19, 42, 3, DARK[3]); b.rect(0, 19, 42, 1, NEON.pink); b.rect(0, 21, 42, 1, DARK[1]);
+    b.rect(2, 22, 38, 4, DARK[2]); b.rect(2, 25, 38, 1, DARK[0]);
+    for (const lx of [3, 34]) { b.rect(lx, 26, 5, 12, DARK[2]); b.rect(lx, 26, 1, 12, DARK[4]); b.rect(lx + 4, 26, 1, 12, DARK[0]); }
+    // headphones lying on the desk
+    for (let y = 13; y < 19; y += 1) for (let x = 0; x < 8; x += 1) if (inEll(x, y, 4, 18, 3.6, 4.5) && !inEll(x, y, 4, 18, 2.4, 3.3)) b.set(x, y, NEON.lime);
   });
 }
 
@@ -869,22 +934,6 @@ function lab2Art() {
   });
 }
 
-/** A red velvet armchair with gold studs. */
-function armchair2Art() {
-  return sprite(28, 28, (b) => {
-    for (let y = 0; y < 28; y += 1) for (let x = 0; x < 28; x += 1) {
-      let c = null;
-      if (y < 14 && x >= 3 && x < 25 && inEll(x, y, 14, 12, 11, 12)) c = y < 2 ? VELVET[5] : (x + y) % 5 === 0 && y > 4 && y < 12 ? VELVET[2] : VELVET[3];
-      if (y >= 10 && y < 24 && (x < 6 || x >= 22)) c = x < 3 || x > 24 ? VELVET[2] : VELVET[4];
-      if (y >= 13 && y < 22 && x >= 6 && x < 22) c = y === 13 ? VELVET[5] : VELVET[4];
-      if (y >= 22 && y < 25 && x >= 1 && x < 27) c = y === 22 ? GOLDS[3] : VELVET[1];
-      if (y >= 25 && (x === 3 || x === 4 || x === 23 || x === 24)) c = WAL[2];
-      if (y === 22 && x % 3 === 0 && x > 1 && x < 27) c = GOLDS[5];
-      if (c) b.set(x, y, c);
-    }
-  });
-}
-
 /** A fern on a tall pedestal. */
 function fernArt() {
   return sprite(24, 40, (b) => {
@@ -1124,18 +1173,6 @@ function lab3Art() {
   });
 }
 
-/** A velvet rope on two brass posts (the VIP area). */
-function ropeArt() {
-  return sprite(40, 22, (b) => {
-    for (const x0 of [0, 34]) {
-      for (let y = 3; y < 19; y += 1) { b.set(x0 + 2, y, BRASS[4]); b.set(x0 + 3, y, BRASS[2]); }
-      for (let y = 0; y < 4; y += 1) for (let x = 0; x < 6; x += 1) if (inEll(x, y, 3, 2, 2.6, 2)) b.set(x0 + x, y, x < 3 ? BRASS[5] : BRASS[3]);
-      b.rect(x0, 19, 6, 3, BRASS[1]); b.rect(x0, 19, 6, 1, BRASS[4]);
-    }
-    swag(5, 5, 35, 5, 6, (x, y) => { b.set(x, y, VELVET[3]); b.set(x, y + 1, VELVET[1]); });
-  });
-}
-
 /** An electric guitar on its stand. */
 function guitarStandArt() {
   return sprite(16, 40, (b) => {
@@ -1177,8 +1214,8 @@ const rgbOf = (hex) => { const n = parseInt(hex.slice(1, 7), 16); return `${n >>
  *     (musichouse.js draws them as their own canvases, in front of or behind the buddy;
  *     anim(px, t) paints their moving bits, in their own pixels),
  *   blocks: [[x, y, w, h]...] where the buddy can't walk,
- *   hot: { piano, sheets, studio, lab: [x, y, w, h] }: the stations' tappable boxes,
- *   spots: { piano, sheets, studio, lab, door, wake: { x, y, face? } }: where the buddy stands to use each,
+ *   hot: { piano, sheets, studio, lab, desk: [x, y, w, h] }: the stations' tappable boxes,
+ *   spots: { piano, sheets, studio, lab, desk, door, wake: { x, y, face? } }: where the buddy stands to use each,
  *   life(px, t): paints what moves on the layer over the room (t in seconds),
  * }
  */
@@ -1240,8 +1277,13 @@ export function paintMusicRoom(canvas, tier, o = {}) {
       const k = Math.floor(t * 3) % 4;
       p(7 + k * 4, 31, '#ffffff');
     });
-    const bag = beanbagArt();
-    stand(null, bag, 252, 126, [253, 134, 28, 12]);
+    const desk = compose1Art();
+    stand('desk', desk, DESK.x, DESK.y, [DESK.x + 1, DESK.y + 26, desk.w - 2, 12], (p, t) => {
+      // the pencil scribbles, and the lamp glows
+      const k = Math.floor(t * 4) % 4;
+      p(15 + k, 16 - (k % 2), NOTE);
+      for (let x = 23; x < 30; x += 1) if ((x + Math.floor(t * 2)) % 3) p(x, 9, 'rgba(255,240,170,0.7)');
+    });
     const plant = plantArt();
     stand(null, plant, 290, 128, [293, 150, 16, 8]);
     const boxes = boxesArt();
@@ -1284,7 +1326,13 @@ export function paintMusicRoom(canvas, tier, o = {}) {
       const k = Math.floor(t * 4) % 8;
       p(5 + k * 4, 34, '#ffe27a');
     });
-    stand(null, armchair2Art(), 254, 124, [255, 138, 26, 14]);
+    const desk = compose2Art();
+    stand('desk', desk, DESK.x, DESK.y, [DESK.x + 1, DESK.y + 24, desk.w - 2, 14], (p, t) => {
+      // the candle flickers
+      const f = Math.sin(t * 9) + Math.sin(t * 13.7);
+      p(6, 10, '#ffe27a'); p(6, 9, f > 0 ? '#ffd43b' : '#ff922b');
+      if (f > 0.6) p(7, 8, '#ff922b');
+    });
     stand(null, fernArt(), 292, 116, [295, 148, 18, 8]);
     const ap = at.piano; const st = at.studio;
     lives.push((p, t) => {
@@ -1358,7 +1406,16 @@ export function paintMusicRoom(canvas, tier, o = {}) {
       grid((x, y, c) => p(x, Math.round(y + hy), c), 19, 0, ['...KK.', '...KKK', '...K.K', '..KK..', 'KKKK..', 'KKK...'], { K: Math.floor(t * 4) % 2 ? '#c8a8ff' : '#e8d8ff' });
       for (let i = 0; i < 11; i += 1) p(25 + i, 33 + Math.round(Math.abs(Math.sin(t * 6 + i)) * 3), NEON.lime);
     });
-    stand(null, ropeArt(), 236, 132, [236, 146, 40, 8]);
+    const desk = compose3Art();
+    stand('desk', desk, DESK.x, DESK.y, [DESK.x + 1, DESK.y + 26, desk.w - 2, 12], (p, t) => {
+      // notes scroll across the screen, and the neon edge pulses
+      for (let k = 0; k < 4; k += 1) {
+        const x = 10 + ((Math.floor(t * 6) + k * 5) % 18);
+        const y = [8, 10, 12, 14][(k * 3 + Math.floor(t)) % 4];
+        p(x, y, '#e8d8ff'); p(x + 1, y, '#e8d8ff'); p(x + 1, y - 1, '#e8d8ff');
+      }
+      if (Math.sin(t * 3) > 0) for (let x = 0; x < 42; x += 2) p(x, 19, '#ffffff');
+    });
     stand(null, guitarStandArt(), 292, 110, [292, 140, 16, 10]);
     const ap = at.piano; const st = at.studio;
     lives.push((p, t) => {
