@@ -121,6 +121,24 @@ const desk = (page) => page.evaluate(async () => (await import('./js/composedesk
   s = await desk(page);
   assert.equal(s.shelf[0], 'Sea Song');
   await page.screenshot({ path: `${out}/5-step4-song.png`, fullPage: true });
+  // the kept song as sheet music: engraved, with Ava as the composer; only the page prints
+  await tap(page, '[data-c="shelf-sheet"][data-v="0"]');
+  await page.waitForSelector('#cd-score.engraved svg', { timeout: 20000 });
+  assert.equal((await desk(page)).paper, 'Sea Song');
+  const sheet = await page.locator('#cd-score').innerText();
+  assert.match(sheet, /Sea Song/);
+  assert.match(sheet, /Music by Ava/);
+  assert.equal(await page.locator('#cd-score .abcjs-chord').count(), 8);
+  await page.screenshot({ path: `${out}/8-sheet-music.png`, fullPage: true });
+  await page.emulateMedia({ media: 'print' });
+  assert.equal(await page.locator('.cd-paper-bar').isVisible(), false, 'the buttons don’t print');
+  assert.equal(await page.locator('.kid-head').isVisible(), false);
+  assert.ok(await page.locator('.cd-paper').isVisible());
+  await page.pdf({ path: `${out}/sea-song.pdf`, format: 'Letter', printBackground: true });
+  await page.emulateMedia({ media: 'screen' });
+  await tap(page, '[data-c="paper-close"]');
+  await page.waitForSelector('.cd-strip');
+  assert.equal((await desk(page)).paper, null);
   // a reload keeps the shelf and the draft
   await page.reload();
   await intoHouse(page);
@@ -171,6 +189,12 @@ for (const [weeks, tier] of [[5, 2], [7, 3]]) {
     assert.ok(wide <= 362, `step ${step + 1} fits a phone (${wide})`);
     await page.screenshot({ path: `${out}/7-phone-step${step + 1}.png`, fullPage: true });
   }
+  // the sheet music fits a phone too
+  await tap(page, '[data-c="sheet"]');
+  await page.waitForSelector('#cd-score.engraved svg', { timeout: 20000 });
+  assert.doesNotMatch(await page.locator('#cd-score').innerText(), /Music by/, 'the test desk has no composer');
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth) <= 362, 'the sheet fits a phone');
+  await page.screenshot({ path: `${out}/7-phone-sheet.png`, fullPage: true });
   await ctx.close();
 }
 

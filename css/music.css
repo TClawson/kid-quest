@@ -516,3 +516,29 @@
   .cd-strip { grid-template-columns: repeat(8, minmax(0, 1fr)); }
   .cd-sheet { padding: 12px; }
 }
+
+/* the desk's sheet music: a white page to print (only the page prints) */
+.cd-paper-bar { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.cd-paper-tip { margin: 0 0 8px; font: 0.9rem var(--px-text); color: var(--muted); }
+.cd-paper { box-sizing: border-box; width: 100%; max-width: 820px; margin: 0 auto; padding: 18px 22px; background: #fff; color: #111; border: 2px solid var(--px-ink); border-radius: 6px; box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.18); }
+.cd-score { min-height: 160px; }
+.cd-score .abcjs-title { font-weight: 700; }
+.cd-paper-twice { margin: 6px 0 0; font: italic 1rem Georgia, serif; text-align: center; }
+.cd-paper-chords { margin-top: 14px; padding-top: 10px; border-top: 1px solid #ccc; font: 0.95rem var(--px-text); }
+.cd-paper-chords > div { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+.cd-paper-chords span { display: grid; justify-items: center; padding: 4px 2px; font: 1.15rem var(--px-text); font-weight: 700; color: var(--c); background: var(--cs); border: 1px solid var(--c); border-radius: 4px; }
+.cd-paper-chords small { font-size: 0.66rem; font-weight: 400; color: #444; }
+.cd-paper-foot { margin: 10px 0 0; text-align: right; font: 0.75rem var(--px-text); color: #777; }
+@media (max-width: 600px) {
+  .cd-paper { padding: 10px 8px; }
+  .cd-paper-chords > div { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media print {
+  html:has(.cd-paper), body:has(.cd-paper) { background: #fff !important; }
+  body:has(.cd-paper) > :not(#app),
+  body:has(.cd-paper) .cd-screen > :not(#compose),
+  body:has(.cd-paper) #compose > :not(.cd-paper) { display: none !important; }
+  body:has(.cd-paper) .cd-screen, body:has(.cd-paper) #compose { margin: 0 !important; padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important; max-width: none !important; }
+  .cd-paper { max-width: none; padding: 0; border: 0; box-shadow: none; }
+  .cd-paper-chords span { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

@@ -19,6 +19,8 @@ import {
   BARS, freeSongSlot, hasTune, SCALE, voicing,
 } from './composerules.js';
 import { loadSongs, saveSong, deleteSong } from './studio-store.js';
+import { deskSongAbc, sheetChords, SECOND_LINE } from './composesheet.js';
+import { loadAbcjs } from './songbook.js';
 
 const TEST_DESK = 'parent-test-desk';
 const STEPS = ['Key', 'Chords', 'Tune', 'Song'];
@@ -43,6 +45,7 @@ const D = {
   confirm: -1,     // the shelf slot asking "Throw away?"
   draftTimer: 0,
   kept: '',        // a line after Keep
+  paper: null,     // the song shown as sheet music to print, or null
 };
 const A = { live: null, noise: null };
 
@@ -88,7 +91,7 @@ export function mountCompose(root) {
 
 async function openDesk(id, most) {
   stop();
-  Object.assign(D, { desk: id, most, song: null, shelf: null, slot: -1, step: 0, sel: 0, confirm: -1, kept: '', show2: false, show3: false });
+  Object.assign(D, { desk: id, most, song: null, shelf: null, slot: -1, step: 0, sel: 0, confirm: -1, kept: '', show2: false, show3: false, paper: null });
   paint();
   const got = await loadSongs(id).catch(() => ({ draft: null, shelf: Array(SONG_SLOTS).fill(null) }));
   if (D.desk !== id) return;
@@ -113,6 +116,7 @@ function leave() {
   stop();
   if (D.draftTimer) { clearTimeout(D.draftTimer); D.draftTimer = 0; keepDraftNow(); }
   D.on = false;
+  D.paper = null;
 }
 
 /** The song on the desk changed: keep the draft a moment later. */
@@ -134,6 +138,7 @@ function paint() {
   const el = body();
   if (!el) return;
   if (!D.song) { el.innerHTML = '<p class="muted">Sharpening the pencils…</p>'; return; }
+  if (D.paper) { el.innerHTML = paperHtml(); drawPaper(); return; }
   el.innerHTML = `
     <div class="cd-top">
       <nav class="cd-tabs" aria-label="Steps">${STEPS.map((s, i) => `<button class="btn small-btn${D.step === i ? ' on' : ''}" data-c="step" data-v="${i}" aria-current="${D.step === i}">${i + 1} ${s}</button>`).join('')}</nav>
@@ -340,6 +345,7 @@ function songStep() {
       <input id="cd-name" data-c="name" maxlength="${NAME_MOST}" placeholder="Name your song" value="${esc(s.name)}" aria-label="Song name">
       <button class="btn" data-c="keep">${D.slot >= 0 ? 'Keep changes' : 'Keep it'}</button>
       <button class="btn ghost" data-c="new">New song</button>
+      <button class="btn ghost" data-c="sheet">🖨️ Sheet music</button>
     </div>
     ${D.kept ? `<p class="cd-kept" role="status">${esc(D.kept)}</p>` : ''}
     ${shelfHtml()}
@@ -356,9 +362,59 @@ function shelfHtml() {
         <div class="cd-row">
           <button class="btn small-btn" data-c="shelf-play" data-v="${i}">▶</button>
           <button class="btn small-btn ghost" data-c="shelf-open" data-v="${i}">Open</button>
+          <button class="btn small-btn ghost" data-c="shelf-sheet" data-v="${i}" aria-label="Sheet music">🖨️</button>
           <button class="btn small-btn ghost${D.confirm === i ? ' danger' : ''}" data-c="shelf-throw" data-v="${i}">${D.confirm === i ? 'Sure? Throw away' : '🗑'}</button>
         </div>
       </div>` : `<div class="cd-song empty"><small>Empty spot</small></div>`)).join('')}</div>`;
+}
+
+// ---------- sheet music to print ----------
+
+function paperHtml() {
+  const s = D.paper;
+  const chords = sheetChords(s).map((c) => `<span data-job="${c.job}"><small>${c.bar}</small>${esc(c.name)}<small>${esc(c.jobName)}</small></span>`).join('');
+  return `
+    <div class="cd-paper-bar">
+      <button class="btn ghost" data-c="paper-close">◀ Back to the desk</button>
+      <button class="btn" data-c="paper-print">🖨️ Print</button>
+    </div>
+    <p class="cd-paper-tip">Print it for the piano, or choose <b>Save as PDF</b> to keep it.</p>
+    <article class="cd-paper">
+      <div id="cd-score" class="cd-score"><p class="muted">Inking the staff…</p></div>
+      <p class="cd-paper-twice">${esc(SECOND_LINE[s.second] || SECOND_LINE.same)}</p>
+      <div class="cd-paper-chords"><b>My chords</b><div>${chords}</div></div>
+      <p class="cd-paper-foot">Written at the composing desk</p>
+    </article>`;
+}
+
+/** Engrave the song on the paper with abcjs (or show its notes bar by bar without it). */
+function drawPaper() {
+  const el = document.querySelector('#cd-score');
+  const song = D.paper;
+  if (!el || !song) return;
+  const by = deskOf(D.desk)?.kid?.name || '';
+  loadAbcjs(document).then((ABCJS) => {
+    if (!el.isConnected || D.paper !== song) return;
+    const per = el.clientWidth >= 560 ? 4 : 2;
+    el.innerHTML = '';
+    ABCJS.renderAbc(el, deskSongAbc(song, { by, perLine: per }), {
+      add_classes: true, responsive: 'resize', staffwidth: per === 4 ? 760 : 400,
+      paddingleft: 8, paddingright: 4, paddingtop: 4, paddingbottom: 4,
+    });
+    el.classList.add('engraved');
+  }, () => {
+    if (!el.isConnected || D.paper !== song) return;
+    const st = METERS[song.meter].steps;
+    const bars = Array.from({ length: BARS }, (_, b) => song.tune.slice(b * st, b * st + st).map((v) => (Number.isInteger(v) ? pitchName(song.key, v) : v === 'z' ? '·' : '')).filter(Boolean).join(' ') || '—');
+    el.innerHTML = `<h3>${esc(song.name || 'My song')}</h3><p class="muted">${esc(keyName(song.key))} · ${esc(song.meter)}${by ? ` · Music by ${esc(by)}` : ''}</p>${bars.map((n, b) => `<p><b>${b + 1}</b> ${esc(n)}</p>`).join('')}`;
+  });
+}
+
+function showPaper(song) {
+  stop();
+  D.paper = cleanSong(JSON.parse(JSON.stringify(song)));
+  paint();
+  window.scrollTo?.(0, 0);
 }
 
 const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
@@ -474,6 +530,10 @@ function onClick(e) {
       keepDraft();
       paint();
       return;
+    case 'sheet': showPaper(s); return;
+    case 'shelf-sheet': { const song = D.shelf?.[Number(v)]; if (song) showPaper(song); return; }
+    case 'paper-close': D.paper = null; paint(); return;
+    case 'paper-print': window.print(); return;
     case 'shelf-play': { const song = D.shelf?.[Number(v)]; if (song) playSong(b, song); return; }
     case 'shelf-open': {
       const i = Number(v);
@@ -797,5 +857,6 @@ export function composeState() {
     shelf: D.shelf && D.shelf.map((s) => (s ? s.name : null)),
     playing: Boolean(A.live),
     kept: D.kept,
+    paper: D.paper && (D.paper.name || 'My song'),
   };
 }
