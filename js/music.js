@@ -2,7 +2,7 @@
 // longer loop in sections, maploops.js), synthesized live with Web Audio (pulse waves, a
 // triangle bass and noise drums, like old consoles). No audio files. A small look-ahead
 // scheduler keeps the timing steady.
-import { SONGS, SHOW_SONGS, barChords } from './songs.js';
+import { SONGS, SHOW_SONGS, barChords, songBeat } from './songs.js';
 import { LOOPS } from './maploops.js';
 import { VOICES, KITS, DRUM_HALVES } from './studiokit.js';
 
@@ -27,9 +27,12 @@ function chordTones(name) {
   return [root, root + third, root + fifth];
 }
 
-/** A bar's chords ('F', or 'F E' for two that share the bar) as the chord's tones at every step. */
-export function stepChords(entry, beat) {
-  const parts = barChords(entry, beat).map((c) => chordTones(c.name));
+/**
+ * A bar's chords ('F', or 'F E' for two that share the bar) as the chord's tones at every step.
+ * beat: steps a bar; per: steps a beat (2, or 3 in 6/8).
+ */
+export function stepChords(entry, beat, per = 2) {
+  const parts = barChords(entry, beat, per).map((c) => chordTones(c.name));
   return Array.from({ length: beat }, (_, i) => parts[Math.floor((i * parts.length) / beat)]);
 }
 
@@ -44,7 +47,7 @@ function compile(id) {
     ...s,
     beat,
     lead: s.lead.map((bar) => bar.split(' ')),
-    chords: s.chords.map((entry) => stepChords(entry, beat)),
+    chords: s.chords.map((entry) => stepChords(entry, beat, songBeat(s))),
   };
   compiled.set(id, song);
   return song;
@@ -61,7 +64,7 @@ function compilePiece(id) {
     ...song,
     loop: song.lead.length,
     lead: [...song.lead, song.ending.lead.split(' ')],
-    chords: [...song.chords, stepChords(song.ending.chord, song.beat)],
+    chords: [...song.chords, stepChords(song.ending.chord, song.beat, songBeat(song))],
   };
 }
 

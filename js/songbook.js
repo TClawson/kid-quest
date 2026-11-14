@@ -16,7 +16,7 @@
 
 import { ui, state, esc, kidById, render, progressFor, toast, viewKid, save, openModal, closeModal } from './ctx.js';
 import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars, SONG_PRICE, songBuyCheck, buySong } from './sheetmusic.js';
-import { barChords } from './songs.js';
+import { barChords, songTempo } from './songs.js';
 import { treasureFound } from './treasure.js';
 import { musicTier, MUSIC_TIERS } from './musicrules.js';
 import { itemById } from './items.js';
@@ -148,7 +148,7 @@ function pieceHtml(kid, p) {
     <div class="screen songbook piece" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="song-back" aria-label="Back to the songbook">←</button>
-        <div class="kid-title"><b>${iconOf(p)} ${esc(p.name)}</b><small>${esc(keyLabel(p.key))} · speed ${song.bpm}${song.swing ? ', swing' : ''} · ${esc(source(p))}</small></div>
+        <div class="kid-title"><b>${iconOf(p)} ${esc(p.name)}</b><small>${esc(keyLabel(p.key))} · speed ${songTempo(song).bpm}${song.swing ? ', swing' : ''} · ${esc(source(p))}</small></div>
       </header>
       <div class="song-tools">
         ${levels.length > 1 ? `<nav class="tabs song-levels" aria-label="How hard">${levelTabs}</nav>` : ''}
@@ -293,7 +293,7 @@ export function leadSheetHtml(id, per = 4) {
   const song = songById(id);
   const bars = song.lead.map((bar, i) => {
     const notes = barEvents(bar).map((e) => (e.note ? e.note.replace(/\d/, '').replace('#', '♯').replace(/^([A-G])b$/, '$1♭') : '·')).join(' ');
-    return `<div class="lead-bar abcjs-mm${i}"><b>${esc(barChords(song.chords[i]).map((c) => chordLabel(c.name)).join(' '))}</b><span>${esc(notes)}</span></div>`;
+    return `<div class="lead-bar abcjs-mm${i}"><b>${esc(barChords(song.chords[i], meterOf(song).steps, meterOf(song).beat).map((c) => chordLabel(c.name)).join(' '))}</b><span>${esc(notes)}</span></div>`;
   });
   return `<div class="lead-sheet" style="--per:${per}">${bars.join('')}</div>`;
 }
