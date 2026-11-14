@@ -8,7 +8,7 @@ import { dayStatus } from './logic.js';
 
 // One look per piano, from the little keyboard (2-week piano streak) to the rock star piano.
 export const MUSIC_TIERS = [
-  { tier: 1, piano: 'music-keyboard', name: 'Cozy Studio', hello: 'Welcome to your music house! Walk up to your keyboard, the studio desk, the sheet music or the Note-o-Matic.' },
+  { tier: 1, piano: 'music-keyboard', name: 'Cozy Studio', hello: 'Welcome to your music house! Walk up to your keyboard, the studio desk, the sheet music, the Note-o-Matic or the composing desk.' },
   { tier: 2, piano: 'music-upright', name: 'Music Parlor', hello: 'Whoa! Your new upright piano moved in, and the whole music house got a makeover!' },
   { tier: 3, piano: 'music-rock', name: 'Rock Arena', hello: 'WHOA! A rock star piano needs a rock star stage. Welcome to the Rock Arena!' },
 ];
@@ -97,4 +97,12 @@ export const LAB_NEEDS_CHORES = true;
  */
 export function labOpen(state, kid, today, needs = LAB_NEEDS_CHORES) {
   return needs ? studioOpen(state, kid, today) : { open: true, left: 0, waiting: 0 };
+}
+
+/**
+ * Whether the composing desk is open today: like the studio, once today's chores are done
+ * (Taylor's call, 2026-11-14). Returns { open, left, waiting }.
+ */
+export function deskOpen(state, kid, today) {
+  return studioOpen(state, kid, today);
 }

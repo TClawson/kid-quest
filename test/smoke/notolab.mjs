@@ -437,6 +437,7 @@ async function recordToPick(page, name = '', stop = 'limit') {
 // 2. Settings: a test desk right after the studio's, behind the PIN, with its own shelf
 {
   const { ctx, page } = await start(TABLET, family());
+  await intoHouse(page); // past what pops up on the way in (the music house's hello, a Saturday's free games)
   await openParents(page);
   for (const d of '1234') await page.click(`#modal [data-pin="${d}"]`);
   await page.waitForSelector('.pnav');

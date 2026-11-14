@@ -1,7 +1,8 @@
 // The music house, inside: a walkable room in the village world (like the buddy's house),
 // with a new look for each piano the kid earns (musicart.js draws them). The kid taps to walk
 // the buddy round it; walking up to a station uses it: the piano opens the practice
-// stopwatch, and the sheet music, the studio and the Note-o-Matic each have their own screen.
+// stopwatch, and the sheet music, the studio, the Note-o-Matic and the composing desk each have
+// their own screen.
 // The door leads back out to the village, in front of the music hall.
 
 import { MROOM, paintMusicRoom } from './musicart.js';
@@ -18,6 +19,7 @@ export const STATIONS = {
   sheets: { name: 'Sheet music', tag: '🎼 Sheet music' },
   studio: { name: 'Studio', tag: '🎚️ Studio' },
   lab: { name: 'Note-o-Matic', tag: '🤖 Note-o-Matic' },
+  desk: { name: 'Composing desk', tag: '✍️ Compose' },
 };
 
 /**
@@ -25,13 +27,14 @@ export const STATIONS = {
  *   kidId, kidName, color, buddy: live buddy markup, tier: 1-3 (which look),
  *   studio: { open, left, waiting }: whether today's chores are done (the studio waits for them),
  *   lab: { open, left, waiting }: the same for the Note-o-Matic's screen (musicrules.js labOpen),
+ *   desk: { open, left, waiting }: the same for the composing desk (musicrules.js deskOpen),
  *   hello: a line to say on the way in (a new look), or '',
  *   quests: quests left outside (for the door sign),
  *   hud: markup laid over a corner of the room (the Today button), or '',
  * }
  */
 export function musicHouseHtml(m) {
-  const data = { kid: m.kidId, name: m.kidName, color: m.color, tier: m.tier, studio: m.studio || { open: false, left: 0 }, lab: m.lab || { open: false, left: 0 }, hello: m.hello || '' };
+  const data = { kid: m.kidId, name: m.kidName, color: m.color, tier: m.tier, studio: m.studio || { open: false, left: 0 }, lab: m.lab || { open: false, left: 0 }, desk: m.desk || { open: false, left: 0 }, hello: m.hello || '' };
   const info = tierInfo(m.tier);
   return `
     <section class="house music-house tier-${m.tier}" data-kid="${esc(m.kidId)}" data-m="${esc(JSON.stringify(data))}">
@@ -61,7 +64,7 @@ export function cameInMusic(kidId) { memory.set(kidId, { entering: true }); }
 
 /**
  * Starts every music house inside root. handlers: {
- *   onPiano(): the practice stopwatch, onSheets(), onStudio(), onLab(): the other stations,
+ *   onPiano(): the practice stopwatch, onSheets(), onStudio(), onLab(), onDesk(): the other stations,
  *   onExit(): the buddy went out the door, sound(name),
  * }
  */
@@ -152,7 +155,11 @@ function mount(section, handlers) {
       say(name, `Beep boop! The Note-o-Matic wakes up once today's chores are done${toGo(data.lab)}. The piano and the sheet music are open any time!`);
       return;
     }
-    ({ sheets: handlers.onSheets, studio: handlers.onStudio, lab: handlers.onLab })[id]?.();
+    if (id === 'desk' && !data.desk.open) {
+      say(name, `The composing desk opens once today's chores are done${toGo(data.desk)}. The piano and the sheet music are open any time!`);
+      return;
+    }
+    ({ sheets: handlers.onSheets, studio: handlers.onStudio, lab: handlers.onLab, desk: handlers.onDesk })[id]?.();
   };
 
   const mem = memory.get(data.kid) || {};
