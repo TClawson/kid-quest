@@ -14,8 +14,12 @@ export async function closePops(page) {
 
 /** Opens the kid's Menu (the ☰ button at the top right of the village). */
 export async function openMenu(page) {
-  await closePops(page);
-  await page.click('.k-hud [data-action="menu"]');
+  // a start-of-day pop-up (on a Saturday, the free games) can open a moment after the village does
+  for (let i = 0; i < 5; i += 1) {
+    await closePops(page);
+    await page.click('.k-hud [data-action="menu"]');
+    if (await page.waitForSelector('#modal .menu-pop', { timeout: 2000 }).then(() => true, () => false)) return;
+  }
   await page.waitForSelector('#modal .menu-pop');
 }
 
@@ -38,6 +42,11 @@ export async function toPicker(page) {
 export async function openParents(page) {
   await page.waitForSelector('[data-action="parent"], .screen.kid');
   if (await page.locator('[data-action="parent"]').count()) return page.click('[data-action="parent"]');
+  // a start-of-day pop-up can open over the menu a moment later: then open the menu again
+  for (let i = 0; i < 4; i += 1) {
+    await openMenu(page);
+    if (await page.click('#modal [data-action="menu-parents"]', { timeout: 2000 }).then(() => true, () => false)) return;
+  }
   await openMenu(page);
   await page.click('#modal [data-action="menu-parents"]');
 }
