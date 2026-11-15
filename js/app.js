@@ -50,7 +50,7 @@ import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS
 import { GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { SPOTS as FISH_SPOTS, boatThumb } from './fishing.js';
-import { chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
+import { chestTier, chestPrize, chestPiece, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
 import { chestSvg, trophySvg, mapPiecesSvg, secretSvg, secretSize, SECRETS } from './treasure-art.js';
 import { playShow, showPlaying } from './mapshow.js';
 import { createStore, migrate, localBackend, stableJson, DEVICE_SETTINGS } from './store.js';
@@ -480,6 +480,8 @@ const unlockedMaps = (kid) => {
   return ITEMS.filter((i) => i.slot === 'background' && isUnlocked(i, prog)).map((i) => i.id);
 };
 const mapName = (id) => mapTheme(id).name;
+/** A short line for an opened chest: its prize, plus the map piece that came with it. */
+const chestTitle = (prize) => prizeText(prize, mapName).title + (prize.piece && prize.kind !== 'piece' ? ' And a map piece!' : '');
 const mapGround = (id) => mapTheme(id).ground[0];
 
 function openChest(kid, key) {
@@ -500,12 +502,18 @@ function openChest(kid, key) {
   else if (prize.kind === 'gems') art = '<div class="prize-emoji">💎</div>';
   else if (prize.kind === 'games') art = '<div class="prize-emoji">⚽</div>';
   else if (prize.kind === 'trophy') art = trophySvg(prize.trophy, { scale: 6 });
-  else {
-    const n = after.pieces[prize.map] || 0;
-    art = mapPiecesSvg(n, PIECES_PER_MAP, { scale: 7, ground: mapGround(prize.map) });
-    extra = n >= PIECES_PER_MAP
-      ? `<p class="prize-big">You finished the ${esc(mapName(prize.map))} treasure map! Something secret is waiting in that village now. 👀</p>`
-      : `<p class="muted">${n} of ${PIECES_PER_MAP} pieces</p>`;
+  // a treasure map piece comes as well as the prize (silver and gold chests)
+  const piece = chestPiece(prize);
+  if (piece) {
+    const n = after.pieces[piece] || 0;
+    extra = `
+        <div class="prize-piece">
+          <h2>And a treasure map piece!</h2>
+          <div class="prize-art">${mapPiecesSvg(n, PIECES_PER_MAP, { scale: 5, ground: mapGround(piece) })}</div>
+          ${n >= PIECES_PER_MAP
+    ? `<p class="prize-big">You finished the ${esc(mapName(piece))} treasure map! Something secret is waiting in that village now. 👀</p>`
+    : `<p class="muted">It's part of the ${esc(mapName(piece))} map: ${n} of ${PIECES_PER_MAP} pieces.</p>`}
+        </div>`;
   }
   sounds.tap();
   openModal(`
@@ -520,7 +528,7 @@ function openChest(kid, key) {
         <button class="btn huge" data-action="modal-close">Awesome!</button>
       </div>
     </div>`, () => render());
-  setTimeout(() => { sounds.day(); confetti(prize.kind === 'piece' || prize.kind === 'trophy' ? 160 : 90, 2200); }, 1000);
+  setTimeout(() => { sounds.day(); confetti(piece || prize.kind === 'trophy' ? 160 : 90, 2200); }, 1000);
 }
 
 /** The trophy shelf and the treasure maps (in the Status pop-up and from the shelf in the house). */
@@ -1521,7 +1529,7 @@ function todayModel(kid) {
   ].filter((x) => x.list.length).map(({ list, ...x }) => ({ ...x, rows: rows(list) }));
   const c = chestFor(kid, t);
   const tier = `<b>${esc(c.tier.name.toLowerCase())}</b>`;
-  const chest = c.opened ? `🎁 Today's chest: ${esc(prizeText(c.opened, mapName).title)}`
+  const chest = c.opened ? `🎁 Today's chest: ${esc(chestTitle(c.opened))}`
     : c.ready ? `🎁 Today's ${tier} is ready! Open it`
       : !q.total ? '🎁 No quests today' : q.toGo ? `🎁 ${q.toGo} more for today's ${tier}` : `🎁 A parent checks ${q.waitingToday === 1 ? 'one quest' : `${q.waitingToday} quests`}, then today's ${tier}`;
   const day = parseKey(t).toLocaleDateString(undefined, { weekday: 'long' });
@@ -2928,7 +2936,7 @@ const actions = {
     const key = el.dataset.day || today();
     const c = chestFor(kid, key);
     if (c.ready) return openChest(kid, key);
-    if (c.opened) { sounds.day(); confetti(60, 1500); toast(`Today's treasure: ${prizeText(c.opened, mapName).title}`); return; }
+    if (c.opened) { sounds.day(); confetti(60, 1500); toast(`Today's treasure: ${chestTitle(c.opened)}`); return; }
     sounds.tap();
     if (c.s.complete) toast('See you tomorrow for another chest!');
     else toast(`${c.s.total - c.s.done} more to reach the ${c.tier.name.toLowerCase()}!`);

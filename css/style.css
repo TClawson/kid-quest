@@ -435,6 +435,9 @@ span.dot.other { background: #f76707; }
 .chest-card .prize-art { display: grid; place-items: center; min-height: 120px; animation: prize-pop 0.6s 1s cubic-bezier(.2, 1.6, .5, 1) both; }
 .chest-card .prize-emoji { font-size: 5rem; line-height: 1; }
 .chest-card .prize-big { font-weight: 800; }
+.chest-card .prize-piece { margin: 6px 0 10px; }
+.chest-card .prize-piece h2 { margin: 4px 0 0; font-size: 1.3rem; }
+.chest-card .prize-piece .prize-art { min-height: 0; }
 @keyframes chest-shake {
   0% { transform: translateX(0) scale(1); } 15% { transform: translateX(-6px) rotate(-4deg); } 30% { transform: translateX(6px) rotate(4deg); }
   45% { transform: translateX(-8px) rotate(-6deg); } 60% { transform: translateX(8px) rotate(6deg); } 80% { transform: scale(1.15); opacity: 1; }

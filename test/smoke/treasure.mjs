@@ -2,6 +2,7 @@
 // - a kid with a 10-day streak gets a silver chest; it wiggles once every task is done
 // - tapping it opens it: the prize is saved on the day and the chest shows open
 // - a chest from yesterday that was approved late waits, with a button to open it
+// - a silver chest's map piece comes as well as its prize, not instead of it
 // - the trophy shelf lists every trophy and the unlocked maps
 // Run: npm run test:smoke   (SHOTS_DIR=... saves screenshots)
 import assert from 'node:assert/strict';
@@ -85,6 +86,8 @@ try {
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
     const chest = saved.log[TODAY].kid_ava.chest;
     assert.ok(chest && chest.tier === 'silver', 'the prize is saved on the day');
+    assert.notEqual(chest.kind, 'piece', 'a map piece never replaces the prize');
+    assert.equal(await page.locator('#modal .prize-piece').count(), chest.piece ? 1 : 0, 'the map piece shows when the chest has one');
     await page.click('#modal [data-action="modal-close"]');
     await page.clock.runFor(400);
     assert.equal(await page.locator('.village .v-chest.opened').count(), 1, 'the chest shows open');
@@ -110,6 +113,8 @@ try {
     await page.click('.k-hud .hud-chest');
     await page.clock.runFor(1500);
     if (shots) await page.screenshot({ path: `${shots}/chest-prize-phone.png` });
+    // (this kid and day roll a map piece as well as the trophy: the piece comes on top)
+    assert.equal(await page.locator('#modal .prize-piece').count(), 1, 'a map piece shows beside the prize');
     await page.click('#modal [data-action="modal-close"]');
     await page.clock.runFor(400);
     assert.equal(await page.locator('.k-hud .hud-chest').count(), 0);
