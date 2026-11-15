@@ -542,3 +542,4 @@
   .cd-paper { max-width: none; padding: 0; border: 0; box-shadow: none; }
   .cd-paper-chords span { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.cd-shelf-note { font: 0.8rem var(--px-text); color: var(--muted); margin-left: 6px; }

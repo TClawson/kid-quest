@@ -148,6 +148,26 @@ const desk = (page) => page.evaluate(async () => (await import('./js/composedesk
   assert.equal(s.shelf[0], 'Sea Song');
   assert.equal(s.song.meter, '6/8');
   assert.equal(s.slot, 0);
+  // and the song is in the recording studio, under My songs: its tune and chords go into a mix
+  await tap(page, '[data-action="compose-back"]');
+  await page.waitForSelector('.music-house');
+  await tap(page, '.m-station[data-spot="studio"]');
+  await page.waitForSelector('#studio .st-desk-songs [data-action="st-song-add"]', { timeout: 20000 });
+  assert.match(await page.locator('#studio .st-desk-songs').innerText(), /Sea Song[\s\S]*6\/8, 30 seconds/);
+  await tap(page, '#studio .st-desk-songs [data-action="st-song-add"]');
+  await page.waitForSelector('#studio .st-clip');
+  const mix = await page.evaluate(async () => {
+    const m = await import('./js/studio-store.js');
+    for (let i = 0; i < 40; i += 1) {
+      const { draft } = await m.loadMixes('kid_ava');
+      const clips = draft?.tracks.flat().filter((x) => x.kind === 'notes') || [];
+      if (clips.length === 2) return { roles: clips.map((c) => c.role).sort(), bpm: draft.bpm, meter: draft.meter, bars: draft.bars };
+      await new Promise((r) => { setTimeout(r, 100); });
+    }
+    return null;
+  });
+  assert.deepEqual(mix, { roles: ['band', 'tune'], bpm: 96, meter: 3, bars: 16 });
+  await page.screenshot({ path: `${out}/9-studio-my-songs.png`, fullPage: true });
   await ctx.close();
 }
 

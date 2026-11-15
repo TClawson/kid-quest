@@ -592,6 +592,8 @@ export function addTune(mix, track, kept, at = 0) {
   });
   if (r.error) return fail(r.error);
   if (r.bandLeft) note = 'There was no room for the band on another track, so your tune went in alone.';
+  // a song from the composing desk: its clips carry its name
+  if (typeof kept.desk === 'string' && kept.desk) for (const id of r.ids) { const c = findClip(next, id)?.clip; if (c) c.desk = kept.desk.slice(0, 40); }
   // a tune cut short (by the next clip on its track, or the loop's end) is never cut without a word
   const placed = findClip(next, r.ids[0])?.clip;
   if (placed && placed.len < Math.ceil((Number(parts[0].beats) || 1) - 1e-6)) {
@@ -942,7 +944,9 @@ export function badges(mix) {
   const clips = allClips(mix);
   const parts = clips.filter((c) => c.kind === 'part');
   const takes = clips.filter((c) => c.kind === 'take');
-  const notes = clips.filter((c) => c.kind === 'notes');
+  // (a song written at the composing desk is the kid's writing, not their playing)
+  const written = clips.filter((c) => c.kind === 'notes' && c.desk);
+  const notes = clips.filter((c) => c.kind === 'notes' && !c.desk);
   // the kid's own playing: a take, or a take turned into notes
   const mine = [...takes, ...notes];
   const kinds = new Set(parts.map((c) => c.part));
@@ -966,6 +970,7 @@ export function badges(mix) {
   if (['beats', 'bass', 'chords'].every((g) => groups.has(g))) out.push({ id: 'house', name: 'House band', why: 'A beat, a bass line and chords from the backing tracks.' });
   if (notes.length) out.push({ id: 'notes', name: 'Note-o-Matic', why: 'You turned your playing into notes.' });
   if (notes.some((c) => c.role === 'band')) out.push({ id: 'leader', name: 'Band leader', why: 'A band played along with your tune.' });
+  if (written.length) out.push({ id: 'composer', name: 'Composer', why: 'A song you wrote yourself, in your mix.' });
   return out;
 }
 
@@ -1015,6 +1020,7 @@ function cleanNotesClip(c, raw, meter) {
   if (pace) Object.assign(clip, { pace, norm });
   if (pace && backOf(c, norm)) clip.back = backOf(c, norm); // (an odd window is dropped, not the clip)
   if (typeof c.pair === 'string' && c.pair && c.pair.length <= 40) clip.pair = c.pair;
+  if (typeof c.desk === 'string' && c.desk && c.desk.length <= 40) clip.desk = c.desk; // a composing desk song's name
   return clip;
 }
 

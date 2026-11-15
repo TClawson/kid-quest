@@ -355,7 +355,7 @@ function songStep() {
 function shelfHtml() {
   if (!D.shelf) return '';
   return `
-    <div class="cd-label">My songs</div>
+    <div class="cd-label">My songs <small class="cd-shelf-note">They are in the recording studio too, ready to mix.</small></div>
     <div class="cd-shelf">${D.shelf.map((s, i) => (s ? `
       <div class="cd-song${i === D.slot ? ' here' : ''}">
         <b>${esc(s.name || `Song ${i + 1}`)}</b><small>${esc(keyName(s.key))} · ${esc(s.meter)} · ${fmt(loopSeconds(s.meter, s.bpm))}</small>
@@ -600,7 +600,7 @@ function keep() {
     D.shelf[slot] = cleanSong(song);
     D.slot = slot;
     s.name = name;
-    D.kept = `“${name}” is on your song shelf!`;
+    D.kept = `“${name}” is on your song shelf, and in the recording studio under My songs!`;
     keepDraftNow();
     paint();
   }, () => toast('I couldn’t keep it on this tablet. Please try again.'));
