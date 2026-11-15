@@ -198,7 +198,7 @@ test('two chords can share a bar: both names are written, each on its own note',
 });
 
 test('a loop that ends up in the air gets a closing bar on paper, and only there', () => {
-  const closed = ['bg-ocean', 'bg-space', 'bg-volcano'];
+  const closed = ['bg-ocean', 'bg-space', 'bg-volcano', 'bg-fjord'];
   for (const p of SONGBOOK) {
     const raw = p.kind === 'show' ? SHOW_SONGS[p.map] : SONGS[p.map];
     const song = songById(p.id);

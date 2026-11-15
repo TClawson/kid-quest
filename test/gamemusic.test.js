@@ -143,7 +143,7 @@ function heardIn(sounds, from, len, unit) {
 }
 
 test('every bar of the long loops fits its section', () => {
-  assert.deepEqual(Object.keys(LOOPS).sort(), ['bg-meadow', 'bg-ocean']);
+  assert.deepEqual(Object.keys(LOOPS).sort(), ['bg-fjord', 'bg-meadow', 'bg-ocean']);
   for (const [id, song] of Object.entries(LOOPS)) {
     for (const sec of song.sections) {
       const beat = sec.beat || song.beat || 8;
@@ -152,11 +152,13 @@ test('every bar of the long loops fits its section', () => {
       sec.lead.forEach((bar, k) => assert.equal(bar.split(' ').length, beat, `${id} ${sec.name} bar ${k + 1}`));
       (sec.lead2 || []).forEach((bar, k) => { if (bar) assert.equal(bar.split(' ').length, beat, `${id} ${sec.name} second voice, bar ${k + 1}`); });
       if (sec.inv) for (const v of sec.inv) assert.ok([0, 1, 2].includes(Array.isArray(v) ? v[0] : v));
+      if (Array.isArray(sec.barEighths)) assert.equal(sec.barEighths.length, n, `${id} ${sec.name}: a speed for every bar`);
     }
     assert.equal(loopScore(id).length, song.sections.reduce((a, s) => a + s.lead.length, 0));
   }
   assert.equal(loopScore('bg-ocean').length, 49);
   assert.equal(loopScore('bg-meadow').length, 62);
+  assert.equal(loopScore('bg-fjord').length, 65);
   assert.equal(loopScore('bg-space'), null);
 });
 
@@ -213,6 +215,53 @@ test('Forest Village in the village: the Great Oak sways in two in a village bar
   // after bar 62 comes bar 1 again, on time
   assert.equal(heardIn(sounds, 62 * L, L, eighth), heardIn(sounds, 0, L, eighth));
   assert.notEqual(heardIn(sounds, 61 * L, L, eighth), heardIn(sounds, 0, L, eighth));
+});
+
+test('Alaskan Fjord in the village: a calm day in nine parts, every bar at its own speed, then round again', async () => {
+  const score = loopScore('bg-fjord');
+  assert.equal(score.length, 65);
+  const parts = score.map((b) => b.sec.name).filter((name, k, all) => name !== all[k - 1]);
+  assert.deepEqual(parts, ['The walk', 'Setting sail', 'The sea otters', 'The sheltered bay', 'Nightfall', 'In three', 'The northern lights', 'The lighthouse', 'First light']);
+  for (const b of score) assert.equal(b.beat, 6, 'six steps in every bar');
+  // how long each bar lasts: six eighths in two beats at a speed in dotted quarters, or (the
+  // waltz) in three beats at a speed in quarters
+  const len = (k) => score[k].beat * score[k].step;
+  const two = (bpm) => 120 / bpm;
+  const three = (bpm) => 180 / bpm;
+  const near = (a, b, what) => assert.ok(Math.abs(a - b) < 1e-9, `${what}: ${a} is not ${b}`);
+  near(len(0), two(76), 'the walk');
+  near(len(6), two(84), 'the walk hurries to the boat');
+  near(len(7), two(90), 'the walk hurries to the boat');
+  for (let k = 8; k < 16; k += 1) near(len(k), two(92), 'setting sail');
+  near(len(23), two(74), 'the otters slow into the bay');
+  near(len(24), two(66), 'the sheltered bay');
+  near(len(34), two(55), 'slowing into the lights');
+  for (let k = 35; k < 48; k += 1) near(len(k), three(128), 'the waltz at its own speed');
+  near(len(50), three(80), 'the waltz slows at its end');
+  near(len(58), two(46), 'the lighthouse\'s last bar');
+  near(len(64), two(73), 'first light picks up into the walk');
+  const starts = [0];
+  for (let k = 0; k < 65; k += 1) starts.push(starts[k] + len(k));
+  assert.ok(Math.abs(starts[65] - 106.5) < 0.5, `about 1:46 round: ${starts[65]}`);
+  const sounds = await village('bg-fjord', starts[65] + len(0) + len(1));
+  const bar = (k, from = starts[k]) => heardIn(sounds, from, len(k), score[k].step);
+  for (let k = 0; k < 65; k += 1) assert.ok(bar(k).length > 0, `bar ${k + 1} plays`);
+  // the walk's first bar: the tune an octave up, F#5 C#6 D6 A5 F#5 on steps 1, 3, 4, 5 and 6
+  const tune = (k) => heardIn(sounds.filter((n) => !n.noise && !n.swept && n.midi >= 72), starts[k], len(k), score[k].step);
+  assert.equal(tune(0), ['0:78', '200:85', '300:86', '400:81', '500:78'].sort().join(' '));
+  // the waltz starts on F#5 and goes up to C#6 on its third beat
+  assert.equal(tune(35), ['0:78', '400:85'].sort().join(' '));
+  // nothing falls between the steps of its own bar (the sparks of the waltz fall on half steps)
+  for (const n of sounds.filter((s) => s.t < starts[65] - 1e-6)) {
+    let k = 0;
+    while (starts[k + 1] <= n.t + 1e-6) k += 1;
+    const at = (n.t - starts[k]) / (score[k].step / 2);
+    assert.ok(Math.abs(at - Math.round(at)) < 1e-6, `bar ${k + 1}: ${n.t}`);
+  }
+  // after bar 65 comes bar 1 again, on time
+  assert.equal(bar(0, starts[65]), bar(0));
+  assert.equal(bar(1, starts[65] + len(0)), bar(1));
+  assert.notEqual(bar(64), bar(0));
 });
 
 test('a theme without a long loop still plays its 16-bar song in the village', async () => {

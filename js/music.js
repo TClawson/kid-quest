@@ -332,11 +332,12 @@ export function loopScore(id) {
   const bars = [];
   for (const sec of song.sections) {
     const beat = sec.beat || song.beat || 8;
-    // a section can fit its steps into a bar of another length (barEighths of the song's eighths)
-    const step = ((sec.barEighths || beat) * base) / beat;
+    // a section can fit its steps into a bar of another length (barEighths of the song's
+    // eighths), the same for all its bars or one for each (it speeds up or slows down)
     const n = sec.lead.length;
-    for (const key of ['chords', 'lead2', 'inv']) if (sec[key] && sec[key].length !== n) throw new Error(`${sec.name}: ${key} has ${sec[key].length} bars, lead has ${n}`);
+    for (const key of ['chords', 'lead2', 'inv', ...(Array.isArray(sec.barEighths) ? ['barEighths'] : [])]) if (sec[key] && sec[key].length !== n) throw new Error(`${sec.name}: ${key} has ${sec[key].length} bars, lead has ${n}`);
     sec.lead.forEach((line, k) => {
+      const step = (((Array.isArray(sec.barEighths) ? sec.barEighths[k] : sec.barEighths) || beat) * base) / beat;
       const lead = line.split(' ');
       const lead2 = sec.lead2?.[k] ? sec.lead2[k].split(' ') : null;
       for (const l of [lead, lead2]) if (l && l.length !== beat) throw new Error(`${sec.name} bar ${k + 1}: ${l.length} steps, wants ${beat}`);

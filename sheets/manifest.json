@@ -86,27 +86,6 @@
    "fingerprint": "347ba992"
   },
   {
-   "id": "bg-fjord",
-   "level": "easy",
-   "name": "Northern Lights",
-   "file": "sheets/northern-lights-easy-6dad7f.pdf",
-   "fingerprint": "6dad7fe6"
-  },
-  {
-   "id": "bg-fjord",
-   "level": "medium",
-   "name": "Northern Lights",
-   "file": "sheets/northern-lights-medium-ac1ee5.pdf",
-   "fingerprint": "ac1ee545"
-  },
-  {
-   "id": "bg-fjord",
-   "level": "hard",
-   "name": "Northern Lights",
-   "file": "sheets/northern-lights-hard-59514a.pdf",
-   "fingerprint": "59514a1e"
-  },
-  {
    "id": "bg-rainbow",
    "level": "easy",
    "name": "Candy Skip",
@@ -189,6 +168,27 @@
    "name": "Island Breeze",
    "file": "sheets/island-breeze-hard-924056.pdf",
    "fingerprint": "92405657"
+  },
+  {
+   "id": "bg-fjord",
+   "level": "easy",
+   "name": "Alaskan Fjord",
+   "file": "sheets/alaskan-fjord-easy-fb6601.pdf",
+   "fingerprint": "fb6601a2"
+  },
+  {
+   "id": "bg-fjord",
+   "level": "medium",
+   "name": "Alaskan Fjord",
+   "file": "sheets/alaskan-fjord-medium-0e1d48.pdf",
+   "fingerprint": "0e1d4875"
+  },
+  {
+   "id": "bg-fjord",
+   "level": "hard",
+   "name": "Alaskan Fjord",
+   "file": "sheets/alaskan-fjord-hard-abab8c.pdf",
+   "fingerprint": "abab8c72"
   },
   {
    "id": "bg-rainforest",
