@@ -34,7 +34,9 @@ import { READINGS, readings } from './notomatic.js';
 import { hearNotes } from './hearnotes.js';
 import { VOICES, KITS, LOOPS, LOOP_IDS, BACKING, BACKING_GROUPS, backingEvents } from './studiokit.js';
 import { partEvents, clipSound, backingKey, keyTonic } from './remix.js';
-import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes, loadTunes } from './studio-store.js';
+import { loadMixes, saveMix, deleteMix, saveTake, loadTake, sweepTakes, loadTunes, loadSongs } from './studio-store.js';
+import { songAsTune } from './composestudio.js';
+import { METERS as DESK_METERS } from './composerules.js';
 import {
   CLICK, normalise, findOnsets, joinBlocks, guessDelay, sliceSchedule, pct, beatAt, waveLine, echoDelay, countInDelay,
   clickWave, clickPlan, makeTake, fadeEnds, phonesDelay, softClip, usableDelay, stopPoint, firstPass, MOST_DELAY,
@@ -189,6 +191,7 @@ const S = {
   nom: null,          // the Note-o-Matic's panel: { id (the take's clip), take, phase, progress, result, pick, bufs }
   heard: new Map(),   // take id -> the notes heard in it (kept while the app is open, so a take is listened to once)
   tunes: [],          // the desk's Note-o-Matic tunes (tunerules.js), or null in a slot
+  songs: [],          // the kid's composing desk songs, as studio tunes: [{ slot, name, meter, tune }]
   tuneBufs: new Map(), // a tune's sound, made once: key -> Promise<AudioBuffer[]|null>
 };
 
@@ -265,11 +268,32 @@ export function mountStudio(root) {
 /** Read the desk's Note-o-Matic tunes again (one may have been kept on the robot's screen). */
 async function refreshTunes(kid) {
   let tunes = [];
+  let songs = [];
   try { tunes = await loadTunes(kid); } catch { tunes = []; }
+  try { songs = deskSongs((await loadSongs(kid === TEST_DESK ? COMPOSE_TEST_DESK : kid)).shelf); } catch { songs = []; }
   if (S.kid !== kid) return;
-  const was = JSON.stringify(S.tunes);
+  const was = JSON.stringify([S.tunes, S.songs]);
   S.tunes = tunes;
-  if (JSON.stringify(tunes) !== was) paint();
+  S.songs = songs;
+  if (JSON.stringify([tunes, songs]) !== was) paint();
+}
+
+// the parents' test studio shows the songs of the composing desk's test desk (composedesk.js)
+const COMPOSE_TEST_DESK = 'parent-test-desk';
+
+/** A short fingerprint of some text (a changed song gets new sounds, not the old ones kept for it). */
+function textHash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+}
+
+/** The composing desk's kept songs that have notes, ready for a mix. */
+function deskSongs(shelf) {
+  return (shelf || []).map((song, slot) => {
+    const tune = song && songAsTune(song, { id: `desk-${slot}-${textHash(JSON.stringify(song))}` });
+    return tune && { slot, name: song.name || `Song ${slot + 1}`, meter: song.meter, tune };
+  }).filter(Boolean);
 }
 
 /**
@@ -341,6 +365,7 @@ async function openDesk(kid) {
   S.takes.clear();
   S.waves.clear();
   S.tunes = [];
+  S.songs = [];
   paint();
   refreshTunes(kid);
   // read strictly: an empty desk after a failed read would be saved over the kid's real draft
@@ -554,7 +579,9 @@ function clipWords(c, mix = S.mix) {
   const kit = c.kit && KITS[c.kit] ? KITS[c.kit] : null;
   const moved = splitShift(c.shift || 0).octaves;
   if (c.kind === 'notes') {
-    const n = NOTES_WORDS[c.role] || NOTES_WORDS.tune;
+    const n = c.desk
+      ? (c.role === 'band' ? { icon: '🎹', name: 'Its chords', song: c.desk } : { icon: '✍️', name: c.desk, song: 'My song' })
+      : NOTES_WORDS[c.role] || NOTES_WORDS.tune;
     const key = clipKey(c);
     return { ...n, key: key ? keyLabel(key) : '', fits: clipFits(mix, c), voice, kit, moved };
   }
@@ -838,12 +865,28 @@ function shelfHtml() {
       <p class="st-song-info"><small>${esc(keyLabel(src.key))}</small>${beatNote}${fit}</p>
       <div class="st-parts">${buttons}</div></div>`;
   }).join('');
-  return `${tunesHtml()}
+  return `${deskSongsHtml()}${tunesHtml()}
     <section class="st-shelf" aria-label="Parts from your songs">
       <h3>Parts from your songs</h3>
       <p class="muted small">Tap a part to put it in your mix. Tap 🔊 to hear it first.</p>
       <div class="st-songs">${cards || '<p class="muted">Your songbook\'s songs show up here.</p>'}</div>
     </section>${backingHtml()}`;
+}
+
+/** The kid's songs from the composing desk, when they have some: the tune and chords go in together. */
+function deskSongsHtml() {
+  if (!S.songs?.length) return '';
+  const buttons = S.songs.map(({ slot, name, meter, tune }) => {
+    const h = hearFace(`song|${slot}`, name);
+    const secs = Math.round((tune.beats * 60) / tune.bpm);
+    return `<span class="st-part"><button class="btn small-btn st-add st-tune" data-action="st-song-add" data-slot="${slot}"><span>✍️ ${esc(name)}</span><small>${esc(DESK_METERS[meter]?.name || meter)}, ${secs} seconds</small></button><button class="btn ghost small-btn st-hear ${h.on ? 'on' : ''}" data-action="st-song-hear" data-slot="${slot}" aria-label="${esc(h.label)}">${h.face}</button></span>`;
+  }).join('');
+  return `
+    <section class="st-shelf st-tunes st-desk-songs" aria-label="My songs">
+      <h3>My songs</h3>
+      <p class="muted small">Songs you wrote at the composing desk. Tap one to put your tune and its chords in your mix.</p>
+      <div class="st-parts">${buttons}</div>
+    </section>`;
 }
 
 /** The desk's Note-o-Matic tunes, when it has some: tap one to put it in the mix, 🔊 to hear it. */
@@ -2076,10 +2119,8 @@ async function hearReading(id) {
 }
 
 /** Hear a tune from the shelf as the robot played it (its band under it), or stop it. */
-async function hearTune(i) {
-  const t = S.tunes?.[i];
+async function hearTune(i, t = S.tunes?.[i], key = `tune|${i}`) {
   if (!t) return;
-  const key = `tune|${i}`;
   if (S.hearing === key) { stopHearing(); return; }
   if (heldNow() || soundOff()) return;
   const ac = audio();
@@ -2112,6 +2153,18 @@ async function hearTune(i) {
   for (const b of bufs) { startSource(b, when, 0, b.duration, { sharp: true }); len = Math.max(len, b.duration); }
   clearTimeout(A.hearTimer);
   A.hearTimer = setTimeout(() => { if (S.hearing === key) stopHearing(); }, len * 1000 + 150);
+}
+
+/** Put a kept tune (a Note-o-Matic tune, or a desk song as one) in the mix at the picked spot. */
+function addKeptTune(tune) {
+  if (busyNow() || !tune) return;
+  const spot = currentSpot();
+  if (!spot) { toast(SAY.full); return; }
+  const r = addTune(S.mix, spot.track, tune, spot.beat);
+  if (r.error) { toast(r.error); return; }
+  S.spot = { ...S.spot, picked: false };
+  commit(r.mix, { select: r.ids[0], quiet: Boolean(r.note) });
+  if (r.note) setTimeout(() => toast(r.note), 50);
 }
 
 /** Use the picked reading: the take becomes notes (Undo brings the take back). */
@@ -2298,19 +2351,15 @@ export const studioActions = {
     commit(r.mix, { select: r.id });
   },
   'st-back-hear': (el) => hearBacking(el.dataset.pattern),
-  'st-tune-add': (el) => {
-    if (busyNow()) return;
-    const i = Number(el.dataset.slot);
-    const tune = S.tunes?.[i];
-    if (!tune) return;
-    const spot = currentSpot();
-    if (!spot) { toast(SAY.full); return; }
-    const r = addTune(S.mix, spot.track, tune, spot.beat);
-    if (r.error) { toast(r.error); return; }
-    S.spot = { ...S.spot, picked: false };
-    commit(r.mix, { select: r.ids[0], quiet: Boolean(r.note) });
-    if (r.note) setTimeout(() => toast(r.note), 50);
+  'st-song-add': (el) => {
+    const song = S.songs?.find((x) => x.slot === Number(el.dataset.slot));
+    if (song) addKeptTune(song.tune);
   },
+  'st-song-hear': (el) => {
+    const song = S.songs?.find((x) => x.slot === Number(el.dataset.slot));
+    if (song) hearTune(song.slot, song.tune, `song|${song.slot}`);
+  },
+  'st-tune-add': (el) => addKeptTune(S.tunes?.[Number(el.dataset.slot)]),
   'st-tune-hear': (el) => hearTune(Number(el.dataset.slot)),
   'st-loop': (el) => {
     const loop = el.dataset.loop;
