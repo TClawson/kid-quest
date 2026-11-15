@@ -14,9 +14,11 @@
 // smallmouth or two hanging just off the school, largemouth cruising, pike
 // lurking in the weeds, catfish lying on the bottom by the logs. Each map tips
 // the odds toward some kinds and has one rare fish of its own. A fish near a
-// bait it likes may get interested and come up to it; a twitch then makes it
-// strike (44% for small fish, down to 20% for the biggest) or spooks it, and
-// a spooked fish startles its school and the fish around it. Big fish are
+// bait it likes may get interested and come up to it; a twitch then may make
+// it strike, spook it, or bore it so it swims off. One twitch rarely spooks a
+// fish, but twitches close together make it nervous (the nerves build up and
+// fade, like a low-pass filter), and a nervous fish spooks easily. A spooked
+// fish startles its school and the fish around it. Big fish are
 // pickier and slower to bite. Which
 // bait works best changes a little every day (the same for everyone that day).
 //
@@ -49,13 +51,38 @@ const SWEEP = 0.8; // seconds for the cast needle to cross the meter
 const HOLD = 0.18; // a press longer than this is reeling, shorter is a twitch
 export const SNAG = { weed: 0.1, log: 0.5 };
 /**
- * The chance a twitch makes an interested fish bite (size 0-1); otherwise it spooks.
- * Small fish 44%, the biggest 20% (Taylor, 2026-11-05: big fish half as likely as
- * before, small ones 20% less).
+ * The chance one twitch makes an interested fish bite (size 0-1). Otherwise it may spook
+ * (spookChance), lose interest and swim off (BORED), or keep watching the bait.
+ * Before 2026-11-15 every twitch that didn't hook spooked the fish (44% small, 20% biggest).
+ * Since then one twitch does less either way, so the kid tries a few, not too close together
+ * (Taylor, 2026-11-15: fish were a tad too skittish).
  */
-export const strikeChance = (size, tier = 1) => 0.44 - 0.24 * size + RODS_STRIKE * (Math.max(1, tier) - 1);
-/** Each better rod: this much likelier a twitch hooks instead of spooking (Taylor, 2026-11-05). */
-export const RODS_STRIKE = 0.06;
+export const strikeChance = (size, tier = 1) => STRIKE_SCALE * (0.44 - 0.24 * size) + RODS_STRIKE * (Math.max(1, tier) - 1);
+/** Each better rod: this much likelier a twitch hooks (Taylor, 2026-11-05: 6% when every twitch hooked or spooked). */
+export const RODS_STRIKE = 0.05;
+/** How much of the old hook chance one twitch has now that a twitch can also do nothing. */
+export const STRIKE_SCALE = 0.45;
+/**
+ * Nerves: each twitch near a fish adds 1 to its nerves, and they fade by half every
+ * NERVES_HALF seconds. So a first twitch makes 1, and fast twitching climbs toward 3-4.
+ */
+export const NERVES_HALF = 1;
+/** The chance a twitch spooks a fish with these nerves (counting this twitch): low at 1, then quickly likely. */
+export const spookChance = (nerves) => clamp(SPOOK_FIRST + SPOOK_BUILD * (nerves - 1), 0, 1);
+export const SPOOK_FIRST = 0.05;
+export const SPOOK_BUILD = 0.3;
+/** The chance a twitch that neither hooks nor spooks a fish bores it: it swims off quietly, scaring nobody. */
+export const BORED = 0.22;
+/**
+ * What a twitch does to an interested fish: 'hook', 'spook', 'bored' or 'watch' (nothing yet).
+ * One roll r (0-1) against the chances in that order.
+ */
+export function twitchOutcome(r, size, tier, nerves) {
+  const s = strikeChance(size, tier);
+  const q = Math.min(1 - s, spookChance(nerves));
+  const b = Math.min(1 - s - q, BORED);
+  return r < s ? 'hook' : r < s + q ? 'spook' : r < s + q + b ? 'bored' : 'watch';
+}
 /** Each better rod (the kid's): the map's rare fish turns up this much more often (+75%, then +150%). */
 export const RODS_RARE = 0.75;
 /**
@@ -979,9 +1006,13 @@ export class Fishing {
     for (const f of this.fish) {
       if (f.line !== L || f.state !== 'interest') continue;
       if (Math.hypot(f.x - L.x, f.y - L.y) > 12 + f.len / 2) continue;
-      // one roll per twitch: a bite, or it bolts and startles the fish around it
-      if (this.r() < strikeChance(f.pick, L === this.lines.vis ? this.visTier : this.rodTier)) this.hook(L, f);
-      else { this.spook(f, 'Spooked!'); this.startle(f); }
+      // its nerves build with each twitch and fade between them
+      f.nerves = (f.nerves || 0) * 0.5 ** ((this.t - (f.twitchedAt ?? this.t)) / NERVES_HALF) + 1; f.twitchedAt = this.t;
+      // one roll per twitch: a bite, it bolts and startles the fish around it, it loses interest, or it keeps watching
+      const what = twitchOutcome(this.r(), f.pick, L === this.lines.vis ? this.visTier : this.rodTier, f.nerves);
+      if (what === 'hook') this.hook(L, f);
+      else if (what === 'spook') { this.spook(f, 'Spooked!'); this.startle(f); }
+      else if (what === 'bored') { f.state = 'swim'; f.line = null; f.waryUntil = this.t + WARY; this.pop('Meh', f.x, f.y - 5, '#dee2e6'); }
       break;
     }
   }

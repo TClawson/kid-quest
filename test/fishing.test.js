@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BAIT, BAITS, baitToday, pointsFor, POINTS, pickiness, strikeChance, SPOTS, SPECIES, GAME_SECONDS, SNAG, ROD_ZOOM, sizePower, BOAT_OUT, maxSizeAt } from '../js/fishing.js';
+import { BAIT, BAITS, baitToday, pointsFor, POINTS, pickiness, strikeChance, spookChance, twitchOutcome, NERVES_HALF, SPOTS, SPECIES, GAME_SECONDS, SNAG, ROD_ZOOM, sizePower, BOAT_OUT, maxSizeAt } from '../js/fishing.js';
 
 test('bait: jigs and spoons for bass and pike, worms for catfish and bluegill', () => {
   const like = (b, k) => BAIT[b].like[k];
@@ -31,12 +31,28 @@ test('points: more for bigger fish, the most for the map\'s rare fish', () => {
   assert.ok(POINTS.bluegill < POINTS.largemouth && POINTS.largemouth < POINTS.pike);
 });
 
-test('a twitch hooks small fish 44% of the time, the biggest 20%', () => {
-  // Taylor, 2026-11-05: from 55% and 40%, small fish 20% harder and big ones twice as hard
-  assert.ok(Math.abs(strikeChance(0) - 0.55 * 0.8) < 1e-9);
-  assert.ok(Math.abs(strikeChance(1) - 0.4 / 2) < 1e-9);
+test('one twitch hooks small fish more often than big ones, and better rods hook more', () => {
   assert.ok(strikeChance(0.5) < strikeChance(0) && strikeChance(0.5) > strikeChance(1));
-  assert.ok(strikeChance(1, 3) > strikeChance(1, 2) && strikeChance(1, 2) > strikeChance(1, 1), 'better rods spook fewer fish');
+  assert.ok(strikeChance(1, 3) > strikeChance(1, 2) && strikeChance(1, 2) > strikeChance(1, 1), 'better rods hook more');
+  assert.ok(strikeChance(0) < 0.3, 'one twitch is not a sure thing: try a few');
+});
+
+test('a first twitch rarely spooks a fish; twitches close together build up its nerves', () => {
+  // Taylor, 2026-11-15: smaller chance on the first twitch, only fast twitching builds it up (a low-pass filter)
+  assert.ok(spookChance(1) <= 0.1, 'the first twitch');
+  // the nerves a fish has after twitches every `gap` seconds, counting the last one
+  const nervesAfter = (n, gap) => { let v = 0; for (let i = 0; i < n; i += 1) v = v * 0.5 ** (gap / NERVES_HALF) + 1; return v; };
+  assert.ok(spookChance(nervesAfter(4, 2.5)) < 0.15, 'slow twitches stay calm');
+  assert.ok(spookChance(nervesAfter(4, 0.3)) > 0.6, 'fast twitches spook it');
+  assert.ok(spookChance(nervesAfter(2, 0.5)) > spookChance(nervesAfter(2, 1.5)));
+  // one roll: hook, then spook, then bored (it swims off), else it keeps watching
+  assert.equal(twitchOutcome(0, 0.5, 1, 1), 'hook');
+  assert.equal(twitchOutcome(strikeChance(0.5) + 0.01, 0.5, 1, 1), 'spook');
+  assert.equal(twitchOutcome(0.999, 0.5, 1, 1), 'watch');
+  assert.equal(twitchOutcome(0.999, 0.5, 1, 9), 'spook', 'a very nervous fish always spooks if it does not bite');
+  const counts = { hook: 0, spook: 0, bored: 0, watch: 0 };
+  for (let i = 0; i < 1000; i += 1) counts[twitchOutcome((i + 0.5) / 1000, 0.3, 1, 1)] += 1;
+  assert.ok(counts.spook < counts.hook && counts.bored > counts.spook, JSON.stringify(counts));
 });
 
 test('bigger fish are pickier', () => {
@@ -97,5 +113,5 @@ test('better rods see farther, and fish farther out are bigger', () => {
   // deep water grows trophies past a kind's usual biggest, only out past a regular rod's view
   assert.equal(maxSizeAt(0), 1); assert.equal(maxSizeAt(1), 1);
   assert.ok(maxSizeAt(2) > 1.3 && maxSizeAt(3) === maxSizeAt(10));
-  assert.ok(strikeChance(1, 3) > 0.25, 'the biggest still bite with a super rod');
+  assert.ok(strikeChance(1, 3) > strikeChance(0, 1) * 0.6, 'the biggest still bite with a super rod');
 });
