@@ -4,7 +4,8 @@
 // the Note-o-Matic's tunes. Play once plays a record (the record goes round, notes float up)
 // and the village song makes way; House music puts one on repeat, which comes back on by
 // itself the next time the buddy is in. Tapping it again goes back to the village song,
-// muffled as if from outside, and walking out the door makes it clear again. Saves screenshots.
+// muffled as if from outside, and walking out the door makes it clear again. The music house
+// muffles it too; the garden, outdoors, doesn't. Saves screenshots.
 // Run: node test/smoke/turntable.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
 import { chromium } from 'playwright';
@@ -202,6 +203,16 @@ try {
     await page.waitForTimeout(300);
     const n = await now(page);
     assert.ok(!n.muffled && n.map, 'outside, the song is clear');
+    await ctx.close();
+  }
+
+  // ---- 4b. every building muffles the village song (the music house too); the garden is outdoors ----
+  for (const [place, inside] of [['music', true], ['garden', false]]) {
+    const { ctx, page } = await start(TABLET, family(), place);
+    await mods(page);
+    await page.waitForFunction(() => window.kqMusic.isMusicPlaying());
+    if (place === 'music') assert.ok(await page.locator('.music-house').count(), 'in the music house');
+    assert.equal((await now(page)).muffled, inside, `${place}: muffled ${inside}`);
     await ctx.close();
   }
 
