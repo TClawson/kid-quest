@@ -6,21 +6,31 @@ import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash, freeGamesOn } from '../../js/logic.js';
-import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
+import { TEST_DAY as TODAY, useTestDay } from '../helpers/clock.mjs';
+import { pickVisitors } from '../../js/visits.js';
 import { seenSaturday } from '../helpers/seed.mjs';
 import { openKid, openParents, tapInVillage, visitorsHere } from '../helpers/open-kid.mjs';
+
+// The other kids' buddies, as the cloud hands them to Sam's device.
+const BUDDIES = [
+  { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', owned: ['sport-soccer-good'], buddy: { species: 'cat', outfit: { sport: 'sport-soccer-good' } } },
+  { id: 'kid_max', name: 'Max', color: '#51cf66', owned: [], buddy: { species: 'bear', outfit: {} } },
+  { id: 'kid_lu', name: 'Lu', color: '#fcc419', owned: ['sport-hockey-good'], buddy: { species: 'panda', outfit: {} } },
+];
+// Which buddies visit is picked per day (1 to 3 of them here), and this test plays with each of
+// Ava, Max and Lu. So it runs on the first day, from today on, when all three come by: the same
+// mix of weekdays and Saturdays over time, but never a day with a buddy missing.
+let TEST_DAY = TODAY;
+while (pickVisitors('kid_sam', BUDDIES, TEST_DAY).length < BUDDIES.length) TEST_DAY = addDays(TEST_DAY, 1);
 
 const site = await serve('.');
 const browser = await chromium.launch();
 const shots = process.env.SHOTS;
 
 // Tap a visitor in the village: the buddy walks over, then the game (or its menu) opens.
-// Which family buddies visit is random per day: when the one we want isn't here, the first
-// visitor stands in (it answers to their name by the time the buddy gets there).
 // With more than one game to play, a menu asks which: pick `kind`.
 async function visit(page, id, kind) {
-  const here = await page.locator(`.village .v-visitor[data-id="${id}"]`).count();
-  await tapInVillage(page, here ? `.v-visitor[data-id="${id}"]` : '.v-visitor', { then: here ? null : `el.dataset.id = ${JSON.stringify(id)};` });
+  await tapInVillage(page, `.v-visitor[data-id="${id}"]`);
   if (kind) {
     await page.waitForSelector('.game-pick');
     await page.click(`.game-pick [data-kind="${kind}"]`);
@@ -30,7 +40,7 @@ async function visit(page, id, kind) {
 async function open(device, done, played = 0, held = null, tweak = null) {
   const ctx = await browser.newContext(device);
   const page = await ctx.newPage();
-  await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
+  await useTestDay(page, { day: TEST_DAY }); // the page's clock starts at noon on the test's day (see clock.mjs)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(site.url);
@@ -45,18 +55,14 @@ async function open(device, done, played = 0, held = null, tweak = null) {
   s.kids[0].playLog = { day: TEST_DAY, n: played + freeGamesOn(TEST_DAY), prev: { day: addDays(TEST_DAY, -1), n: 99, cap: 4 } };
   if (held) { s.kids[0].owned.push(held); s.kids[0].buddy.outfit.sport = held; }
   if (tweak) tweak(s, tasks);
-  seenSaturday(s);
+  seenSaturday(s, TEST_DAY);
   if (done) s.log[TEST_DAY] = { kid_sam: { tasks: Object.fromEntries(tasks.filter((t) => t.period !== 'exercise').map((t) => [t.id, { status: 'done' }])), excused: false } };
-  await page.evaluate((st) => {
+  await page.evaluate(([st, buddies]) => {
     localStorage.setItem('kidquest.v1', JSON.stringify(st));
     localStorage.setItem('kidquest.cloud', JSON.stringify({ familyId: 'fam', role: 'kid', kidId: 'kid_sam' }));
     localStorage.setItem('kidquest.cloud.cache', JSON.stringify(st));
-    localStorage.setItem('kidquest.cloud.buddies', JSON.stringify([
-      { id: 'kid_ava', name: 'Ava', color: '#ff6b6b', owned: ['sport-soccer-good'], buddy: { species: 'cat', outfit: { sport: 'sport-soccer-good' } } },
-      { id: 'kid_max', name: 'Max', color: '#51cf66', owned: [], buddy: { species: 'bear', outfit: {} } },
-      { id: 'kid_lu', name: 'Lu', color: '#fcc419', owned: ['sport-hockey-good'], buddy: { species: 'panda', outfit: {} } },
-    ]));
-  }, s);
+    localStorage.setItem('kidquest.cloud.buddies', JSON.stringify(buddies));
+  }, [s, BUDDIES]);
   await page.reload();
   await openKid(page, '[data-action="open-kid"]');
   await visitorsHere(page); // visitors walk in first (the first time today); their bubbles show once they arrive
@@ -215,7 +221,7 @@ try {
   {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true });
     const page = await ctx.newPage();
-    await useTestDay(page); // the page's clock starts at noon on the test's day (see clock.mjs)
+    await useTestDay(page, { day: TEST_DAY }); // the page's clock starts at noon on the test's day (see clock.mjs)
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
@@ -225,7 +231,7 @@ try {
     s.settings.questView = 'map'; // chose the old map once: the village opens all the same
     s.kids.push({ id: 'kid_sam', name: 'Sam', color: '#4dabf7', tasks: defaultTasks(), startDate: TEST_DAY, buddy: { species: 'fox', outfit: {} } });
     s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: TEST_DAY, buddy: { species: 'cat', outfit: {} }, playLog: { day: TEST_DAY, n: 99 } });
-    await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), seenSaturday(s));
+    await page.evaluate((st) => localStorage.setItem('kidquest.v1', JSON.stringify(st)), seenSaturday(s, TEST_DAY));
     await page.reload();
     await openParents(page);
     for (const d of '1234') await page.click(`[data-pin="${d}"]`);

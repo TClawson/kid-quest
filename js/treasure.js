@@ -1,8 +1,10 @@
 // The treasure chest at the end of the day's quests. Pure rules, no DOM, so it can be tested.
 //
 // Finishing every task (parent-approved) earns that day's chest. Opening it gives one
-// prize: a few coins or gems, extra visitor games for the day, a trophy for the shelf,
-// or (from a silver chest up) now and then a piece of a treasure map. The prize is saved
+// prize: a few coins or gems, extra visitor games for the day, or a trophy for the shelf.
+// Silver and gold chests can also hold a piece of a treasure map ON TOP of that prize
+// (saved as chest.piece). Chests opened before that held a piece INSTEAD of a prize
+// (kind 'piece'); those still count. The prize is saved
 // on the day (entry.chest), so it syncs like the day's tasks, and everything else
 // (trophies owned, map pieces found) is worked out again from those saved chests.
 //
@@ -16,11 +18,12 @@ export const LATE_DAYS = 2;
 export const PIECES_PER_MAP = 4;
 export const CHEST_GAMES = 2;
 
-/** Chests get better with the streak (counting the day the chest is for). */
+/** Chests get better with the streak (counting the day the chest is for).
+ *  piece: the chance of a treasure map piece as well as the prize (Taylor, 2026-11-15). */
 export const CHEST_TIERS = [
   { id: 'wood', name: 'Wooden chest', from: 0, coins: 5, gems: 3, piece: 0 },
-  { id: 'silver', name: 'Silver chest', from: 7, coins: 10, gems: 5, piece: 0.1 },
-  { id: 'gold', name: 'Gold chest', from: 21, coins: 20, gems: 8, piece: 0.2 },
+  { id: 'silver', name: 'Silver chest', from: 7, coins: 10, gems: 5, piece: 0.25 },
+  { id: 'gold', name: 'Gold chest', from: 21, coins: 20, gems: 8, piece: 0.4 },
 ];
 
 export function chestTier(streak) {
@@ -83,7 +86,8 @@ export function treasureFound(log, kidId) {
   const pieces = {};
   for (const c of openedChests(log, kidId)) {
     if (c.kind === 'trophy' && !c.dupe) trophies.add(c.trophy);
-    if (c.kind === 'piece') pieces[c.map] = Math.min(PIECES_PER_MAP, (pieces[c.map] || 0) + 1);
+    const map = c.kind === 'piece' ? c.map : c.piece; // old chests: kind 'piece'; now: an extra piece
+    if (map) pieces[map] = Math.min(PIECES_PER_MAP, (pieces[map] || 0) + 1);
   }
   const maps = new Set(Object.keys(pieces).filter((m) => pieces[m] >= PIECES_PER_MAP));
   return { trophies, pieces, maps };
@@ -103,13 +107,13 @@ export function mapsNeedingPieces(unlocked, current, found) {
  * seed: text that fixes the roll (kid id and date), tier: from chestTier,
  * found: from treasureFound, maps: from mapsNeedingPieces, games: whether extra
  * visitor games are any use (only on the day itself, and with visitors around).
- * Returns { tier, kind: 'coins'|'gems'|'games'|'trophy'|'piece', coins?, gems?, games?, trophy?, dupe?, map? }.
+ * Returns { tier, kind: 'coins'|'gems'|'games'|'trophy', coins?, gems?, games?, trophy?, dupe?, piece? },
+ * where piece (a map id) is a treasure map piece that comes as well as the prize.
  */
 export function chestPrize({ seed, tier, found, maps = [], games = true }) {
   const r = rng(`${seed}|chest`);
-  const base = { tier: tier.id };
   const pieceRoll = r();
-  if (tier.piece > 0 && maps.length && pieceRoll < tier.piece) return { ...base, kind: 'piece', map: maps[0] };
+  const base = tier.piece > 0 && maps.length && pieceRoll < tier.piece ? { tier: tier.id, piece: maps[0] } : { tier: tier.id };
   const table = [['coins', 35], ['trophy', 30], ['gems', 15], ['games', games ? 20 : 0]];
   const total = table.reduce((s, [, w]) => s + w, 0);
   let x = r() * total;
@@ -145,7 +149,10 @@ function prevDay(key) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
-/** Words for a prize, for the chest card. */
+/** The map a chest's treasure map piece belongs to, or null (old chests: kind 'piece'). */
+export const chestPiece = (prize) => (prize?.kind === 'piece' ? prize.map : prize?.piece) || null;
+
+/** Words for a prize, for the chest card (the map piece that can come with it is told apart). */
 export function prizeText(prize, mapName = (id) => id) {
   switch (prize.kind) {
     case 'coins': return { title: `${prize.coins} coins!`, text: 'Spend them in the shop.' };

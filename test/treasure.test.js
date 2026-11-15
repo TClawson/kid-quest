@@ -21,22 +21,39 @@ test('the same kid and day always get the same prize', () => {
   assert.deepEqual(chestPrize(args), chestPrize(args));
 });
 
-test('wooden chests never hold map pieces; silver and gold sometimes do', () => {
+test('wooden chests never hold map pieces; silver about 25% of the time, gold about 40%', () => {
   const count = (tier) => {
     let n = 0;
-    for (let i = 0; i < 2000; i += 1) if (chestPrize({ seed: `k|${i}`, tier, found: none, maps: ['bg-meadow'] }).kind === 'piece') n += 1;
-    return n / 2000;
+    for (let i = 0; i < 4000; i += 1) if (chestPrize({ seed: `k|${i}`, tier, found: none, maps: ['bg-meadow'] }).piece) n += 1;
+    return n / 4000;
   };
   assert.equal(count(CHEST_TIERS[0]), 0);
   const silver = count(CHEST_TIERS[1]);
   const gold = count(CHEST_TIERS[2]);
-  assert.ok(silver > 0.06 && silver < 0.14, `silver ${silver}`);
-  assert.ok(gold > 0.15 && gold < 0.25, `gold ${gold}`);
+  assert.ok(silver > 0.22 && silver < 0.28, `silver ${silver}`);
+  assert.ok(gold > 0.37 && gold < 0.43, `gold ${gold}`);
+});
+
+test('a map piece comes on top of the normal prize, never instead of it', () => {
+  let pieces = 0;
+  for (let i = 0; i < 1000; i += 1) {
+    const withMaps = chestPrize({ seed: `k|${i}`, tier: CHEST_TIERS[2], found: none, maps: ['bg-meadow'] });
+    const noMaps = chestPrize({ seed: `k|${i}`, tier: CHEST_TIERS[2], found: none, maps: [] });
+    assert.notEqual(withMaps.kind, 'piece');
+    assert.ok(['coins', 'gems', 'games', 'trophy'].includes(withMaps.kind));
+    // the same prize either way: the piece is only added
+    const { piece, ...rest } = withMaps;
+    assert.deepEqual(rest, noMaps);
+    if (piece) { pieces += 1; assert.equal(piece, 'bg-meadow'); }
+  }
+  assert.ok(pieces > 0);
 });
 
 test('no pieces once every unlocked map is finished', () => {
   for (let i = 0; i < 500; i += 1) {
-    assert.notEqual(chestPrize({ seed: `k|${i}`, tier: CHEST_TIERS[2], found: none, maps: [] }).kind, 'piece');
+    const p = chestPrize({ seed: `k|${i}`, tier: CHEST_TIERS[2], found: none, maps: [] });
+    assert.notEqual(p.kind, 'piece');
+    assert.equal(p.piece, undefined);
   }
 });
 
@@ -72,10 +89,12 @@ test('found treasure is worked out from the opened chests', () => {
   put('2026-11-05', { kind: 'trophy', trophy: 'crab' });
   put('2026-11-06', { kind: 'trophy', trophy: 'crab', dupe: true, coins: 5 });
   for (let i = 0; i < PIECES_PER_MAP; i += 1) put(`2026-11-1${i}`, { kind: 'piece', map: 'bg-meadow' });
-  put('2026-11-20', { kind: 'piece', map: 'bg-ocean' });
+  put('2026-11-20', { kind: 'piece', map: 'bg-ocean' }); // an old chest: a piece instead of a prize
+  put('2026-11-21', { kind: 'trophy', trophy: 'acorn', piece: 'bg-ocean' }); // now: a piece as well
+  put('2026-11-22', { kind: 'coins', coins: 10, piece: 'bg-ocean' });
   const f = treasureFound(log, 'k');
-  assert.deepEqual([...f.trophies], ['crab']);
-  assert.deepEqual(f.pieces, { 'bg-meadow': PIECES_PER_MAP, 'bg-ocean': 1 });
+  assert.deepEqual([...f.trophies].sort(), ['acorn', 'crab']);
+  assert.deepEqual(f.pieces, { 'bg-meadow': PIECES_PER_MAP, 'bg-ocean': 3 });
   assert.deepEqual([...f.maps], ['bg-meadow']);
 });
 
