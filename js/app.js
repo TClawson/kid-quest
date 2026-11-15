@@ -2743,16 +2743,20 @@ function render() {
 
 /**
  * Map music plays only on the kid's screen (the village and its buildings), with sound on and
- * music not muted, while the app is visible. Inside the buddy's house it is muffled, as if heard from outside, unless the kid's
- * turntable is playing (turntable.js): then that plays instead (even with the map music muted,
- * since the kid put it on).
+ * music not muted, while the app is visible. Inside a building (the buddy's house, the music
+ * house) it is muffled, as if heard from outside; the garden is outdoors, so it plays clearly
+ * there. In the house, the kid's turntable (turntable.js) plays instead when it's on (even with
+ * the map music muted, since the kid put it on).
  */
 function syncMusic() {
   const onMap = ui.view === 'kid';
   const kid = kidById(ui.kidId);
   const heard = onMap && state.settings.sound && document.visibilityState === 'visible';
-  const inHouse = Boolean(heard && kid && placeOf(kid.id, today()) === 'house');
-  muffleMusic(inHouse);
+  const place = heard && kid ? placeOf(kid.id, today()) : 'out';
+  const inHouse = place === 'house';
+  // the music house only stands once the kid has a piano (villageView shows the village otherwise)
+  const indoors = inHouse || (place === 'music' && Boolean(musicTier(progressFor(kid))));
+  muffleMusic(indoors);
   if (houseRecord(kid, inHouse)) { stopMusic(); return; }
   if (heard && state.settings.music !== false) startMusic(kidTheme(kid || {}));
   else stopMusic();

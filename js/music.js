@@ -443,8 +443,9 @@ export function musicContext() {
   return ac;
 }
 
-// The map song goes out through a filter and a knob, so inside the buddy's house it can sound
-// as if it comes from outside: quiet and muffled, the high notes gone (muffleMusic).
+// The map song goes out through a filter and a knob, so inside a building (the buddy's house,
+// the music house) it can sound as if it comes from outside: quiet and muffled, the high notes
+// gone (muffleMusic).
 export const MUFFLE = { hz: 520, level: 0.28 };
 let outlet = null; // { ac, filter, gain }
 let muffled = false;
@@ -463,7 +464,7 @@ function musicOut() {
 }
 
 /**
- * Muffle the map song (on: inside the buddy's house, as if heard through the walls) or let it
+ * Muffle the map song (on: inside a building, as if heard through the walls) or let it
  * play clearly again. It slides over half a second, so walking in the door sounds smooth.
  */
 export function muffleMusic(on) {
