@@ -18,7 +18,8 @@
 // as they tire. The score counts up while your buddy isn't IT and down at
 // half speed while it is (never below 0), until it's tagged for the third
 // time. Bumping into a moving obstacle knocks a buddy back and stops it for
-// half a second.
+// half a second. Power-ups, the map's own twist and the visitor's personality
+// come from tagfun.js.
 //
 // No coins: play is just for fun. Each game keeps a best score.
 //
@@ -28,6 +29,7 @@ import { buildRig, render, Brain, CALM } from './rig.js';
 import { ballCells, SPRITE_Y } from './avatar.js';
 import { clamp } from './pixelkit.js';
 import { addPop } from './meter.js';
+import { TagFun, personalityFor, MAP_TRICKS, trickFor } from './tagfun.js';
 
 /**
  * Which game a visitor plays, from the gear they own ({ kind: best tier }): one of
@@ -174,6 +176,20 @@ export class Player {
   move(dt) {
     const dx = this.tx - this.x; const dy = this.ty - this.y; const d = Math.hypot(dx, dy);
     const px = this.x; const py = this.y;
+    if (this.grip) {
+      // slippery (ice, the moon): speed builds up and dies away instead of changing at once
+      const want = d > 0.6 ? Math.min(this.speed, d * 6) : 0;
+      const k = 1 - Math.exp(-this.grip * dt);
+      this.mvx = lerp(this.mvx || 0, d > 0.6 ? (dx / d) * want : 0, k);
+      this.mvy = lerp(this.mvy || 0, d > 0.6 ? (dy / d) * want : 0, k);
+      this.x += this.mvx * dt; this.y += this.mvy * dt;
+      const sp = Math.hypot(this.mvx, this.mvy);
+      if (Math.abs(this.mvx) > 3) this.face = this.mvx > 0 ? 1 : -1;
+      this.run = sp > 4 ? Math.min(1, this.run + dt * 8) : Math.max(0, this.run - dt * 6);
+      this.vx = this.mvx; this.vy = this.mvy;
+      this.stride += dt * (6 + sp * 0.1) * (this.run > 0.05 ? 1 : 0);
+      return;
+    }
     if (d > 0.6) {
       const k = Math.min(1, (this.speed * dt) / d);
       this.x += dx * k; this.y += dy * k;
@@ -183,6 +199,7 @@ export class Player {
       this.run = Math.max(0, this.run - dt * 6);
     }
     this.vx = (this.x - px) / Math.max(dt, 1e-3); this.vy = (this.y - py) / Math.max(dt, 1e-3);
+    this.mvx = this.vx; this.mvy = this.vy;
     this.stride += dt * (6 + this.speed * 0.1) * (this.run > 0.05 ? 1 : 0);
   }
 
@@ -221,7 +238,8 @@ export class Player {
     ctx.fillStyle = 'rgba(20,40,20,0.28)';
     ctx.fillRect(x - 5, y - 1, 10, 1); ctx.fillRect(x - 4, y, 8, 1);
     ctx.save();
-    if (this.face < 0) { ctx.translate(x, 0); ctx.scale(-1, 1); ctx.drawImage(this.pic, -12, y - FEET); } else ctx.drawImage(this.pic, x - 12, y - FEET);
+    const top = y - FEET - (this.lift || 0); // lift: off the ground (a hop)
+    if (this.face < 0) { ctx.translate(x, 0); ctx.scale(-1, 1); ctx.drawImage(this.pic, -12, top); } else ctx.drawImage(this.pic, x - 12, top);
     ctx.restore();
   }
 }
@@ -246,6 +264,12 @@ export class Play {
     this.vis = new Player(playLook(opts.visitor.buddy, opts.visitor.gear, this.kind), opts.visitor.name, 23, Math.round(this.W * 0.66), y);
     this.kid.gear = opts.kid.gear || {}; this.vis.gear = opts.visitor.gear || {};
     this.kid.face = 1; this.vis.face = -1;
+    // tag: the kid's map brings its own twist, and the visitor its personality
+    this.map = trickFor(opts.map);
+    if (this.kind === 'tag') {
+      this.personality = opts.visitor.personality || personalityFor(opts.visitor.buddy?.species, opts.visitor.name);
+      this.fun = new TagFun(this, this.map, this.personality);
+    }
     this.field = this.paintField();
     if (this.kind === 'soccer') {
       this.tier = Math.max(this.kid.gear.soccer || 0, this.vis.gear.soccer || 0, 1);
@@ -273,6 +297,7 @@ export class Play {
           .filter((o) => [this.kid, this.vis].every((p) => Math.hypot(o.x - p.x, o.y - p.y) > o.r + 16));
       }
       this.kid.speed = 60; this.vis.speed = 60;
+      this.fun?.reset();
     }
   }
 
@@ -303,7 +328,9 @@ export class Play {
     dt = Math.min(dt, 0.1);
     this.t += dt;
     if (this.kind === 'soccer') this.stepSoccer(dt); else this.stepTag(dt);
+    this.fun?.step(dt);
     for (const p of [this.kid, this.vis]) p.move(dt);
+    this.fun?.after(dt);
     if (this.kind === 'tag') this.bump();
     this.pops = this.pops.filter((p) => this.t - p.at < 1.1);
   }
@@ -473,7 +500,8 @@ export class Play {
     const k = this.kid; const v = this.vis; const bd = this.bounds;
     if (this.phase !== 'play') {
       v.face = k.x > v.x ? 1 : -1;
-      if (this.phase === 'ready') { k.speed = this.baseSpeed(k); }
+      // set fresh every frame: the map's ground multiplies them (tagfun.js)
+      k.speed = this.baseSpeed(k); v.speed = this.baseSpeed(v);
       return;
     }
     const age = this.t - this.start;
@@ -489,7 +517,9 @@ export class Play {
       if (ready) {
         // aims a little ahead of where the kid's buddy is going, with a wobble
         const lead = 0.15;
-        this.steer(v, clamp(k.x + k.vx * lead + Math.sin(this.t * 1.7) * 4, bd.x0, bd.x1), clamp(k.y + k.vy * lead, bd.y0, bd.y1));
+        const go = this.fun ? this.fun.chase([k.x + k.vx * lead + Math.sin(this.t * 1.7) * 4, k.y + k.vy * lead], dt) : { aim: [k.x + k.vx * lead + Math.sin(this.t * 1.7) * 4, k.y + k.vy * lead], mul: 1 };
+        v.speed *= go.mul;
+        this.steer(v, clamp(go.aim[0], bd.x0, bd.x1), clamp(go.aim[1], bd.y0, bd.y1));
         if (Math.hypot(k.x - v.x, k.y - v.y) < TAG_REACH) {
           this.tags += 1;
           if (this.tags >= TAG_OUTS) {
@@ -515,7 +545,10 @@ export class Play {
       this.wander += (this.r() - 0.5) * dt * 6;
       ax += Math.cos(this.wander) * 0.35; ay += Math.sin(this.wander) * 0.35;
       const n = Math.hypot(ax, ay) || 1;
-      this.steer(v, clamp(v.x + (ax / n) * 24, bd.x0, bd.x1), clamp(v.y + (ay / n) * 24, bd.y0, bd.y1));
+      const away = [v.x + (ax / n) * 24, v.y + (ay / n) * 24];
+      const go = this.fun ? this.fun.flee(away, dt) : { aim: away, mul: 1 };
+      v.speed *= go.mul;
+      this.steer(v, clamp(go.aim[0], bd.x0, bd.x1), clamp(go.aim[1], bd.y0, bd.y1));
       if (ready && Math.hypot(k.x - v.x, k.y - v.y) < TAG_REACH) this.tagged(v);
     }
     if (!ready) (this.it === 'kid' ? k : v).goTo((this.it === 'kid' ? k : v).x, (this.it === 'kid' ? k : v).y);
@@ -538,11 +571,13 @@ export class Play {
       if (u >= 1) {
         this.scroll = null; this.levelAt = this.t;
         this.obstacles = this.obstacles.filter((o) => o.x > this.camX - 20);
+        this.fun?.trim(this.camX);
       }
     } else if (this.t - (this.levelAt || this.start) >= LEVEL_HOLD) {
       this.level += 1;
       const to = this.camX + this.W;
       this.obstacles.push(...levelObstacles(this.level, to, this.W, b.y0, b.y1, this.r));
+      this.fun?.addLevel(this.level, to);
       this.scroll = { from: this.camX, to, t0: this.t };
       this.pop(`Level ${this.level}! →`, this.camX + this.W / 2, this.top + 30, '#ffd43b', true);
     }
@@ -584,6 +619,7 @@ export class Play {
   bump() {
     const b = this.bounds;
     for (const p of [this.kid, this.vis]) {
+      if (p.launch) continue; // hopping over things
       for (const o of this.obstacles || []) {
         const dx = p.x - o.x; const dy = (p.y - o.y) * 1.4; const d = Math.hypot(dx, dy) || 0.01;
         const need = o.r + 4;
@@ -606,16 +642,19 @@ export class Play {
   paintField() {
     const c = canvas(this.W, this.H); const x = c.getContext('2d');
     const r = rng(7);
+    // tag is played on the kid's map's own ground (grass, sand, the moon, snow...)
+    const look = this.kind === 'tag' ? MAP_TRICKS[this.map] : MAP_TRICKS['bg-meadow'];
+    const [c0, c1, speck] = look.field;
     for (let i = 0; i * 16 < this.W; i += 1) {
-      x.fillStyle = i % 2 ? '#5fbf5a' : '#69c964';
+      x.fillStyle = look.stripes ? look.stripes[i % look.stripes.length] : i % 2 ? c0 : c1;
       x.fillRect(i * 16, 0, 16, this.H);
     }
-    x.fillStyle = '#4fa84b';
-    for (let i = 0; i < (this.W * this.H) / 90; i += 1) {
+    x.fillStyle = speck;
+    for (let i = 0; i < (this.W * this.H) / (this.map === 'bg-galaxy' && this.kind === 'tag' ? 400 : 90); i += 1) {
       const gx = Math.floor(r() * this.W); const gy = Math.floor(r() * this.H);
       x.fillRect(gx, gy, 1, 1); x.fillRect(gx + 1, gy - 1, 1, 1);
     }
-    x.fillStyle = '#f1f3f5';
+    x.fillStyle = (this.kind === 'tag' && look.line) || '#f1f3f5';
     const b = { x0: 4, y0: this.top + 6, x1: this.W - 5, y1: this.H - 2 };
     if (this.kind !== 'tag') { x.fillRect(b.x0, b.y0, b.x1 - b.x0, 1); x.fillRect(b.x0, b.y1, b.x1 - b.x0 + 1, 1); } else x.fillRect(0, b.y1, this.W, 1);
     if (this.kind !== 'tag') { x.fillRect(b.x0, b.y0, 1, b.y1 - b.y0); x.fillRect(b.x1, b.y0, 1, b.y1 - b.y0); } else x.fillRect(0, b.y0, this.W, 1);
@@ -636,7 +675,9 @@ export class Play {
     if (off) ctx.drawImage(this.field, this.W - off, 0);
     ctx.save();
     ctx.translate(-cam, 0);
-    const things = [this.kid, this.vis].map((p) => ({ y: p.y, draw: () => p.draw(ctx) }));
+    this.fun?.drawUnder(ctx);
+    const things = [this.kid, this.vis].map((p) => ({ y: p.y, draw: () => (this.fun ? this.fun.drawPlayer(ctx, p) : p.draw(ctx)) }));
+    if (this.fun) things.push(...this.fun.things(ctx));
     for (const p of [this.kid, this.vis]) p.paint(this.t);
     if (this.kind === 'soccer') {
       const b = this.ball;
@@ -730,6 +771,12 @@ export class Play {
     if (this.phase === 'ready') {
       const msg = this.locked ? "That's all our games today!" : this.kind === 'soccer' ? 'Tap a buddy to kick off!' : `Tap ${this.vis.name} to start tag!`;
       if (Math.floor(this.t * 2) % 3) text(msg, W / 2, (this.H - 5) * S, u * 1.8);
+      // tag: who you're playing and the map's twist
+      if (this.fun && !this.locked) {
+        const tips = this.fun.tips;
+        text(tips.who, W / 2, u * 10, u * 1.5, '#ffd43b');
+        text(tips.map, W / 2, u * 12, u * 1.5, '#ffffff');
+      }
     }
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
       const cy = (this.top + 20) * S;
