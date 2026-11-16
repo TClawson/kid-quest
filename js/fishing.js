@@ -36,6 +36,7 @@
 // holdAnywhere: a finger held down anywhere reels, so playground.js calls
 // release() for every finger that comes up.
 import { Player, rng, canvas, clamp, HAPPY } from './play.js';
+import { weightFor, sizeClass, fmtWeight, CLASSES } from './fishfacts.js';
 import { fishPic, baitArt, shade, mix } from './fishart.js';
 import { needle, drawMeter, addPop, ZONE_COLORS } from './meter.js';
 
@@ -823,6 +824,9 @@ export class Fishing {
     return [Math.min(lo, hi - 20), hi];
   }
 
+  /** The fish book's id for a kind on this lake (as fishbook.js speciesId; a map with no lake fishes at Forest Lake). */
+  speciesKey(likeKey) { return `${(SPOTS[this.map] ? this.map : 'bg-meadow').replace(/^bg-/, '')}-${likeKey}`; }
+
   /** home: where it lives; farther out, bigger fish (sizePower). */
   makeFish(kind, x, y, move, home = x) {
     const sp = this.spot;
@@ -834,6 +838,8 @@ export class Fishing {
     const f = {
       kind, likeKey: kind === 'special' ? sp.special.id : kind, name,
       size, len, inches: Math.round(base.inches[0] + (base.inches[1] - base.inches[0]) * size),
+      // what it weighs: its real kind's weight for its size (fishfacts.js)
+      lb: weightFor(this.speciesKey(kind === 'special' ? sp.special.id : kind), size),
       pic: fishPic(look, len, this.Z), x, y, vx: 0, vy: 0, dir: x < this.W / 2 ? 1 : -1, speed: base.speed * (0.8 + this.r() * 0.4),
       move, state: 'swim', born: this.t, life: 10 + this.r() * 20, homeY: y, wob: this.r() * 10, mood: 0, checkAt: 0, pull: base.pull,
     };
@@ -1149,12 +1155,12 @@ export class Fishing {
 
   land(L, f) {
     L.state = 'idle'; L.fish = null; f.gone = true;
-    const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special' };
+    const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, lb: f.lb, cls: sizeClass(this.speciesKey(f.likeKey), f.lb), kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special' };
     this.points[c.who] += c.points;
     this.catches.push(c);
     if (c.who === 'kid') {
       this.showCatch = c; this.sound = 'goal';
-      const got = this.onCatch?.({ kind: f.likeKey, size: f.inches, points: c.points, map: this.map });
+      const got = this.onCatch?.({ kind: f.likeKey, size: f.inches, lb: f.lb, points: c.points, map: this.map });
       if (got === 'first' || got === 'record') { c.record = got; this.records += 1; }
     }
     this.pop(c.who === 'kid' ? `+${c.points}` : `${this.vis.name}: ${f.name} +${c.points}`, c.who === 'kid' ? L.who.x + 10 : this.camX + this.fieldW / 2, this.surface - 30, '#b2f2bb', true);
@@ -1408,7 +1414,7 @@ export class Fishing {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(c.pic, W / 2 - (c.pic.width * z) / 2, cy + u * 1.2, c.pic.width * z, c.pic.height * z);
       text(`${c.who === 'kid' ? this.kid.name : this.vis.name} caught a ${c.name}!`, W / 2, cy + ch - u * 3.2, u * 1.6, '#ffd43b');
-      text(`${c.inches} inches · +${c.points} points${c.rare ? ' · RARE!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare ? '#ffd43b' : '#ffffff');
+      text(`${fmtWeight(c.lb)}${c.cls ? ` · ${CLASSES[c.cls].name}${c.cls === 'trophy' ? '!' : ''}` : ''} · +${c.points} points${c.rare ? ' · RARE!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare ? '#ffd43b' : '#ffffff');
       // a new record for the fish book in the house: a ribbon across the card's corner
       if (c.record) {
         const label = c.record === 'first' ? 'NEW FISH!' : 'NEW RECORD!';

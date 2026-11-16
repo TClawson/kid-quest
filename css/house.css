@@ -68,6 +68,31 @@
 .fb-fish.rare { border-color: #f0c040; }
 .fb-fish.rare::after { content: '⭐ Rare'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #a8701e; }
 .fb-fish .fb-tank { position: absolute; top: 3px; left: 4px; font-size: 0.8rem; }
+button.fb-fish { cursor: pointer; font: inherit; color: inherit; }
+button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink); }
+.fb-fish .fb-badge { margin-right: 3px; font-size: 0.85rem; }
+/* one fish's page: the kid's biggest, the small / typical / trophy scale, and real facts */
+.fishpage h2 { margin: 0; }
+.fishpage h3 { margin: 14px 0 4px; font: 700 1.15rem/1.1 var(--px-font); }
+.fishpage p { margin: 0 0 6px; line-height: 1.45; }
+.fp-back { margin-bottom: 8px; }
+.fp-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #fff8e7; border: 3px solid var(--px-ink); border-radius: 6px; }
+.fp-head.rare { border-color: #f0c040; }
+.fp-head img { width: 96px; height: 56px; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+.fp-head p { margin: 2px 0 0; }
+.fp-mine { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; padding: 8px 10px; background: #fff; border: 3px solid var(--cls); border-radius: 6px; }
+.fp-mine .fp-badge { font-size: 1.8rem; line-height: 1; }
+.fp-mine b { display: block; font: 700 1.25rem/1.1 var(--px-font); }
+.fp-mine small { color: var(--muted); font-size: 0.8rem; }
+.fp-pretend { padding: 6px 10px; background: #f3f0ff; border: 2px dashed #b197fc; border-radius: 6px; font-size: 0.9rem; }
+.fp-scale { position: relative; margin: 6px 0 4px; padding-top: 16px; }
+.fp-bar { display: flex; height: 14px; border: 2px solid var(--px-ink); border-radius: 4px; overflow: hidden; }
+.fp-bar .s { background: #a5d8ff; }
+.fp-bar .t { background: #b2f2bb; }
+.fp-bar .x { background: #ffd43b; }
+.fp-pin { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.9rem; line-height: 1; color: var(--px-ink); }
+.fp-classes { list-style: none; margin: 4px 0 6px; padding: 0; display: grid; gap: 2px; font-size: 0.9rem; }
+.fp-classes span { display: inline-block; width: 1.4em; text-align: center; }
 .tp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; max-height: 42vh; overflow: auto; padding: 2px; margin: 8px 0; }
 .tp-fish { display: grid; grid-template-rows: 40px auto auto; justify-items: center; gap: 1px; padding: 6px 4px; background: #fff; border: 2px solid #e8d6b8; border-radius: 6px; cursor: pointer; font: inherit; color: inherit; }
 .tp-fish img { max-width: 100%; height: 40px; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }

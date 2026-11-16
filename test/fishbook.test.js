@@ -30,7 +30,7 @@ test('a catch in the game is its map\'s species (a map with no lake fishes at Fo
 test('records keep only the biggest of each species', () => {
   let r = recordCatch(undefined, { species: 'meadow-pike', size: 20, points: 40, map: 'bg-meadow', date: '2026-11-08' });
   assert.ok(r.isNew && r.first);
-  assert.deepEqual(r.records, { 'meadow-pike': { size: 20, points: 40, map: 'bg-meadow', date: '2026-11-08' } });
+  assert.deepEqual(r.records, { 'meadow-pike': { size: 20, points: 40, map: 'bg-meadow', date: '2026-11-08', lb: 1.28 } });
   const first = r.records;
   // smaller: no change, the same object comes back (nothing to save)
   r = recordCatch(first, { species: 'meadow-pike', size: 18, points: 38, date: '2026-11-09' });
