@@ -4,14 +4,17 @@
 // lake has five kinds plus one rare fish of its own (fishing.js SPOTS), so 10 maps x 6 = 60.
 // The kid's biggest catch of each lives on the kid's own synced record:
 //   kid.fishRecords = { 'meadow-bluegill': { size: 9, points: 22, map: 'bg-meadow', date: '2026-11-09' } }
-// size is in inches (what the catch card shows); points break a tie between two catches of the
-// same size (they go up with the fish's exact size). The fish in the tank is
+// lb is the weight in pounds (what the catch card shows, see fishfacts.js; records from before
+// 2026-11-16 have none and get it from their inches). size is the length in inches, still kept so
+// an older copy of the app on another device keeps working. points break a tie between two catches
+// of the same weight (they go up with the fish's exact size). The fish in the tank is
 //   kid.tank = { species: 'meadow-trout', nickname: 'Goldie' },
 // and a bigger tank from the shop (furniture.js) holds more: the second fish on are in
 //   kid.tank.more = [{ species: 'ocean-sword', nickname: 'Pointy' }, ...]
 // (the first stays where it always was, so an older copy of the app still shows it).
 
 import { SPOTS, SPECIES, lookFor } from './fishing.js';
+import { weightFor, sizeClass, roundLb } from './fishfacts.js';
 
 /** The maps with a fishing spot, in the order the book shows them. */
 export const FISH_MAPS = Object.keys(SPOTS);
@@ -42,10 +45,28 @@ export function catchSpecies(map, kind) {
   return fishSpecies(speciesId(m, kind));
 }
 
-const better = (a, b) => !b || a.size > b.size || (a.size === b.size && (a.points || 0) > (b.points || 0));
+/** The game's hidden size (0-1, more for a trophy) of a fish this many inches long. */
+export const sizeFromInches = (sp, inches) => Math.max(0, (Number(inches) - sp.inches[0]) / (sp.inches[1] - sp.inches[0] || 1));
+
+/** A record's weight in pounds: its own, or worked out from its inches for one from before pounds. */
+export function recordLb(id, rec) {
+  if (!rec) return 0;
+  if (Number(rec.lb) > 0) return Number(rec.lb);
+  const sp = fishSpecies(id);
+  return sp && Number(rec.size) > 0 ? weightFor(id, sizeFromInches(sp, rec.size)) : 0;
+}
+
+/** small, typical or trophy for a record (see fishfacts.js), or null. */
+export const recordClass = (id, rec) => sizeClass(id, recordLb(id, rec));
+
+const better = (id, a, b) => {
+  if (!b) return true;
+  const la = recordLb(id, a); const lb = recordLb(id, b);
+  return la > lb || (la === lb && (a.points || 0) > (b.points || 0));
+};
 
 /**
- * Records a catch: { species, size (inches), points, map, date }. Returns { records, record,
+ * Records a catch: { species, size (inches), lb (pounds; worked out from size when missing), points, map, date }. Returns { records, record,
  * first, isNew }: records is the kid's records after it (a new object when it changed, the
  * same one when not), isNew whether this catch is now the record (first: the kid's first of
  * this species). Unknown species and sizes that aren't numbers are ignored.
@@ -56,8 +77,9 @@ export function recordCatch(records, c) {
   const size = Number(c?.size);
   if (!sp || !(size > 0)) return { records: was, record: null, first: false, isNew: false };
   const rec = { size: Math.round(size), points: Math.max(0, Math.round(Number(c.points) || 0)), map: sp.map, date: String(c.date || '') };
+  rec.lb = Number(c.lb) > 0 ? roundLb(Number(c.lb)) : recordLb(sp.id, rec);
   const old = was[sp.id];
-  if (!better(rec, old)) return { records: was, record: old, first: false, isNew: false };
+  if (!better(sp.id, rec, old)) return { records: was, record: old, first: false, isNew: false };
   return { records: { ...was, [sp.id]: rec }, record: rec, first: !old, isNew: true };
 }
 

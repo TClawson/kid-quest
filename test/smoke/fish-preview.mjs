@@ -200,6 +200,7 @@ const TANK = { species: 'meadow-trout', nickname: 'Sir Goldie' };
     g.phase = 'play';
     const f = g.makeFish(k, g.W * 0.6, g.H * 0.7, 'lurk');
     f.post = [f.x, f.y];
+    f.lb = sz / 4; // pounds that go up with the inches asked for
     f.inches = sz;
     g.land(g.lines.kid, f);
     return g.catches.at(-1).record || null;

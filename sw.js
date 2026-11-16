@@ -136,6 +136,7 @@ const SHELL = [
   'js/composer.js',
   'js/printsheets.js',
   'js/fishbook.js',
+  'js/fishfacts.js',
   'js/grants.js',
   'js/meter.js',
   'manifest.webmanifest',

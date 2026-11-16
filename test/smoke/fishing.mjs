@@ -109,7 +109,7 @@ try {
     await page.waitForSelector('.game-pick');
     assert.deepEqual(await page.locator('.game-pick .btn').allInnerTexts(), ["Fishing\nWith Ben's rod", 'Tag\nNo gear needed']);
     await page.click('.game-pick [data-kind="fishing"]');
-    await page.waitForSelector('.playground');
+    await page.waitForSelector('.playground[data-phase]'); // its first frame has drawn (a busy machine can be slow to)
     assert.match(await page.locator('.play-top').innerText(), /Fishing with Ben/);
     const field = page.locator('.play-field');
     const box = await field.boundingBox();

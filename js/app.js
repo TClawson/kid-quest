@@ -33,7 +33,8 @@ import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout,
 import { seedThumb, decorThumb } from './gardenart.js';
 import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
 import { leaderboard, weekOf } from './leaderboard.js';
-import { bookPages, bookCount, fishSpecies, tankFishes, tankSlots, putInTank, takeFromTank, NICK_MAX } from './fishbook.js';
+import { bookPages, bookCount, fishSpecies, tankFishes, tankSlots, putInTank, takeFromTank, NICK_MAX, recordLb, recordClass } from './fishbook.js';
+import { realFish, fmtWeight, CLASSES, weightRanges } from './fishfacts.js';
 import { fishPic } from './fishart.js';
 import { startMusic, stopMusic, playShowAudio, muffleMusic } from './music.js';
 import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHtml } from './songbook.js';
@@ -1224,7 +1225,7 @@ function fishImg(id, dark = false) {
 
 const fishDate = (key) => (key ? new Date(`${key}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 
-function openFishBook(kid) {
+function openFishBook(kid, scrollTo = 0) {
   if (!kid) return;
   const recs = kid.fishRecords || {};
   const { caught, total } = bookCount(recs);
@@ -1236,13 +1237,13 @@ function openFishBook(kid) {
         <h3>🎣 ${esc(page.name)} <small>${n} of ${page.fish.length}</small></h3>
         <div class="fb-grid ${n ? '' : 'mini'}">
           ${page.fish.map((f) => (f.record ? `
-            <div class="fb-fish ${f.rare ? 'rare' : ''}">
+            <button class="fb-fish ${f.rare ? 'rare' : ''}" data-action="fish-page" data-species="${esc(f.id)}">
               ${inTank.has(f.id) ? '<span class="fb-tank" title="In your tank">🐟</span>' : ''}
               <img src="${fishImg(f.id)}" alt="">
               <b>${esc(f.name)}</b>
-              <span class="fb-size">${f.record.size} in</span>
+              <span class="fb-size">${fishBadge(f.id, f.record)}${fmtWeight(recordLb(f.id, f.record))}</span>
               <small>${esc(fishDate(f.record.date))}</small>
-            </div>` : `
+            </button>` : `
             <div class="fb-fish none ${f.rare ? 'rare' : ''}" title="${f.rare ? 'A rare fish!' : 'Not caught yet'}">
               <img src="${fishImg(f.id, true)}" alt="">
               <b>???</b>
@@ -1254,9 +1255,69 @@ function openFishBook(kid) {
   openModal(`
     <div class="fishbook" style="--kid:${esc(kid.color)}">
       <h2>📖 ${esc(kid.name)}'s fish book</h2>
-      <p class="muted small fb-count">${caught ? `${caught} of ${total} kinds of fish caught. Each one shows the biggest yet.` : `No fish yet! Go fishing with a visiting buddy: every kind you catch goes in here (${total} to find).`}</p>
+      <p class="muted small fb-count">${caught ? `${caught} of ${total} kinds of fish caught. Each one shows the biggest yet: ${Object.values(CLASSES).map((c) => `${c.icon} ${lower(c.name)}`).join(', ')}. Tap a fish to learn about it!` : `No fish yet! Go fishing with a visiting buddy: every kind you catch goes in here (${total} to find).`}</p>
       ${pages}
       <button class="btn" data-action="modal-close">Close</button>
+    </div>`);
+  if (scrollTo) { const card = $modal.querySelector('.modal-card'); if (card) card.scrollTop = scrollTo; }
+}
+
+/** A small / typical / trophy badge for a record. */
+function fishBadge(id, record) {
+  const c = CLASSES[recordClass(id, record)];
+  return c ? `<span class="fb-badge" title="${c.name}" aria-label="${c.name}">${c.icon}</span>` : '';
+}
+
+/**
+ * One fish's page in the fish book: the kid's biggest, what's small, typical and a trophy for
+ * that kind of fish (a scale with the kid's catch on it), and true facts about it (fishfacts.js).
+ * A pretend fish teaches about its real cousin.
+ */
+function openFishPage(kid, id) {
+  const sp = fishSpecies(id);
+  const rec = kid?.fishRecords?.[id];
+  const real = realFish(id);
+  if (!sp || !rec || !real) return;
+  const lb = recordLb(id, rec);
+  const cls = recordClass(id, rec);
+  const c = CLASSES[cls];
+  const r = weightRanges(id);
+  // the scale: smallest to biggest on a log scale, the three classes colored, the kid's fish marked
+  const [w0, w1, , w3, w4] = r.w;
+  const pos = (w) => Math.max(0, Math.min(100, (100 * Math.log(w / w0)) / Math.log(w4 / w0)));
+  const a = pos(w1); const b = pos(w3);
+  const facts = [['🗺️ Where it lives', real.where], ['🍽️ What it eats', real.eats], ['🤩 Wow!', real.wow]];
+  openModal(`
+    <div class="fishpage" style="--kid:${esc(kid.color)}">
+      <button class="btn ghost small-btn fp-back" data-action="fish-book-back">◀ Fish book</button>
+      <div class="fp-head ${sp.rare ? 'rare' : ''}">
+        <img src="${fishImg(id)}" alt="">
+        <div>
+          <h2>${sp.rare ? '⭐ ' : ''}${esc(sp.name)}</h2>
+          <p class="muted small">${esc(sp.mapName)}</p>
+        </div>
+      </div>
+      <div class="fp-mine" style="--cls:${c?.color || '#868e96'}">
+        <span class="fp-badge">${c?.icon || ''}</span>
+        <div><b>Your biggest: ${fmtWeight(lb)}</b><small>${c ? `${c.name}${cls === 'trophy' ? '! Wow!' : ''}` : ''} · ${esc(fishDate(rec.date))}</small></div>
+      </div>
+      ${real.pretend ? `<p class="fp-pretend">✨ The ${esc(sp.name.toLowerCase())} is a pretend fish: it lives only in this game. Its real-life cousin is the <b>${esc(real.name)}</b>, so its weights and facts here are the real cousin's.</p>` : ''}
+      <h3>⚖️ How big do they get?</h3>
+      <p class="fp-typical">A typical one weighs about <b>${r.typical}</b>.</p>
+      <div class="fp-scale" role="img" aria-label="Small is under ${r.small}, trophy is ${r.trophy} or more, yours is ${fmtWeight(lb)}">
+        <div class="fp-bar">
+          <span class="s" style="width:${a}%"></span><span class="t" style="width:${b - a}%"></span><span class="x" style="width:${100 - b}%"></span>
+        </div>
+        <span class="fp-pin" style="left:${pos(Math.max(w0, Math.min(w4, lb)))}%">▼</span>
+      </div>
+      <ul class="fp-classes">
+        <li><span>${CLASSES.small.icon}</span> <b>Small</b> under ${r.small}</li>
+        <li><span>${CLASSES.typical.icon}</span> <b>Typical</b> ${r.small} to ${r.trophy}</li>
+        <li><span>${CLASSES.trophy.icon}</span> <b>Trophy</b> ${r.trophy} or more</li>
+      </ul>
+      ${real.biggest && !real.pretend ? `<p class="muted small">🥇 Biggest ever caught on a rod: ${esc(real.biggest)}.</p>` : ''}
+      ${facts.map(([h, t]) => `<h3>${h}</h3><p>${esc(t)}</p>`).join('')}
+      <button class="btn" data-action="fish-book-back">Back to the fish book</button>
     </div>`);
 }
 
@@ -1311,7 +1372,7 @@ function openTankPicker(kid, slot = null) {
     return `<button class="tp-fish ${f.id === ui.tankPick ? 'on' : ''} ${taken ? 'taken' : ''}" data-action="tank-pick" data-species="${esc(f.id)}" aria-pressed="${f.id === ui.tankPick}" ${taken ? 'disabled' : ''}>
             <img src="${fishImg(f.id)}" alt="">
             <b>${f.rare ? '⭐ ' : ''}${esc(f.name)}</b>
-            <small>${taken ? 'In the tank' : `${f.record.size} in · ${esc(f.mapName)}`}</small>
+            <small>${taken ? 'In the tank' : `${fmtWeight(recordLb(f.id, f.record))} · ${esc(f.mapName)}`}</small>
           </button>`;
   }).join('')}
       </div>
@@ -3284,6 +3345,13 @@ Object.assign(actions, studioActions);
 Object.assign(actions, labActions);
 Object.assign(actions, composeActions);
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
+
+// the fish book: a fish's own page, and back to the book where it was
+actions['fish-page'] = (el) => {
+  ui.fbScroll = $modal.querySelector('.modal-card')?.scrollTop || 0;
+  openFishPage(kidById(ui.kidId), el.dataset.species);
+};
+actions['fish-book-back'] = () => openFishBook(kidById(ui.kidId), ui.fbScroll || 0);
 
 actions['tank-pick'] = (el) => {
   ui.tankPick = el.dataset.species;

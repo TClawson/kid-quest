@@ -119,7 +119,7 @@ export function playWith(kid, v, kind) {
     onCatch: (c) => {
       const kid = currentKid(kid0);
       const sp = catchSpecies(c.map, c.kind);
-      const got = sp && recordCatch(kid.fishRecords, { species: sp.id, size: c.size, points: c.points, date: today() });
+      const got = sp && recordCatch(kid.fishRecords, { species: sp.id, size: c.size, lb: c.lb, points: c.points, date: today() });
       if (!got?.isNew) return null;
       kid.fishRecords = got.records;
       save();
