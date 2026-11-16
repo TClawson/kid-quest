@@ -124,6 +124,7 @@ const SHELL = [
   'js/rig.js',
   'js/live.js',
   'js/play.js',
+  'js/tagfun.js',
   'js/hockey.js',
   'js/fishing.js',
   'js/fishart.js',
