@@ -993,6 +993,10 @@ function mount(section, handlers) {
     const at = dialog.hidden ? 0.5 : 0.3;
     const x = camAxis(W, vw, S, left);
     const y = camAxis(H, vh, S, me.y - 12 - (vh / S) * at, pad.lo, pad.hi);
+    // The step aside from the HUD (below) waits until the buddy stands still. Worked out on every
+    // frame of a walk, it held the view still, then let it jump when the step ran out, again and
+    // again: the screen shook instead of following the buddy.
+    if (me.path.length) { nudge = 0; return { x, y }; }
     return { x, y: dialog.hidden ? clearOfHud(x, y) : y };
   };
   // A HUD button sitting on a villager, the chest, a door or a sign: the view moves up or down a
