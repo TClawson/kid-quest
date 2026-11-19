@@ -233,7 +233,8 @@ const dressedVisitor = (v, buddy = v.buddy) => ({ ...buddy, wand: wandPower(v.to
  */
 function buddyHtml(kid, mood, size = 'lg', opts = {}) {
   if (opts.live) {
-    const html = liveHtml(liveKey(kid), dressed(kid), { background: opts.background !== false, feel: opts.feel || feelFor(kid, mood), idle: opts.idle, label: `${kid.name}'s buddy` });
+    // close-ups get the 32 px drawing; the small one is for the village, where its pixels match the map's
+    const html = liveHtml(liveKey(kid), dressed(kid), { background: opts.background !== false, feel: opts.feel || feelFor(kid, mood), idle: opts.idle, big: size !== 'mini', label: `${kid.name}'s buddy` });
     return `<div class="buddy buddy-${size} live">${html}</div>`;
   }
   return `<div class="buddy buddy-${size} mood-${mood}">${buddySvg(dressed(kid), mood, opts)}</div>`;
@@ -308,6 +309,7 @@ function openModal(html, onClose = null) {
   $modal.innerHTML = `<div class="modal-card">${html}</div>`;
   $modal.hidden = false;
   modalOnClose = onClose;
+  liveStart(); // a live buddy in the modal starts moving right away
 }
 
 function closeModal() {
@@ -2650,6 +2652,9 @@ function homeThumb(id) {
   return thumbs.get(id);
 }
 
+/** The buddy trying on something from the shop: live and big, glad to try it. */
+const tryOn = (kid, preview) => liveHtml(`try:${kid.id}`, preview, { big: true, feel: { valence: 0.9, arousal: 0.7 }, label: `${kid.name}'s buddy trying it on` });
+
 function buyGear(kid, item, prog) {
   if (prog.gems < item.gems) {
     sounds.error();
@@ -2659,7 +2664,7 @@ function buyGear(kid, item, prog) {
   const preview = { ...dressed(kid), outfit: { ...kid.buddy.outfit, sport: item.id } };
   openModal(`
     <div class="celebrate">
-      ${item.noHold ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${boatThumb()}" alt=""></div>` : `<div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>`}
+      ${item.noHold ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${boatThumb()}" alt=""></div>` : `<div class="buddy buddy-xl live">${tryOn(kid, preview)}</div>`}
       <h1>Buy ${esc(item.name)}?</h1>
       <p>It costs <b>💎 ${item.gems}</b>. You'll have ${prog.gems - item.gems} gems left.</p>
       <p class="muted small">${item.noHold ? 'When you go fishing, you and your visitor row out into deep water, where the bigger fish swim. Every buddy can use it.' : 'Every buddy can use it. Keep exercising to unlock its moves.'}</p>
@@ -2680,7 +2685,7 @@ function buyItem(kid, item, prog) {
   const preview = { ...kid.buddy, wand: 1, outfit: { ...kid.buddy.outfit, [item.slot]: item.id } };
   openModal(`
     <div class="celebrate">
-      ${item.home ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${homeThumb(item.id)}" alt=""></div>` : `<div class="buddy buddy-xl mood-happy">${buddySvg(preview, 'happy')}</div>`}
+      ${item.home ? `<div class="buddy buddy-xl home-buy"><img class="home-thumb" src="${homeThumb(item.id)}" alt=""></div>` : `<div class="buddy buddy-xl live">${tryOn(kid, preview)}</div>`}
       <h1>Buy ${esc(item.name)}${isWorn(item) ? ` for your ${esc(speciesName(kid.buddy.species).toLowerCase())}` : item.home ? ' for your house' : ''}?</h1>
       <p>It costs <b>🪙 ${item.price}</b>. You'll have ${prog.coins - item.price} coins left.</p>
       ${item.note ? `<p>${esc(item.note)}</p>` : ''}

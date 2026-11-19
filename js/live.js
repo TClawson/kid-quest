@@ -11,6 +11,7 @@
 // Left alone (when the app asks for it), a buddy gets bored, then dozes off; a tap
 // wakes it with a jump.
 import { buildRig, render, Brain, CALM } from './rig.js';
+import { buildRig32, render32 } from './rig32.js';
 
 const FPS = 12;
 const BORED_AFTER = 45_000;
@@ -37,7 +38,8 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /**
  * The markup for a live buddy, and what it should feel right now.
- * opts: { background: bool, feel: targets for rig.js feelings, idle: bool (bored when left alone), label }
+ * opts: { background: bool, feel: targets for rig.js feelings, idle: bool (bored when left alone), label,
+ *   big: bool (the 32 px drawing from rig32.js, for close-ups; the 16 px one otherwise, as on the village map) }
  */
 export function liveHtml(key, buddy, opts = {}) {
   looks.set(key, buddy);
@@ -45,7 +47,8 @@ export function liveHtml(key, buddy, opts = {}) {
   if (opts.feel) feel(key, opts.feel, { idle: opts.idle });
   // the look is in the markup too, so a changed outfit (say, synced from another device) changes the page
   const look = [buddy?.species, ...Object.values(buddy?.outfit || {})].filter(Boolean).join(' ');
-  return `<canvas class="live-buddy" width="24" height="24" data-live="${esc(key)}" data-look="${esc(look)}" data-bg="${opts.background === false ? 0 : 1}" role="img" aria-label="${esc(opts.label || `${buddy?.species || 'buddy'} buddy`)}"></canvas>`;
+  const n = opts.big ? 48 : 24;
+  return `<canvas class="live-buddy" width="${n}" height="${n}"${opts.big ? ' data-big="1"' : ''} data-live="${esc(key)}" data-look="${esc(look)}" data-bg="${opts.background === false ? 0 : 1}" role="img" aria-label="${esc(opts.label || `${buddy?.species || 'buddy'} buddy`)}"></canvas>`;
 }
 
 /** Sets where a buddy's feelings are heading. opts.idle: gets bored when nobody taps it. */
@@ -127,12 +130,12 @@ function beatNow(st, now) {
   return { index: b.index + Math.floor(phase), phase: phase % 1 };
 }
 
-function rigFor(key, bg) {
+function rigFor(key, bg, big) {
   const look = looks.get(key);
-  const id = JSON.stringify([look?.species, look?.outfit, bg]);
+  const id = JSON.stringify([look?.species, look?.outfit, bg, big]);
   let rig = rigs.get(id);
   if (!rig) {
-    rig = buildRig(look, { background: bg });
+    rig = (big ? buildRig32 : buildRig)(look, { background: bg });
     if (rigs.size > 40) rigs.clear();
     rigs.set(id, rig);
   }
@@ -142,7 +145,8 @@ function rigFor(key, bg) {
 function paint(canvas, buf) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const img = ctx.createImageData(24, 24);
+  const n = canvas.width;
+  const img = ctx.createImageData(n, n);
   for (let i = 0; i < buf.length; i += 1) {
     const c = buf[i];
     if (!c) continue;
@@ -181,7 +185,8 @@ function tick() {
     }
     if (st.pose && !st.drawn.has(canvas)) {
       st.drawn.add(canvas);
-      paint(canvas, render(rigFor(key, canvas.dataset.bg !== '0'), st.pose, step, { wand: looks.get(key)?.wand }));
+      const big = canvas.dataset.big === '1';
+      paint(canvas, (big ? render32 : render)(rigFor(key, canvas.dataset.bg !== '0', big), st.pose, step, { wand: looks.get(key)?.wand }));
     }
   }
 }

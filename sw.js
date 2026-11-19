@@ -123,6 +123,8 @@ const SHELL = [
   'js/beat.js',
   'js/rig.js',
   'js/live.js',
+  'js/art32.js',
+  'js/rig32.js',
   'js/play.js',
   'js/tagfun.js',
   'js/hockey.js',
