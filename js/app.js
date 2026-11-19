@@ -40,6 +40,7 @@ import { startMusic, stopMusic, playShowAudio, muffleMusic } from './music.js';
 import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHtml } from './songbook.js';
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
+import { viewNfc, mountNfcTest } from './nfctest.js';
 import { viewLab, mountLab, labActions, openLab } from './notolab.js';
 import { viewCompose, mountCompose, composeActions, openCompose } from './composedesk.js';
 import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
@@ -2550,6 +2551,11 @@ ${seasonTestCard()}
       <p class="muted small">Try how well the tablet hears piano playing. To have a kid’s practice timer listen, turn on “Listen to the piano” for that chore in Kids. Nothing is recorded or saved.</p>
       <button class="btn ghost" data-action="listen-open">Open the listening test</button>
     </div>
+    <div class="card nfc-test-card">
+      <h2>📡 NFC token test</h2>
+      <p class="muted small">See how this phone reads the NFC stickers in chore tokens: where to hold them, how far away, how fast. Works in Chrome on an Android phone with NFC. Nothing is saved, and the kids' data is not touched.</p>
+      <button class="btn ghost" data-action="nfc-open">Open the NFC test</button>
+    </div>
     <div class="card rec-test">
       <h2>🎙️ Save a test recording</h2>
       <p class="muted small">Record up to 2 minutes of piano through the tablet's microphone and save it as a sound file. Nothing is kept in the game.</p>
@@ -2694,7 +2700,7 @@ function buyItem(kid, item, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, lab: viewLab, compose: viewCompose, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, lab: viewLab, compose: viewCompose, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen, nfc: viewNfc };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -2794,6 +2800,7 @@ function render() {
   mountSongbook($app);
   mountStudio($app);
   mountTestRec($app);
+  mountNfcTest($app);
   mountLab($app);
   mountCompose($app);
   liveStart();
@@ -2846,6 +2853,8 @@ const actions = {
   },
   'listen-open': () => { ui.view = 'listen'; ui.listenKid = ui.listenKid || state.kids[0]?.id; render(); window.scrollTo(0, 0); },
   'listen-back': () => { stopListenTest(); ui.view = 'parent'; ui.tab = 'settings'; ui.testTools = true; render(); },
+  'nfc-open': () => { ui.view = 'nfc'; render(); window.scrollTo(0, 0); },
+  'nfc-back': () => { ui.view = 'parent'; ui.tab = 'settings'; ui.testTools = true; render(); },
   'test-tools': () => { ui.testTools = !ui.testTools; render(); },
   'listen-start': () => startListenTest(),
   'listen-mode': (el) => {
