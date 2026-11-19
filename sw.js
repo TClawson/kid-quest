@@ -25,6 +25,7 @@ const SHELL = [
   'js/play-ui.js',
   'js/logic.js',
   'js/fx.js',
+  'js/nfctest.js',
   'js/avatar.js',
   'js/items.js',
   'js/maparts.js',
