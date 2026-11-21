@@ -123,6 +123,7 @@ export const SPORTS = [
   { id: 'hockey', name: 'Hockey stick', icon: '🏒' },
   // the downhill gear games add theirs here, in this order: sled, bike, skis, camera
   { id: 'sled', name: 'Sled', icon: '🛷' },
+  { id: 'bike', name: 'Bike', icon: '🚲' },
   { id: 'camera', name: 'Camera', icon: '📷' },
 ];
 export const TIERS = [
@@ -167,6 +168,9 @@ export const MOVES = [
   { id: 'dangle', kind: 'hockey', step: 1, name: 'Stickhandling' },
   { id: 'slapshot', kind: 'hockey', step: 2, name: 'Slap shot' },
   { id: 'spinorama', kind: 'hockey', step: 3, name: 'Spin-o-rama' },
+  { id: 'wheelie', kind: 'bike', step: 1, name: 'Wheelie' },
+  { id: 'bunnyhop', kind: 'bike', step: 2, name: 'Bunny hop' },
+  { id: 'tailwhip', kind: 'bike', step: 3, name: 'Tailwhip' },
   { id: 'click', kind: 'camera', step: 1, name: 'Say cheese' },
   { id: 'selfie', kind: 'camera', step: 2, name: 'Selfie' },
   { id: 'paparazzi', kind: 'camera', step: 3, name: 'Flash frenzy' },
