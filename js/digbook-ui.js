@@ -10,6 +10,7 @@ import {
 } from './digfinds.js';
 import { findPic, skeletonPic } from './digart.js';
 import { itemById } from './items.js';
+import { bookTabs } from './findsbook-ui.js';
 import { esc, openModal, $modal } from './ctx.js';
 
 const mapName = (map) => itemById(map)?.name || map;
@@ -78,10 +79,10 @@ export function openDigBook(kid, tab = 'skeletons', scrollTo = 0) {
   }
   openModal(`
     <div class="fishbook digbook" style="--kid:${esc(kid.color)}">
-      <div class="book-tabs">
-        <button class="btn ghost" data-action="dig-fishbook">🐟 Fish</button>
-        <button class="btn ${tab === 'skeletons' ? 'on' : 'ghost'}" data-action="dig-tab" data-tab="skeletons">🦴 Skeletons</button>
-        <button class="btn ${tab === 'treasures' ? 'on' : 'ghost'}" data-action="dig-tab" data-tab="treasures">💎 Treasures</button>
+      ${bookTabs('digs')}
+      <div class="book-tabs dig-tabs">
+        <button class="btn ${tab === 'skeletons' ? '' : 'ghost'}" data-action="dig-tab" data-tab="skeletons">🦴 Skeletons</button>
+        <button class="btn ${tab === 'treasures' ? '' : 'ghost'}" data-action="dig-tab" data-tab="treasures">💎 Treasures</button>
       </div>
       <h2>📖 ${esc(kid.name)}'s dig book</h2>
       <p class="muted small fb-count">${nDone || nTre ? `${nDone} of ${DINOS.length} skeletons finished, ${nTre} of ${allTre} treasures found. Tap one to learn about it!` : 'Nothing dug up yet! Go on a dino dig with a visiting buddy who has a shovel. Every bone and treasure goes in here.'}</p>
