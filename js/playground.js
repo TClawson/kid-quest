@@ -4,6 +4,7 @@ import { Play, GAME_NAMES } from './play.js';
 import { Hockey } from './hockey.js';
 import { Fishing } from './fishing.js';
 import { Football } from './football.js';
+import { SkiRace } from './skirace.js';
 
 let open = null;
 
@@ -41,9 +42,9 @@ export function openPlay(opts) {
   for (const c of [field, hud]) { c.style.width = `${W * S}px`; c.style.height = `${H * S}px`; }
   stage.style.width = `${W * S}px`; stage.style.height = `${H * S}px`;
 
-  const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : Play;
+  const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : opts.kind === 'race' ? SkiRace : Play;
   // fishing: the lake for the kid's map, and today's bait odds
-  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch });
+  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, book: opts.book, onBook: opts.onBook, season: opts.season, snow: opts.snow });
   root.game = game; // for tests
   // fishing draws its lake and fish with finer pixels, and a better rod shows more of the
   // lake (fieldW x fieldH lake pixels, shrunk to fit the same screen)
@@ -77,7 +78,7 @@ export function openPlay(opts) {
     }
     // for tests: what the game is doing
     root.dataset.phase = game.phase;
-    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.kind === 'fishing' || game.kind === 'football' ? game.score : game.free.toFixed(1);
+    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.kind === 'fishing' || game.kind === 'football' || game.kind === 'race' ? game.score : game.free.toFixed(1);
     if (game.buzz) { navigator.vibrate?.(game.buzz); game.buzz = null; }
     const n = game.kind === 'soccer' && game.next();
     root.dataset.next = n ? String(Math.round((n.at - game.t) * 1000)) : '';
@@ -105,7 +106,7 @@ export function openPlay(opts) {
   const onMove = (e) => { if (down === e.pointerId) game.drag(...at(e)); };
   const onUp = (e) => {
     if (button === e.pointerId) { button = null; game.release(); listen(); }
-    if (down === e.pointerId) { down = null; if (game.holdAnywhere) { game.release(); listen(); } }
+    if (down === e.pointerId) { down = null; game.up?.(); if (game.holdAnywhere) { game.release(); listen(); } }
   };
   root.addEventListener('pointerdown', onDown);
   root.addEventListener('pointermove', onMove);

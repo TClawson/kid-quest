@@ -120,6 +120,8 @@ export const SPORTS = [
   { id: 'shoes', name: 'Running shoes', icon: '👟' },
   { id: 'football', name: 'Football', icon: '🏈' },
   { id: 'hockey', name: 'Hockey stick', icon: '🏒' },
+  // the ski race with a visitor (js/skirace.js)
+  { id: 'skis', name: 'Skis', icon: '🎿' },
 ];
 export const TIERS = [
   { tier: 1, id: 'regular', name: '', gems: 40 },

@@ -12,6 +12,7 @@ import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { recordWeekBest } from './leaderboard.js';
 import { recordCatch, catchSpecies } from './fishbook.js';
+import { shownSeason } from './seasons.js';
 import {
   state, today, esc, save, render, openModal, currentKid, mover, exerciseInfo, kidTheme,
 } from './ctx.js';
@@ -23,10 +24,10 @@ import {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', race: 'skis' };
 // the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
-const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod' };
-const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod' };
+const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', race: 'skis' };
+const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', race: 'skis' };
 /** True when the kid would play with the visitor's gear: they don't own that kind. */
 const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
@@ -55,7 +56,9 @@ export function visitPlan(kid, visitors) {
 
 /** Fishing when the kid's buddy is holding a fishing rod (there's no field for it: the lake is in the game). */
 function heldRod(kid) {
-  return itemById(kid.buddy?.outfit?.sport)?.kind === 'rod' ? 'fishing' : null;
+  const kind = itemById(kid.buddy?.outfit?.sport)?.kind;
+  // skis: the ski race down the map's hill (there's no field for it either)
+  return kind === 'rod' ? 'fishing' : kind === 'skis' ? 'race' : null;
 }
 
 export function gamesWith(kid, v, plan) {
@@ -115,6 +118,14 @@ export function playWith(kid, v, kind) {
       const week = recordWeekBest(kid, kind, score, today());
       if (week !== kid.gameBests) { kid.gameBests = week; save(); }
     },
+    // the ski race: shortcuts found and best times go in the shortcut book (in the house)
+    book: kid.skiBook || {},
+    onBook: (book) => {
+      const kid = currentKid(kid0);
+      kid.skiBook = book;
+      save();
+    },
+    season: shownSeason(today()),
     // fishing: the biggest of each kind of fish goes in the fish book (in the house)
     onCatch: (c) => {
       const kid = currentKid(kid0);

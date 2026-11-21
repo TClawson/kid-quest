@@ -567,3 +567,15 @@ body:has(.approve-bar) .toast { bottom: calc(var(--pnav-h, 64px) + 86px + env(sa
 .nfc-log .nfc-read { font-weight: 600; }
 .nfc-log .nfc-error { color: #c0392b; }
 .nfc-log .nfc-write { color: #1e7e34; }
+
+/* the shortcut book (ski race, js/skibook-ui.js) */
+.skibook h3 { margin: 14px 0 6px; }
+.skibook h3 small { font-weight: 400; opacity: 0.75; font-size: 0.8rem; }
+.sb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.sb-card { border-radius: 8px; padding: 8px 10px; background: rgba(127, 127, 127, 0.12); border-left: 4px solid #d08a5a; min-width: 0; }
+.sb-card.uncommon { border-left-color: #74c0fc; }
+.sb-card.legendary { border-left-color: #fab005; }
+.sb-card.none { opacity: 0.6; }
+.sb-card b { display: block; }
+.sb-card small { opacity: 0.8; }
+.sb-card p { margin: 4px 0 0; font-size: 0.85rem; }
