@@ -33,11 +33,20 @@ const HAPPY = { ...CALM, valence: 0.7, arousal: 0.6 };
 const INK = '#1b1430';
 const FEET = 7 + 16; // SPRITE_Y + 16, as in play.js
 
-export const RUN_LEN = 4100; // pixels of hill from the top to the finish
-export const ACT2 = 800; // the ramps start
-export const ACT3 = 3250; // the steep finish
-export const BIG_AT = 3700; // the Big Jump's ramp
-export const BASE_SPEED = 62; // pixels a second on a normal hill
+export const RUN_LEN = 7400; // pixels of hill from the top to the finish
+export const ACT2 = 1300; // the ramps start
+export const ACT3 = 5900; // the steep finish
+export const BIG_AT = 6800; // the Big Jump's ramp
+export const BASE_SPEED = 95; // pixels a second at the top of a normal hill
+// Momentum, like a real sled (Taylor, 2026-11-21): the longer you ride without crashing, the
+// faster you go (up to BUILD_GAIN more after BUILD_LEN of clean hill), steep bits speed you up and
+// rises slow you down, a crash loses most of it, and you never drop below MIN_SPEED.
+export const BUILD_LEN = 2000;
+export const BUILD_GAIN = 1.2;
+export const MIN_SPEED = 60;
+export const MAX_SPEED = 260;
+const SLOPE_PULL = 260; // extra push per unit of slope steeper than the hill's usual drop
+const AVG_DROP = 0.15; // the hill's usual drop (makeGround's drop)
 export const GRAVITY = 380;
 export const JUMP_V = 118;
 const HOLD_T = 0.3; // holding the button keeps a jump rising for up to this long
@@ -136,7 +145,7 @@ export class Sledding {
   }
 
   newRider(x) {
-    return { x, y: this.groundAt(x), vy: 0, v: 0, on: 'g', jumps: 0, holdT: 0, held: false, tumble: 0, spin: 0, guard: this.tier >= 2, airT: 0, swing: null, highFived: false };
+    return { x, y: this.groundAt(x), vy: 0, v: 0, build: 0, on: 'g', jumps: 0, holdT: 0, held: false, tumble: 0, spin: 0, guard: this.tier >= 2, airT: 0, swing: null, highFived: false };
   }
 
   get score() { return this.points.kid; }
@@ -303,21 +312,29 @@ export class Sledding {
     if (R.x >= RUN_LEN && !this.done) this.finish();
   }
 
-  /** How fast the rider wants to go at x. */
-  targetSpeed(x) {
-    let v = BASE_SPEED * this.speed;
-    if (this.twist === 'glide') v *= 1 + 0.35 * clamp(x / RUN_LEN, 0, 1);
-    if (x > ACT3) v *= 1.15;
-    if (this.puddles.some((p) => x > p.x0 && x < p.x1)) v *= 0.55;
+  /** The speed the rider's momentum carries them toward at x: it grows with clean riding (R.build). */
+  targetSpeed(x, build = 0) {
+    let v = BASE_SPEED * this.speed * (1 + BUILD_GAIN * clamp(build / BUILD_LEN, 0, 1));
+    if (this.twist === 'glide') v *= 1 + 0.3 * clamp(x / RUN_LEN, 0, 1);
+    if (x > ACT3) v *= 1.1;
     return v;
+  }
+
+  /** Momentum: speed up with clean riding and on steep bits, slow on rises, puddles and crashes. */
+  stepSpeed(R, dt) {
+    const grip = SNOWGRIP[this.snow] || 1;
+    if (R.tumble > 0) { R.v = Math.max(MIN_SPEED * 0.6, R.v - R.v * 2.2 * dt); return; }
+    R.build += R.v * dt;
+    let a = (this.targetSpeed(R.x, R.build) - R.v) * 0.9 * grip;
+    if (R.on === 'g') a += SLOPE_PULL * this.speed * (this.base.slope(R.x) - AVG_DROP);
+    if (R.on && this.puddles.some((p) => R.x > p.x0 && R.x < p.x1)) a -= 2.5 * R.v;
+    R.v = clamp(R.v + a * dt, MIN_SPEED, MAX_SPEED);
   }
 
   stepRider(R, dt) {
     if (R.held) R.holdT += dt;
     if (R.tumble > 0) { R.tumble -= dt; R.spin += dt; }
-    // speed eases toward the hill's speed (slower while tumbling)
-    const want = this.targetSpeed(R.x) * (R.tumble > 0 ? 0.35 : 1);
-    R.v = lerp(R.v, want, 1 - Math.exp(-dt * 1.6 * (SNOWGRIP[this.snow] || 1)));
+    this.stepSpeed(R, dt);
     // swinging on a vine: carried across the gully
     if (R.swing) {
       const s = R.swing; s.k += dt / 0.9;
@@ -402,8 +419,8 @@ export class Sledding {
   tumble(R, soft = false) {
     if (R.tumble > 0) return;
     // a good sled shrugs off the first bump of the run
-    if (!soft && R.guard) { R.guard = false; R.v *= 0.7; this.pop('Wobble!', R.x, R.y - 26, '#ffe066'); this.buzz = 30; return; }
-    R.tumble = TUMBLE; R.spin = 0; R.v *= 0.4;
+    if (!soft && R.guard) { R.guard = false; R.v *= 0.7; R.build *= 0.5; this.pop('Wobble!', R.x, R.y - 26, '#ffe066'); this.buzz = 30; return; }
+    R.tumble = TUMBLE; R.spin = 0; R.v *= 0.4; R.build = 0;
     this.sound = 'drop'; this.buzz = 80;
     if (this.streak >= 2) this.pop('Streak over', R.x, R.y - 34, '#ffc9c9');
     this.streak = 0;
@@ -570,7 +587,7 @@ export class Sledding {
   stepVisitor(dt) {
     const R = this.rider;
     this.trail.push({ t: this.t, x: R.x, y: R.y, air: !R.on, tumble: R.tumble > 0 });
-    while (this.trail.length > 2 && this.trail[1].t < this.t - 0.42) this.trail.shift();
+    while (this.trail.length > 2 && (this.trail[1].t < this.t - 0.42 || this.trail[1].x < R.x - 40)) this.trail.shift();
     const p = this.trail[0];
     const V = this.visPos;
     V.x = p.x - 4; V.y = this.trail.length && p.air ? p.y : (this.surfOrGround(p.x, p.y)); V.air = p.air; V.tumble = p.tumble;
@@ -594,7 +611,9 @@ export class Sledding {
 
   follow(dt, snap = false) {
     const R = this.rider;
-    const tx = R.x - this.fieldW * 0.3;
+    // the faster you go, the more of the hill ahead you see
+    this.lead = lerp(this.lead ?? 0.3, 0.3 - 0.1 * clamp((R.v - 100) / 120, 0, 1), snap ? 1 : 1 - Math.exp(-dt * 1.5));
+    const tx = R.x - this.fieldW * this.lead;
     // the ground about 60% down the screen, but the rider never too near the top (the Big Jump)
     const ty = Math.min(this.groundAt(R.x) - this.fieldH * 0.6, R.y - this.fieldH * 0.3);
     this.camX = tx;

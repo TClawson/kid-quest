@@ -44,25 +44,25 @@ try {
         g.tap(); g.release();
         // the bot: jump what's ahead, hold over ramps, land the Big Jump on green
         let holdUntil = 0; let tumbles = 0; let lastT = 0;
-        const want = [800, 1900, BIG_AT + 60];
+        const want = [1300, 3600, BIG_AT + 60]; let vmax = 0;
         const at = {};
         for (let i = 0; i < 30 * 120 && g.phase === 'play'; i += 1) {
           const R = g.rider;
           if (R.tumble > 0 && g.t - lastT > 1.5) { tumbles += 1; lastT = g.t; }
-          const ahead = g.hazards.find((z) => !z.bounce && !z.hit && z.x > R.x + 4 && z.x < R.x + 22 && (z.surf || 'g') === R.on);
-          const gap = g.gaps.find((p) => p.x0 > R.x && p.x0 < R.x + 14);
+          const ahead = g.hazards.find((z) => !z.bounce && !z.hit && z.x > R.x + 4 && z.x < R.x + 10 + R.v * 0.16 && (z.surf || 'g') === R.on);
+          const gap = g.gaps.find((p) => p.x0 > R.x && p.x0 < R.x + 4 + R.v * 0.1);
           if (R.on && (ahead || gap)) { g.tap(); holdUntil = g.t + (gap ? 0.3 : 0.12); }
           if (R.on === 'g' && g.onRamp(R.x) && !R.held) { g.tap(); holdUntil = g.t + 0.6; }
           if (g.meter && !g.meter.zone) { const m = (g.t - g.meter.at) / 0.55 % 2; const k = m < 1 ? m : 2 - m; if (Math.abs(k - 0.5) < 0.05) g.tap(); }
           if (R.held && g.t > holdUntil) g.release();
-          g.step(1 / 30);
+          g.step(1 / 30); vmax = Math.max(vmax, R.v);
           for (const w of want) if (!at[w] && R.x >= w) { at[w] = true; out[`x${w}`] = snap(); }
           if (g.big && !g.big.landed && R.vy > -10 && R.vy < 30 && !out.big) out.big = snap();
         }
         while (g.phase === 'play') g.step(1 / 30);
         for (let i = 0; i < 40; i += 1) g.step(1 / 30);
         out.over = snap();
-        console.log(`LOG ${map}: ${g.points.kid} points, ${g.haul.length} finds, ${tumbles} tumbles, ${Math.round(g.t)} s, vis ${g.points.vis}`);
+        console.log(`LOG ${map}: ${g.points.kid} points, ${g.haul.length} finds, ${tumbles} tumbles, ${Math.round(g.t)} s, top speed ${Math.round(vmax)}, vis ${g.points.vis}`);
         return out;
       }, { map, season, tier });
       for (const [k, url] of Object.entries(shots)) save(`${map.replace('bg-', '')}-${k}`, url);

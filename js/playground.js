@@ -101,6 +101,8 @@ export function openPlay(opts) {
     const p = at(e);
     if (!game.holdAnywhere && game.press && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
     down = e.pointerId;
+    // keep this finger's events even if it slides off the field
+    try { root.setPointerCapture(e.pointerId); } catch { /* not a live pointer (tests) */ }
     game.tap(...p);
     listen();
   };
@@ -109,6 +111,9 @@ export function openPlay(opts) {
     if (button === e.pointerId) { button = null; game.release(); listen(); }
     if (down === e.pointerId) { down = null; if (game.holdAnywhere) { game.release(); listen(); } }
   };
+  // a finger held still is a hold, not a long-press menu (which would end the hold early)
+  const noMenu = (e) => e.preventDefault();
+  root.addEventListener('contextmenu', noMenu);
   root.addEventListener('pointerdown', onDown);
   root.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
@@ -132,6 +137,7 @@ export function openPlay(opts) {
   const close = () => {
     cancelAnimationFrame(raf);
     root.removeEventListener('pointerdown', onDown);
+    root.removeEventListener('contextmenu', noMenu);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
     document.removeEventListener('visibilitychange', onVis);

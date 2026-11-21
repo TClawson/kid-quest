@@ -55,6 +55,8 @@ try {
     assert.ok(box.width <= device.viewport.width + 1 && box.height <= device.viewport.height + 1, 'the hill fits the screen');
     assert.equal(await page.locator('.playground').getAttribute('data-phase'), 'ready');
     if (shots) await page.screenshot({ path: `${shots}/sled-ready-${name}.png` });
+    // no finds on the hill, so the only one in the book is the one this test hands over
+    await page.evaluate(() => { document.querySelector('.playground').game.finds.length = 0; });
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     assert.equal(await page.locator('.playground').getAttribute('data-phase'), 'play', 'the first tap starts the run');
     // hold the button down for a jump, then let go
@@ -76,7 +78,7 @@ try {
     assert.deepEqual(Object.keys(saved.findRecords), ['volcano-obsidian']);
     assert.equal(saved.findRecords['volcano-obsidian'].n, 2);
     // skip to the bottom of the hill
-    await page.evaluate(() => { const g = document.querySelector('.playground').game; g.points.kid = 77; g.rider.x = 4099; g.rider.on = 'g'; g.big = null; });
+    await page.evaluate(() => { const g = document.querySelector('.playground').game; g.points.kid = 77; g.rider.x = g.bigRamp.x + 400; g.rider.on = 'g'; g.big = null; });
     await page.waitForFunction(() => document.querySelector('.playground')?.dataset.phase === 'over');
     await page.waitForTimeout(400);
     if (shots) await page.screenshot({ path: `${shots}/sled-over-${name}.png` });
