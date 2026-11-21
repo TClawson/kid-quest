@@ -289,17 +289,25 @@ export class SkiRace {
       return;
     }
     // a finger down: steer from here
-    this.touch = { y0: y, aim0: this.kid.aim };
-    this.kid.aim = this.kid.y; this.touch.aim0 = this.kid.y;
+    this.touch = { y0: y, yNow: y, aim0: this.kid.y };
+    this.kid.aim = this.kid.y;
   }
 
   drag(x, y) {
     if (!this.touch) return;
+    this.touch.yNow = y;
     // relative steering: slide 1 px on screen to move the line 1.6 px on the hill
     this.kid.aim = clamp(this.touch.aim0 + (y - this.touch.y0) * 1.6 * this.zoom, 2, BAND - 2);
   }
 
   up() { this.touch = null; }
+
+  /** Point a rider's line at y (after a crash), and re-anchor a held finger there so it
+   * doesn't keep steering the buddy back into the trees. */
+  aimAt(p, y) {
+    p.aim = y;
+    if (p === this.kid && this.touch) { this.touch.aim0 = y; this.touch.y0 = this.touch.yNow; }
+  }
   release() { /* the boost button needs no release */ }
 
   boostButton() { return { x: this.W - 16, y: this.H - 16, r: 12 }; }
@@ -373,6 +381,7 @@ export class SkiRace {
     if (p.done) { p.v = lerp(p.v, 0, 1 - Math.exp(-dt * 2)); p.x += p.v * dt; p.run = 0; return; }
     const g = p.gear;
     p.safe = Math.max(0, p.safe - dt);
+    p.wallT = Math.max(0, (p.wallT || 0) - dt);
     p.boostT = Math.max(0, p.boostT - dt);
     p.burst = Math.max(0, p.burst - dt);
     p.whoosh = Math.max(0, p.whoosh - dt);
@@ -386,6 +395,8 @@ export class SkiRace {
       wantHead = 0;
     } else if (p.air <= 0) {
       if (ctl.touching) wantHead = clamp(Math.atan2(ctl.aim - p.y, 28), -MAX_HEAD, MAX_HEAD);
+      // fingers off in the deep snow: the buddy turns back toward the trail by itself
+      else if (!lane && Math.abs(p.y - ch) > hh) wantHead = clamp(Math.atan2(ch - p.y, 60), -MAX_HEAD * 0.6, MAX_HEAD * 0.6);
       let turn = TURN * g.turn * (c.mech.turn || 1) * (0.6 + 0.4 * c.grip);
       if (lane?.kind === 'ice') turn *= 0.45;
       const d = wantHead - p.head;
@@ -405,7 +416,7 @@ export class SkiRace {
     if (p.whoosh > 0) vt *= 1.06;
     // off the trail: deep snow, then trees
     const off = lane ? 0 : Math.max(0, Math.abs(p.y - ch) - hh);
-    if (off > 0 && p.air <= 0) vt *= c.snow === 'slushy' ? 0.5 : 0.65;
+    if (off > 0 && p.air <= 0) vt *= c.snow === 'slushy' ? 0.7 : 0.8;
     // off the snow band (outside winter): grass, sand or mud is slower
     p.offSnow = !c.full && !lane && p.air <= 0 && off <= 0 && Math.abs(p.y - c.snowAt(p.x)) > c.snowHw;
     if (p.offSnow) vt *= 0.72;
@@ -515,9 +526,12 @@ export class SkiRace {
         p.clean = false;
         p.y = ly; p.head = 0;
       } else {
-        p.y = ly + Math.sign(p.y - ly) * s.hw;
+        const side = Math.sign(p.y - ly);
+        p.y = ly + side * s.hw;
         p.head *= -0.3;
-        this.laneBump(p, 'Bump!');
+        // a scrape along the wall slows you once, not every frame; and the line moves off it
+        if (!(p.wallT > 0)) { this.laneBump(p, 'Bump!'); p.wallT = 0.6; }
+        if (p.aim != null && Math.abs(p.aim - ly) > s.hw - 1) this.aimAt(p, ly + side * (s.hw - 2));
       }
     }
     if (p.x >= s.sx + s.len) {
@@ -539,7 +553,26 @@ export class SkiRace {
 
   land(p) {
     const s = p.lane;
-    if (s?.ramp && !p.jumpGood) this.laneBump(p, 'Oof!');
+    const c = this.c;
+    // a wobbly landing is a short crash: up again on the lane's line, then on you go
+    if (s?.ramp && !p.jumpGood) {
+      const ly = s.y(p.x);
+      p.y = clamp(p.y, ly - s.hw + 1, ly + s.hw - 1);
+      this.tumble(p, 'Oof!');
+      this.aimAt(p, ly);
+      return;
+    }
+    // landing off the trail: crash, get up at the edge of the deep snow, and head back
+    if (!s) {
+      const ch = c.center(p.x); const hh = c.halfWidth(p.x);
+      const off = Math.abs(p.y - ch) - hh;
+      if (off > 0) {
+        const side = Math.sign(p.y - ch);
+        p.y = ch + side * (hh + Math.min(off, TREE_LINE - 3));
+        this.tumble(p, 'Crash!');
+        this.aimAt(p, ch + side * (hh - 4));
+      }
+    }
     // the volcano's lava and the fjord's crevasses are only safe in the air
   }
 
@@ -550,6 +583,7 @@ export class SkiRace {
       this.tumble(p, 'Timber!');
       const ch = c.center(p.x); const hh = c.halfWidth(p.x);
       p.y = ch + Math.sign(p.y - ch) * (hh - 3); p.head = 0;
+      this.aimAt(p, p.y);
       return;
     }
     if (!p.lane && c.wallAt(p.x) && Math.abs(p.y - c.center(p.x)) > c.halfWidth(p.x) - 1) {
