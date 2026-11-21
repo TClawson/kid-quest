@@ -12,6 +12,7 @@
 import { ramp, mix, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer } from './pixelkit.js';
 import { HOME_COLORS, furnitureById } from './furniture.js';
 import { tankSpec, tankArt, tankFront, tankThumb } from './tankart.js';
+import { displayPic } from './digart.js';
 
 export const INK = '#3b2235';
 const WD = ['#4a2a36', '#7a4436', '#a8663e', '#cc8a50', '#e8b674', '#f8dca0'];
@@ -58,6 +59,8 @@ export const ROOM = {
     basket: { x: 292, y: 148 },
     tank: { x: 132, y: 133 }, // the fish tank on its cabinet, against the front wall right of the door
     music: { x: 48, y: 34 }, // the turntable and its speakers, against the back wall under the window
+    stand: { x: 152, y: 47 }, // the dino dig's skeleton stand, in front of the couch
+    pedestal: { x: 54, y: 78 }, // the dino dig's treasure pedestal, between the bed and the table
   },
 };
 const R = ROOM;
@@ -1151,6 +1154,13 @@ export function paintRoom(canvas, o) {
   const g = gearArt(o.gear);
   if (g) stand('gear', g, gat.x, gat.y, [gat.x, gat.y + 24, 38, 12]);
   stand('basket', basketArt(), at.basket.x, at.basket.y, [at.basket.x, at.basket.y + 8, 16, 10]);
+  // the dino dig's displays (once the kid has a shovel): a finished skeleton and a treasure
+  if (o.dig) {
+    const art = (c) => ({ W: c.width, H: c.height, w: c.width, h: c.height, pad: 0, blit: (put, x0, y0) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let y = 0; y < c.height; y += 1) for (let x = 0; x < c.width; x += 1) { const i = (y * c.width + x) * 4; if (d[i + 3]) put(x0 + x, y0 + y, `rgba(${d[i]},${d[i + 1]},${d[i + 2]},${(d[i + 3] / 255).toFixed(3)})`); } } });
+    const sa = at.stand; const pa = at.pedestal;
+    stand('stand', art(displayPic('stand-room', o.dig.skeleton)), sa.x, sa.y, [sa.x + 3, sa.y + 34, 54, 11]);
+    stand('pedestal', art(displayPic('pedestal', o.dig.pedestal)), pa.x, pa.y, [pa.x + 3, pa.y + 30, 18, 9]);
+  }
   // the fish tank is always there (the little one is free): the buddy looks in from behind it
   const ta = tank.at;
   stand('tank', tankArt(lay.tank?.art), ta.x, ta.y, [ta.x, ta.y + 4, tank.w, tank.h - 4]);

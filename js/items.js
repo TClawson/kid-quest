@@ -125,6 +125,7 @@ export const SPORTS = [
   { id: 'sled', name: 'Sled', icon: '🛷' },
   { id: 'bike', name: 'Bike', icon: '🚲' },
   { id: 'camera', name: 'Camera', icon: '📷' },
+  { id: 'shovel', name: 'Shovel', icon: '🪏' },
 ];
 export const TIERS = [
   { tier: 1, id: 'regular', name: '', gems: 40 },

@@ -15,6 +15,7 @@ export const BOARD_GAMES = [
   { id: 'hockey', name: 'Hockey', icon: '🏒', unit: (n) => `${n} ${n === 1 ? 'goal' : 'goals'}` },
   { id: 'football', name: 'Football', icon: '🏈', unit: (n) => `${n} ${n === 1 ? 'point' : 'points'}` },
   { id: 'fishing', name: 'Fishing', icon: '🎣', unit: (n) => `${n} ${n === 1 ? 'point' : 'points'}` },
+  { id: 'dig', name: 'Dino dig', icon: '🦴', unit: (n) => `${n} ${n === 1 ? 'point' : 'points'}` },
 ];
 
 /** The Sunday a day's week starts on (weeks run Sunday to Saturday). */
