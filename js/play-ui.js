@@ -13,6 +13,7 @@ import { openPlay } from './playground.js';
 import { recordWeekBest } from './leaderboard.js';
 import { recordCatch, catchSpecies } from './fishbook.js';
 import { recordTrick } from './bike.js';
+import { recordFind } from './finds.js';
 import { shownSeason } from './seasons.js';
 import { recordPhoto, keepPhoto, addClue, spendClues } from './album.js';
 import { critterById } from './critters.js';
@@ -27,10 +28,10 @@ import {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', train: 'camera', tricks: 'bike' };
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', sledding: 'sled', train: 'camera', tricks: 'bike' };
 // the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
-const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', train: 'camera', tricks: 'bike' };
-const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', train: 'camera', tricks: 'bike' };
+const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', sledding: 'sled', train: 'camera', tricks: 'bike' };
+const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', sledding: 'sled', train: 'camera', tricks: 'bike' };
 /** True when the kid would play with the visitor's gear: they don't own that kind. */
 const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
@@ -63,7 +64,7 @@ export function visitPlan(kid, visitors) {
  */
 function heldRod(kid) {
   const k = itemById(kid.buddy?.outfit?.sport)?.kind;
-  return k === 'rod' ? 'fishing' : k === 'camera' ? 'train' : null;
+  return k === 'rod' ? 'fishing' : k === 'sled' ? 'sledding' : k === 'camera' ? 'train' : null;
 }
 
 /** Trick jumps when the kid's buddy is holding a bike (the hill is in the game). */
@@ -107,7 +108,10 @@ export function playWith(kid, v, kind) {
     visitor: { buddy: v.buddy, name: v.name, gear, moves: moveIds(v) },
     map: kidTheme(kid),
     day: today(),
+    // the treasure hill: the season (a parent's try-out on this device too), and how many runs
+    // on this hill since the last super rare (so the first one comes within a few days)
     season: shownSeason(today()),
+    dry: kid.sledDry?.[kidTheme(kid)] || 0,
     book: kid.trickBook || {},
     // a bike bought in the last day guarantees a golden ramp on its first ride
     newBike: kind === 'tricks' && !kid.trickBook,
@@ -151,6 +155,20 @@ export function playWith(kid, v, kind) {
       kid.fishRecords = got.records;
       save();
       return got.first ? 'first' : 'record';
+    },
+    // the treasure hill: every find goes in the finds book (in the house)
+    onFind: (f) => {
+      const kid = currentKid(kid0);
+      const got = recordFind(kid.findRecords, { key: f.key, q: f.q, inches: f.inches, date: today() });
+      kid.findRecords = got.records;
+      save();
+      return got.isNew ? 'new' : got.better ? 'better' : got.bigger ? 'bigger' : null;
+    },
+    onRun: (run) => {
+      const kid = currentKid(kid0);
+      const map = kidTheme(kid);
+      kid.sledDry = { ...(kid.sledDry || {}), [map]: run.superRare ? 0 : (kid.sledDry?.[map] || 0) + 1 };
+      save();
     },
     // the photo train: the best photo of each animal goes in the critter album (the photo itself
     // stays on this device; the game fills in shot.pic when it draws next)

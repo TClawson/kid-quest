@@ -804,6 +804,18 @@ const GEAR_ART = {
     { S: SH('#1c7ed6', '#4dabf7', '#1864ab'), W: '#ffd43b' },
     { S: SH('#fcc419', '#ffe066', '#e67700'), W: '#ffffff' },
   ]],
+  // a sled on its rope, waiting by the buddy's feet: wooden, red, then a blue racer on runners
+  sled: [14, 18, [
+    '........KK',
+    'KKKKKKKKSK',
+    'KSSSSSSSSK',
+    'KTTTTTTTK.',
+    '.KR...KR..',
+  ], [
+    { S: '#c98a4b', T: '#8b5a2b', R: '#5c3a1e' },
+    { S: '#e03131', T: '#a61e1e', R: '#a61e1e' },
+    { S: '#1c7ed6', T: '#ffd43b', R: '#adb5bd' },
+  ]],
 };
 const SHOE = ['KSSSK.', 'KSWSSK', 'KWWWWK'];
 const WING = ['W.', 'WW'];

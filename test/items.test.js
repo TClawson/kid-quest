@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel } from '../js/items.js';
+import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel, SPORTS } from '../js/items.js';
 
 test('every item has a known slot and unique id', () => {
   const slots = new Set(SLOTS.map((s) => s.id));
@@ -189,6 +189,7 @@ test('sports gear: every kind in 3 versions plus the fishing boat, bought with g
   // every kind of gear (more come with new games) in 3 versions, plus the boat
   assert.equal(gear.length, ITEMS.filter((i) => i.slot === 'sport' && i.tier === 3).length * 3 + 1);
   assert.ok(gear.length >= 16);
+  assert.ok(SPORTS.some((k) => k.id === 'sled'), 'the sled');
   const boat = itemById('sport-boat');
   assert.equal(boat.gems, 100);
   assert.ok(boat.noHold, 'the boat stays at the lake');

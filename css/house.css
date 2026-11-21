@@ -196,6 +196,18 @@ button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink)
 .tb-page { text-align: center; }
 .tb-page .tb-big { width: 148px; image-rendering: pixelated; image-rendering: crisp-edges; }
 .tb-page p { text-align: left; }
+/* the book in the house: fish and treasure hill finds (findsbook-ui.js) */
+.book-tabs { display: flex; gap: 6px; margin: 0 0 8px; }
+.book-tabs .btn { flex: 1; }
+.fb-fish.find img { height: 40px; width: 40px; }
+.fb-fish.find.super { border-color: #e64980; }
+.fb-fish.find.super::after { content: '💖 Super'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #c2255c; }
+.fb-fish.find.rare { border-color: #f0c040; }
+.fb-fish.find.rare::after { content: '⭐ Rare'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #a8701e; }
+.fb-grid.mini .fb-fish.find.super::after { content: '💖'; top: 1px; right: 2px; }
+.fb-grid.mini .fb-fish.find.rare::after { content: '⭐'; top: 1px; right: 2px; }
+.fd-stars { color: #e67700; letter-spacing: -1px; }
+.findpage .fp-head img { image-rendering: pixelated; }
 /* the critter album (js/albumview.js): fish book cards with season icons and a photo quality */
 .ca-grid .ca-card { grid-template-rows: 56px auto auto auto; }
 .ca-grid .ca-card img { height: 56px; }
