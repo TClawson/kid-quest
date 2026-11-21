@@ -36,9 +36,9 @@ export const SITE_LOOKS = {
     bits: ['#ffffff', '#ffa8a8', '#ffd8a8', '#e8590c'], soft: true, sea: ['#2b8fcf', '#4dabf7', '#a5d8ff'],
   },
   'bg-ocean': {
-    ground: ['#b8ae86', '#cdc298', '#ddd3ac'], lip: ['#7a5ca8', '#9a78c8'], cliff: ['#a061b8', '#8a4ea2', '#c07ad4', '#784490', '#e07898', '#6a3a80'],
-    dirt: ['#8e8460', '#a89c74'], layers: ['#a89c74', '#968a64', '#7e7458', '#6a6250', '#585446'], rock: '#8a8e9e', creek: ['#bfb48c', '#aaa078', '#948a66'],
-    bits: ['#ff8787', '#ffffff', '#ffd43b', '#e599f7'], soft: true, tint: 'rgba(40,120,200,0.18)', under: true,
+    ground: ['#256a7c', '#2f7f8f', '#3b97a3'], lip: ['#1e3352', '#2c4a70'], cliff: ['#3a5a80', '#274060', '#4a6e96', '#203654', '#ff8787', '#1a2c46'],
+    dirt: ['#1e5464', '#2f7484'], layers: ['#c9b98a', '#a89c74', '#7e7458', '#6a6250', '#585446'], rock: '#ff8787', creek: ['#bfb48c', '#aaa078', '#948a66'],
+    bits: ['#ff8787', '#ffffff', '#ffa94d', '#e599f7'], soft: true, tint: 'rgba(28,93,153,0.25)', under: true, coral: ['#ff8787', '#ffa94d', '#e599f7'],
   },
   'bg-volcano': {
     ground: ['#4a3e3c', '#5a4c48', '#6e605a'], lip: ['#3a8a3a', '#56a84a'], cliff: ['#3a3034', '#2a2226', '#4a3e42', '#c2410c', '#36292c', '#221a1e'],
@@ -46,7 +46,7 @@ export const SITE_LOOKS = {
     bits: ['#868e96', '#ff922b', '#adb5bd', '#2a2226'],
   },
   'bg-rainforest': {
-    ground: ['#2f6a30', '#3a7d38', '#4c9446'], lip: ['#2f6a30', '#4c9446'], cliff: ['#6a7a50', '#5a6a42', '#7e8e5e', '#4e5a38', '#3a7d38', '#40482e'],
+    ground: ['#175530', '#1f6b3a', '#2b8a3e'], lip: ['#1f6b3a', '#2b8a3e'], ferns: true, cliff: ['#6a7a50', '#5a6a42', '#7e8e5e', '#4e5a38', '#3a7d38', '#40482e'],
     dirt: ['#4a2e1a', '#6e4428'], layers: ['#6e4428', '#7a3e22', '#8a4a26', '#6a3a2a', '#523026'], rock: '#7e8478', creek: ['#4aa3c9', '#3a8ab0', '#8ad0e8'],
     bits: ['#ff6b6b', '#ffd43b', '#da77f2', '#1e4a20'],
   },
@@ -103,11 +103,12 @@ export function paintSite(look, L, W, H, Z, seed = 1) {
     const lipY = foot - faceH;
     for (let y = 0; y < foot && y < FH; y += 1) {
       if (y < lipY) {
-        // the plateau on top
+        // the plateau on top (space: the black sky, with stars)
         const n = vnoise(x, y, 10, seed + 3);
-        px(x, y, n < 0.55 ? look.lip[0] : look.lip[1]);
+        if (look.sky) px(x, y, h2(x, y, seed) > 0.996 ? '#ffffff' : h2(x, y, seed + 1) > 0.996 ? '#a5d8ff' : '#0b0b1a');
+        else px(x, y, n < 0.55 ? look.lip[0] : look.lip[1]);
       } else if (y < lipY + Z) {
-        px(x, y, mix(look.lip[1], '#ffffff', 0.25));
+        px(x, y, look.sky ? look.cliff[2] : mix(look.lip[1], '#ffffff', 0.25));
       } else {
         // the face: wavy horizontal rock layers (the layers bones come out of)
         const depth = (y - lipY) / faceH;
@@ -128,6 +129,24 @@ export function paintSite(look, L, W, H, Z, seed = 1) {
     // a soft shadow on the ground at the foot of the cliff
     for (let y = foot; y < foot + 3 * Z; y += 1) if (bayer(x, y) < 0.6 - (y - foot) / (6 * Z)) px(x, y, mix(g[0], INK, 0.35));
   }
+  if (look.sky) {
+    // the Earth, low in the black sky
+    const ex = Math.round(FW * 0.7); const ey = Math.round(7 * Z); const er = 5 * Z;
+    for (let y = -er; y <= er; y += 1) for (let x = -er; x <= er; x += 1) {
+      const e = (x * x + y * y) / (er * er); if (e > 1) continue;
+      const land = vnoise(x + ex, y, 3 * Z, seed + 21) > 0.58; const night = x + y * 0.3 > er * 0.35;
+      let c = land ? '#51cf66' : '#339af0'; if (vnoise(x + ex, y + 40, 2 * Z, seed + 22) > 0.72) c = '#ffffff';
+      px(ex + x, ey + y, night ? mix(c, '#0b0b1a', 0.55) : c);
+    }
+  }
+  if (look.ferns) {
+    // ferns on the forest floor: little fans of fronds
+    for (let k = 0; k < (W * H) / 900; k += 1) {
+      const X = Math.round(h2(k, 31, seed) * W) * Z; const Y = Math.round(h2(k, 32, seed) * H) * Z;
+      if (Y < (L.top(X / Z) + 6) * Z) continue;
+      for (let q = -3; q <= 3; q += 1) for (let t = 0; t < 4 - Math.abs(q) * 0.6; t += 1) px(X + q * Z + Math.round(q * t * 0.3 * Z), Y - t * Z, t % 2 ? '#40c057' : '#2f9e44', Z, Z);
+    }
+  }
   // the sea along the bottom (the beach)
   if (L.bottom && look.sea) {
     for (let x = 0; x < FW; x += 1) {
@@ -147,8 +166,8 @@ export function paintSite(look, L, W, H, Z, seed = 1) {
   // under the sea: everything a little blue, with light ripples
   if (look.tint) {
     for (let y = 0; y < FH; y += 1) for (let x = 0; x < FW; x += 1) {
-      const rip = vnoise(x + y * 0.4, y, 16, seed + 11);
-      px(x, y, rip > 0.72 ? 'rgba(200,240,255,0.22)' : look.tint);
+      const rip = Math.abs(vnoise(x + y * 0.4, y, 18, seed + 11) - 0.5);
+      px(x, y, rip < 0.025 ? 'rgba(155,231,255,0.28)' : look.tint);
     }
   }
   const c = canvas(FW, FH); put(c.getContext('2d'));
@@ -190,12 +209,15 @@ function paintDecal(px, look, L, d, Z, seed, W) {
   const g = look.ground;
   if (d.type === 'scree') {
     // a fan of loose stones fallen from the cliff, thick near the foot
-    for (let k = 0; k < 150; k += 1) {
-      const a = 0.15 + h2(k, 1, d.x) * (Math.PI - 0.3); const rr = h2(k, 2, d.x) ** 0.7;
-      const x = d.x + Math.cos(a) * rr * d.w * 0.55; const y = L.top(d.x) + 1 + Math.sin(a) * rr * d.h;
+    const lum = (h) => parseInt(h.slice(1, 3), 16) + parseInt(h.slice(3, 5), 16) + parseInt(h.slice(5, 7), 16);
+    const [c1, c2] = [...look.cliff].sort((p, q) => lum(q) - lum(p));
+    const top = L.top(d.x);
+    for (let k = 0; k < 40; k += 1) {
+      const rr = h2(k, 2, d.x) ** 0.8; // 0 at the cliff, 1 downhill
+      const x = d.x + (h2(k, 1, d.x) - 0.5) * (8 + rr * d.w); const y = top + 1 + rr * d.h;
       const X = Math.round(x * Z); const Y = Math.round(y * Z);
-      const c = look.cliff[[0, 2, 4][k % 3]]; const w = 2 + (k % 3);
-      px(X - 1, Y - 2, INK, w + 2, 4); px(X, Y - 1, mix(c, INK, 0.3), w, 2); px(X, Y - 1, c, w, 1); px(X, Y - 1, mix(c, '#ffffff', 0.35), 1, 1);
+      const c = k % 2 ? c1 : c2; const w = Math.round((3 + rr * 2) * Z); const hh = Math.round((2 + rr) * Z);
+      px(X, Y + hh - Z, mix(c, INK, 0.45), w, Z); px(X, Y, c, w, hh - Z); px(X, Y, mix(c, '#ffffff', 0.35), Math.max(1, w - Z), Z);
     }
   } else if (d.type === 'path') {
     for (let x = 0; x < W * Z; x += 1) {
@@ -250,8 +272,7 @@ function paintDecal(px, look, L, d, Z, seed, W) {
     for (let y = -ry; y <= ry; y += 1) for (let x = -rx; x <= rx; x += 1) {
       const e = (x / rx) ** 2 + (y / ry) ** 2 + (vnoise(x, y, 6, seed) - 0.5) * 0.5; if (e > 1) continue;
       const X = Math.round(d.x * Z + x); const Y = Math.round(d.y * Z + y);
-      if (e > 0.85 && bayer(X, Y) > 0.5) continue;
-      px(X, Y, vnoise(X, Y, 4, seed + 2) > 0.55 ? '#7a8a5a' : '#6a6050');
+      px(X, Y, e > 0.82 ? '#4a3d30' : vnoise(X, Y, 4, seed + 2) > 0.7 ? '#7a6a52' : '#6b5a45');
     }
   } else if (d.type === 'hot') {
     // hot ground: dark crusted rock with glowing cracks
@@ -265,10 +286,9 @@ function paintDecal(px, look, L, d, Z, seed, W) {
   } else if (d.type === 'flag') {
     // the castle path's one odd flagstone (a cellar under it)
     const X = Math.round((d.x - 6) * Z); const Y = Math.round((d.y - 4) * Z);
-    px(X - Z, Y - Z, INK, 14 * Z, 10 * Z);
-    px(X, Y, '#b8a07a', 12 * Z, 8 * Z); px(X, Y, '#d8c49a', 12 * Z, Z); px(X, Y, '#d8c49a', Z, 8 * Z);
-    px(X + 10 * Z, Y + 2 * Z, '#8a7450', 2 * Z, 6 * Z);
-    px(X + 4 * Z, Y + 3 * Z, '#5c4630', 4 * Z, Z); px(X + 5 * Z, Y + 2 * Z, '#5c4630', 2 * Z, 3 * Z); // a little iron ring
+    px(X - Z, Y - Z, '#6b6b7a', 14 * Z, 10 * Z);
+    px(X, Y, '#9a9aa8', 12 * Z, 8 * Z); px(X, Y, '#b4b4c0', 12 * Z, Z);
+    for (let q = 0; q < 6; q += 1) px(X + (3 + q) * Z, Y + (2 + (q % 3 === 1 ? 1 : q > 3 ? 2 : 0)) * Z, '#6b6b7a', Z, Z); // a crack
   } else if (d.type === 'bit') {
     const X = Math.round(d.x * Z); const Y = Math.round(d.y * Z);
     const c = look.bits[d.v];
@@ -460,24 +480,24 @@ export function drawHole(ctx, look, x, y, h, t, Z) {
     ctx.fillRect(x - 3, y, 6, f); ctx.fillRect(x, y - 2, f, 4); ctx.fillRect(x - 2, y - 1.5, f, f); ctx.fillRect(x + 2, y + 1, f, f);
     return;
   }
-  const rx = 3.5 + Math.min(d, 3) * 0.9; const ry = 2.2 + Math.min(d, 3) * 0.55;
-  // the dirt pile thrown to one side, with flecks of what's below
-  const pile = look.dirt[1]; const px0 = Math.round(x + rx - 1); const py0 = Math.round(y + ry - 3);
-  ctx.fillStyle = INK; ctx.fillRect(px0 - f, py0 - f, 6 + 2 * f, 3 + 2 * f);
-  ctx.fillStyle = mix(pile, INK, 0.25); ctx.fillRect(px0, py0 + 1, 6, 2);
-  ctx.fillStyle = pile; ctx.fillRect(px0, py0, 5, 1.5);
-  ctx.fillStyle = mix(pile, '#ffffff', 0.3); ctx.fillRect(px0 + 1, py0, 2, f);
+  const rx = 5 + Math.min(d, 3) * 0.7; const ry = 3 + Math.min(d, 3) * 0.5;
+  // the dirt pile thrown to one side: a rounded mound, with flecks of what's below
+  const pile = look.dirt[1]; const px0 = Math.round(x + rx - 2); const py0 = Math.round(y + ry - 4);
+  const PAL = { L: mix(pile, '#ffffff', 0.3), P: pile, p: mix(pile, INK, 0.3) };
+  MOUND.forEach((r, j) => { for (let i = 0; i < r.length; i += 1) if (r[i] !== '.') { ctx.fillStyle = PAL[r[i]]; ctx.fillRect(px0 + i, py0 + j, 1, 1); } });
   if (h.flecks) {
     const tw = Math.floor(t * 4) % 2;
-    const col = h.flecks === 'bone' ? '#ffffff' : h.flecks === 'gem' ? (tw ? '#ffffff' : '#a5d8ff') : h.flecks === 'made' ? (tw ? '#d9480f' : '#2f9e44') : h.flecks;
-    ctx.fillStyle = col;
-    ctx.fillRect(px0 + 1, py0 + 1, f * 2, f * 2); ctx.fillRect(px0 + 3.5, py0 + 0.5, f * 2, f * 2); ctx.fillRect(px0 + 2.5, py0 + 2, f * 2, f);
+    const two = h.flecks === 'made' ? ['#d9480f', '#2f9e44'] : h.flecks === 'gem' ? (tw ? ['#ffffff', '#74c0fc'] : ['#74c0fc', '#ffffff']) : h.flecks === 'bone' ? ['#ffffff', '#ffffff'] : [h.flecks, h.flecks];
+    [[2, 1, 2], [5, 2, 1], [3, 3, 1], [6, 3, 1]].forEach(([i, j, w], q) => { ctx.fillStyle = two[q % 2]; ctx.fillRect(px0 + i, py0 + j, w, 1); });
+    if (h.flecks === 'gem' && (t % 0.8) < 0.25) { ctx.fillStyle = '#ffffff'; ctx.fillRect(px0 + 4, py0 - 2, 1, 3); ctx.fillRect(px0 + 3, py0 - 1, 3, 1); }
+  } else if (h.done) {
+    ctx.fillStyle = mix(pile, INK, 0.5); ctx.fillRect(px0 + 3, py0 + 2, 1, 1); ctx.fillRect(px0 + 6, py0 + 3, 1, 1);
   }
   // the rim, then the hole: the color of the layer it reached, its far half in shadow
-  for (let yy = -ry - f; yy <= ry + f; yy += f) {
-    const w = (rx + f) * Math.sqrt(Math.max(0, 1 - (yy / (ry + f)) ** 2));
+  for (let yy = -ry - 1; yy <= ry + 1; yy += f) {
+    const w = (rx + 1) * Math.sqrt(Math.max(0, 1 - (yy / (ry + 1)) ** 2));
     if (w <= 0) continue;
-    ctx.fillStyle = yy > 0 ? mix(look.dirt[1], '#ffffff', 0.2) : INK; ctx.fillRect(x - w, y + yy, w * 2, f);
+    ctx.fillStyle = yy > ry * 0.6 ? mix(look.dirt[1], '#ffffff', 0.3) : yy > 0 ? look.dirt[1] : mix(look.dirt[0], INK, 0.4); ctx.fillRect(x - w, y + yy, w * 2, f);
   }
   for (let yy = -ry; yy <= ry; yy += f) {
     const w = rx * Math.sqrt(Math.max(0, 1 - (yy / ry) ** 2));
@@ -489,11 +509,17 @@ export function drawHole(ctx, look, x, y, h, t, Z) {
   if (h.glow && !h.found) { ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 8); ctx.fillStyle = '#fff3bf'; ctx.fillRect(x - rx * 0.5, y - ry * 0.3, rx, ry * 0.8); ctx.globalAlpha = 1; }
   // a hole that gave a find gets a tiny flag in its rarity color
   if (h.found && h.flag) {
-    ctx.fillStyle = '#5c3a1e'; ctx.fillRect(x - rx - 1, y - 8, f * 2, 9);
-    ctx.fillStyle = INK; ctx.fillRect(x - rx - 1, y - 8 - f, 5 + f, 3 + 2 * f);
-    ctx.fillStyle = h.flag; ctx.fillRect(x - rx - 1 + f, y - 8, 4, 3);
+    const fx = Math.round(x - rx - 1); const fy = Math.round(y - 11);
+    ctx.fillStyle = INK; ctx.fillRect(fx - f, fy - f, 1 + 2 * f, 12 + f); ctx.fillRect(fx + 1, fy - f, 6 + f, 4 + 2 * f);
+    ctx.fillStyle = '#c9a97a'; ctx.fillRect(fx, fy, 1, 12);
+    ctx.fillStyle = h.flag; ctx.fillRect(fx + 1, fy, 6, 4);
+    ctx.fillStyle = INK; ctx.fillRect(fx + 5, fy + 1.5, 2, 1); // the notch
+    ctx.fillStyle = mix(h.flag, '#ffffff', 0.4); ctx.fillRect(fx + 1, fy, 5, f * 2);
+    if (h.flag === '#ffd43b') { ctx.fillStyle = '#ffffff'; ctx.fillRect(fx + 2, fy + 1, 1, 1); }
   }
 }
+
+const MOUND = ['...LLL...', '.LPPPPP..', 'PPPPPPPP.', 'pPPPPPPPp', '.ppppppp.'];
 
 // ---------- each map's twist, drawn over the ground ----------
 export function drawTwistDecals(ctx, g, Z, layer = 'ground') {
@@ -651,15 +677,15 @@ function bonePic(info) {
 // B bone, b shade, d deep shade, K holes (eye, nostril, window), W teeth.
 const SKULLS = {
   trex: ['.....BBBBBBB........', '...BBBBBBBBBBBBB....', '..BBKKBBBBBBBBBBBB..', '.BBBKKBBKKKBBBBBBKB.', 'BBBBBBBBKKKBBBBBBBBB', 'BbBBBBBBBBBBBBBBBBBb', '.bbddddddddddddddddb', '..WWbWWbWWbWWbWWbWW.', '..bBBBBBBBBBBBBBBBb.', '...bbbbbbbbbbbbbbb..'],
-  trike: ['BBB.................', 'BBBB.........B.B....', 'BbBBB.......BB.B....', 'BbbBBB.....BB.BB....', '.BbbBBBBBBBBBBB...B.', '..BbBBBKKBBBBBBBBBB.', '..BbBBBKKBBBBBBBBBBB', '...bBBBBBBBBBBBBBBBb', '....bbbBBBBBBbbbbbd.', '.......bbbbbbbb.....'],
-  stego: ['....BBBBB.....', '..BBBBBBBBBB..', '.BBKKBBBBBBBB.', 'BBBKKBBBBBBBBB', 'BbbbbBBBBBBBBd', '.bbbbbbbbbbbd.'],
-  raptor: ['.....BBBBBBBB.....', '..BBBBBBBBBBBBBBB.', '.BBKKBBKKBBBBBBBBB', 'BBBKKBBBBBBBBBBBB.', 'BbdddddddddddddB..', '.WbWbWbWbWbWbWb...', '..bbbbbbbbbbbbb...'],
-  spino: ['...BBBBBB.............', '.BBBBBBBBBBBBBBB......', 'BBKKBBBBBBBBBBBBBBBBB.', 'BBKKBBBBKBBBBBBBBBBBBB', 'BbbddddddddddddddddBBB', '.WbWbWbWbWbWbWbWbWbWb.', '..bbbbbbbbbbbbbbbbbbb.'],
-  pachy: ['B..B..............', 'BB.BB.............', 'BBBBBBBBBB........', '.BBBBBBBBBBBBB....', '.BBBKKBBBBbbbBBB..', '..BBKKBBBbbbbbBBB.', '..bBBBBBBBBBBBBBBd', '...bbbbbbbbbbbbdd.'],
-  mosa: ['....BBBBBBBBBB..........', '..BBBBBBBBBBBBBBBBBB....', '.BBKKBBBBBBBBBBBBBBBBBB.', 'BBBKKBBBBBBBBBBBBBBBBBBB', 'BbdddddddddddddddddddddB', '.WWbWWbWWbWWbWWbWWbWWbW.', '..bbbbbbbbbbbbbbbbbbbbb.'],
-  psitta: ['..BBBBBB....', '.BBBBBBBBB..', 'BBKKBBBBBBB.', 'BBKKBBBBBBBB', '.BBBBBBbBBBB', 'B.bbbbbbbBBd', '.......bBBd.'],
-  compy: ['...BBBBB....', '.BBBBBBBBBB.', 'BBKKBBKBBBBB', 'BbdddddddBB.', '.WbWbWbWb...', '..bbbbbbb...'],
-  edmonto: ['..BBBBB...........', '.BBBBBBBBBB.......', 'BBKKBBBBBBBBBBB...', 'BBKKBBBBBBBBBBBBBB', 'BbbbBBBBBBBBBBBBBB', '.bbbbbbbbbbbbbbbd.'],
+  trike: ['BBB.........BB......', 'BBBB.......BBB......', 'BbBBB.....BBB...B...', 'BbbBBB...BBB...BB...', '.BbbBBBBBBBBBBBBB...', '..BbBBBKKBBBBBBBBBB.', '..BbBBBKKBBBBBBBBBBB', '...bBBBBBBBBBBBBBBBb', '....bbbBBBBBBbbbbbd.', '.......bbbbbbbb.....'],
+  stego: ['....BBBBBB......', '.BBBBBBBBBBBB...', 'BBBKKBBBBBBBBBB.', 'BBBKKBBBBBKBBBBB', 'BbbbbbWbWbWbbBBd', '.bbbbbbbbbbb.bd.'],
+  raptor: ['..BBBB.......', '.BBBBBBB..BB.', 'BBKKBBBBBBBBB', 'BBKKBBKBBBBBB', 'BbWbWbWbWbWbB', '.bbbbbbbbbbb.'],
+  spino: ['....BB................', '..BBBBBBB.........BB..', '.BKKBBBBBBBBBBBBB.BBBB', 'BBKKBBBBBBBBBBBBBBBBBB', 'BbWbWbWbWbWbWbWbW.WbWb', '.bbbbbbbbbbbbbbbbbbbb.'],
+  pachy: ['.B...B..............', '.BB.BB..............', 'BBBBBBB.....bBBb....', 'BBKKBBBB...BBBBBB...', 'BBKKBBBBBBBBbBbBBB..', 'BBBBBBBBKKBBBBBBBBB.', '.BbBBBBBKKBBBBBKBBBB', '..bbBBBBBBBBBBBBBBBd', '....bbbBBBBBbbbb.Bd.', '.......bbbbbb.......'],
+  mosa: ['..BBBBBB............', '.BBBBBBBBBBBB.......', 'BBKKBBBBBBBBBBBBB...', 'BBKKBBBBBBBBBBBBBBBB', 'BbWbWbWbWbWbWbWbWb..', '....................', '.bbbbbbbbbbbbbbbb...'],
+  psitta: ['..BBBBBBB....', '.BBBBBBBBBB..', 'BBBBKKBBBBBB.', 'BBBBKKBBKBBBB', 'BBBBBBBBBBBBB', '.BBbBBBBBbBBd', 'BBbbbbbbb.bBd', 'Bb.bbbbb...bd'],
+  compy: ['.BBBBB...', 'BKKKBBBB.', 'BKKKBBBBB', 'BKKKBBBBB', 'bWbWbWbW.', '.bbbbbb..'],
+  edmonto: ['...BBBBBB...........', '.BBBBBBBBBBBB.......', 'BBBKKBBBBBBBBBBB....', 'BBBKKBBBKKKKBBBBBBB.', 'BBBBBBBBBKKKBBBBBBBB', 'BbbWWWWWbbBBBBBBBBBB', '.bbbbbbbbbb...bBBBBd', '..bbbbbbb.......bdd.'],
 };
 
 function skullPic(dino) {
@@ -674,24 +700,24 @@ function skullPic(dino) {
 
 // Treasures by shape: a little grid; letters A (main), a (shade), L (light), D (dark)
 const T_SHAPES = {
-  crystal: ['...L...', '..LAa..', '..LAa..', '.LAAAa.', '.LAAAa.', 'LAAAAAa', '.DDDDD.'],
+  crystal: ['....L.....', '.L..LA....', '.LA.LAa.L.', '.LAaLAa.La', 'LAAaLAAaLa', 'LAAaLAAaAa', '.DDDDDDDD.'],
   gem: ['.LLLLL.', 'LAAAAAa', 'LAAAAaa', '.AAAaa.', '..Aaa..', '...a...'],
-  coin: ['..LLL..', '.LAAAa.', 'LAADAAa', 'LADDDAa', 'LAADAAa', '.LAAAa.', '..aaa..'],
+  coin: ['..LLLLL..', '.LAAAAAa.', 'LAADDDAAa', 'LAAAAAAAa', '.aAAAAAa.', '..aaaaa..'],
   ring: ['..LAL..', '..AaA..', '.DD.DD.', 'D.....D', 'D.....D', '.D...D.', '..DDD..'],
   arrow: ['...L...', '..LAa..', '..LAa..', '.LAAAa.', '.LAAAa.', 'LAAAAAa', 'a.AAa.a', '...a...'],
-  egg: ['..LLL..', '.LAAAa.', 'LAAaAAa', 'LAAAAAa', 'LAaAAAa', '.AAAAa.', '..aaa..'],
-  poop: ['...L...', '..LAa..', '.LAAAa.', '..aaa..', '.LAAAAa', 'LAAAAAAa', '.aaaaaa.'],
+  egg: ['...L...', '..LAa..', '.LAAAa.', '.LADAa.', 'LAAAAAa', 'LADAAAa', 'LAAADAa', '.aAAAa.', '..aaa..'],
+  poop: ['....L....', '...LAa...', '..LAAAa..', '...aaa...', '.LAAAAAa.', '.aaaaaaa.', 'LAAAAAAAa', '.aaaaaaa.'],
   trilo: ['..LAL..', '.LAAAa.', 'LADADAa', '.LAAAa.', 'LADADAa', '.LAAAa.', '..AaA..', '...a...'],
   wood: ['.LLLLLLL.', 'LAAaAAaAa', 'LADDaDDAa', 'LAAaAAaAa', '.aaaaaaa.'],
-  nugget: ['..LL...', '.LAAa..', 'LAAAAa.', 'LAAAAAa', '.AAaAa.', '..aa...'],
-  bell: ['..LA...', '.LAAa..', '.LAAa..', 'LAAAAa.', 'LAAAAAa', 'aaaaaaa', '...D...'],
+  nugget: ['.LL......', 'LAAa.LL..', 'LAAALAAa.', '.LAAAAAAa', 'LAAaAAaa.', '.aa.aaa..'],
+  bell: ['...LA....', '..LAAa...', '..LAAa...', '.LAAAAa..', '.LAAAAa..', 'LAAAAAAa.', 'aaaaaaaaa', '....D....'],
   shell: ['...L...', '..LAa..', '.LADAa.', 'LADADAa', 'LADADAa', '.aaaaa.'],
   claw: ['LL.....', 'LAa....', '.LAa...', '.LAAa..', '..LAAa.', '...aAAa', '....aaa'],
   tooth: ['LLLLL', 'LAAAa', '.LAa.', '.LAa.', '..a..'],
   statue: ['..LA...', '.LAAa..', '..Aa...', '.LAAAa.', '.LAAAa.', '..A.a..', '.aaaaa.'],
-  orb: ['..LLL..', '.LLAAa.', 'LLAAAAa', 'LAAAAAa', 'LAAAAaa', '.AAAaa.', '..aaa..'],
+  orb: ['..LLLL...', '.LLLAAa..', 'LLLAAAAa.', 'DDDDDDDDD', 'LAAAAAAaa', '.AAAAAaa.', '..aaaa...'],
   star: ['...L...', '...A...', '.LLAAa.', 'LAAAAAa', '.LAAAa.', '.La.Aa.', 'a.....a'],
-  rock: ['..LLL..', '.LAADa.', 'LADAAAa', 'LAAADAa', '.AaAAa.', '..aaa..'],
+  rock: ['..DLLD...', '.DAAADa..', 'DAaAAAAD.', 'DAAAaAAaD', '.DAAAAaD.', '..DDDDD..'],
   bone: ['LL...LL', 'LAAAAAa', '.aaaaa.', 'LL...La', 'aa...aa'],
 };
 
@@ -751,12 +777,12 @@ export function skeletonPic(dinoId, bones = {}, all = false) {
   const b = new Buf(Wc, Hc, 0);
   const ox = Math.round((Wc - 66 * k) / 2); const oy = Math.round(Hc - 3 - 38 * k);
   const T = ([a, c]) => [ox + a * k, oy + c * k];
-  const ON = ['#f4ead0', '#d9c49a']; const OFF = ['#4a5a72', '#3e4c62'];
+  const ON = ['#f4ead0', '#d9c49a']; const OFF = ['#dfe5ec', '#c8d0da']; const FAR = ['#c9a97a', '#b0905e'];
   // a bone: a line of the given thickness, light on its top side
-  const bone = (A, B, on, th = 2, reg = 'x') => {
+  const bone = (A, B, on, th = 2, far = false) => {
     const [x0, y0] = T(A); const [x1, y1] = T(B);
     const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5));
-    const col = on ? ON : OFF;
+    const col = on ? (far ? FAR : ON) : OFF;
     for (let i = 0; i <= n; i += 1) {
       const px = Math.round(x0 + ((x1 - x0) * i) / n); const py = Math.round(y0 + ((y1 - y0) * i) / n);
       for (let t = 0; t < th; t += 1) b.set(px, py + t, t === 0 ? col[0] : col[1], on ? 'on' : 'off');
@@ -765,9 +791,19 @@ export function skeletonPic(dinoId, bones = {}, all = false) {
   const knob = (A, on) => { const [px, py] = T(A); b.rect(Math.round(px) - 1, Math.round(py) - 1, 3, 3, on ? ON[0] : OFF[0], on ? 'on' : 'off'); };
   const S = P.spine;
   const region = (i) => (i < P.hip ? 'tail' : i >= P.sh ? 'neck' : 'back');
-  const th = k >= 1.1 ? 2 : 1;
+  const th = 2;
   // the sail and the plates stand behind
-  if (dinoId === 'spino') for (let i = P.hip - 1; i <= P.sh; i += 1) { const [a, c] = S[i]; bone([a, c], [a, c - 12 + Math.abs(i - 3.5) * 2], lit.has('sail'), 1); }
+  if (dinoId === 'spino') {
+    const on = lit.has('sail'); const a0 = S[P.hip - 1][0]; const a1 = S[P.sh][0]; const tops = [];
+    for (let q = 0; q < 10; q += 1) {
+      const a = a0 + ((a1 - a0) * q) / 9; const c = 17; const hh = 4 + 10 * Math.sin((Math.PI * (q + 0.5)) / 10);
+      const [px0, py0] = T([a, c]); const [, pyT] = T([a, c - hh]);
+      for (let py = Math.round(pyT); py < py0; py += 1) for (let w = 0; w < ((a1 - a0) / 9) * k; w += 1) b.set(Math.round(px0 + w), py, on ? '#e8dcc0' : '#edf1f5', 'fill');
+      tops.push([a, c - hh]);
+      bone([a, c], [a, c - hh], on, 1);
+    }
+    for (let q = 0; q < tops.length - 1; q += 1) bone(tops[q], tops[q + 1], on, 1);
+  }
   if (dinoId === 'stego') for (let i = 1; i < S.length - 2; i += 1) {
     const [a, c] = S[i]; const on = lit.has('plates'); const hh = 7 - Math.abs(i - 3) * 1.2;
     for (let q = 0; q < hh * k; q += 1) { const w = Math.round(((hh * k - q) / 2.6)); for (let x = -w; x <= w; x += 1) { const [px, py] = T([a, c - 1.5]); b.set(Math.round(px + x), Math.round(py - q), on ? (x < 0 ? ON[1] : ON[0]) : OFF[x < 0 ? 1 : 0], on ? 'on' : 'off'); } }
@@ -775,7 +811,7 @@ export function skeletonPic(dinoId, bones = {}, all = false) {
   // the backbone, with a knob for each vertebra group
   for (let i = 0; i < S.length - 1; i += 1) bone(S[i], S[i + 1], lit.has(region(i)), th);
   for (let i = 1; i < S.length - 1; i += 1) { const [px, py] = T(S[i]); b.set(Math.round(px), Math.round(py) - 1, lit.has(region(Math.min(i, S.length - 2))) ? ON[0] : OFF[0], lit.has(region(Math.min(i, S.length - 2))) ? 'on' : 'off'); }
-  if (dinoId === 'stego') { const [a, c] = S[1]; for (const [dx, dy] of [[-3, -4], [-1, -5], [1, -4], [-4, -2]]) bone([a, c], [a + dx, c + dy], lit.has('spikes'), 1); }
+  if (dinoId === 'stego') { const [a, c] = S[1]; for (const [dx, dy] of [[-4, -5], [-1, -6], [1, -6], [4, -5]]) bone([a + (dx > 0 ? 1 : -1), c], [a + dx, c + dy], lit.has('spikes'), 1); }
   // ribs hanging from the back
   const [r0, r1, rl] = P.ribs;
   for (let i = r0; i < r1; i += 1) for (const f of [0, 0.34, 0.67]) {
@@ -784,13 +820,27 @@ export function skeletonPic(dinoId, bones = {}, all = false) {
     bone([a, c + 1], [a - 1.2, c + 1 + len], lit.has('ribs'), 1);
   }
   // legs (the far one a step behind), and arms
-  for (const L of P.legs) for (const back of [true, false]) {
-    const on = lit.has('leg'); const dx = back ? -3 : 0;
-    for (let i = 0; i < L.length - 1; i += 1) bone([L[i][0] + dx, L[i][1]], [L[i + 1][0] + dx, L[i + 1][1]], on, i < 2 ? th : 1);
-    knob([L[0][0] + dx, L[0][1]], on);
-    if (dinoId === 'raptor' && !back) { const t = L[L.length - 2]; bone([t[0] + 0.5, t[1] + 1], [t[0] + 2.5, t[1] - 1.5], lit.has('claw'), 1); }
+  const paddle = (A, dx, on, far) => {
+    // a paddle fin: an 8 x 4 lozenge sloping back from the shoulder or hip
+    const [a, c] = A;
+    for (let q = 0; q < 8; q += 1) { const w = q < 4 ? q * 0.5 + 0.5 : (8 - q) * 0.5; bone([a + dx - q * 0.6, c + 1 + q * 0.7 - w], [a + dx - q * 0.6, c + 1 + q * 0.7 + w], on, 1, far); }
+  };
+  if (dinoId === 'mosa') {
+    for (const far of [true, false]) { paddle(P.legs[0][0], far ? -2 : 0, lit.has('leg'), far); paddle(P.arms[0][0], far ? -2 : 0, lit.has('arm'), far); }
+    // the tail kinks down into a fluke
+    bone(S[0], [S[0][0] - 3, S[0][1] - 4], lit.has('tail'), 1); bone(S[0], [S[0][0] - 3, S[0][1] + 3], lit.has('tail'), 1);
+  } else {
+    for (const L of P.legs) for (const back of [true, false]) {
+      const on = lit.has('leg'); const dx = back ? -3 : 0;
+      for (let i = 0; i < L.length - 1; i += 1) bone([L[i][0] + dx, L[i][1]], [L[i + 1][0] + dx, L[i + 1][1]], on, i < 2 ? th : 1, back);
+      knob([L[0][0] + dx, L[0][1]], on);
+      if (dinoId === 'raptor' && !back) { const t = L[L.length - 2]; bone([t[0] + 0.5, t[1] + 1], [t[0] + 2.5, t[1] - 1.5], lit.has('claw'), 1); }
+    }
+    for (const A of P.arms) {
+      const walks = A[A.length - 1][1] >= 36; // a four-legged walker: draw the far front leg too
+      for (const back of walks ? [true, false] : [false]) for (let i = 0; i < A.length - 1; i += 1) bone([A[i][0] - (back ? 3 : 0), A[i][1]], [A[i + 1][0] - (back ? 3 : 0), A[i + 1][1]], lit.has('arm'), walks && i === 0 ? th : 1, back);
+    }
   }
-  for (const A of P.arms) for (let i = 0; i < A.length - 1; i += 1) bone(A[i], A[i + 1], lit.has('arm'), 1);
   // horns and frills on the head
   const H0 = P.skull;
   if (dinoId === 'trike' || dinoId === 'pachy') {
@@ -798,54 +848,70 @@ export function skeletonPic(dinoId, bones = {}, all = false) {
     for (let q = 0; q < 9; q += 1) { const [px, py] = T([H0[0] - 3 + q * 0.25, H0[1] - 6 + q * 1.1]); b.rect(Math.round(px) - 2, Math.round(py), 3, 1, fon ? ON[q % 3 ? 0 : 1] : OFF[0], fon ? 'on' : 'off'); }
     if (dinoId === 'pachy') for (let q = 0; q < 3; q += 1) bone([H0[0] - 4 + q * 1.5, H0[1] - 6], [H0[0] - 6 + q * 1.5, H0[1] - 10], lit.has('horns'), 1);
   }
-  b.outline((tag) => (String(tag).startsWith('on') ? INK : String(tag).startsWith('off') ? '#2a3346' : null));
+  b.outline((tag) => (String(tag).startsWith('on') ? INK : String(tag).startsWith('off') ? '#9aa7b8' : null));
   const c = canvas(Wc, Hc); const x = c.getContext('2d');
   b.each((px, py) => { const col = b.get(px, py); if (col) { x.fillStyle = col; x.fillRect(px, py, 1, 1); } });
   // the skull, from its find picture (a dark silhouette when missing), and its brow horns
   const sk = findPic(`${dinoId}-skull`);
   const [sx, sy] = T(H0);
-  const s2 = canvas(sk.width, sk.height); const sx2 = s2.getContext('2d'); sx2.drawImage(sk, 0, 0);
-  if (!lit.has('skull')) { sx2.globalCompositeOperation = 'source-atop'; sx2.fillStyle = '#4a5a72'; sx2.fillRect(0, 0, s2.width, s2.height); }
-  x.drawImage(s2, Math.round(sx - 3), Math.round(sy - sk.height / 2));
-  if (dinoId === 'trike') {
-    const on = lit.has('horns'); x.fillStyle = on ? ON[0] : OFF[0];
-    for (let q = 0; q < 7; q += 1) { x.fillRect(Math.round(sx + 8 + q), Math.round(sy - sk.height / 2 - q * 0.9), 2, 1); }
-    x.fillStyle = INK; x.fillRect(Math.round(sx + 15), Math.round(sy - sk.height / 2 - 7), 1, 1);
+  const sc = dinoId === 'stego' ? 0.7 : 1;
+  const s2 = canvas(Math.round(sk.width * sc), Math.round(sk.height * sc)); const sx2 = s2.getContext('2d');
+  sx2.imageSmoothingEnabled = false; sx2.drawImage(sk, 0, 0, s2.width, s2.height);
+  if (!lit.has('skull')) {
+    const im = sx2.getImageData(0, 0, s2.width, s2.height); const D = im.data;
+    for (let i = 0; i < D.length; i += 4) if (D[i + 3]) { const dark = D[i] + D[i + 1] + D[i + 2] < 200; D[i] = dark ? 0x9a : 0xdf; D[i + 1] = dark ? 0xa7 : 0xe5; D[i + 2] = dark ? 0xb8 : 0xec; }
+    sx2.putImageData(im, 0, 0);
   }
-  if (REGIONS[dinoId].jaw && !lit.has('jaw')) { x.fillStyle = '#4a5a72'; x.fillRect(Math.round(sx - 1), Math.round(sy + sk.height / 2 - 2), Math.round(sk.width * 0.8), 2); }
-  if ((REGIONS[dinoId].tooth || REGIONS[dinoId].teeth) && !lit.has('teeth')) { x.fillStyle = '#4a5a72'; for (let q = 1; q < sk.width - 3; q += 2) x.fillRect(Math.round(sx - 2 + q), Math.round(sy + sk.height / 2 - 3), 1, 1); }
+  x.drawImage(s2, Math.round(sx - 4), Math.round(sy - s2.height / 2 + (dinoId === 'stego' ? 2 : 0)));
+  if (REGIONS[dinoId].jaw && !lit.has('jaw')) { x.fillStyle = '#9aa7b8'; x.fillRect(Math.round(sx - 1), Math.round(sy + sk.height / 2 - 2), Math.round(sk.width * 0.8), 2); }
+  if ((REGIONS[dinoId].tooth || REGIONS[dinoId].teeth) && !lit.has('teeth')) { x.fillStyle = '#9aa7b8'; for (let q = 1; q < sk.width - 3; q += 2) x.fillRect(Math.round(sx - 2 + q), Math.round(sy + sk.height / 2 - 3), 1, 1); }
   return c;
 }
 let DINO_POSE = {};
 export function setDinoPoses(dinos) { DINO_POSE = Object.fromEntries(dinos.map((d) => [d.id, d])); }
 
-/** The house displays: 'stand' with a finished skeleton (id), or 'pedestal' with a treasure (key). */
+/** The house displays: 'stand' with a finished skeleton (id), or 'pedestal' with a treasure (key).
+ * Drawn like the room's furniture: 3/4 view, warm brown outlines, a lit top face. */
 export function displayPic(kind, id) {
+  const OL = '#5c3a1e';
   if (kind === 'stand') {
-    const c = canvas(104, 70); const x = c.getContext('2d');
-    // wood base with a brass plaque, two dark metal posts holding the skeleton up
-    x.fillStyle = INK; x.fillRect(3, 58, 98, 11);
-    x.fillStyle = '#8b5a2b'; x.fillRect(4, 59, 96, 9);
-    x.fillStyle = '#a8703a'; x.fillRect(4, 59, 96, 2);
-    for (let i = 7; i < 98; i += 11) { x.fillStyle = '#7a4a26'; x.fillRect(i, 63, 5, 1); x.fillRect(i + 4, 65, 4, 1); }
-    x.fillStyle = INK; x.fillRect(41, 61, 22, 6); x.fillStyle = '#e0b23a'; x.fillRect(42, 62, 20, 4); x.fillStyle = '#fff3bf'; x.fillRect(42, 62, 4, 1);
+    const c = canvas(96, 70); const x = c.getContext('2d');
+    const X = 8; const Wb = 80;
+    x.fillStyle = 'rgba(0,0,0,0.15)'; x.fillRect(X + 1, 67, Wb, 2); // floor shadow
+    x.fillStyle = OL; x.fillRect(X - 1, 54, Wb + 2, 13); x.fillRect(X + 2, 66, 6, 3); x.fillRect(X + Wb - 8, 66, 6, 3);
+    x.fillStyle = '#c68f53'; x.fillRect(X, 55, Wb, 4); // top face
+    x.fillStyle = '#d9a46a'; x.fillRect(X, 55, Wb, 1);
+    x.fillStyle = '#8b5a2b'; x.fillRect(X, 59, Wb, 7); // front face
+    x.fillStyle = '#a8703a'; x.fillRect(X, 59, Wb, 1);
+    x.fillStyle = '#7a4a26'; x.fillRect(X + 3, 67, 4, 1); x.fillRect(X + Wb - 7, 67, 4, 1); // feet
+    x.fillStyle = OL; x.fillRect(X + 31, 60, 18, 6); x.fillStyle = '#e0b23a'; x.fillRect(X + 32, 61, 16, 4); x.fillStyle = '#fff3bf'; x.fillRect(X + 32, 61, 5, 1);
     if (!id) return c;
-    x.fillStyle = '#343a40'; x.fillRect(38, 36, 2, 23); x.fillRect(62, 34, 2, 25);
-    x.fillStyle = '#495057'; x.fillRect(38, 36, 1, 23); x.fillRect(62, 34, 1, 25);
-    x.drawImage(skeletonPic(id, {}, true), 4, 4);
+    // brass posts with a little Y cradle
+    for (const px of [36, 58]) {
+      x.fillStyle = OL; x.fillRect(px - 1, 33, 4, 23);
+      x.fillStyle = '#b8860b'; x.fillRect(px, 34, 2, 22); x.fillStyle = '#e0b23a'; x.fillRect(px, 34, 1, 22);
+      x.fillStyle = '#e0b23a'; x.fillRect(px - 2, 32, 2, 2); x.fillRect(px + 2, 32, 2, 2);
+    }
+    x.drawImage(skeletonPic(id, {}, true), 0, 2);
     return c;
   }
   const c = canvas(24, 40); const x = c.getContext('2d');
-  // a stone column, a velvet cushion, and a glass dome drawn with two highlights
-  x.fillStyle = INK; x.fillRect(4, 20, 16, 20);
-  x.fillStyle = '#ced4da'; x.fillRect(5, 21, 14, 18);
-  x.fillStyle = '#adb5bd'; x.fillRect(14, 21, 5, 18); x.fillStyle = '#f1f3f5'; x.fillRect(6, 21, 2, 18);
-  x.fillStyle = '#868e96'; x.fillRect(3, 20, 18, 2); x.fillRect(3, 37, 18, 2);
-  x.fillStyle = '#c92a2a'; x.fillRect(6, 17, 12, 3); x.fillStyle = '#e03131'; x.fillRect(7, 17, 10, 1);
-  if (id) { const p = findPic(id); const s = Math.min(1, 12 / Math.max(p.width, p.height)); x.drawImage(p, 12 - (p.width * s) / 2, 17 - p.height * s, p.width * s, p.height * s); }
-  x.fillStyle = 'rgba(255,255,255,0.85)';
-  for (let a = 0; a <= Math.PI; a += 0.05) { const px = Math.round(12 + Math.cos(a) * 10); const py = Math.round(18 - Math.sin(a) * 15); if (a > 1.9 && a < 2.6) x.fillRect(px, py, 1, 1); }
-  x.fillRect(19, 9, 1, 6); x.fillStyle = 'rgba(255,255,255,0.4)'; x.fillRect(2, 18, 20, 1);
+  // a wood plinth like the bookshelf, a velvet cushion, a full glass dome
+  x.fillStyle = 'rgba(0,0,0,0.15)'; x.fillRect(4, 38, 18, 2);
+  x.fillStyle = OL; x.fillRect(3, 21, 18, 18);
+  x.fillStyle = '#c68f53'; x.fillRect(4, 22, 16, 2); // cap
+  x.fillStyle = '#8b5a2b'; x.fillRect(5, 24, 14, 12); x.fillStyle = '#a8703a'; x.fillRect(5, 24, 2, 12); x.fillStyle = '#7a4a26'; x.fillRect(16, 24, 3, 12);
+  x.fillStyle = OL; x.fillRect(5, 29, 14, 1);
+  x.fillStyle = '#a8703a'; x.fillRect(4, 36, 16, 2); // base
+  x.fillStyle = '#c92a2a'; x.fillRect(7, 19, 10, 3); x.fillStyle = '#e03131'; x.fillRect(8, 19, 8, 1);
+  if (id) { const p = findPic(id); const s = Math.min(1, 12 / Math.max(p.width, p.height)); x.imageSmoothingEnabled = false; x.drawImage(p, Math.round(12 - (p.width * s) / 2), Math.round(19 - p.height * s), p.width * s, p.height * s); }
+  // the dome: 16 wide, 14 tall, faint glass, a base ring and one highlight
+  x.fillStyle = 'rgba(207,232,245,0.22)';
+  for (let yy = 0; yy < 14; yy += 1) { const w = Math.round(8 * Math.sqrt(1 - ((13 - yy) / 14) ** 2)); x.fillRect(12 - w, 7 + yy, w * 2, 1); }
+  x.fillStyle = '#cfe8f5';
+  for (let a = 0; a <= Math.PI; a += 0.04) x.fillRect(Math.round(12 + Math.cos(a) * 7.5 - 0.5), Math.round(21 - Math.sin(a) * 13.5), 1, 1);
+  x.fillStyle = '#ffffff'; x.fillRect(7, 11, 1, 5);
+  x.fillStyle = '#868e96'; x.fillRect(3, 20, 18, 2);
   return c;
 }
 

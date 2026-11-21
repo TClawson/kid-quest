@@ -95,6 +95,8 @@ $('#stage').addEventListener('pointerdown', (e) => {
   const p = at(e);
   if (game.onButton(...p) && game.phase === 'play') game.press(); else if (game.onButton(...p) && game.phase !== 'over') game.press(); else game.tap(...p);
 });
+// taps only (no holds), but block long-press menus and text selection anyway
+document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('keydown', (e) => { if (e.code === 'Space' && game) { e.preventDefault(); game.press(); } });
 $('#go').onclick = () => { hide(); start(); };
 $('#map').onchange = () => { hide(); start(); };

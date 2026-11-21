@@ -277,7 +277,7 @@ export class Dig {
     }
     // the view follows the kid's buddy
     const tx = clamp(this.kid.x - this.fieldW / 2, 0, this.W - this.fieldW);
-    const ty = clamp(this.kid.y - this.fieldH * 0.55, 0, this.H - this.fieldH);
+    const ty = clamp(this.kid.y - this.fieldH * 0.62, 0, this.H - this.fieldH);
     const k = 1 - Math.exp(-5 * dt);
     this.camX += (tx - this.camX) * k; this.camY += (ty - this.camY) * k;
   }
@@ -845,17 +845,18 @@ export class Dig {
       ctx.textAlign = 'center';
     };
     const X = (x) => (x - this.camX) * k; const Y = (y) => (y - this.camY) * k;
-    for (const p of this.pops) {
+    const shownPops = this.pops.slice(-3);
+    shownPops.forEach((p, i) => { p.stack = (shownPops.length - 1 - i); });
+    for (const p of shownPops) {
       const a = (this.t - p.at) / 1.6;
       ctx.globalAlpha = Math.max(0, 1 - a * a);
-      text(p.text, X(p.x), Y(p.y) - a * u * 3, p.big ? u * 1.9 : u * 1.25, p.color);
+      text(p.text, X(p.x), Y(p.y) - a * u * 3 - p.stack * u * 1.6, p.big ? u * 1.9 : u * 1.25, p.color);
     }
     ctx.globalAlpha = 1;
-    text(this.kid.name, X(this.kid.x), Y(this.kid.y - FEET - 3 - (this.kid.lift || 0)), u * 1.05, '#ffd43b');
-    text(this.vis.name, X(this.vis.x), Y(this.vis.y - FEET - 3 - (this.vis.lift || 0)), u * 1.05, '#ffffff');
+    text(this.kid.name, X(this.kid.x), Y(this.kid.y) + u * 1.2, u * 0.95, '#ffd43b');
+    text(this.vis.name, X(this.vis.x), Y(this.vis.y) + u * 1.2, u * 0.95, '#ffffff');
     // top bar
     const secs = Math.ceil(Math.max(0, this.left));
-    ctx.fillStyle = 'rgba(27,20,48,0.55)'; ctx.fillRect(0, 0, W, u * 3.6);
     text(`${this.points.kid}`, u * 1.5, u * 1.8, u * 2.2, '#ffd43b', 'left');
     text(this.overtime ? 'Finish it!' : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, u * 1.8, u * 2, (secs <= GOLDEN && this.phase === 'play') ? '#ffd43b' : '#ffffff');
     text(this.site.name, W - u * 1.5, u * 1.25, u * 1.25, '#ffffff', 'right');
@@ -883,23 +884,28 @@ export class Dig {
     const c = this.digCell(this.kid);
     const h = c && this.holes.get(c.idx);
     if (this.phase === 'play' && c?.open) {
-      const mx = (b.x - b.r - 9) * S; const my = (b.y - 12) * S; const mh = 24 * S;
+      const mw = 7 * S; const mx = (b.x - b.r - 12) * S; const my = (b.y - 14) * S; const mh = 28 * S;
+      ctx.fillStyle = INK; ctx.fillRect(mx - S * 0.6, my - S * 0.6, mw + S * 1.2, mh + S * 1.2);
       for (let q = 0; q < MAX_DEPTH; q += 1) {
         const yy = my + (q / MAX_DEPTH) * mh;
-        ctx.fillStyle = h && h.d > q ? this.look.layers[q] : 'rgba(27,20,48,0.45)';
-        ctx.fillRect(mx, yy + S * 0.3, 5 * S, mh / MAX_DEPTH - S * 0.6);
+        ctx.fillStyle = h && h.d > q ? this.look.layers[q] : 'rgba(80,70,110,0.9)';
+        ctx.fillRect(mx, yy + S * 0.3, mw, mh / MAX_DEPTH - S * 0.6);
       }
-      ctx.strokeStyle = INK; ctx.lineWidth = S * 0.5; ctx.strokeRect(mx, my, 5 * S, mh);
+      if (h && h.d > 0) {
+        const yy = my + ((Math.ceil(h.d) - 0.5) / MAX_DEPTH) * mh;
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(mx - S * 3, yy - S * 1.4); ctx.lineTo(mx - S * 0.8, yy); ctx.lineTo(mx - S * 3, yy + S * 1.4); ctx.fill();
+      }
     }
     // the find tray along the bottom
-    const tray = this.found.slice(-10);
+    const tray = this.found.slice(this.card ? -4 : -8);
     if (tray.length) {
-      const sz = u * 2.3; const gap = u * 0.35; const ty = H - sz - u * 0.8;
-      ctx.fillStyle = 'rgba(27,20,48,0.55)'; ctx.fillRect(u * 0.6, ty - u * 0.4, tray.length * (sz + gap) + u * 0.5, sz + u * 0.8);
+      const sz = u * 2.6; const gap = u * 0.4; const ty = H - sz - u * 0.7;
       tray.forEach((f, q) => {
-        const pic = findPic(f.key); const s = Math.min(sz / pic.width, sz / pic.height);
-        ctx.drawImage(pic, u * 0.85 + q * (sz + gap) + (sz - pic.width * s) / 2, ty + (sz - pic.height * s) / 2, pic.width * s, pic.height * s);
-        if (f.fresh) { ctx.fillStyle = '#ffd43b'; ctx.fillRect(u * 0.85 + q * (sz + gap) + sz - u * 0.5, ty - u * 0.2, u * 0.5, u * 0.5); }
+        const x0 = u * 0.7 + q * (sz + gap);
+        ctx.fillStyle = f.fresh ? '#ffd43b' : INK; ctx.fillRect(x0 - S * 0.6, ty - S * 0.6, sz + S * 1.2, sz + S * 1.2);
+        ctx.fillStyle = '#f4e8d0'; ctx.fillRect(x0, ty, sz, sz);
+        const pic = findPic(f.key); const s = Math.min((sz - S * 2) / pic.width, (sz - S * 2) / pic.height);
+        ctx.drawImage(pic, x0 + (sz - pic.width * s) / 2, ty + (sz - pic.height * s) / 2, pic.width * s, pic.height * s);
       });
     }
     if (this.card) this.drawCard(ctx, S, u, text);
@@ -912,30 +918,35 @@ export class Dig {
   }
 
   drawCard(ctx, S, u, text) {
-    const W = this.vW * S;
+    const W = this.vW * S; const H = this.vH * S;
     const c = this.card; const a = Math.min(1, (this.t - c.at) / 0.18);
-    const cw = Math.min(W * 0.72, u * 32); const ch = u * 7.4;
-    const x0 = W / 2 - cw / 2; const y0 = u * 4.4 - (1 - a) * u * 3;
+    const cw = Math.min(W * 0.5, u * 26); const ch = u * 4.6;
+    const x0 = W / 2 - cw / 2; const y0 = H - ch - u * 0.7 + (1 - a) * u * 4;
     const col = RARITY[c.info.rarity].color;
-    ctx.fillStyle = 'rgba(27,20,48,0.92)'; ctx.fillRect(x0, y0, cw, ch);
-    ctx.strokeStyle = col; ctx.lineWidth = S; ctx.strokeRect(x0, y0, cw, ch);
+    ctx.fillStyle = INK; ctx.fillRect(x0 - S, y0 - S, cw + 2 * S, ch + 2 * S);
+    ctx.fillStyle = '#2b2146'; ctx.fillRect(x0, y0, cw, ch);
+    ctx.fillStyle = col; ctx.fillRect(x0, y0, S, ch);
     const pic = findPic(c.key);
-    const ps = Math.min((ch - u) / pic.height, (u * 6) / pic.width);
+    const box = u * 3.8; const ps = Math.min(box / pic.height, box / pic.width);
+    ctx.fillStyle = '#f4e8d0'; ctx.fillRect(x0 + u * 0.6, y0 + u * 0.4, box, box);
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(pic, x0 + u * 0.8 + (u * 6 - pic.width * ps) / 2, y0 + ch / 2 - (pic.height * ps) / 2, pic.width * ps, pic.height * ps);
-    const tx = x0 + u * 7.6;
-    text(c.info.name, tx, y0 + u * 1.5, u * 1.55, '#ffffff', 'left');
+    ctx.drawImage(pic, x0 + u * 0.6 + (box - pic.width * ps) / 2, y0 + u * 0.4 + (box - pic.height * ps) / 2, pic.width * ps, pic.height * ps);
+    const tx = x0 + u * 5;
+    text(c.info.name, tx, y0 + u * 1.25, u * 1.35, '#ffffff', 'left');
     const cond = CONDITIONS[c.q || 1];
     const tag = c.gift ? `A gift from ${c.gift}!` : `${RARITY[c.info.rarity].name} · ${cond.stars} ${cond.name} · +${c.pts}`;
-    text(tag, tx, y0 + u * 3.15, u * 1.1, col, 'left');
+    text(tag, tx, y0 + u * 2.4, u * 0.95, col, 'left');
     if (c.prog) {
-      const bw = cw - u * 9; const by = y0 + u * 4.4;
-      ctx.fillStyle = '#343a40'; ctx.fillRect(tx, by, bw, u * 0.9);
+      const label = c.done ? 'Skeleton complete! +200' : `${c.prog.have} of ${c.prog.total} bones`;
+      ctx.font = `${Math.round(u * 0.95)}px "Jersey 10", monospace`;
+      const lw = ctx.measureText(label).width + u * 0.6;
+      const bw = cw - u * 5.6 - lw; const by = y0 + u * 3.3;
+      ctx.fillStyle = '#495057'; ctx.fillRect(tx, by, bw, u * 0.7);
       ctx.fillStyle = c.prog.have === c.prog.total ? '#ffd43b' : '#8ce99a';
-      ctx.fillRect(tx, by, (bw * c.prog.have) / c.prog.total, u * 0.9);
-      text(c.done ? `${c.info.dino.short || c.info.dino.name} skeleton complete! +200` : `${c.info.dino.short || c.info.dino.name}: ${c.prog.have} of ${c.prog.total} bones`, tx, by + u * 2, u * 1.1, c.done ? '#ffd43b' : '#e9ecef', 'left');
-    } else if (c.better) text('Better than the one you had!', tx, y0 + u * 5.2, u * 1.05, '#b2f2bb', 'left');
-    if (c.fresh && Math.floor(this.t * 4) % 2) text('NEW!', x0 + cw - u * 2.4, y0 + u * 1.5, u * 1.5, '#ffd43b');
+      ctx.fillRect(tx, by, (bw * c.prog.have) / c.prog.total, u * 0.7);
+      text(label, tx + bw + u * 0.5, by + u * 0.35, u * 0.95, c.done ? '#ffd43b' : '#e9ecef', 'left');
+    } else if (c.better) text('Better than the one you had!', tx, y0 + u * 3.6, u * 0.95, '#b2f2bb', 'left');
+    if (c.fresh && Math.floor(this.t * 4) % 2) text('NEW!', x0 + cw - u * 1.8, y0 + u * 1.25, u * 1.3, '#ffd43b');
   }
 
   drawOver(ctx, S, u, text, W, H) {
