@@ -1,6 +1,7 @@
 // Buddy species, wardrobe items and the rules for unlocking them. Pure data + logic, no DOM.
 
 import { FURNITURE } from './furniture.js';
+import { notYet } from './releases.js';
 
 export const SPECIES = [
   { id: 'fox', name: 'Fox' },
@@ -120,6 +121,7 @@ export const SPORTS = [
   { id: 'shoes', name: 'Running shoes', icon: '👟' },
   { id: 'football', name: 'Football', icon: '🏈' },
   { id: 'hockey', name: 'Hockey stick', icon: '🏒' },
+  { id: 'bike', name: 'Bike', icon: '🚲' },
   { id: 'camera', name: 'Camera', icon: '📷' },
 ];
 export const TIERS = [
@@ -164,6 +166,9 @@ export const MOVES = [
   { id: 'dangle', kind: 'hockey', step: 1, name: 'Stickhandling' },
   { id: 'slapshot', kind: 'hockey', step: 2, name: 'Slap shot' },
   { id: 'spinorama', kind: 'hockey', step: 3, name: 'Spin-o-rama' },
+  { id: 'wheelie', kind: 'bike', step: 1, name: 'Wheelie' },
+  { id: 'bunnyhop', kind: 'bike', step: 2, name: 'Bunny hop' },
+  { id: 'tailwhip', kind: 'bike', step: 3, name: 'Tailwhip' },
   { id: 'click', kind: 'camera', step: 1, name: 'Say cheese' },
   { id: 'selfie', kind: 'camera', step: 2, name: 'Selfie' },
   { id: 'paparazzi', kind: 'camera', step: 3, name: 'Flash frenzy' },
@@ -213,8 +218,11 @@ export const ITEMS = [...BASE_ITEMS, ...SPORT_ITEMS, ...FURNITURE].flatMap((item
 
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
 
-/** On show in the shop, but not for sale yet. A kid who already has it keeps it. */
-export const comingSoon = (item) => item?.soon === true;
+/**
+ * On show in the shop, but not for sale yet: marked soon, or new gear before its Friday
+ * (releases.js). A kid who already has it keeps it. day: 'YYYY-MM-DD' (default: today here).
+ */
+export const comingSoon = (item, day) => item?.soon === true || notYet(item, day);
 
 export function isUnlocked(item, progress) {
   if (item.gems) return Boolean(progress.owned?.includes(item.id));

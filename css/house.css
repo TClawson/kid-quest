@@ -182,6 +182,20 @@ button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink)
 .tt-vol { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; }
 .tt-vol input { flex: 1; min-height: 44px; accent-color: #7a4ab0; }
 
+/* the trick book: bike trick cards (js/trickbook-ui.js) */
+.trickbook h2 { margin: 0 0 4px; }
+.tb-group { margin: 10px 0; padding: 8px 10px; background: #fff8e7; border: 3px solid var(--px-ink); border-radius: 6px; }
+.tb-group h3 { margin: 0 0 6px; font: 700 1.2rem/1 var(--px-font); display: flex; justify-content: space-between; gap: 8px; }
+.tb-group h3 small { font: 400 0.95rem/1 var(--px-font); color: var(--muted); }
+.tb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.tb-card { display: grid; justify-items: center; gap: 2px; padding: 4px; background: none; border: 0; cursor: pointer; font: inherit; color: inherit; min-width: 0; }
+.tb-card img { width: 100%; max-width: 110px; image-rendering: pixelated; image-rendering: crisp-edges; }
+.tb-card small { font-size: 0.75rem; color: var(--muted); line-height: 1.2; text-align: center; }
+.tb-card.none img { filter: grayscale(1) brightness(0.45); }
+.tb-card:focus-visible { outline: 3px solid var(--px-ink); }
+.tb-page { text-align: center; }
+.tb-page .tb-big { width: 148px; image-rendering: pixelated; image-rendering: crisp-edges; }
+.tb-page p { text-align: left; }
 /* the critter album (js/albumview.js): fish book cards with season icons and a photo quality */
 .ca-grid .ca-card { grid-template-rows: 56px auto auto auto; }
 .ca-grid .ca-card img { height: 56px; }
