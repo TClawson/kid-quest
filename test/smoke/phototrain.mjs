@@ -2,6 +2,7 @@
 // - a 90 second ride on each map in every season, at tablet and phone size, with a bot that
 //   holds focus on an animal's sign and lets go when it poses: the ride ends, perfect photos
 //   happen, every kept photo is told to the album, and nothing throws while drawing
+// - aiming takes no photo, even when the finger lifts; the shutter button takes it
 // - in the app: a visitor with a camera invites you on the photo train, a photo goes in the
 //   kid's critter album (kid.critterAlbum), the best score is kept, and the album opens from
 //   the Status pop-up with the animal's own page
@@ -23,7 +24,7 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
-    const results = await page.evaluate(async () => {
+    const { rides: results, early } = await page.evaluate(async () => {
       const { PhotoTrain, LIFT } = await import('./js/phototrain.js');
       const out = [];
       for (const map of ['bg-meadow', 'bg-fjord', 'bg-space', 'bg-volcano']) {
@@ -34,13 +35,13 @@ try {
             const c = document.createElement('canvas'); c.width = W * g.Z; c.height = H * g.Z;
             const h = document.createElement('canvas'); h.width = W * 4; h.height = H * 4;
             const ctx = c.getContext('2d'); const hctx = h.getContext('2d');
-            g.tap(W / 2, H / 2); g.release(); // the first tap starts the ride
+            g.tap(W / 2, H / 2); // the first tap starts the ride
             let target = null;
             for (let i = 0; i < 100 * 30 && g.phase !== 'over'; i += 1) {
               if (!target) {
                 const o = g.subjects().find((s) => s.k && !s.k.far && s.k.state === 'sign' && s.box.x > W * 0.3 && s.box.x < W * 0.9);
-                if (o && g.film > 0) { target = o.k; g.press(o.box.x + o.box.w / 2, o.box.y + o.box.h / 2 + LIFT); }
-              } else if (target.gone || (target.state === 'pose' && g.t - target.st > 0.3) || target.state === 'leave') { g.release(); target = null; }
+                if (o && g.film > 0) { target = o.k; g.tap(o.box.x + o.box.w / 2, o.box.y + o.box.h / 2 + LIFT); }
+              } else if (target.state === 'pose' && g.t - target.st > 0.3) { g.press(); target = null; } else if (target.gone || target.state === 'leave') target = null;
               g.step(1 / 30);
               if (i % 6 === 0) { g.draw(ctx); g.drawHud(hctx, 4); }
             }
@@ -50,8 +51,24 @@ try {
           }
         }
       }
-      return out;
+      // aiming takes no photo; the shutter does, and the viewfinder stays up after the finger lifts
+      const g = new PhotoTrain({ W: 213, H: 120, map: 'bg-meadow', day: '2026-11-21', seed: 3, kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { camera: 1 } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} } } });
+      g.tap(100, 60);
+      g.press(); const none = g.roll.length; // nothing aimed yet
+      g.tap(100, 60); g.release(); for (let i = 0; i < 30; i += 1) g.step(1 / 30);
+      const aimed = { roll: g.roll.length, view: !!g.view, film: g.film, full: g.cam.film };
+      const b = g.shutter;
+      const early = { none, ...aimed, onButton: g.onButton(b.x, b.y) };
+      g.press();
+      early.after = g.roll.length; early.filmAfter = g.film;
+      return { rides: out, early };
     });
+    assert.equal(early.none, 0, 'the shutter without aiming takes nothing');
+    assert.equal(early.roll, 0, 'aiming and lifting the finger takes no photo');
+    assert.ok(early.view, 'the viewfinder stays up');
+    assert.ok(early.onButton, 'the shutter is a button');
+    assert.equal(early.after, 1, 'the shutter takes one');
+    assert.equal(early.filmAfter, early.full - 1);
     for (const r of results) {
       const where = `${r.map} ${r.season} ${r.W}x${r.H}`;
       assert.equal(r.phase, 'over', `${where}: the ride ends`);

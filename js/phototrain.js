@@ -9,11 +9,13 @@
 // before it goes again. Some animals are movers instead: birds flying over, a fox running
 // beside the train.
 //
-// Snapping: press and hold anywhere: the camera comes up, and the viewfinder sits a little
-// ABOVE the finger so the finger doesn't hide the animal. Hold still and a focus ring closes
-// in. Once it is sharp on an animal (or on a sign, to be ready before it comes out), the
-// viewfinder LOCKS ON and follows it by itself. Let go to snap. Dragging moves the viewfinder
-// yourself (for fliers and runners, or to pick another animal).
+// Snapping (Taylor, 2026-11-20: a shutter button, after letting go to snap confused): touch the
+// screen to aim: the camera comes up, and the viewfinder sits a little ABOVE the finger so the
+// finger doesn't hide the animal. Hold still and a focus ring closes in. Once it is sharp on an
+// animal (or on a sign, to be ready before it comes out), the viewfinder LOCKS ON and follows it
+// by itself, even after the finger lifts. Tap the shutter button (bottom right) to snap.
+// Dragging moves the viewfinder yourself (for fliers and runners, or to pick another animal),
+// and touching somewhere else aims there.
 //
 // Every photo gets three ticks: Sharp, Posed and Centred. All three: PERFECT. Sharp: GOOD.
 // Not sharp: a blurry glimpse, no points and not for the album. The film is limited, so
@@ -60,7 +62,6 @@ export const LIFT = 22;
 export const SPEED = 60;
 export const LAYER = { far: 0.1, mid: 0.35, track: 1, fore: 1.6 };
 /** A quick tap (shorter than this) doesn't snap: it reminds the kid to hold. */
-const QUICK = 0.14;
 /** Seconds an animal holds its pose. */
 const POSE = 1.1;
 
@@ -124,7 +125,7 @@ export class PhotoTrain {
     this.r = rng(this.seed);
     this.best = opts.best || 0;
     this.t = 0; this.pops = [];
-    this.holdAnywhere = true; this.locked = false;
+    this.holdAnywhere = false; this.locked = false; this.shutterAt = -9;
     // where things are on screen (game pixels)
     const H = this.H;
     this.horizon = Math.round(H * 0.46);
@@ -387,11 +388,17 @@ export class PhotoTrain {
     return out;
   }
 
-  press(x, y) {
-    if (this.film <= 0) { addPop(this, 'Out of film!', x, y - 10, '#ff8787'); return; }
+  /** Aims the camera: the viewfinder comes up over the finger (or moves there). */
+  aim(x, y) {
+    const v = this.view;
+    if (v) { v.fx = x; v.fy = y; if (v.lock) { v.lock = null; v.focus *= 0.5; } return; }
     const f = this.frameAt(x, y);
     this.view = { ...f, fx: x, fy: y, at: this.t, focus: 0, lock: null, vx: 0, vy: 0, lastX: f.x, lastY: f.y };
   }
+
+  /** The shutter button (bottom right, game pixels). */
+  get shutter() { return { x: this.W - 15, y: this.H - 15, r: 11 }; }
+  onButton(x, y) { const b = this.shutter; return !!this.view && Math.hypot(x - b.x, y - b.y) <= b.r + 3; }
 
   tap(x, y) {
     if (this.phase === 'over') { if (this.t - this.overAt > 1.2) { this.reset(); this.phase = 'ready'; } return; }
@@ -401,7 +408,10 @@ export class PhotoTrain {
       return;
     }
     if (this.left <= 0) return;
-    this.press(x, y);
+    // the shutter, before there's anything to aim at
+    const b = this.shutter;
+    if (Math.hypot(x - b.x, y - b.y) <= b.r + 3) { this.press(); return; }
+    this.aim(x, y);
   }
 
   drag(x, y) {
@@ -411,13 +421,17 @@ export class PhotoTrain {
     if (v.lock && Math.hypot(x - v.lockFx, y - v.lockFy) > 14) { v.lock = null; v.focus *= 0.5; }
   }
 
-  release() {
-    const v = this.view; if (!v) return;
-    this.view = null;
+  /** The shutter: takes the photo now. The viewfinder stays up (and stays locked on). */
+  press() {
     if (this.phase !== 'play') return;
-    if (this.t - v.at < QUICK) { addPop(this, 'Hold to focus, let go to snap!', this.W / 2, this.H * 0.25, '#ffffff'); return; }
+    this.shutterAt = this.t;
+    const v = this.view;
+    if (!v) { addPop(this, 'Touch the screen to aim first!', this.W / 2, this.H * 0.25, '#ffffff'); return; }
+    if (this.film <= 0) { addPop(this, 'Out of film!', v.x, v.y - 10, '#ff8787'); return; }
     this.snap(v);
   }
+
+  release() { /* the shutter snaps when pressed; the aiming finger lifting changes nothing */ }
 
   stepView(dt) {
     const v = this.view; if (!v) return;
@@ -535,7 +549,8 @@ export class PhotoTrain {
     this.pops = this.pops.filter((p) => this.t - p.at < 1.6);
     if (this.phase !== 'play') return;
     this.left = Math.max(0, this.left - dt);
-    if (this.left <= 0 && !this.view) { this.finish(); return; }
+    // time's up: the ride ends (a shutter press in the same moment still counts)
+    if (this.left <= 0) { this.finish(); return; }
     // the train: slows to a stop for an animal on the track, then chugs on
     const want = this.brake ? (this.brake.k.state === 'leave' && this.t - this.brake.k.st > 1 ? SPEED : 0) : SPEED;
     this.speed += (want - this.speed) * (1 - Math.exp(-(want < this.speed ? 2.6 : 0.9) * dt));
@@ -1044,9 +1059,23 @@ export class PhotoTrain {
       ctx.fillStyle = col; ctx.fillRect(x0 + fw / 2 - S * 0.5, y0 + fh / 2 - S * 2, S, S * 4); ctx.fillRect(x0 + fw / 2 - S * 2, y0 + fh / 2 - S * 0.5, S * 4, S);
       // the label sits over the frame, or under it when the frame is up by the top lines
       const ly = y0 - u * 0.8 < u * 6.6 ? y0 + fh + u * 0.8 : y0 - u * 0.8;
-      text(v.lock ? 'LOCKED' : v.focus >= 1 ? 'SHARP' : 'focusing...', x0 + fw / 2, ly, u * 0.95, col);
+      const waiting = v.lock?.state === 'sign';
+      text(waiting ? 'LOCKED: wait for it...' : v.lock ? 'LOCKED: snap!' : v.focus >= 1 ? 'SHARP' : 'hold still...', x0 + fw / 2, ly, u * 0.95, col);
       // far specks get a hint
       if (!this.cam.zoom) for (const k of this.critters) if (k.far && !k.gone) { const [kx, ky] = this.where(k); if (Math.abs(kx - v.x) < w / 2 && Math.abs(ky - v.y) < h / 2 + 6) text('too far!', kx * S, (ky - 9) * S, u * 0.9, '#ffd43b'); }
+    }
+    // the shutter button: bright and bouncing when the photo is ready (sharp on an animal that's out)
+    if (this.phase === 'play') {
+      const b = this.shutter; const cx = b.x * S; const cy = b.y * S; const R = b.r * S;
+      const ready = v && v.focus >= 1 && !(v.lock?.state === 'sign');
+      const pressed = this.t - this.shutterAt < 0.12;
+      const k = pressed ? 0.9 : ready ? 1 + Math.sin(this.t * 10) * 0.05 : 1;
+      ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k);
+      ctx.beginPath(); ctx.arc(0, 0, R + S * 1.2, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fillStyle = !v ? '#868e96' : ready ? '#ffd43b' : '#e9ecef'; ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, R * 0.62, 0, Math.PI * 2); ctx.lineWidth = S * 1.2; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.restore();
+      text('SNAP', cx, cy, u * 0.95, '#ffffff');
     }
     // the visitor points
     if (this.pointAt && this.t - this.pointAt.at < 1.4 && !this.pointAt.k.gone) {

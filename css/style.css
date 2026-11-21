@@ -382,7 +382,7 @@ span.dot.other { background: #f76707; }
 @media (prefers-reduced-motion: reduce) { .listen-metro i { transition: none; } .listen-metro.tick { animation: none; } }
 
 /* ---------- playing with a visitor (js/playground.js) ---------- */
-.playground { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: #5fbf5a; touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: contain; }
+.playground { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: #5fbf5a; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overscroll-behavior: contain; }
 .play-stage { position: relative; }
 .play-stage canvas { position: absolute; inset: 0; display: block; }
 .play-field { image-rendering: pixelated; image-rendering: crisp-edges; }

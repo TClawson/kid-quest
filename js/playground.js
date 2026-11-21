@@ -97,6 +97,8 @@ export function openPlay(opts) {
   const onDown = (e) => {
     if (e.target.closest('.play-close')) return;
     e.preventDefault();
+    // keep this finger's events here even if it slides off the field
+    try { root.setPointerCapture(e.pointerId); } catch { /* fine */ }
     const p = at(e);
     if (!game.holdAnywhere && game.press && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
     down = e.pointerId;
@@ -108,6 +110,9 @@ export function openPlay(opts) {
     if (button === e.pointerId) { button = null; game.release(); listen(); }
     if (down === e.pointerId) { down = null; if (game.holdAnywhere) { game.release(); listen(); } }
   };
+  // a long press must not open the browser's menu (that cancels the touch, which reads as a let-go)
+  const noMenu = (e) => e.preventDefault();
+  root.addEventListener('contextmenu', noMenu);
   root.addEventListener('pointerdown', onDown);
   root.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
