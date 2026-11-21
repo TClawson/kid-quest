@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel } from '../js/items.js';
+import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel, SPORTS } from '../js/items.js';
 
 test('every item has a known slot and unique id', () => {
   const slots = new Set(SLOTS.map((s) => s.id));
@@ -184,9 +184,10 @@ test('the panda’s bamboo leans on the side away from held gear', async () => {
   assert.ok(Math.max(...xs(draw('sport-rod-regular'))) <= 12, 'on the left when the rod is on the right');
 });
 
-test('sports gear: 5 kinds in 3 versions plus the fishing boat, bought with gems only', () => {
+test('sports gear: every kind in 3 versions plus the fishing boat, bought with gems only', () => {
   const gear = ITEMS.filter((i) => i.slot === 'sport');
-  assert.equal(gear.length, 16);
+  assert.equal(gear.length, SPORTS.length * 3 + 1);
+  assert.ok(SPORTS.some((k) => k.id === 'sled'), 'the sled');
   const boat = itemById('sport-boat');
   assert.equal(boat.gems, 100);
   assert.ok(boat.noHold, 'the boat stays at the lake');

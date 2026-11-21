@@ -12,6 +12,8 @@ import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { recordWeekBest } from './leaderboard.js';
 import { recordCatch, catchSpecies } from './fishbook.js';
+import { recordFind } from './finds.js';
+import { shownSeason } from './seasons.js';
 import {
   state, today, esc, save, render, openModal, currentKid, mover, exerciseInfo, kidTheme,
 } from './ctx.js';
@@ -23,10 +25,10 @@ import {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', sledding: 'sled' };
 // the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
-const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod' };
-const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod' };
+const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', sledding: 'sled' };
+const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', sledding: 'sled' };
 /** True when the kid would play with the visitor's gear: they don't own that kind. */
 const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
@@ -55,7 +57,8 @@ export function visitPlan(kid, visitors) {
 
 /** Fishing when the kid's buddy is holding a fishing rod (there's no field for it: the lake is in the game). */
 function heldRod(kid) {
-  return itemById(kid.buddy?.outfit?.sport)?.kind === 'rod' ? 'fishing' : null;
+  const kind = itemById(kid.buddy?.outfit?.sport)?.kind;
+  return kind === 'rod' ? 'fishing' : kind === 'sled' ? 'sledding' : null;
 }
 
 export function gamesWith(kid, v, plan) {
@@ -94,6 +97,10 @@ export function playWith(kid, v, kind) {
     visitor: { buddy: v.buddy, name: v.name, gear, moves: moveIds(v) },
     map: kidTheme(kid),
     day: today(),
+    // the treasure hill: the season (a parent's try-out on this device too), and how many runs
+    // on this hill since the last super rare (so the first one comes within a few days)
+    season: shownSeason(today()),
+    dry: kid.sledDry?.[kidTheme(kid)] || 0,
     sounds,
     gamesLeft: () => playableFor(currentKid(kid0)),
     onStart: () => {
@@ -124,6 +131,20 @@ export function playWith(kid, v, kind) {
       kid.fishRecords = got.records;
       save();
       return got.first ? 'first' : 'record';
+    },
+    // the treasure hill: every find goes in the finds book (in the house)
+    onFind: (f) => {
+      const kid = currentKid(kid0);
+      const got = recordFind(kid.findRecords, { key: f.key, q: f.q, inches: f.inches, date: today() });
+      kid.findRecords = got.records;
+      save();
+      return got.isNew ? 'new' : got.better ? 'better' : got.bigger ? 'bigger' : null;
+    },
+    onRun: (run) => {
+      const kid = currentKid(kid0);
+      const map = kidTheme(kid);
+      kid.sledDry = { ...(kid.sledDry || {}), [map]: run.superRare ? 0 : (kid.sledDry?.[map] || 0) + 1 };
+      save();
     },
   });
 }

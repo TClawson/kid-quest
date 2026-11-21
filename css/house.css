@@ -181,3 +181,16 @@ button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink)
 @keyframes tt-spin { to { transform: rotate(360deg); } }
 .tt-vol { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; }
 .tt-vol input { flex: 1; min-height: 44px; accent-color: #7a4ab0; }
+
+/* the book in the house: fish and treasure hill finds (findsbook-ui.js) */
+.book-tabs { display: flex; gap: 6px; margin: 0 0 8px; }
+.book-tabs .btn { flex: 1; }
+.fb-fish.find img { height: 40px; width: 40px; }
+.fb-fish.find.super { border-color: #e64980; }
+.fb-fish.find.super::after { content: '💖 Super'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #c2255c; }
+.fb-fish.find.rare { border-color: #f0c040; }
+.fb-fish.find.rare::after { content: '⭐ Rare'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #a8701e; }
+.fb-grid.mini .fb-fish.find.super::after { content: '💖'; top: 1px; right: 2px; }
+.fb-grid.mini .fb-fish.find.rare::after { content: '⭐'; top: 1px; right: 2px; }
+.fd-stars { color: #e67700; letter-spacing: -1px; }
+.findpage .fp-head img { image-rendering: pixelated; }
