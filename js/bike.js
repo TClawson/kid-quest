@@ -60,6 +60,10 @@ export const CHAIN_MAX = 5;
 export const CRASH_TIME = 1;
 /** A held grab: a no-hander from this long, a Superman from SUPERMAN. */
 export const GRAB_MIN = 0.2;
+/** Letting go of the left thumb away from a ramp (this many seconds from its lip) hops. */
+export const HOP_CLEAR = 0.8;
+/** A bunny hop's speed up: about a meter high, half a second in the air. */
+export const HOP_V = 72;
 /** Two thumbs pressed this close together are one move (a no-hander), not a flip and a spin. */
 export const TOGETHER = 0.15;
 /** A right press this soon before take-off spins once the bike is in the air. */
@@ -185,7 +189,7 @@ export function likeA(m, list) {
  * space low gravity; rainbow a loop; galaxy star rings in the air.
  */
 export const TWISTS = {
-  'bg-meadow': { feature: 'log', say: 'Hop the logs!' },
+  'bg-meadow': { feature: 'log', say: 'Let go of the left thumb to hop the logs!' },
   'bg-castle': { feature: 'drawbridge', say: 'The drawbridge rises: later is steeper!' },
   'bg-sunset': { feature: 'dune', say: 'Pedal down the dunes, let go going up!' },
   'bg-ocean': { feature: 'wave', say: 'Pop off the wave when it curls!' },
@@ -556,9 +560,18 @@ export class Bike {
     if (k.state !== 'ground') return;
     // a release just before the lip: the pop waits for the lip
     const kk = this.nextKicker(k.x);
-    if (!kk) return;
-    const tt = (kk.lip - k.x) / Math.max(20, k.vx || k.v);
-    if (tt >= 0 && tt <= POP_WIN.good + 0.05) k.pending = { k: kk, grade: popGrade(tt) };
+    const tt = kk ? (kk.lip - k.x) / Math.max(20, k.vx || k.v) : 9;
+    if (tt >= 0 && tt <= POP_WIN.good + 0.05) { k.pending = { k: kk, grade: popGrade(tt) }; return; }
+    // away from the ramps, letting go is a bunny hop (over a log, say)
+    if (tt > HOP_CLEAR) this.hop(k);
+  }
+
+  /** A bunny hop on flat ground: about a meter up, enough to clear a log. */
+  hop(k) {
+    this.launchOff(k);
+    k.vy = -HOP_V * Math.sqrt(this.grav);
+    k.air.groundHop = true; k.air.offRail = false;
+    if (k === this.kid) this.sound = 'bikePop';
   }
 
   /** The left thumb lets go in the air: past half a flip, the flip finishes by itself. */
@@ -670,7 +683,7 @@ export class Bike {
     for (const f of this.near(nx)) {
       if (f.kind === 'log' && !f.hit && nx >= f.x && k.x < f.x) {
         f.hit = k === this.kid; k.v *= 0.6;
-        if (k === this.kid) { addPop(this, 'Bonk! Hop the logs!', k.x - this.camX, k.y - this.camY - 30, '#ffa8a8'); this.sound = 'bikeBonk'; }
+        if (k === this.kid) { addPop(this, 'Bonk! Let go to hop logs!', k.x - this.camX, k.y - this.camY - 30, '#ffa8a8'); this.sound = 'bikeBonk'; }
       }
       if (f.kind === 'loop' && k.x < f.x && nx >= f.x) {
         if (k.v >= 92 || k.ai) { k.state = 'loop'; k.loop = { f, phi: 0, y0: this.ground(f.x) }; return; }
@@ -787,7 +800,7 @@ export class Bike {
     if (rail) k.grind = { f: rail, t: 0, fromStart: k.x - rail.x < 14, flip: flips >= 1 };
     if (k.ai) { if (grade === 'crash') k.grind = null; this.aiLanded(k, flips, spins, grab, grade, h); return; }
     // a little bounce off a bump, not a jump: no trick, nothing lost
-    if (!a.fromLip && !a.offRail && !rail && a.t < 0.7 && grade !== 'crash') return;
+    if (!a.fromLip && !a.offRail && !rail && a.t < 0.7 && grade !== 'crash' && !(a.groundHop && a.overLog)) return;
     if (grade === 'crash') {
       k.state = 'crash'; k.crashT = CRASH_TIME; k.grind = null;
       this.chain = Math.floor(this.chain / 2); this.crashes += 1;

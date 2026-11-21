@@ -106,8 +106,28 @@ try {
       g = make(); toLip(g); air(g); g.step(0.1); g.down('R', g.W - 1); g.step(1 / 60); g.down('L', 1); const a = g.kid.air; g.step(0.3); out.together = { spins: a.spinsQueued, grab: a.grabMax, flip: a.flip }; g.up('L'); g.up('R');
       g = make(); toLip(g, 0.3); g.down('R', g.W - 1); g.up('R'); out.early = air(g)?.spinsQueued;
       g = make(); toLip(g); const b = air(g); g.down('L', 1); for (let i = 0; i < 120 && b.flip < 220; i += 1) g.step(1 / 60); g.up('L'); g.step(0.5); out.finish = b.flip;
+      // the meadow's logs: let go of the left thumb just before one and hop it
+      let hopped = 0; let bonks = 0;
+      for (const seed of [1, 2, 3, 4, 5, 6]) {
+        g = make(); g.seed = seed; g.restart(); g.down('s', 1); g.up('s');
+        const cards = []; const earn = g.earn.bind(g); g.earn = (k, ids, info) => { if (k === g.kid) cards.push(...ids); return earn(k, ids, info); };
+        const log = g.features.find((f) => f.kind === 'log' && !g.kickers.some((kk) => f.x > kk.lip && f.x < kk.lip + 60));
+        if (!log) continue;
+        g.down('L', 1);
+        for (let i = 0; i < 4000 && g.kid.x < log.x + 40; i += 1) {
+          const k = g.kid;
+          if (g.L && k.state === 'ground' && (log.x - k.x) / k.vx < 0.15 && log.x > k.x) g.up('L');
+          if (!g.L && k.state === 'ground' && k.x > log.x + 14) g.down('L', 1);
+          if (k.state === 'ground' && !g.L && k.x < log.x - 60) g.down('L', 1);
+          g.step(1 / 60);
+        }
+        if (cards.includes('loghop')) hopped += 1;
+        if (log.hit) bonks += 1;
+      }
+      out.logs = { hopped, bonks };
       return out;
     });
+    assert.ok(r.logs.hopped >= 2 && r.logs.bonks === 0, `letting go hops the logs (${JSON.stringify(r.logs)})`);
     assert.equal(r.longTap, 1, 'a long right press is still a spin');
     assert.equal(r.withLeft, 1, 'a right press spins even with the left thumb down');
     assert.equal(r.together.spins, 0, 'both together is not a spin');
