@@ -12,6 +12,7 @@ import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { recordWeekBest } from './leaderboard.js';
 import { recordCatch, catchSpecies } from './fishbook.js';
+import { recordDig, nextDry } from './digfinds.js';
 import {
   state, today, esc, save, render, openModal, currentKid, mover, exerciseInfo, kidTheme,
 } from './ctx.js';
@@ -23,10 +24,10 @@ import {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', dig: 'shovel' };
 // the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
-const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod' };
-const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod' };
+const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', dig: 'shovel' };
+const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', dig: 'shovel' };
 /** True when the kid would play with the visitor's gear: they don't own that kind. */
 const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
@@ -53,9 +54,13 @@ export function visitPlan(kid, visitors) {
   return planVisits(kid.id, visitors.map((v) => ({ id: v.id, gear: bestGear(v.owned) })), today(), heldGame(kid));
 }
 
-/** Fishing when the kid's buddy is holding a fishing rod (there's no field for it: the lake is in the game). */
+/**
+ * Fishing when the kid's buddy is holding a fishing rod, the dino dig with a shovel (there's no
+ * field for them: the lake and the dig site are in the game).
+ */
 function heldRod(kid) {
-  return itemById(kid.buddy?.outfit?.sport)?.kind === 'rod' ? 'fishing' : null;
+  const kind = itemById(kid.buddy?.outfit?.sport)?.kind;
+  return kind === 'rod' ? 'fishing' : kind === 'shovel' ? 'dig' : null;
 }
 
 export function gamesWith(kid, v, plan) {
@@ -94,6 +99,12 @@ export function playWith(kid, v, kind) {
     visitor: { buddy: v.buddy, name: v.name, gear, moves: moveIds(v) },
     map: kidTheme(kid),
     day: today(),
+    // the dino dig: the bones and treasures so far (needed bones come up more), the maps the kid
+    // has (skeletons from them come up more), and rounds on this map without its key piece
+    bones: kid.digBones || {},
+    treasures: kid.digTreasures || {},
+    maps: [...new Set([kidTheme(kid), 'bg-meadow', ...(kid.owned || []).filter((id) => id.startsWith('bg-'))])],
+    dry: kid.digDry?.[kidTheme(kid)] || 0,
     sounds,
     gamesLeft: () => playableFor(currentKid(kid0)),
     onStart: () => {
@@ -124,6 +135,22 @@ export function playWith(kid, v, kind) {
       kid.fishRecords = got.records;
       save();
       return got.first ? 'first' : 'record';
+    },
+    // the dino dig: every bone and treasure goes in the dig book (in the house)
+    onFind: (f) => {
+      const kid = currentKid(kid0);
+      const field = f.kind === 'bone' ? 'digBones' : 'digTreasures';
+      const records = { ...(kid[field] || {}) };
+      const got = recordDig(records, { key: f.key, q: f.q, date: today() });
+      kid[field] = records;
+      save();
+      return got;
+    },
+    onRound: (r) => {
+      const kid = currentKid(kid0);
+      const map = kidTheme(kid);
+      kid.digDry = { ...(kid.digDry || {}), [map]: nextDry(kid.digDry?.[map] || 0, Boolean(r.key)) };
+      save();
     },
   });
 }

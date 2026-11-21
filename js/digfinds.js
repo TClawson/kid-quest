@@ -498,8 +498,8 @@ export function seedFinds(map, cells, r, opts = {}) {
 // ---------- the kid's collection ----------
 /** Add a find to a record list ({ key: { n, q, date } }); answers 'new', 'better' or null. */
 export function recordDig(records = {}, { key, q = 1, date }) {
-  const old = records[key];
-  if (!old) { records[key] = { n: 1, q, date }; return 'new'; }
+  if (!records[key]) { records[key] = { n: 1, q, date }; return 'new'; }
+  const old = { ...records[key] }; records[key] = old;
   old.n += 1;
   if (q > (old.q || 1)) { old.q = q; old.date = date; return 'better'; }
   return null;

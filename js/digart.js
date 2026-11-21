@@ -768,12 +768,12 @@ const REGIONS = {
 const SCALE = { psitta: 0.8, compy: 0.65, raptor: 0.75, edmonto: 1, trike: 1, trex: 1, stego: 1, spino: 1, pachy: 0.9, mosa: 1 };
 
 /** A skeleton picture (96 x 56): bones = the kid's bones ({ key: ... }); all: draw it complete. */
-export function skeletonPic(dinoId, bones = {}, all = false) {
+export function skeletonPic(dinoId, bones = {}, all = false, small = false) {
   const dino = DINO_POSE[dinoId];
-  const P = POSES[dino.pose]; const k = (SCALE[dinoId] || 1) * 1.3;
+  const P = POSES[dino.pose]; const k = (SCALE[dinoId] || 1) * (small ? 0.8 : 1.3);
   const lit = new Set();
   for (const [part, regs] of Object.entries(REGIONS[dinoId])) if (all || bones[`${dinoId}-${part}`]) regs.forEach((r) => lit.add(r));
-  const Wc = 96; const Hc = 56;
+  const Wc = small ? 60 : 96; const Hc = small ? 36 : 56;
   const b = new Buf(Wc, Hc, 0);
   const ox = Math.round((Wc - 66 * k) / 2); const oy = Math.round(Hc - 3 - 38 * k);
   const T = ([a, c]) => [ox + a * k, oy + c * k];
@@ -791,7 +791,7 @@ export function skeletonPic(dinoId, bones = {}, all = false) {
   const knob = (A, on) => { const [px, py] = T(A); b.rect(Math.round(px) - 1, Math.round(py) - 1, 3, 3, on ? ON[0] : OFF[0], on ? 'on' : 'off'); };
   const S = P.spine;
   const region = (i) => (i < P.hip ? 'tail' : i >= P.sh ? 'neck' : 'back');
-  const th = 2;
+  const th = small ? 1 : 2;
   // the sail and the plates stand behind
   if (dinoId === 'spino') {
     const on = lit.has('sail'); const a0 = S[P.hip - 1][0]; const a1 = S[P.sh][0]; const tops = [];
@@ -854,7 +854,7 @@ export function skeletonPic(dinoId, bones = {}, all = false) {
   // the skull, from its find picture (a dark silhouette when missing), and its brow horns
   const sk = findPic(`${dinoId}-skull`);
   const [sx, sy] = T(H0);
-  const sc = dinoId === 'stego' ? 0.7 : 1;
+  const sc = (dinoId === 'stego' ? 0.7 : 1) * (small ? 0.6 : 1);
   const s2 = canvas(Math.round(sk.width * sc), Math.round(sk.height * sc)); const sx2 = s2.getContext('2d');
   sx2.imageSmoothingEnabled = false; sx2.drawImage(sk, 0, 0, s2.width, s2.height);
   if (!lit.has('skull')) {
@@ -893,6 +893,20 @@ export function displayPic(kind, id) {
       x.fillStyle = '#e0b23a'; x.fillRect(px - 2, 32, 2, 2); x.fillRect(px + 2, 32, 2, 2);
     }
     x.drawImage(skeletonPic(id, {}, true), 0, 2);
+    return c;
+  }
+  if (kind === 'stand-room') {
+    // the stand in the buddy's room: the same wood and brass, sized for the room's furniture
+    const c = canvas(60, 46); const x = c.getContext('2d');
+    const X = 4; const Wb = 52;
+    x.fillStyle = 'rgba(0,0,0,0.15)'; x.fillRect(X + 1, 44, Wb, 2);
+    x.fillStyle = OL; x.fillRect(X - 1, 34, Wb + 2, 10); x.fillRect(X + 2, 43, 4, 3); x.fillRect(X + Wb - 6, 43, 4, 3);
+    x.fillStyle = '#c68f53'; x.fillRect(X, 35, Wb, 3); x.fillStyle = '#d9a46a'; x.fillRect(X, 35, Wb, 1);
+    x.fillStyle = '#8b5a2b'; x.fillRect(X, 38, Wb, 5); x.fillStyle = '#a8703a'; x.fillRect(X, 38, Wb, 1);
+    x.fillStyle = OL; x.fillRect(X + 19, 39, 14, 4); x.fillStyle = '#e0b23a'; x.fillRect(X + 20, 40, 12, 2);
+    if (!id) return c;
+    for (const px of [24, 37]) { x.fillStyle = OL; x.fillRect(px - 1, 22, 3, 14); x.fillStyle = '#e0b23a'; x.fillRect(px, 23, 1, 13); }
+    x.drawImage(skeletonPic(id, {}, true, true), 0, 2);
     return c;
   }
   const c = canvas(24, 40); const x = c.getContext('2d');

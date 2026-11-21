@@ -661,7 +661,7 @@ export class Dig {
   tap(x, y) {
     if (this.phase === 'over') { if (this.t - this.overAt > 1.2) this.restart(); return; }
     if (this.locked) return;
-    if (this.phase === 'ready') this.start();
+    if (this.phase === 'ready') { if (this.onButton(x, y)) { this.press(); return; } this.start(); }
     if (this.heave) return; // hold still while heaving
     if (this.overtime) return;
     const wx = this.camX + x * this.zoom; const wy = this.camY + y * this.zoom;

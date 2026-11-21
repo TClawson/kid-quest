@@ -172,3 +172,14 @@ test('every site has a cliff foot, cues of all three kinds, and room to dig', ()
     assert.ok(L.top(10) > 20 && L.top(10) < 50);
   }
 });
+
+test('the shovel is sports gear in three versions, on sale from Friday, Dec 11', async () => {
+  const { itemById, comingSoon, bestGear } = await import('../js/items.js');
+  const { gameFor, GAME_NAMES } = await import('../js/play.js');
+  for (const t of ['regular', 'good', 'super']) assert.ok(itemById(`sport-shovel-${t}`), t);
+  assert.equal(comingSoon(itemById('sport-shovel-super'), '2026-12-10'), true);
+  assert.equal(comingSoon(itemById('sport-shovel-super'), '2026-12-11'), false);
+  assert.equal(bestGear(['sport-shovel-good']).shovel, 2);
+  assert.equal(gameFor({ shovel: 1 }), 'dig');
+  assert.equal(GAME_NAMES.dig, 'Dino dig');
+});

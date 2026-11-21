@@ -121,6 +121,8 @@ export const SPORTS = [
   { id: 'shoes', name: 'Running shoes', icon: '👟' },
   { id: 'football', name: 'Football', icon: '🏈' },
   { id: 'hockey', name: 'Hockey stick', icon: '🏒' },
+  // the new gear games add theirs here, in this order: sled, bike, skis, camera, shovel
+  { id: 'shovel', name: 'Shovel', icon: '🪏' },
 ];
 export const TIERS = [
   { tier: 1, id: 'regular', name: '', gems: 40 },
