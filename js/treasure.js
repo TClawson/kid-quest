@@ -17,6 +17,9 @@ export const TREASURE_START = '2026-11-05';
 export const LATE_DAYS = 2;
 export const PIECES_PER_MAP = 4;
 export const CHEST_GAMES = 2;
+/** Bad-luck guard: after this many silver or gold chests in a row with no map piece,
+ *  the next one always has one (Taylor's son went weeks without, 2026-11-21). */
+export const MAX_DRY_CHESTS = 6;
 
 /** Chests get better with the streak (counting the day the chest is for).
  *  piece: the chance of a treasure map piece as well as the prize (Taylor, 2026-11-15). */
@@ -55,17 +58,33 @@ export const TROPHIES = [
 
 export const trophyById = (id) => TROPHIES.find((t) => t.id === id);
 
-/** A seeded random number generator: the same text always gives the same numbers. */
+/**
+ * A seeded random number generator: the same text always gives the same numbers.
+ *
+ * The text is mixed well first (FNV-1a, then a murmur-style scramble), so texts that
+ * differ by one letter, like the same kid on the next day, give unrelated numbers.
+ * (Before 2026-11-21 the text was only summed up, so one kid's first roll just stepped
+ * up by about 1/6 each day: the map piece roll came round on a fixed pattern, and a
+ * kid could go weeks of silver chests without a piece.)
+ */
 export function rng(text) {
-  let s = 11;
-  for (const ch of String(text)) s = (s * 31 + ch.charCodeAt(0)) % 2147483647;
-  if (s <= 0) s = 11;
-  const next = () => {
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
+  let h = 0x811c9dc5;
+  for (const ch of String(text)) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 0x01000193);
+  }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  let s = h >>> 0;
+  // mulberry32
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  next();
-  return next;
 }
 
 /** Every chest a kid has opened, oldest first: [{ date, ...chest }]. */
@@ -79,18 +98,22 @@ export function openedChests(log, kidId) {
 
 /**
  * What the kid has found so far: trophies (a Set of ids), map pieces per map
- * ({ 'bg-meadow': 2 }) and the maps that are finished (a Set of background ids).
+ * ({ 'bg-meadow': 2 }), the maps that are finished (a Set of background ids), and
+ * dry: how many silver or gold chests in a row (the latest ones) had no map piece.
  */
 export function treasureFound(log, kidId) {
   const trophies = new Set();
   const pieces = {};
+  let dry = 0;
   for (const c of openedChests(log, kidId)) {
     if (c.kind === 'trophy' && !c.dupe) trophies.add(c.trophy);
     const map = c.kind === 'piece' ? c.map : c.piece; // old chests: kind 'piece'; now: an extra piece
     if (map) pieces[map] = Math.min(PIECES_PER_MAP, (pieces[map] || 0) + 1);
+    if (map) dry = 0;
+    else if (tierById(c.tier).piece > 0) dry += 1; // wooden chests can't hold pieces, so they don't count
   }
   const maps = new Set(Object.keys(pieces).filter((m) => pieces[m] >= PIECES_PER_MAP));
-  return { trophies, pieces, maps };
+  return { trophies, pieces, maps, dry };
 }
 
 /**
@@ -107,13 +130,15 @@ export function mapsNeedingPieces(unlocked, current, found) {
  * seed: text that fixes the roll (kid id and date), tier: from chestTier,
  * found: from treasureFound, maps: from mapsNeedingPieces, games: whether extra
  * visitor games are any use (only on the day itself, and with visitors around).
+ * A silver or gold chest always has a piece after MAX_DRY_CHESTS in a row without one.
  * Returns { tier, kind: 'coins'|'gems'|'games'|'trophy', coins?, gems?, games?, trophy?, dupe?, piece? },
  * where piece (a map id) is a treasure map piece that comes as well as the prize.
  */
 export function chestPrize({ seed, tier, found, maps = [], games = true }) {
   const r = rng(`${seed}|chest`);
   const pieceRoll = r();
-  const base = tier.piece > 0 && maps.length && pieceRoll < tier.piece ? { tier: tier.id, piece: maps[0] } : { tier: tier.id };
+  const due = (found.dry || 0) >= MAX_DRY_CHESTS; // too many in a row without one
+  const base = tier.piece > 0 && maps.length && (pieceRoll < tier.piece || due) ? { tier: tier.id, piece: maps[0] } : { tier: tier.id };
   const table = [['coins', 35], ['trophy', 30], ['gems', 15], ['games', games ? 20 : 0]];
   const total = table.reduce((s, [, w]) => s + w, 0);
   let x = r() * total;

@@ -3,6 +3,7 @@
 // - tapping it opens it: the prize is saved on the day and the chest shows open
 // - a chest from yesterday that was approved late waits, with a button to open it
 // - a silver chest's map piece comes as well as its prize, not instead of it
+// - after a run of silver chests with no piece, the next one always has one
 // - the trophy shelf lists every trophy and the unlocked maps
 // Run: npm run test:smoke   (SHOTS_DIR=... saves screenshots)
 import assert from 'node:assert/strict';
@@ -104,6 +105,8 @@ try {
   // ---- phone: yesterday's chest is still waiting
   {
     const { s } = family({ yesterdayOpen: false });
+    // a week of silver chests with no map piece: the bad-luck guard makes this one hold a piece
+    for (let i = 8; i >= 3; i -= 1) s.log[addDays(TODAY, -i)].kid_ava.chest = { tier: 'silver', kind: 'gems', gems: 5 };
     const { page, errors, ctx } = await open({ name: 'Pixel 7' }, s);
     await page.clock.runFor(600);
     await closePops(page);
@@ -113,7 +116,7 @@ try {
     await page.click('.k-hud .hud-chest');
     await page.clock.runFor(1500);
     if (shots) await page.screenshot({ path: `${shots}/chest-prize-phone.png` });
-    // (this kid and day roll a map piece as well as the trophy: the piece comes on top)
+    // (the piece comes on top of the prize)
     assert.equal(await page.locator('#modal .prize-piece').count(), 1, 'a map piece shows beside the prize');
     await page.click('#modal [data-action="modal-close"]');
     await page.clock.runFor(400);

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   chestTier, chestPrize, treasureFound, mapsNeedingPieces, chestReady, TROPHIES, CHEST_TIERS, PIECES_PER_MAP, TREASURE_START,
+  MAX_DRY_CHESTS, rng,
 } from '../js/treasure.js';
 import { emptyState, newId, defaultTasks, entryFor, tasksForDay, totalCoins, totalGems, totalXp, gamesLeft } from '../js/logic.js';
 
@@ -127,4 +128,58 @@ test('chest coins and gems count, but give no XP; chest games add to the day', (
   assert.equal(totalXp(state, kid, key), xp0);
   assert.equal(gamesLeft({ playLog: { day: key, n: 4 } }, key, 0, 2), 2);
   assert.ok(tasksForDay(state, kid, key, key).length > 0);
+});
+
+test("one kid's piece rolls on day after day aren't a pattern (the old roll stepped up about 1/6 a day)", () => {
+  // over many kids, how often today's roll and tomorrow's land in the same quarter
+  let same = 0;
+  let n = 0;
+  for (let k = 0; k < 400; k += 1) {
+    for (let d = 1; d < 28; d += 1) {
+      const a = rng(`kid_${k}x|2026-11-${String(d).padStart(2, '0')}|chest`)();
+      const b = rng(`kid_${k}x|2026-11-${String(d + 1).padStart(2, '0')}|chest`)();
+      if (Math.floor(a * 4) === Math.floor(b * 4)) same += 1;
+      n += 1;
+    }
+  }
+  assert.ok(Math.abs(same / n - 0.25) < 0.03, `same quarter ${same / n}`);
+});
+
+test('a silver kid opening a chest every day gets a piece about 25% of the time, day by day', () => {
+  let hits = 0;
+  let n = 0;
+  for (let k = 0; k < 100; k += 1) {
+    for (let d = 1; d <= 30; d += 1) {
+      const seed = `kid_${k}q|2026-11-${String(d).padStart(2, '0')}`;
+      if (chestPrize({ seed, tier: CHEST_TIERS[1], found: none, maps: ['bg-meadow'] }).piece) hits += 1;
+      n += 1;
+    }
+  }
+  assert.ok(hits / n > 0.21 && hits / n < 0.29, `silver ${hits / n}`);
+});
+
+test(`after ${MAX_DRY_CHESTS} silver or gold chests in a row without a piece, the next one has one`, () => {
+  const log = {};
+  const put = (day, chest) => { log[`2026-11-${day}`] = { k: { chest } }; };
+  put('10', { tier: 'silver', kind: 'piece', map: 'bg-meadow' }); // an old-style piece
+  put('11', { tier: 'silver', kind: 'coins', coins: 10 });
+  put('12', { tier: 'wood', kind: 'coins', coins: 5 }); // wooden chests don't count either way
+  for (let d = 13; d < 13 + MAX_DRY_CHESTS - 2; d += 1) put(String(d), { tier: 'silver', kind: 'gems', gems: 5 });
+  assert.equal(treasureFound(log, 'k').dry, MAX_DRY_CHESTS - 1);
+  // not due yet: some seeds still miss
+  let missed = 0;
+  for (let i = 0; i < 50; i += 1) if (!chestPrize({ seed: `k|${i}`, tier: CHEST_TIERS[1], found: treasureFound(log, 'k'), maps: ['bg-meadow'] }).piece) missed += 1;
+  assert.ok(missed > 0);
+  put(String(13 + MAX_DRY_CHESTS - 2), { tier: 'gold', kind: 'coins', coins: 20 });
+  const found = treasureFound(log, 'k');
+  assert.equal(found.dry, MAX_DRY_CHESTS);
+  for (let i = 0; i < 50; i += 1) {
+    assert.equal(chestPrize({ seed: `k|${i}`, tier: CHEST_TIERS[1], found, maps: ['bg-meadow'] }).piece, 'bg-meadow');
+    // but never from a wooden chest, or when every map is finished
+    assert.equal(chestPrize({ seed: `k|${i}`, tier: CHEST_TIERS[0], found, maps: ['bg-meadow'] }).piece, undefined);
+    assert.equal(chestPrize({ seed: `k|${i}`, tier: CHEST_TIERS[1], found, maps: [] }).piece, undefined);
+  }
+  // a piece starts the count over
+  put('28', { tier: 'silver', kind: 'coins', coins: 10, piece: 'bg-meadow' });
+  assert.equal(treasureFound(log, 'k').dry, 0);
 });
