@@ -474,7 +474,7 @@ export function viewWatch() {
         </div>
         <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
           <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
+          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, big: true, label: `${kid.name}'s buddy` })}</span>
         </button>
       </div>
       <p class="watch-session" id="watch-session">This time: ${mmss(n.session)}</p>
@@ -684,7 +684,7 @@ export function viewTimer() {
         </div>
         <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
           <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
+          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, big: true, label: `${kid.name}'s buddy` })}</span>
         </button>
       </div>
       ${task.listen ? `<p class="timer-ears" id="ears"><b id="ears-text" aria-live="polite"${earsText() ? '' : ' hidden'}>${esc(earsText())}</b></p>` : ''}
