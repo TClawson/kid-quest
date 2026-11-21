@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ITEMS, SLOTS, SPORTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel } from '../js/items.js';
+import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel, SPORTS } from '../js/items.js';
 
 test('every item has a known slot and unique id', () => {
   const slots = new Set(SLOTS.map((s) => s.id));
@@ -188,6 +188,7 @@ test('sports gear: every kind in 3 versions plus the fishing boat, bought with g
   const gear = ITEMS.filter((i) => i.slot === 'sport');
   assert.equal(gear.length, ITEMS.filter((i) => i.slot === 'sport' && i.tier === 3).length * 3 + 1);
   assert.ok(gear.length >= 16);
+  assert.ok(SPORTS.some((k) => k.id === 'sled'), 'the sled');
   assert.ok(SPORTS.some((k) => k.id === 'skis'), 'skis for the ski race');
   const boat = itemById('sport-boat');
   assert.equal(boat.gems, 100);
@@ -246,7 +247,7 @@ test('the fjord is for sale now that its music is written; nothing is "coming so
 test('new gear goes on sale on its Friday, one a week (Taylor, 2026-11-20)', async () => {
   const { GEAR_RELEASES, notYet, releaseDay, releaseLabel } = await import('../js/releases.js');
   const { comingSoon } = await import('../js/items.js');
-  const sled = { id: 'sport-sled-good', slot: 'sport', kind: 'sled', tier: 2 };
+  const sled = { id: 'sport-sled-good', slot: 'sport', kind: 'sled', tier: 2 }; // works before the sled's own items are merged
   assert.equal(releaseDay(sled), GEAR_RELEASES.sled);
   assert.equal(comingSoon(sled, '2026-11-26'), true, 'the day before');
   assert.equal(comingSoon(sled, '2026-11-27'), false, 'on its Friday');
