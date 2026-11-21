@@ -12,6 +12,8 @@ import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { recordWeekBest } from './leaderboard.js';
 import { recordCatch, catchSpecies } from './fishbook.js';
+import { recordTrick } from './bike.js';
+import { shownSeason } from './seasons.js';
 import {
   state, today, esc, save, render, openModal, currentKid, mover, exerciseInfo, kidTheme,
 } from './ctx.js';
@@ -23,10 +25,10 @@ import {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod' };
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', tricks: 'bike' };
 // the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
-const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod' };
-const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod' };
+const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', tricks: 'bike' };
+const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', tricks: 'bike' };
 /** True when the kid would play with the visitor's gear: they don't own that kind. */
 const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
@@ -58,17 +60,22 @@ function heldRod(kid) {
   return itemById(kid.buddy?.outfit?.sport)?.kind === 'rod' ? 'fishing' : null;
 }
 
+/** Trick jumps when the kid's buddy is holding a bike (the hill is in the game). */
+function heldBike(kid) {
+  return itemById(kid.buddy?.outfit?.sport)?.kind === 'bike' ? 'tricks' : null;
+}
+
 export function gamesWith(kid, v, plan) {
   const area = plan.areas.find((a) => a.members.includes(v.id));
   // a visitor fishing at the village pond goes fishing with you
   const theirs = area && PLAY_KINDS.includes(area.kind) ? area.kind : area?.kind === 'pond' ? 'fishing' : visitGame(v);
   // a visitor only lends their gear for a couple of games a day
   const lent = borrows(kid, theirs) && lendLeft(kid, today(), GEAR_KEY[theirs]) === 0 ? null : theirs;
-  return [...new Set([heldGame(kid) || heldRod(kid), lent, 'tag'].filter(Boolean))];
+  return [...new Set([heldGame(kid) || heldRod(kid) || heldBike(kid), lent, 'tag'].filter(Boolean))];
 }
 
 export function pickGame(kid, v, games) {
-  const held = heldGame(kid) || heldRod(kid);
+  const held = heldGame(kid) || heldRod(kid) || heldBike(kid);
   const note = (k) => (k === 'tag' ? 'No gear needed' : k === held ? `With your ${GEAR_WORD[k]}` : `With ${esc(v.name)}'s ${GEAR_WORD[k]}`);
   const lend = games.find((k) => k !== held && borrows(kid, k));
   const invite = lend
@@ -94,6 +101,10 @@ export function playWith(kid, v, kind) {
     visitor: { buddy: v.buddy, name: v.name, gear, moves: moveIds(v) },
     map: kidTheme(kid),
     day: today(),
+    season: shownSeason(today()),
+    book: kid.trickBook || {},
+    // a bike bought in the last day guarantees a golden ramp on its first ride
+    newBike: kind === 'tricks' && !kid.trickBook,
     sounds,
     gamesLeft: () => playableFor(currentKid(kid0)),
     onStart: () => {
@@ -116,6 +127,14 @@ export function playWith(kid, v, kind) {
       if (week !== kid.gameBests) { kid.gameBests = week; save(); }
     },
     // fishing: the biggest of each kind of fish goes in the fish book (in the house)
+    // trick jumps: every card landed goes in the trick book (in the status pop-up)
+    onTrick: (c) => {
+      const kid = currentKid(kid0);
+      const got = recordTrick(kid.trickBook, { ...c, height: c.height, dist: c.dist, date: today() });
+      kid.trickBook = got.book;
+      save();
+      return got.res;
+    },
     onCatch: (c) => {
       const kid = currentKid(kid0);
       const sp = catchSpecies(c.map, c.kind);

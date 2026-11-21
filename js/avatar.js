@@ -752,6 +752,22 @@ const GEAR_ART = {
     { S: SH('#343a40', '#5c636a', '#1b1e21'), T: '#e03131', B: '#1c7ed6' },
     { S: SH('#fcc419', '#ffe066', '#e67700'), T: '#e03131', B: '#e03131' },
   ]],
+  // a bike standing in front of the buddy's legs (ridden in the trick jumps game, js/bike.js)
+  bike: [4, 15, [
+    '....SSS....HH..',
+    '.....F.....F...',
+    '.....FFFFFFF...',
+    '......F...F.F..',
+    '.KKK...F.F..KKK',
+    'K...K..FF..K...K',
+    'K.D.FFFFFFFF.D.K',
+    'K...K..D...K...K',
+    '.KKK........KKK.',
+  ], [
+    { F: SH('#e03131', '#ff6b6b', '#a61e1e'), S: '#212529', H: '#1b1430', D: '#adb5bd' },
+    { F: SH('#1c7ed6', '#4dabf7', '#1259a3'), S: '#212529', H: '#1b1430', D: '#dee2e6' },
+    { F: SH('#fcc419', '#ffe066', '#e67700'), S: '#7048e8', H: '#1b1430', D: '#fff3bf' },
+  ]],
   rod: [17, 5, [
     '.....KK',
     '....KRK',
@@ -883,6 +899,9 @@ export const MOVE_ART = {
   cast: { gear: 'char', props: ['bobber'], ms: 1800 },
   reel: { gear: 'char', props: ['fish'], ms: 1800 },
   whopper: { gear: 'char', props: ['bigfish'], ms: 2200 },
+  wheelie: { gear: 'free', ms: 1600 },
+  bunnyhop: { gear: 'free', ms: 1400 },
+  tailwhip: { gear: 'free', ms: 1600 },
 };
 
 // ---------- what visitors catch in each map's pond ----------

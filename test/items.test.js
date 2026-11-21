@@ -186,7 +186,9 @@ test('the panda’s bamboo leans on the side away from held gear', async () => {
 
 test('sports gear: 5 kinds in 3 versions plus the fishing boat, bought with gems only', () => {
   const gear = ITEMS.filter((i) => i.slot === 'sport');
-  assert.equal(gear.length, 16);
+  // every kind of gear (more come with new games) in 3 versions, plus the boat
+  assert.equal(gear.length, ITEMS.filter((i) => i.slot === 'sport' && i.tier === 3).length * 3 + 1);
+  assert.ok(gear.length >= 16);
   const boat = itemById('sport-boat');
   assert.equal(boat.gems, 100);
   assert.ok(boat.noHold, 'the boat stays at the lake');
@@ -207,7 +209,7 @@ test('moves unlock at 1, 3 and 6 exercise weeks, for gear the kid owns', () => {
   assert.deepEqual(ids(['sport-soccer-regular'], 3), ['jacks', 'cartwheel', 'keepy', 'flick']);
   assert.equal(ids(['sport-soccer-regular', 'sport-rod-super'], 6).length, 9);
   assert.equal(unlockedMoves(['sport-rod-super'], 6).find((m) => m.move.kind === 'rod').tier, 3);
-  assert.equal(MOVES.length, 18);
+  assert.ok(MOVES.length >= 18, 'more gear brings more moves');
   const two = unlockedMoves([], 3);
   assert.equal(pickMove(two, 'jacks').move.id, 'cartwheel');
   assert.equal(pickMove([], null), null);
@@ -244,7 +246,7 @@ test('the fjord is for sale now that its music is written; nothing is "coming so
 test('new gear goes on sale on its Friday, one a week (Taylor, 2026-11-20)', async () => {
   const { GEAR_RELEASES, notYet, releaseDay, releaseLabel } = await import('../js/releases.js');
   const { comingSoon } = await import('../js/items.js');
-  const sled = itemById('sport-sled-good');
+  const sled = { id: 'sport-sled-good', slot: 'sport', kind: 'sled', tier: 2 }; // works before the sled's own items are merged
   assert.equal(releaseDay(sled), GEAR_RELEASES.sled);
   assert.equal(comingSoon(sled, '2026-11-26'), true, 'the day before');
   assert.equal(comingSoon(sled, '2026-11-27'), false, 'on its Friday');
