@@ -210,6 +210,11 @@ export const sounds = {
   splash: () => hiss(1800, 500, 0.5, 0.12, 'lowpass'),
   eep: () => { slide(1100, 1700, 0.07, 'square', 0.05); setTimeout(() => slide(1500, 900, 0.1, 'square', 0.05), 90); },
   goal: () => play([N.C5, N.E5, N.G5, N.C6, N.G5, N.C6], 0.08, 0.16, 'square', 0.1),
+  // the photo train: a shutter click, focus lock, an animal's pose, a bush rustling
+  snap: () => { hiss(4000, 1200, 0.06, 0.12, 'highpass'); setTimeout(() => hiss(3000, 900, 0.05, 0.09, 'highpass'), 70); },
+  lock: () => play([N.C6, N.G6], 0.04, 0.06, 'square', 0.05),
+  chime: () => play([N.E6, N.G6], 0.06, 0.18, 'sine', 0.09),
+  rustle: () => hiss(2500, 1500, 0.25, 0.05),
   over: (best) => (best ? play([N.C5, N.E5, N.G5, N.C6], 0.09, 0.2, 'square', 0.1) : play([N.G5, N.E5, N.C5], 0.1, 0.18, 'triangle', 0.12)),
   // the dino dig: a scoop of dirt, the clink of the shovel on bone, gem or metal, a big find's
   // heave and fanfare, a critter's squeak, and each map's twist (current, rain, meteor)

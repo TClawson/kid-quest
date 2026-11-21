@@ -53,6 +53,7 @@ import {
 import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
 import { GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
+import { openCritterAlbum, openCritterPage } from './albumview.js';
 import { SPOTS as FISH_SPOTS, boatThumb } from './fishing.js';
 import { PERSONALITIES } from './tagfun.js';
 import { chestTier, chestPrize, chestPiece, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
@@ -907,7 +908,7 @@ function visitorInfo(kid, s) {
   // once the quest is done, every visitor wants to play (see playWith)
   if (s.complete) {
     const left = gamesLeftFor(kid);
-    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', dig: 'Dino dig? Tap me!', tag: 'Wanna play tag? Tap me!' };
+    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', train: 'Wanna ride the photo train? Tap me!', dig: 'Dino dig? Tap me!', tag: 'Wanna play tag? Tap me!' };
     const plan = visitPlan(kid, visitors);
     visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[gamesWith(kid, v, plan)[0]] : "That's all our games today! See you tomorrow"; });
   } else if (playableFor(kid, false) > 0) {
@@ -1927,7 +1928,7 @@ function viewWardrobe() {
       ${ui.slot === 'garden' ? gardenShop(kid, prog) : ''}
       ${sportTab ? movesList(kid, prog) : ''}
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
-      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish. Visiting buddies with a shovel go on a 90-second dino dig: dig by cliffs, creeks and rocks for real dinosaur bones and treasures for your dig book, and show off a finished skeleton and a treasure in your house. Better shovels walk faster, see more of the dig site and find more.</p>` : ''}
+      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish. A camera takes you on the photo train to snap wild animals for your critter album. Better cameras focus faster, hold more film and zoom in on far-off animals. Visiting buddies with a shovel go on a 90-second dino dig: dig by cliffs, creeks and rocks for real dinosaur bones and treasures for your dig book, and show off a finished skeleton and a treasure in your house. Better shovels walk faster, see more of the dig site and find more.</p>` : ''}
       ${ui.slot === 'home' ? '<p class="muted small">Every task you finish earns coins to spend on furniture. Furniture goes in your buddy\'s house, and every buddy you have can use it. Each spot holds one thing at a time: tap something you own to put it in, or tap it again to take it out. Walk your buddy in the front door of your house in the village to see it!</p>' : ''}
       ${sportTab || ui.slot === 'home' || ui.slot === 'garden' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
@@ -3370,6 +3371,11 @@ actions['fish-page'] = (el) => {
   openFishPage(kidById(ui.kidId), el.dataset.species);
 };
 actions['fish-book-back'] = () => openFishBook(kidById(ui.kidId), ui.fbScroll || 0);
+actions['critter-page'] = (el) => {
+  ui.caScroll = $modal.querySelector('.modal-card')?.scrollTop || 0;
+  openCritterPage(kidById(ui.kidId), el.dataset.critter);
+};
+actions['album-back'] = () => openCritterAlbum(kidById(ui.kidId), ui.caScroll || 0);
 // the dig book (digbook-ui.js): beside the fish book in the house, and the dino dig's displays
 const digScroll = () => { const card = $modal.querySelector('.modal-card'); ui.dgScroll = card ? card.scrollTop : 0; };
 actions['dig-book'] = () => { sounds.tap(); openDigBook(kidById(ui.kidId), ui.dgTab || 'skeletons'); };
@@ -3449,18 +3455,18 @@ function gameTestCard() {
   return `
     <div class="card game-test">
       <h2>🎮 Try the games</h2>
-      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, football, fishing rod, shovel or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
+      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, football, fishing rod, camera, shovel or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
       <div class="game-test-pick">
         <label>Playing <select id="gt-kid">${opt(ui.gtKid || kids[0].id, who)}</select></label>
         <label>Their gear <select id="gt-kid-gear">${opt(ui.gtKidGear || '1', tiers)}</select></label>
         <label>Visitor <select id="gt-vis">${opt(ui.gtVis || (kids[1] || kids[0]).id, who)}</select></label>
         <label>Visitor's gear <select id="gt-vis-gear">${opt(ui.gtVisGear || '1', tiers)}</select></label>
-        <label>Map (fishing, dino dig, tag) <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
+        <label>Map (fishing, tag, photo train, dino dig) <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
         <label>Fishing boat <select id="gt-boat">${opt(ui.gtBoat || '0', [['0', 'No boat'], ['1', 'In the boat']])}</select></label>
         <label>Tag personality <select id="gt-pers">${opt(ui.gtPers || '', [['', 'Their buddy\'s own'], ...Object.entries(PERSONALITIES).map(([id, p]) => [id, p.name])])}</select></label>
       </div>
       <div class="row wrap">
-        ${['soccer', 'tag', 'hockey', 'football', 'fishing', 'dig'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
+        ${['soccer', 'tag', 'hockey', 'football', 'fishing', 'train', 'dig'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
       </div>
     </div>`;
 }
@@ -3493,7 +3499,7 @@ actions['game-test'] = (el) => {
   Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map'), gtBoat: val('gt-boat'), gtPers: val('gt-pers') });
   const kid = kidById(ui.gtKid) || state.kids[0];
   const other = kidById(ui.gtVis) || kid;
-  const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind === 'dig' ? 'shovel' : kind;
+  const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind === 'train' ? 'camera' : kind === 'dig' ? 'shovel' : kind;
   const gear = (tier) => (Number(tier) ? { [gearKind]: Number(tier) } : {});
   // the same kid on both sides still needs two names
   const visName = other.id === kid.id ? 'Visitor' : other.name;
@@ -3662,6 +3668,7 @@ Object.assign(actions, {
   'status-outfit': () => { closeModal(); actions.wardrobe(); },
   'status-scores': () => openLeaderboard(kidById(ui.kidId)),
   'status-fish': () => openFishBook(kidById(ui.kidId)),
+  'status-album': () => openCritterAlbum(kidById(ui.kidId)),
   menu: () => { sounds.tap(); openMenu(kidById(ui.kidId)); },
   'menu-music': () => {
     // music needs sounds: turning music on turns sounds on too
