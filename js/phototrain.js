@@ -50,9 +50,9 @@ import { seasonOf } from './seasons.js';
 export const GAME_SECONDS = 90;
 /** Each camera: focus time, film, zoom lens (far hills), telephoto (tighter frame), pose held longer. */
 export const CAMERAS = [
-  { tier: 1, focus: 0.6, film: 12, zoom: false, tele: false, posePlus: 0 },
-  { tier: 2, focus: 0.5, film: 14, zoom: true, tele: false, posePlus: 0 },
-  { tier: 3, focus: 0.4, film: 16, zoom: true, tele: true, posePlus: 0.4 },
+  { tier: 1, focus: 0.6, film: 15, zoom: false, tele: false, posePlus: 0 },
+  { tier: 2, focus: 0.5, film: 17, zoom: true, tele: false, posePlus: 0 },
+  { tier: 3, focus: 0.4, film: 19, zoom: true, tele: true, posePlus: 0.4 },
 ];
 export const cameraFor = (tier) => CAMERAS[clamp(tier || 1, 1, 3) - 1];
 /** The viewfinder, in game pixels (the telephoto frames tighter). */
