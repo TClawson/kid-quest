@@ -36,9 +36,10 @@ import { TagFun, personalityFor, MAP_TRICKS, trickFor } from './tagfun.js';
  * their ball games or fishing (with a rod), the same one all day (seed:
  * something like the date and the visitor's id), or tag when they have none.
  */
+/** The gear a game needs, when it isn't called the same as the game. */
+export const GAME_GEAR = { fishing: 'rod', sledding: 'sled', train: 'camera' };
 export function gameFor(gear = {}, seed = '') {
-  const need = { fishing: 'rod', train: 'camera' };
-  const games = ['soccer', 'hockey', 'football', 'fishing', 'train'].filter((k) => gear[need[k] || k]);
+  const games = ['soccer', 'hockey', 'football', 'fishing', 'sledding', 'train'].filter((k) => gear[GAME_GEAR[k] || k]);
   if (!games.length) return 'tag';
   let h = 7;
   for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -69,7 +70,7 @@ export const SWITCH_STEP = 0.1;
 /** Points taken off for a kick with the buddy it isn't the turn of. */
 export const WRONG_BUDDY = 2;
 
-export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag', hockey: 'Hockey', football: 'Football', fishing: 'Fishing', train: 'Photo train' };
+export const GAME_NAMES = { soccer: 'Keepy-uppy', tag: 'Tag', hockey: 'Hockey', football: 'Football', fishing: 'Fishing', sledding: 'Treasure hill', train: 'Photo train' };
 
 // ---------- tag levels ----------
 // Every LEVEL_HOLD seconds the field scrolls sideways to the next level. Tag goes
