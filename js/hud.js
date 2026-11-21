@@ -72,6 +72,7 @@ export function statusHtml(s) {
         <button class="t-tag" data-action="plan" data-kid="${esc(s.kidId)}">📝 Plan my day</button>
         <button class="t-tag" data-action="status-scores">📊 Family game scores</button>
         <button class="t-tag" data-action="status-fish">🐟 Fish book</button>
+        <button class="t-tag" data-action="status-album">📷 Critter album</button>
       </div>
     </div>`;
 }
