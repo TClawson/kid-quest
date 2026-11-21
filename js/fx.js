@@ -229,6 +229,22 @@ export const sounds = {
   chime: () => play([N.E6, N.G6], 0.06, 0.18, 'sine', 0.09),
   rustle: () => hiss(2500, 1500, 0.25, 0.05),
   over: (best) => (best ? play([N.C5, N.E5, N.G5, N.C6], 0.09, 0.2, 'square', 0.1) : play([N.G5, N.E5, N.C5], 0.1, 0.18, 'triangle', 0.12)),
+  // the dino dig: a scoop of dirt, the clink of the shovel on bone, gem or metal, a big find's
+  // heave and fanfare, a critter's squeak, and each map's twist (current, rain, meteor)
+  dig: () => hiss(700, 300, 0.12, 0.08, 'lowpass'),
+  'clink-tok': () => play([N.G4], 0, 0.06, 'triangle', 0.14),
+  'clink-ting': () => play([N.E6], 0, 0.12, 'sine', 0.12),
+  'clink-clank': () => play([N.C5, N.C5 * 1.06], 0, 0.08, 'square', 0.06),
+  tok: () => play([N.G4], 0, 0.05, 'triangle', 0.1),
+  thud: () => play([N.C4 / 2], 0, 0.06, 'triangle', 0.1),
+  big: () => play([N.C5, N.G5], 0.05, 0.12, 'square', 0.07),
+  heave: () => slide(140, 320, 0.25, 'triangle', 0.1),
+  find: () => play([N.E5, N.G5, N.C6], 0.06, 0.12, 'square', 0.08),
+  fanfare: () => play([N.C5, N.E5, N.G5, N.C6, null, [N.C5, N.E5, N.G5, N.C6]], 0.08, 0.3, 'square', 0.08),
+  critter: () => slide(1200, 1600, 0.06, 'sine', 0.06),
+  whoosh: () => hiss(400, 1600, 0.4, 0.06),
+  rain: () => hiss(3000, 2000, 0.6, 0.04),
+  meteor: () => slide(900, 120, 1.1, 'sawtooth', 0.04),
   // a quick rising whoosh for a buddy's sports move; fishing gets a plip
   move: (kind) => (kind === 'rod'
     ? play([N.G5, null, N.C6, N.E6], 0.09, 0.15, 'sine', 0.16)

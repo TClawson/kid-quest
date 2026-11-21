@@ -8,6 +8,7 @@ import { Bike } from './bike.js';
 import { Sledding } from './sledding.js';
 import { SkiRace } from './skirace.js';
 import { PhotoTrain } from './phototrain.js';
+import { Dig } from './dig.js';
 
 let open = null;
 
@@ -24,7 +25,8 @@ function layout(vw, vh) {
  * opts: { kid, visitor: { buddy, name, gear }, kind, best, sounds, onScore(score): a new best, onOver(score): any game's end,
  *   onCatch(fish): fishing only, the kid landed a fish (see Fishing);
  *   onFind(find), onRun(run), dry, season: the sled's treasure hill only (see Sledding);
- *   season, onTrick(card), book: trick jumps only, see Bike }
+ *   season, onTrick(card), book: trick jumps only, see Bike;
+ *   onDigFind(find), onRound(round), bones, treasures, maps, dry: the dino dig only (see Dig) }
  * Returns a function that closes the screen.
  */
 export function openPlay(opts) {
@@ -47,9 +49,9 @@ export function openPlay(opts) {
   for (const c of [field, hud]) { c.style.width = `${W * S}px`; c.style.height = `${H * S}px`; }
   stage.style.width = `${W * S}px`; stage.style.height = `${H * S}px`;
 
-  const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : opts.kind === 'sledding' ? Sledding : opts.kind === 'race' ? SkiRace : opts.kind === 'train' ? PhotoTrain : opts.kind === 'tricks' ? Bike : Play;
+  const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : opts.kind === 'sledding' ? Sledding : opts.kind === 'race' ? SkiRace : opts.kind === 'train' ? PhotoTrain : opts.kind === 'tricks' ? Bike : opts.kind === 'dig' ? Dig : Play;
   // fishing: the lake for the kid's map, and today's bait odds
-  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, onFind: opts.onFind, onRun: opts.onRun, onBook: opts.onBook, snow: opts.snow, dry: opts.dry, season: opts.season, weather: opts.weather, clues: opts.clues, onPhoto: opts.onPhoto, onClue: opts.onClue, onTrick: opts.onTrick, book: opts.book, newBike: opts.newBike });
+  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, onFind: opts.kind === 'dig' ? opts.onDigFind : opts.onFind, onRun: opts.onRun, onBook: opts.onBook, snow: opts.snow, dry: opts.dry, season: opts.season, weather: opts.weather, clues: opts.clues, onPhoto: opts.onPhoto, onClue: opts.onClue, onTrick: opts.onTrick, book: opts.book, newBike: opts.newBike, onRound: opts.onRound, bones: opts.bones, treasures: opts.treasures, maps: opts.maps });
   root.game = game; // for tests
   // fishing draws its lake and fish with finer pixels, and a better rod shows more of the
   // lake (fieldW x fieldH lake pixels, shrunk to fit the same screen)
@@ -83,7 +85,7 @@ export function openPlay(opts) {
     }
     // for tests: what the game is doing
     root.dataset.phase = game.phase;
-    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.kind === 'fishing' || game.kind === 'football' || game.kind === 'sledding' || game.kind === 'race' || game.kind === 'train' || game.kind === 'tricks' ? game.score : game.free.toFixed(1);
+    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.kind === 'fishing' || game.kind === 'football' || game.kind === 'sledding' || game.kind === 'race' || game.kind === 'train' || game.kind === 'tricks' || game.kind === 'dig' ? game.score : game.free.toFixed(1);
     if (game.buzz) { navigator.vibrate?.(game.buzz); game.buzz = null; }
     const n = game.kind === 'soccer' && game.next();
     root.dataset.next = n ? String(Math.round((n.at - game.t) * 1000)) : '';

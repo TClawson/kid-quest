@@ -127,6 +127,7 @@ export const SPORTS = [
   // the ski race with a visitor (js/skirace.js)
   { id: 'skis', name: 'Skis', icon: '🎿' },
   { id: 'camera', name: 'Camera', icon: '📷' },
+  { id: 'shovel', name: 'Shovel', icon: '🪏' },
 ];
 export const TIERS = [
   { tier: 1, id: 'regular', name: '', gems: 40 },

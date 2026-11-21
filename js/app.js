@@ -36,6 +36,7 @@ import { leaderboard, weekOf } from './leaderboard.js';
 import { openSkiBook } from './skibook-ui.js';
 import { openFindsBook, openFindPage, bookTabs } from './findsbook-ui.js';
 import { releaseDay, releaseLabel } from './releases.js';
+import { openDigBook, openDinoPage, openTreasurePage, openDisplayPicker, digShow } from './digbook-ui.js';
 import { openTrickBook, openTrickPage } from './trickbook-ui.js';
 import { bookPages, bookCount, fishSpecies, tankFishes, tankSlots, putInTank, takeFromTank, NICK_MAX, recordLb, recordClass } from './fishbook.js';
 import { realFish, fmtWeight, CLASSES, weightRanges } from './fishfacts.js';
@@ -910,7 +911,7 @@ function visitorInfo(kid, s) {
   // once the quest is done, every visitor wants to play (see playWith)
   if (s.complete) {
     const left = gamesLeftFor(kid);
-    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', sledding: 'Sledding? Tap me!', race: 'Race me down the hill? Tap me!', train: 'Wanna ride the photo train? Tap me!', tricks: 'Trick jumps on our bikes? Tap me!', tag: 'Wanna play tag? Tap me!' };
+    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', sledding: 'Sledding? Tap me!', race: 'Race me down the hill? Tap me!', train: 'Wanna ride the photo train? Tap me!', tricks: 'Trick jumps on our bikes? Tap me!', dig: 'Dino dig? Tap me!', tag: 'Wanna play tag? Tap me!' };
     const plan = visitPlan(kid, visitors);
     visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[gamesWith(kid, v, plan)[0]] : "That's all our games today! See you tomorrow"; });
   } else if (playableFor(kid, false) > 0) {
@@ -935,6 +936,8 @@ function visitorInfo(kid, s) {
 
 /** The map theme follows the kid's Places background. */
 const kidTheme = (kid) => kid.buddy?.outfit?.background || 'bg-meadow';
+/** The dino dig's stand and pedestal (and the dig book) show once a kid has a shovel or a find. */
+const hasDig = (kid) => Boolean(bestGear(kid.owned || []).shovel || Object.keys(kid.digBones || {}).length || Object.keys(kid.digTreasures || {}).length);
 /** A show can play again a minute after the last one. */
 const SHOW_AGAIN_MS = 60000;
 
@@ -1107,6 +1110,7 @@ function houseView(kid, list, mood) {
     garden: { thirsty: gardenThirsty(kid) },
     harvest: houseHarvest(state, kid, t),
     hud: kidHud(kid),
+    dig: hasDig(kid) ? digShow(kid) : null,
   });
 }
 
@@ -1117,6 +1121,8 @@ const houseHandlers = {
   onTank: () => openTankPicker(kidById(ui.kidId)),
   onFishBook: () => openFishBook(kidById(ui.kidId)),
   onTurntable: () => openTurntable(ui.kidId),
+  onStand: () => openDisplayPicker(kidById(ui.kidId), 'stand'),
+  onPedestal: () => openDisplayPicker(kidById(ui.kidId), 'pedestal'),
   spinning: (kidId) => spinning(kidId),
   onGarden: () => goGarden('house'),
   onExit: () => {
@@ -1925,7 +1931,7 @@ function viewWardrobe() {
       ${ui.slot === 'garden' ? gardenShop(kid, prog) : ''}
       ${sportTab ? movesList(kid, prog) : ''}
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
-      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish. Visiting buddies with a sled go sledding down your map's treasure hill: every hill hides its own real treasures for your finds book. Better sleds see farther, pull finds in, and the super sled can jump twice. A camera takes you on the photo train to snap wild animals for your critter album. Better cameras focus faster, hold more film and zoom in on far-off animals. Visiting buddies with a bike do trick jumps: every new trick you land is a card for your trick book, a good bike has pegs for grinding rails, and a super bike can boost in mid-air.</p>` : ''}
+      ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish. Visiting buddies with a sled go sledding down your map's treasure hill: every hill hides its own real treasures for your finds book. Better sleds see farther, pull finds in, and the super sled can jump twice. A camera takes you on the photo train to snap wild animals for your critter album. Better cameras focus faster, hold more film and zoom in on far-off animals. Visiting buddies with a bike do trick jumps: every new trick you land is a card for your trick book, a good bike has pegs for grinding rails, and a super bike can boost in mid-air. Visiting buddies with a shovel go on a 90-second dino dig: dig by cliffs, creeks and rocks for real dinosaur bones and treasures for your dig book, and show off a finished skeleton and a treasure in your house. Better shovels walk faster, see more of the dig site and find more.</p>` : ''}
       ${ui.slot === 'home' ? '<p class="muted small">Every task you finish earns coins to spend on furniture. Furniture goes in your buddy\'s house, and every buddy you have can use it. Each spot holds one thing at a time: tap something you own to put it in, or tap it again to take it out. Walk your buddy in the front door of your house in the village to see it!</p>' : ''}
       ${sportTab || ui.slot === 'home' || ui.slot === 'garden' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
@@ -3369,7 +3375,7 @@ actions['fish-page'] = (el) => {
 };
 actions['fish-book-back'] = () => openFishBook(kidById(ui.kidId), ui.fbScroll || 0);
 // the book in the house holds two books: fish and the treasure hill finds
-actions['book-tab'] = (el) => { sounds.tap(); (el.dataset.book === 'finds' ? openFindsBook : openFishBook)(kidById(ui.kidId)); };
+actions['book-tab'] = (el) => { sounds.tap(); ({ finds: openFindsBook, digs: (kid) => openDigBook(kid, ui.dgTab || 'skeletons') }[el.dataset.book] || openFishBook)(kidById(ui.kidId)); };
 actions['find-page'] = (el) => {
   const card = $modal.querySelector('.modal-card');
   ui.fdScroll = card ? card.scrollTop : 0;
@@ -3382,6 +3388,23 @@ actions['critter-page'] = (el) => {
   openCritterPage(kidById(ui.kidId), el.dataset.critter);
 };
 actions['album-back'] = () => openCritterAlbum(kidById(ui.kidId), ui.caScroll || 0);
+// the dig book (digbook-ui.js): beside the fish book in the house, and the dino dig's displays
+const digScroll = () => { const card = $modal.querySelector('.modal-card'); ui.dgScroll = card ? card.scrollTop : 0; };
+actions['dig-book'] = () => { sounds.tap(); openDigBook(kidById(ui.kidId), ui.dgTab || 'skeletons'); };
+actions['dig-tab'] = (el) => { sounds.tap(); ui.dgTab = el.dataset.tab; openDigBook(kidById(ui.kidId), ui.dgTab); };
+actions['dig-dino'] = (el) => { digScroll(); sounds.tap(); openDinoPage(kidById(ui.kidId), el.dataset.id); };
+actions['dig-treasure'] = (el) => { digScroll(); sounds.tap(); openTreasurePage(kidById(ui.kidId), el.dataset.key); };
+actions['dig-book-back'] = () => openDigBook(kidById(ui.kidId), ui.dgTab || 'skeletons', ui.dgScroll || 0);
+actions['dig-show'] = (el) => {
+  const kid = kidById(ui.kidId);
+  if (!kid) return;
+  const field = el.dataset.kind === 'stand' ? 'skeleton' : 'pedestal';
+  kid.digShow = { ...(kid.digShow || {}), [field]: el.dataset.id || null };
+  sounds.tap();
+  save();
+  render();
+  openDisplayPicker(kid, el.dataset.kind);
+};
 
 actions['tank-pick'] = (el) => {
   ui.tankPick = el.dataset.species;
@@ -3443,18 +3466,18 @@ function gameTestCard() {
   return `
     <div class="card game-test">
       <h2>🎮 Try the games</h2>
-      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, football, fishing rod, sled, bike, skis, camera or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
+      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, football, fishing rod, sled, bike, skis, camera, shovel or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
       <div class="game-test-pick">
         <label>Playing <select id="gt-kid">${opt(ui.gtKid || kids[0].id, who)}</select></label>
         <label>Their gear <select id="gt-kid-gear">${opt(ui.gtKidGear || '1', tiers)}</select></label>
         <label>Visitor <select id="gt-vis">${opt(ui.gtVis || (kids[1] || kids[0]).id, who)}</select></label>
         <label>Visitor's gear <select id="gt-vis-gear">${opt(ui.gtVisGear || '1', tiers)}</select></label>
-        <label>Map (fishing, sledding, ski race, tag, photo train, trick jumps) <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
+        <label>Map (fishing, sledding, ski race, tag, photo train, trick jumps, dino dig) <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
         <label>Fishing boat <select id="gt-boat">${opt(ui.gtBoat || '0', [['0', 'No boat'], ['1', 'In the boat']])}</select></label>
         <label>Tag personality <select id="gt-pers">${opt(ui.gtPers || '', [['', 'Their buddy\'s own'], ...Object.entries(PERSONALITIES).map(([id, p]) => [id, p.name])])}</select></label>
       </div>
       <div class="row wrap">
-        ${['soccer', 'tag', 'hockey', 'football', 'fishing', 'sledding', 'race', 'train', 'tricks'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
+        ${['soccer', 'tag', 'hockey', 'football', 'fishing', 'sledding', 'race', 'train', 'tricks', 'dig'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
       </div>
     </div>`;
 }
@@ -3487,7 +3510,7 @@ actions['game-test'] = (el) => {
   Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map'), gtBoat: val('gt-boat'), gtPers: val('gt-pers') });
   const kid = kidById(ui.gtKid) || state.kids[0];
   const other = kidById(ui.gtVis) || kid;
-  const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind === 'sledding' ? 'sled' : kind === 'race' ? 'skis' : kind === 'train' ? 'camera' : kind === 'tricks' ? 'bike' : kind;
+  const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind === 'sledding' ? 'sled' : kind === 'race' ? 'skis' : kind === 'train' ? 'camera' : kind === 'tricks' ? 'bike' : kind === 'dig' ? 'shovel' : kind;
   const gear = (tier) => (Number(tier) ? { [gearKind]: Number(tier) } : {});
   // the same kid on both sides still needs two names
   const visName = other.id === kid.id ? 'Visitor' : other.name;
