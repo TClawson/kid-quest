@@ -22,13 +22,13 @@
 // up() when the steering finger lifts and onButton/press for the boost button.
 import { Player, playLook, canvas, clamp } from './play.js';
 import { addPop } from './meter.js';
-import { hillFor, hillSpeed, snowOfDay, snowWords, SNOW_KINDS, SURFACES, rng, hash } from './slopes.js';
+import { HILLS, hillFor, hillSpeed, snowOfDay, snowWords, SNOW_KINDS, SURFACES, rng, hash } from './slopes.js';
 import { courseFor, skiGear, RARITY } from './skicourses.js';
 import { recordRace, foundIds, hillBest, hillCount, BADGE_NAMES } from './skibook.js';
 import { seasonOf } from './seasons.js';
 
 export const BASE_SPEED = 100; // pixels a second on a normal hill
-export const BAND = 100; // how tall the hill is (pixels across)
+export const BAND = 124; // how tall the hill is (pixels across)
 export const TRAIL_HW = 22; // half the trail's width
 export const SECTION_LEN = 420;
 export const SECTIONS = [700, 1800, 2900];
@@ -108,16 +108,24 @@ export function makeCourse(opts) {
   const hw = TRAIL_HW * (mech.width || 1);
   const M = BAND / 2;
   const A = M - hw - 3; // how far the trail swings away at a shortcut
-  const ph = [r() * 6, r() * 6];
+  const ph = [r() * 6, r() * 6, r() * 6];
+  // big, slow zigzags (Taylor, 2026-11-21: more swing, not more often), a different rhythm each race
+  const zigLen = 230 + r() * 110; const zigAmp = M - hw - 4;
   const picks = shortcutsFor(hill.id, opts.snow, opts.tier, opts.found, r);
   const visSlot = opts.visTakes == null ? (r() < 0.35 ? Math.floor(r() * 3) : -1) : opts.visTakes;
-  const sections = SECTIONS.map((sx, i) => {
+  const sections = SECTIONS.map((sx0, i) => {
     const side = r() < 0.5 ? -1 : 1;
     const sc = picks[i];
-    const yc = M - side * (Math.min(hw, TRAIL_HW) - LANE_HW);
-    const s = { i, sx, len: SECTION_LEN, side, yc, hw: sc.kind === 'bridge' ? 4 : LANE_HW, sc, kind: sc.kind, vis: i === visSlot, posts: [], ramp: null };
-    if (sc.kind === 'tunnel') for (let k = 0; k < 3; k += 1) s.posts.push({ x: sx + 110 + k * 95, y: yc + (k % 2 ? 3 : -3) });
-    if (sc.kind === 'jump') s.ramp = { x: sx + 24, w: 18, land: sx + SECTION_LEN - 70 };
+    const sx = Math.round(sx0 + (r() * 2 - 1) * 60);
+    const len = Math.round(360 + r() * 120);
+    // the way in is at the trail's edge, where the trail starts to swing away
+    const yc = M + side * A * Math.sin(Math.PI * 24 / len) - side * (Math.min(hw, TRAIL_HW) - LANE_HW);
+    // the hidden lane bends away from the trail, in a bow or a wave
+    const bend = 6 + r() * 10; const wave = r() < 0.5;
+    const y = (x) => { const u = clamp((x - sx) / len, 0, 1); return yc - side * bend * Math.sin(Math.PI * u) + (wave ? side * 6 * Math.sin(2 * Math.PI * u) * Math.sin(Math.PI * u) : 0); };
+    const s = { i, sx, len, side, yc, y, hw: sc.kind === 'bridge' ? 4 : LANE_HW, sc, kind: sc.kind, vis: i === visSlot, posts: [], ramp: null };
+    if (sc.kind === 'tunnel') for (let k = 0; k < 3; k += 1) { const px = sx + 100 + k * ((len - 160) / 2); s.posts.push({ x: px, y: y(px) + (k % 2 ? 3 : -3) }); }
+    if (sc.kind === 'jump') s.ramp = { x: sx + 24, w: 18, land: sx + len - 70 };
     return s;
   });
   const fade = (x) => {
@@ -126,31 +134,40 @@ export function makeCourse(opts) {
       if (x >= s.sx && x <= s.sx + s.len) return 0;
       d = Math.min(d, Math.abs(x - s.sx), Math.abs(x - s.sx - s.len));
     }
-    return clamp(d / 90, 0, 1);
+    return clamp(d / 110, 0, 1);
   };
   const walls = [];
   if (mech.walls) for (let x = 300; x < RACE_LEN - 200; x += 470) if (!sections.some((s) => x + 160 > s.sx - 40 && x < s.sx + s.len + 40)) walls.push({ x0: x, x1: x + 160 });
   const wallAt = (x) => walls.some((w) => x >= w.x0 && x <= w.x1);
   const halfWidth = (x) => (wallAt(x) ? 15 : hw);
   const center = (x) => {
-    const w = fade(x);
-    let c = M + w * (12 * Math.sin(x / 260 + ph[0]) + 5 * Math.sin(x / 97 + ph[1]));
+    const w = fade(x) * Math.min(1, x / 200);
+    let c = M + w * (zigAmp * (0.8 * Math.sin(x / zigLen + ph[0]) + 0.2 * Math.sin(x / 97 + ph[1])));
     for (const s of sections) if (x >= s.sx && x <= s.sx + s.len) c += s.side * A * Math.sin(Math.PI * (x - s.sx) / s.len);
     if (wallAt(x)) c = lerp(c, M, 0.6);
-    return c;
+    return clamp(c, hw + 2, BAND - hw - 2);
   };
+  // Snow (Taylor, 2026-11-21): all snow in winter (and on the glacier); otherwise a band of snow
+  // wanders down the trail, thinner in spring and autumn and thinnest in summer, when snow
+  // machines make it (and all year on the warm and pretend maps). Off the snow is slower.
+  const warm = !HILLS[hill.id]?.winter;
+  const full = hill.snowy;
+  const snowHw = full ? hw : (opts.season === 'summer' || (warm && opts.season !== 'winter')) ? 8 : 12;
+  const snowAt = (x) => (full ? center(x) : center(x) + (halfWidth(x) - snowHw - 2) * Math.sin(x / 150 + ph[2]));
+  const machines = [];
   const inSection = (x, pad = 0) => sections.find((s) => x >= s.sx - pad && x <= s.sx + s.len + pad);
   // things on the main trail
   const free = (x, pad = 30) => x > 120 && x < RACE_LEN - 80 && !inSection(x, pad);
+  if (!full) for (let x = 150; x < RACE_LEN; x += 210 + r() * 80) if (free(x, 10)) { const sd = snowAt(x) > center(x) ? 1 : -1; machines.push({ x, side: sd }); }
   const gates = []; const hazards = []; const ramps = []; const pads = []; const vents = []; const lava = []; const gaps = []; const wells = [];
-  for (let x = 160; x < RACE_LEN - 100; x += 190 + r() * 60) {
+  for (let x = 160; x < RACE_LEN - 100; x += 170 + r() * 60) {
     if (!free(x, 20)) continue;
-    const c = center(x); const h = halfWidth(x);
-    gates.push({ x, y: c + (r() * 2 - 1) * Math.max(0, h - 12), hw: 9, i: gates.length });
+    const c = full ? center(x) : snowAt(x); const h = full ? halfWidth(x) : snowHw + 6;
+    gates.push({ x, y: c + (r() * 2 - 1) * Math.max(0, h - 12), hw: 8, i: gates.length });
   }
   const nearThing = (x, y, list, d) => list.some((o) => Math.abs(o.x - x) < d && (o.y == null || Math.abs(o.y - y) < d));
   const hazardKinds = hill.hazards;
-  for (let x = 260; x < RACE_LEN - 120; x += 95 + r() * 70) {
+  for (let x = 240; x < RACE_LEN - 120; x += 70 + r() * 60) {
     // a few rocks on the swing, too, so the long way isn't the easy way
     const sec = inSection(x, 10);
     if (sec && (x < sec.sx + 60 || x > sec.sx + sec.len - 60)) continue;
@@ -160,13 +177,14 @@ export function makeCourse(opts) {
     hazards.push({ x, y, r: 4 + Math.round(r()), kind: hazardKinds[Math.floor(r() * hazardKinds.length)], near: false });
   }
   const per = (rate, fn) => { if (!rate) return; for (let x = 420; x < RACE_LEN - 200; x += (1000 / rate) * (0.6 + r() * 0.8)) if (free(x)) fn(x); };
-  per(mech.ramps ?? 1.2, (x) => { const y = center(x) + (r() * 2 - 1) * 6; if (!nearThing(x, y, hazards, 26)) ramps.push({ x, y, w: 14, hw: 9 }); });
+  per(mech.ramps ?? 1.2, (x) => { const y = snowAt(x) + (r() * 2 - 1) * 4; if (!nearThing(x, y, hazards, 26)) ramps.push({ x, y, w: 14, hw: 9 }); });
   if (mech.pads) per(4, (x) => { const y = center(x) + (r() * 2 - 1) * (halfWidth(x) - 8); if (!nearThing(x, y, hazards, 16)) pads.push({ x, y, r: 6 }); });
   if (mech.vents) per(2.5, (x) => { const y = center(x) + (r() * 2 - 1) * (halfWidth(x) - 8); if (!nearThing(x, y, hazards, 16)) vents.push({ x, y, r: 5 }); });
   if (mech.lava) per(3, (x) => { const y = center(x) + (r() * 2 - 1) * (halfWidth(x) - 6); if (!nearThing(x, y, hazards, 18) && !nearThing(x, y, vents, 18)) lava.push({ x, y, r: 5 }); });
   if (mech.gaps) per(1.6, (x) => { const c = center(x); const h = halfWidth(x); gaps.push({ x, by: c + (r() * 2 - 1) * (h - 9), bw: 7 }); });
   if (mech.wells) per(1.8, (x) => { wells.push({ x, y: center(x) + (r() < 0.5 ? -1 : 1) * (halfWidth(x) + 4), r: 40 }); });
-  // trees: everywhere off the trail and out of the open lanes
+  // trees: everywhere off the trail. The hidden lanes run under the trees (they thin out when
+  // you're in one); only each lane's way in is open, with something special to see there.
   const trees = [];
   const step = 9;
   for (let x = -60; x < RACE_LEN + 300; x += step) {
@@ -174,23 +192,27 @@ export function makeCourse(opts) {
       const tx = x + r() * step; const ty = y + r() * step;
       const c = center(tx); const h = halfWidth(tx);
       if (Math.abs(ty - c) < h + 5) continue;
-      const s = inSection(tx);
-      if (s && tx > s.sx - 2 && Math.abs(ty - s.yc) < s.hw + 4) continue;
-      // just below an open way, only low bushes, so tall crowns don't hide it
-      const low = (ty > c && ty - c < h + 17) || (s && tx > s.sx - 2 && ty > s.yc && ty - s.yc < s.hw + 17);
+      const s = inSection(tx, 4);
+      const ly = s ? s.y(tx) : 0;
+      if (s && tx > s.sx - 4 && tx < s.sx + 34 && Math.abs(ty - ly) < s.hw + 6) continue; // the way in
+      const over = s && tx > s.sx && Math.abs(ty - ly) < s.hw + 16 ? s.i : -1;
+      // just below the trail, only low bushes, so tall crowns don't hide it
+      const low = ty > c && ty - c < h + 17;
       // the start and finish areas stay open
       if (tx < 40 || tx > RACE_LEN - 10 && tx < RACE_LEN + 40) continue;
       // a thick hedge along the trail, thinner farther in (Fable's art review)
-      const far = Math.abs(ty - c) > h + 25 && !(s && Math.abs(ty - s.yc) < s.hw + 25);
+      const far = Math.abs(ty - c) > h + 25 && over < 0;
       if (far && r() < 0.35) continue;
-      trees.push({ x: Math.round(tx), y: Math.round(ty), k: Math.floor(r() * 4), low: !!low });
+      trees.push({ x: Math.round(tx), y: Math.round(ty), k: Math.floor(r() * 4), low: !!low, over });
     }
   }
   trees.sort((a, b) => a.y - b.y);
+  const surface = full ? hill.surface : 'snow';
   return {
     hill, course, mech, snow: opts.snow, len: RACE_LEN, hw, M, center, halfWidth, wallAt, sections, inSection,
-    gates, hazards, ramps, pads, vents, lava, gaps, wells, walls, trees,
-    speed: BASE_SPEED * hillSpeed(hill, opts.snow) * (mech.speed || 1),
+    gates, hazards, ramps, pads, vents, lava, gaps, wells, walls, trees, machines,
+    full, snowHw, snowAt, surface,
+    speed: BASE_SPEED * (full ? hillSpeed(hill, opts.snow) : SNOW_KINDS[opts.snow]?.speed || 1) * (mech.speed || 1),
     grip: SNOW_KINDS[opts.snow]?.grip || 1,
     air: 0.42 * (mech.air || 1),
     drift: mech.drift || 0,
@@ -330,9 +352,9 @@ export class SkiRace {
   think(p) {
     const c = this.c;
     const ahead = p.x + 34;
-    let aim = c.center(ahead);
+    let aim = c.snowAt(ahead);
     const sec = c.sections.find((s) => s.vis && ahead > s.sx - 60 && p.x < s.sx + s.len);
-    if (sec || p.lane) aim = (p.lane || sec).yc;
+    if (sec || p.lane) aim = (p.lane || sec).y(Math.max(ahead, (p.lane || sec).sx + 24));
     if (sec && !p.called && p.x > sec.sx - 140) { p.called = sec.i; this.pop('!', p, '#ffd43b', true); }
     if (!sec && !p.lane) {
       for (const h of c.hazards) {
@@ -384,6 +406,9 @@ export class SkiRace {
     // off the trail: deep snow, then trees
     const off = lane ? 0 : Math.max(0, Math.abs(p.y - ch) - hh);
     if (off > 0 && p.air <= 0) vt *= c.snow === 'slushy' ? 0.5 : 0.65;
+    // off the snow band (outside winter): grass, sand or mud is slower
+    p.offSnow = !c.full && !lane && p.air <= 0 && off <= 0 && Math.abs(p.y - c.snowAt(p.x)) > c.snowHw;
+    if (p.offSnow) vt *= 0.72;
     if (c.mech.tide && Math.abs(p.y - this.tideAt(p.x)) < 6) vt *= 1.15;
     if (lane) {
       if (lane.kind === 'ride') {
@@ -445,7 +470,7 @@ export class SkiRace {
   }
 
   tideAt(x) { return this.c.center(x) + Math.sin(x / 140) * (this.c.hw - 6); }
-  rideLane(s, x) { return s.yc + 3 * Math.sin((x - s.sx) / 38); }
+  rideLane(s, x) { return s.y(x) + 3 * Math.sin((x - s.sx) / 38); }
 
   /** Shortcut lanes: going in, the challenge, coming out. */
   lanes(p, px) {
@@ -453,7 +478,7 @@ export class SkiRace {
     if (!p.lane) {
       for (const s of c.sections) {
         const gate = s.sx + 24;
-        if (px < gate && p.x >= gate && Math.abs(p.y - s.yc) <= s.hw + 1.5) {
+        if (px < gate && p.x >= gate && Math.abs(p.y - s.y(gate)) <= s.hw + 1.5) {
           p.lane = s; p.clean = true; p.laneIn = 0; p.laneT = 0; p.laneStart = this.raceT;
           if (p === this.kid) {
             const isNew = !this.found.has(s.sc.id) && !p.runs.some((r) => r.id === s.sc.id);
@@ -468,7 +493,7 @@ export class SkiRace {
     const s = p.lane;
     // the jump: centered on the ramp flies all the way to the landing; off-center lands short
     if (s.ramp && px < s.ramp.x + s.ramp.w && p.x >= s.ramp.x + s.ramp.w && p.air <= 0) {
-      const good = Math.abs(p.y - s.yc) < 4;
+      const good = Math.abs(p.y - s.y(p.x)) < 4;
       const dist = good ? s.ramp.land - p.x : (s.ramp.land - p.x) * 0.55;
       p.airMax = p.air = dist / Math.max(40, p.v);
       p.v *= 1.05; p.head = 0;
@@ -483,13 +508,14 @@ export class SkiRace {
       }
     }
     // the walls of the lane
-    if (p.air <= 0 && p.x < s.sx + s.len - 6 && Math.abs(p.y - s.yc) > s.hw) {
+    const ly = s.y(p.x);
+    if (p.air <= 0 && p.x < s.sx + s.len - 6 && Math.abs(p.y - ly) > s.hw) {
       if (s.kind === 'bridge') {
         this.tumble(p, 'Splash!');
         p.clean = false;
-        p.y = s.yc; p.head = 0;
+        p.y = ly; p.head = 0;
       } else {
-        p.y = s.yc + Math.sign(p.y - s.yc) * s.hw;
+        p.y = ly + Math.sign(p.y - ly) * s.hw;
         p.head *= -0.3;
         this.laneBump(p, 'Bump!');
       }
@@ -562,7 +588,7 @@ export class SkiRace {
     p.v *= 0.5; p.safe = p.spin + 0.8; p.chain = 0; p.head = 0;
     if (p.lane) p.clean = false;
     if (p === this.kid) { this.pop(word, p, '#ffa8a8'); this.buzz = 60; this.sound = 'drop'; }
-    for (let i = 0; i < 8; i += 1) this.fx.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 50, vy: (Math.random() - 0.5) * 50, life: 0.5, color: SURFACES[this.c.hill.surface]?.spray || '#fff' });
+    for (let i = 0; i < 8; i += 1) this.fx.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 50, vy: (Math.random() - 0.5) * 50, life: 0.5, color: SURFACES[this.c.surface]?.spray || '#fff' });
   }
 
   gatesFor(p, px) {
@@ -629,6 +655,13 @@ export class SkiRace {
       ctx.fillStyle = this.tint(pal.ground[2], -0.2); ctx.fillRect(sx, bot - 2, 1, 2);
       // groomer lines
       if (x % 7 === 0) { ctx.fillStyle = this.tint(pal.ground[0], -0.05); for (let yy = top + 5; yy < bot - 3; yy += 6) ctx.fillRect(sx, yy, 1, 1); }
+      if (!c.full) {
+        // the band of snow down the trail
+        const sy = c.snowAt(x); const st = Math.round(sy - c.snowHw - cy) + (sc ? 1 : 0); const sb = Math.round(sy + c.snowHw - cy) - (sc ? 1 : 0);
+        ctx.fillStyle = '#cfe0f0'; ctx.fillRect(sx, st, 1, sb - st + 1);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(sx, st, 1, sb - st - 1);
+        if (x % 9 === 0) { ctx.fillStyle = '#e3edf7'; ctx.fillRect(sx, Math.round(sy - cy), 1, 1); }
+      }
       if (c.mech.tide) { const ty = Math.round(this.tideAt(x) - cy); ctx.fillStyle = 'rgba(30,120,170,0.28)'; ctx.fillRect(sx, ty - 5, 1, 10); if ((x + Math.floor(this.t * 20)) % 9 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(sx, ty - 5, 1, 1); } }
     }
     // shortcut lanes
@@ -653,10 +686,15 @@ export class SkiRace {
     for (const p of [this.vis, this.kid]) this.drawMarks(ctx, p, cx, cy);
     // everything with height, back to front
     const things = [];
-    for (const t of c.trees) if (t.x > cx - 10 && t.x < cx + VW + 10 && t.y > cy - 20 && t.y < cy + VH + 20) things.push({ y: t.y, f: () => this.drawTree(ctx, t, t.x - cx, t.y - cy) });
+    const thin = this.kid.lane ? this.kid.lane.i : -1;
+    for (const t of c.trees) if (t.x > cx - 10 && t.x < cx + VW + 10 && t.y > cy - 20 && t.y < cy + VH + 20) {
+      if (t.over >= 0 && t.over === thin) things.push({ y: t.y, f: () => { ctx.globalAlpha = 0.28; this.drawTree(ctx, t, t.x - cx, t.y - cy); ctx.globalAlpha = 1; } });
+      else things.push({ y: t.y, f: () => this.drawTree(ctx, t, t.x - cx, t.y - cy) });
+    }
+    for (const m of c.machines) if (m.x > cx - 20 && m.x < cx + VW + 20) { const my = c.center(m.x) + m.side * (c.halfWidth(m.x) + 4); things.push({ y: my, f: () => this.drawMachine(ctx, m, m.x - cx, my - cy) }); }
     for (const h of c.hazards) if (h.x > cx - 10 && h.x < cx + VW + 10) things.push({ y: h.y, f: () => this.drawHazard(ctx, h, h.x - cx, h.y - cy) });
     for (const g of c.gates) if (g.x > cx - 10 && g.x < cx + VW + 10) { things.push({ y: g.y - g.hw, f: () => this.drawFlag(ctx, g.x - cx, g.y - g.hw - cy, g.i) }); things.push({ y: g.y + g.hw, f: () => this.drawFlag(ctx, g.x - cx, g.y + g.hw - cy, g.i) }); }
-    for (const s of c.sections) for (const o of s.posts) if (o.x > cx - 10 && o.x < cx + VW + 10) things.push({ y: o.y, f: () => this.drawPost(ctx, o.x - cx, o.y - cy) });
+    for (const s of c.sections) if (this.inside(s)) for (const o of s.posts) if (o.x > cx - 10 && o.x < cx + VW + 10) things.push({ y: o.y, f: () => this.drawPost(ctx, o.x - cx, o.y - cy) });
     for (const s of c.sections) if (s.sx > cx - 40 && s.sx < cx + VW + 40) this.mouthThings(ctx, s, cx, cy, things);
     for (const p of [this.kid, this.vis]) {
       things.push({ y: p.y, f: () => this.drawRider(ctx, p, cx, cy) });
@@ -674,27 +712,18 @@ export class SkiRace {
     return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
   }
 
+  /** Is the kid inside this lane? Then its trees thin out and its floor shows. */
+  inside(s) { return this.kid.lane === s; }
+
   drawLane(ctx, s, cx, cy) {
+    if (!this.inside(s)) return; // under the trees: only the way in shows (mouthThings)
     const pal = this.pal;
     const x0 = Math.max(s.sx + 20, cx); const x1 = Math.min(s.sx + s.len, cx + this.fieldW);
-    const col = { ice: '#c5f6fa', tunnel: this.tint(pal.ground[0], -0.06), bridge: '#3b2a1e', ride: pal.ground[0], jump: pal.ground[0] }[s.kind];
-    // until it's found (or someone is in it), the way looks like plain forest floor
-    const known = this.found.has(s.sc.id) || this.kid.runs.some((r) => r.id === s.sc.id) || this.kid.lane === s || this.vis.lane === s;
-    if (!known) {
-      // undergrowth over it (you ski right through), so it reads as more forest
-      for (let x = Math.ceil(x0 / 6) * 6; x < x1; x += 6) {
-        for (const row of [0, 1]) {
-          const hsh = hash(`${s.sx}:${x}:${row}`);
-          if (hsh % 5 === 0) continue;
-          this.drawBush(ctx, x - cx + (hsh % 5) - 2, s.yc + (row ? 3 : -5) + ((hsh >> 3) % 4) - cy + 3);
-        }
-      }
-      return;
-    }
+    const col = { ice: '#c5f6fa', tunnel: this.tint('#ffffff', -0.08), bridge: '#3b2a1e', ride: '#ffffff', jump: '#ffffff' }[s.kind];
     for (let x = x0; x < x1; x += 1) {
-      const top = Math.round(s.yc - s.hw - cy);
+      const top = Math.round(s.y(x) - s.hw - cy);
       if (s.kind !== 'bridge') {
-        ctx.fillStyle = this.tint(pal.ground[0], 0.35); ctx.fillRect(x - cx, top - 1, 1, 1);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(x - cx, top - 1, 1, 1);
         ctx.fillStyle = this.tint(pal.ground[2], -0.2); ctx.fillRect(x - cx, top + s.hw * 2, 1, 2);
       }
       if (s.kind === 'bridge') {
@@ -713,37 +742,72 @@ export class SkiRace {
         if ((x + Math.floor(this.t * 40)) % 8 < 3) { ctx.fillStyle = '#ffd43b'; ctx.fillRect(x - cx, ly - 4, 1, 1); ctx.fillRect(x - cx, ly + 4, 1, 1); }
       }
     }
-    if (s.ramp && s.ramp.x > cx - 20) this.drawRamp(ctx, s.ramp.x - cx, s.yc - cy, s.ramp.w, 5);
     if (s.ramp) {
       // the landing zone
-      const lx = s.ramp.land - cx;
-      ctx.fillStyle = 'rgba(255,212,59,0.5)';
-      ctx.fillRect(Math.round(lx - 6), Math.round(s.yc - cy - 5), 12, 1);
-      ctx.fillRect(Math.round(lx - 6), Math.round(s.yc - cy + 5), 12, 1);
+      const lx = s.ramp.land - cx; const ly = s.y(s.ramp.land);
+      ctx.fillStyle = 'rgba(255,212,59,0.7)';
+      ctx.fillRect(Math.round(lx - 6), Math.round(ly - cy - 5), 12, 1);
+      ctx.fillRect(Math.round(lx - 6), Math.round(ly - cy + 5), 12, 1);
     }
   }
 
   drawRoof(ctx, s, cx, cy) {
-    const top = Math.round(s.yc - s.hw - 3 - cy);
+    if (!this.inside(s)) return;
     const x0 = Math.max(s.sx + 30, cx) - cx; const x1 = Math.min(s.sx + s.len - 20, cx + this.fieldW) - cx;
-    if (x1 <= x0) return;
-    ctx.fillStyle = 'rgba(20,16,30,0.22)';
-    ctx.fillRect(x0, top, x1 - x0, s.hw * 2 + 6);
-    ctx.fillStyle = this.pal.props[1];
-    for (let x = x0; x < x1; x += 1) if ((x + cx) % 5 < 3) { ctx.fillRect(x, top - 1, 1, 2); ctx.fillRect(x, top + s.hw * 2 + 5, 1, 2); }
+    for (let x = x0; x < x1; x += 1) {
+      const top = Math.round(s.y(x + cx) - s.hw - 3 - cy);
+      ctx.fillStyle = 'rgba(20,16,30,0.22)'; ctx.fillRect(x, top, 1, s.hw * 2 + 6);
+      if ((x + cx) % 5 < 3) { ctx.fillStyle = this.pal.props[1]; ctx.fillRect(x, top - 1, 1, 2); ctx.fillRect(x, top + s.hw * 2 + 5, 1, 2); }
+    }
+  }
+
+  /**
+   * The way in: something special to spot at the forest's edge, by the kind of lane (a cave
+   * mouth, a ramp, a frozen creek, a bridge's first planks, a lane of arrows), plus a clue on
+   * the trail. Found ones get a signpost.
+   */
+  entrance(ctx, s, cx, cy) {
+    const x = Math.round(s.sx + 6 - cx); const y = Math.round(s.y(s.sx + 20) - cy);
+    const blink = Math.floor(this.t * 3) % 2;
+    if (s.kind === 'tunnel') {
+      // a stone arch with a dark mouth
+      ctx.fillStyle = '#495057'; ctx.fillRect(x + 6, y - 10, 14, 20);
+      ctx.fillStyle = '#868e96'; ctx.fillRect(x + 7, y - 9, 12, 18);
+      ctx.fillStyle = '#1b1430'; ctx.fillRect(x + 10, y - 6, 9, 12); ctx.fillRect(x + 11, y - 7, 8, 14);
+      ctx.fillStyle = '#ced4da'; for (const k of [-8, -3, 2, 7]) ctx.fillRect(x + 8, y + k, 2, 1);
+      if (this.c.hill.snowy) { ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 6, y - 11, 14, 2); }
+    } else if (s.kind === 'jump') {
+      this.drawRamp(ctx, x + 18, y, 18, 6);
+    } else if (s.kind === 'ice') {
+      // a frozen creek running into the trees
+      ctx.fillStyle = '#74c0fc'; ctx.fillRect(x, y - 5, 30, 10);
+      ctx.fillStyle = '#c5f6fa'; ctx.fillRect(x + 1, y - 4, 28, 8);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 4 + blink * 9, y - 2, 3, 1); ctx.fillRect(x + 16 - blink * 5, y + 2, 2, 1);
+    } else if (s.kind === 'bridge') {
+      // the first planks and two rope posts
+      ctx.fillStyle = '#1f3b57'; ctx.fillRect(x + 8, y - 7, 22, 14);
+      for (let k = 0; k < 22; k += 1) { ctx.fillStyle = k % 4 ? '#a0703f' : '#7a5230'; ctx.fillRect(x + 8 + k, y - 4, 1, 8); }
+      ctx.fillStyle = '#5c3d1e'; ctx.fillRect(x + 7, y - 9, 2, 5); ctx.fillRect(x + 7, y + 4, 2, 5);
+      ctx.fillStyle = '#e9d2b4'; ctx.fillRect(x + 9, y - 8, 20, 1); ctx.fillRect(x + 9, y + 7, 20, 1);
+    } else {
+      // a lane of moving arrows, glowing in the map's color
+      for (let k = 0; k < 4; k += 1) {
+        ctx.fillStyle = (k + Math.floor(this.t * 6)) % 4 === 0 ? '#ffffff' : '#ffd43b';
+        const ax = x + 8 + k * 6;
+        ctx.fillRect(ax, y - 3, 1, 2); ctx.fillRect(ax + 1, y - 1, 1, 2); ctx.fillRect(ax, y + 1, 1, 2);
+      }
+    }
+    if (s.sc.rarity === 'legendary' && blink) { ctx.fillStyle = '#ffd43b'; ctx.fillRect(x + 14, y - 13, 1, 3); ctx.fillRect(x + 13, y - 12, 3, 1); }
   }
 
   /** The way in: hidden by bushes and marked by a clue until found; a signpost once it's in the book. */
   mouthThings(ctx, s, cx, cy, things) {
     const found = this.found.has(s.sc.id) || this.kid.runs.some((r) => r.id === s.sc.id);
-    const mx = s.sx + 16; const my = s.yc;
+    const my = s.yc;
+    things.push({ y: my - s.hw - 1, f: () => this.entrance(ctx, s, cx, cy) });
     if (found) {
       things.push({ y: my - s.hw - 2, f: () => this.drawSign(ctx, s.sx - 4 - cx, my - s.hw - 3 - cy, s.sc.rarity) });
       return;
-    }
-    // bushes across the way in (you can ski right through them)
-    if (!this.kid.lane || this.kid.lane !== s) {
-      for (let k = -1; k <= 1; k += 1) things.push({ y: my + k * 4, f: () => this.drawBush(ctx, mx + (k === 0 ? 3 : 0) - cx, my + k * 4 - cy) });
     }
     // the clue shows from a distance that grows with better skis
     const dist = s.sx - this.kid.x;
@@ -772,6 +836,24 @@ export class SkiRace {
         ctx.fillRect(Math.round(ex + 12), Math.round(ey - s.hw), 6, s.hw * 2);
       }
     } });
+  }
+
+  /** A snow machine at the trail's edge, puffing snow onto the band. */
+  drawMachine(ctx, m, x, y) {
+    x = Math.round(x); y = Math.round(y);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x - 4, y + 1, 9, 2);
+    ctx.fillStyle = '#1b1430'; ctx.fillRect(x - 4, y - 7, 9, 8);
+    ctx.fillStyle = '#fab005'; ctx.fillRect(x - 3, y - 6, 7, 6);
+    ctx.fillStyle = '#495057'; ctx.fillRect(x - 1, y - 4, 3, 3);
+    ctx.fillStyle = '#ced4da'; ctx.fillRect(x, y - 3, 1, 1);
+    // the nozzle and the spray, toward the snow
+    const d = -m.side;
+    ctx.fillStyle = '#495057'; ctx.fillRect(x + 4, y - 7 + (d > 0 ? 4 : -2), 3, 2);
+    for (let k = 0; k < 4; k += 1) {
+      const ph = (this.t * 2 + k / 4) % 1;
+      ctx.fillStyle = `rgba(255,255,255,${0.9 * (1 - ph)})`;
+      ctx.fillRect(Math.round(x + 7 + ph * 10), Math.round(y - 6 + d * ph * 14 + (k % 2)), 2, 2);
+    }
   }
 
   drawSign(ctx, x, y, rarity) {
@@ -1101,7 +1183,7 @@ export class SkiRace {
       ctx.fillStyle = '#1b1430'; ctx.beginPath(); ctx.arc(sx0 + k * (sx1 - sx0), sy, u * 0.65, 0, 7); ctx.fill();
       ctx.fillStyle = col; ctx.beginPath(); ctx.arc(sx0 + k * (sx1 - sx0), sy, u * 0.48, 0, 7); ctx.fill();
     }
-    const words = snowWords(this.snow, c.hill.surface);
+    const words = snowWords(this.snow, c.surface);
     if (this.phase === 'play' || this.phase === 'finish') {
       pill(u * 0.6, sy + u * 1.1, u * 6.6, u * 2.2);
       text(`${this.raceT.toFixed(1)} s`, u * 1.3, sy + u * 2.2, u * 2, '#ffffff', 'left');
@@ -1156,7 +1238,7 @@ export class SkiRace {
       const lines = [
         [`${c.hill.name}: race ${this.visName}!`, 2.2, '#ffd43b'],
         [`Today: ${words.emoji} ${words.name}`, 1.6, '#ffffff'],
-        [c.course.twist, 1.3, '#e9ecef'],
+        [c.full ? c.course.twist : `${c.course.twist} Stay on the snow!`, 1.3, '#e9ecef'],
         [`Shortcuts found: ${n.found} of ${n.total}${best ? `   Best ${best.toFixed(1)} s` : ''}`, 1.3, '#b2f2bb'],
       ];
       if (this.rare) lines.push(['Something rare is hiding on the hill today...', 1.3, '#ffd43b']);

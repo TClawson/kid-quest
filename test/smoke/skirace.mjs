@@ -35,7 +35,7 @@ try {
             if (g.phase === 'play' && !g.touch) g.tap(1, 1);
             const k = g.kid; const c = g.c;
             const s = c.sections.find((q) => (k.lane === q || (q.sx + 24 > k.x && q.sx - k.x < 120)));
-            k.aim = s ? (k.lane && s.kind === 'ride' ? g.rideLane(s, k.x + 10) : s.yc) : c.center(k.x + 30);
+            k.aim = s ? (k.lane && s.kind === 'ride' ? g.rideLane(s, k.x + 10) : s.y(Math.max(s.sx + 24, (g.kid.x) + 12))) : c.snowAt(k.x + 30);
             g.step(1 / 60);
             for (const p of [g.kid, g.vis]) if (p.y < 0 || p.y > BAND) off += 1;
           }
