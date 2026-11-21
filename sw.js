@@ -23,6 +23,7 @@ const SHELL = [
   'js/sync-ui.js',
   'js/celebrate.js',
   'js/play-ui.js',
+  'js/slopes.js',
   'js/logic.js',
   'js/fx.js',
   'js/nfctest.js',
