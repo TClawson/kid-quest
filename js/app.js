@@ -33,6 +33,7 @@ import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout,
 import { seedThumb, decorThumb } from './gardenart.js';
 import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
 import { leaderboard, weekOf } from './leaderboard.js';
+import { releaseDay, releaseLabel } from './releases.js';
 import { bookPages, bookCount, fishSpecies, tankFishes, tankSlots, putInTank, takeFromTank, NICK_MAX, recordLb, recordClass } from './fishbook.js';
 import { realFish, fmtWeight, CLASSES, weightRanges } from './fishfacts.js';
 import { fishPic } from './fishart.js';
@@ -1911,7 +1912,7 @@ function viewWardrobe() {
             ${item.home ? `<span class="spot-tag">${spotById(item.spot).icon} ${esc(spotById(item.spot).name)}</span>` : ''}
             <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : item.noHold ? `<img class="home-thumb" src="${boatThumb()}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
-            <small>${open ? wearing : soon ? '🔒 Coming soon' : shut ? '🔒 Opens with your music house' : price || `🔒 ${esc(needLabel(item))}`}</small>
+            <small>${open ? wearing : soon ? (releaseDay(item) ? `🔒 Coming ${esc(releaseLabel(releaseDay(item)))}` : '🔒 Coming soon') : shut ? '🔒 Opens with your music house' : price || `🔒 ${esc(needLabel(item))}`}</small>
             ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
           </button>`;
   }).join('')}
@@ -2953,7 +2954,7 @@ const actions = {
     if (!item || !fitsSpecies(item, kid.buddy.species)) return;
     const prog = progressFor(kid);
     if (!isUnlocked(item, prog) && needsMusicHouse(item) && !musicTier(prog)) { sounds.error(); toast('🔒 This opens with your music house. Keep up your piano streak to earn your first piano!'); return; }
-    if (!isUnlocked(item, prog) && comingSoon(item)) { sounds.error(); toast(`🔒 ${item.name} is coming soon. Its song is still being written!`); return; }
+    if (!isUnlocked(item, prog) && comingSoon(item)) { sounds.error(); toast(releaseDay(item) ? `🔒 ${item.name} comes to the shop on ${releaseLabel(releaseDay(item))}!` : `🔒 ${item.name} is coming soon. Its song is still being written!`); return; }
     if (!isUnlocked(item, prog) && (item.price || item.gems)) { buyItem(kid, item, prog); return; }
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
     if (item.home) {
