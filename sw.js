@@ -24,6 +24,7 @@ const SHELL = [
   'js/celebrate.js',
   'js/play-ui.js',
   'js/slopes.js',
+  'js/releases.js',
   'js/sledding.js',
   'js/finds.js',
   'js/findart.js',
