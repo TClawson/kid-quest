@@ -191,6 +191,7 @@ test('sports gear: every kind in 3 versions plus the fishing boat, bought with g
   assert.ok(gear.length >= 16);
   assert.ok(SPORTS.some((k) => k.id === 'sled'), 'the sled');
   assert.ok(SPORTS.some((k) => k.id === 'shovel'), 'the shovel');
+  assert.ok(SPORTS.some((k) => k.id === 'skis'), 'skis for the ski race');
   const boat = itemById('sport-boat');
   assert.equal(boat.gems, 100);
   assert.ok(boat.noHold, 'the boat stays at the lake');

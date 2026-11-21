@@ -124,6 +124,8 @@ export const SPORTS = [
   // the downhill gear games add theirs here, in this order: sled, bike, skis, camera
   { id: 'sled', name: 'Sled', icon: '🛷' },
   { id: 'bike', name: 'Bike', icon: '🚲' },
+  // the ski race with a visitor (js/skirace.js)
+  { id: 'skis', name: 'Skis', icon: '🎿' },
   { id: 'camera', name: 'Camera', icon: '📷' },
   { id: 'shovel', name: 'Shovel', icon: '🪏' },
 ];

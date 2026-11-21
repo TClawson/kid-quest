@@ -519,7 +519,7 @@ const SPARK_LONG = 8; // frames a burst lasts
 
 /** Which side the wand goes on: away from sports gear held on the left (a ball, a stick). */
 export function wandSide(gearKind) {
-  return ['soccer', 'football', 'hockey'].includes(gearKind) ? 'right' : 'left';
+  return ['soccer', 'football', 'hockey', 'skis'].includes(gearKind) ? 'right' : 'left';
 }
 
 /** A burst of sparks at this frame, or null: { u: 0 to 1 through the burst, k: which burst }. */
@@ -784,6 +784,28 @@ const GEAR_ART = {
     { R: '#c98a4b', C: '#868e96' },
     { R: '#495057', C: '#e03131' },
     { R: '#fcc419', C: '#4dabf7' },
+  ]],
+  // a pair of skis held upright (the ski race, js/skirace.js)
+  skis: [0, 5, [
+    '.KK.KK.',
+    'KTTKTTK',
+    'KSSKSSK',
+    'KSSKSSK',
+    'KSSKSSK',
+    'KSSKSSK',
+    'KSSKSSK',
+    'KBBKBBK',
+    'KSSKSSK',
+    'KSSKSSK',
+    'KSSKSSK',
+    'KSSKSSK',
+    'KSSKSSK',
+    'KSSKSSK',
+    '.KK.KK.',
+  ], [
+    { S: SH('#e03131', '#ff6b6b', '#a51d1d'), T: '#ffffff', B: '#495057' },
+    { S: SH('#1c7ed6', '#4dabf7', '#1864ab'), T: '#ffffff', B: '#212529' },
+    { S: SH('#fcc419', '#ffe066', '#e67700'), T: '#ffffff', B: '#e03131' },
   ]],
   // a camera, held up in front (the photo train)
   camera: [15, 13, [
@@ -1244,7 +1266,7 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
   // body moves keep held shoes on (they're on the feet); other gear is put down
   if (trick && !gear && gearOf(o.sport)?.kind === 'shoes') gear = gearOf(o.sport);
   const gearSvg = gear ? `<g class="gear gear-${gear.kind} tier-${gear.tier}">${gearPixels(gear.kind, gear.tier)}</g>` : '';
-  const inChar = gear && (gear.kind === 'shoes' || gear.kind === 'rod' || gear.kind === 'hockey' || art?.gear === 'char');
+  const inChar = gear && (gear.kind === 'shoes' || gear.kind === 'rod' || gear.kind === 'hockey' || gear.kind === 'skis' || art?.gear === 'char');
   const props = (art?.props || []).map((id) => (id === 'arms' ? armPixels(speciesId) : `<g class="prop prop-${id}">${propPixels(id, trick.tier)}</g>`)).join('');
   const twinkle = trick && trick.tier >= 2 ? `<g class="prop prop-twinkle">${propPixels('twinkle', trick.tier)}</g>` : '';
 
@@ -1351,7 +1373,7 @@ export function liveLook(buddy) {
       front: toCells(musicPx(music, 'front')),
       flames: (MUSIC_ART[music].flames || []).map((_, i) => toCells(musicPx(music, i))),
     } : null,
-    gear: gear && GEAR_ART[gear.kind] ? { kind: gear.kind, held: ['shoes', 'rod', 'hockey', 'shovel'].includes(gear.kind), c: toCells(gearPx(gear.kind, gear.tier)) } : null,
+    gear: gear && GEAR_ART[gear.kind] ? { kind: gear.kind, held: ['shoes', 'rod', 'hockey', 'skis', 'shovel'].includes(gear.kind), c: toCells(gearPx(gear.kind, gear.tier)) } : null,
   };
 }
 

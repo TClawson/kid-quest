@@ -33,6 +33,7 @@ import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout,
 import { seedThumb, decorThumb } from './gardenart.js';
 import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
 import { leaderboard, weekOf } from './leaderboard.js';
+import { openSkiBook } from './skibook-ui.js';
 import { openFindsBook, openFindPage, bookTabs } from './findsbook-ui.js';
 import { releaseDay, releaseLabel } from './releases.js';
 import { openDigBook, openDinoPage, openTreasurePage, openDisplayPicker, digShow } from './digbook-ui.js';
@@ -910,7 +911,7 @@ function visitorInfo(kid, s) {
   // once the quest is done, every visitor wants to play (see playWith)
   if (s.complete) {
     const left = gamesLeftFor(kid);
-    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', sledding: 'Sledding? Tap me!', train: 'Wanna ride the photo train? Tap me!', tricks: 'Trick jumps on our bikes? Tap me!', dig: 'Dino dig? Tap me!', tag: 'Wanna play tag? Tap me!' };
+    const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', sledding: 'Sledding? Tap me!', race: 'Race me down the hill? Tap me!', train: 'Wanna ride the photo train? Tap me!', tricks: 'Trick jumps on our bikes? Tap me!', dig: 'Dino dig? Tap me!', tag: 'Wanna play tag? Tap me!' };
     const plan = visitPlan(kid, visitors);
     visitors.forEach((v, i) => { lines[i] = left > 0 ? invite[gamesWith(kid, v, plan)[0]] : "That's all our games today! See you tomorrow"; });
   } else if (playableFor(kid, false) > 0) {
@@ -3465,18 +3466,18 @@ function gameTestCard() {
   return `
     <div class="card game-test">
       <h2>🎮 Try the games</h2>
-      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, football, fishing rod, sled, bike, camera, shovel or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
+      <p class="muted small">Play a visitor game right away to see how it feels. Gear means the ball, stick, football, fishing rod, sled, bike, skis, camera, shovel or running shoes for that game. Nothing counts toward the daily limit or anyone's best.</p>
       <div class="game-test-pick">
         <label>Playing <select id="gt-kid">${opt(ui.gtKid || kids[0].id, who)}</select></label>
         <label>Their gear <select id="gt-kid-gear">${opt(ui.gtKidGear || '1', tiers)}</select></label>
         <label>Visitor <select id="gt-vis">${opt(ui.gtVis || (kids[1] || kids[0]).id, who)}</select></label>
         <label>Visitor's gear <select id="gt-vis-gear">${opt(ui.gtVisGear || '1', tiers)}</select></label>
-        <label>Map (fishing, sledding, tag, photo train, trick jumps, dino dig) <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
+        <label>Map (fishing, sledding, ski race, tag, photo train, trick jumps, dino dig) <select id="gt-map">${opt(ui.gtMap || kidTheme(kids[0]), Object.entries(FISH_SPOTS).map(([id, sp]) => [id, sp.name]))}</select></label>
         <label>Fishing boat <select id="gt-boat">${opt(ui.gtBoat || '0', [['0', 'No boat'], ['1', 'In the boat']])}</select></label>
         <label>Tag personality <select id="gt-pers">${opt(ui.gtPers || '', [['', 'Their buddy\'s own'], ...Object.entries(PERSONALITIES).map(([id, p]) => [id, p.name])])}</select></label>
       </div>
       <div class="row wrap">
-        ${['soccer', 'tag', 'hockey', 'football', 'fishing', 'sledding', 'train', 'tricks', 'dig'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
+        ${['soccer', 'tag', 'hockey', 'football', 'fishing', 'sledding', 'race', 'train', 'tricks', 'dig'].map((k) => `<button class="btn" data-action="game-test" data-kind="${k}">${GAME_NAMES[k]}</button>`).join('')}
       </div>
     </div>`;
 }
@@ -3509,7 +3510,7 @@ actions['game-test'] = (el) => {
   Object.assign(ui, { gtKid: val('gt-kid'), gtKidGear: val('gt-kid-gear'), gtVis: val('gt-vis'), gtVisGear: val('gt-vis-gear'), gtMap: val('gt-map'), gtBoat: val('gt-boat'), gtPers: val('gt-pers') });
   const kid = kidById(ui.gtKid) || state.kids[0];
   const other = kidById(ui.gtVis) || kid;
-  const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind === 'sledding' ? 'sled' : kind === 'train' ? 'camera' : kind === 'tricks' ? 'bike' : kind === 'dig' ? 'shovel' : kind;
+  const gearKind = kind === 'tag' ? 'shoes' : kind === 'fishing' ? 'rod' : kind === 'sledding' ? 'sled' : kind === 'race' ? 'skis' : kind === 'train' ? 'camera' : kind === 'tricks' ? 'bike' : kind === 'dig' ? 'shovel' : kind;
   const gear = (tier) => (Number(tier) ? { [gearKind]: Number(tier) } : {});
   // the same kid on both sides still needs two names
   const visName = other.id === kid.id ? 'Visitor' : other.name;
@@ -3679,6 +3680,7 @@ Object.assign(actions, {
   'status-outfit': () => { closeModal(); actions.wardrobe(); },
   'status-scores': () => openLeaderboard(kidById(ui.kidId)),
   'status-fish': () => openFishBook(kidById(ui.kidId)),
+  'status-skis': () => openSkiBook(kidById(ui.kidId)),
   'status-tricks': () => openTrickBook(kidById(ui.kidId)),
   'trick-book': () => openTrickBook(kidById(ui.kidId)),
   'trick-page': (el) => openTrickPage(kidById(ui.kidId), el.dataset.trick),

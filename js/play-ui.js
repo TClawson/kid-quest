@@ -29,10 +29,10 @@ import {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', sledding: 'sled', train: 'camera', tricks: 'bike', dig: 'shovel' };
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', sledding: 'sled', race: 'skis', train: 'camera', tricks: 'bike', dig: 'shovel' };
 // the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
-const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', sledding: 'sled', train: 'camera', tricks: 'bike', dig: 'shovel' };
-const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', sledding: 'sled', train: 'camera', tricks: 'bike', dig: 'shovel' };
+const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', sledding: 'sled', race: 'skis', train: 'camera', tricks: 'bike', dig: 'shovel' };
+const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', sledding: 'sled', race: 'skis', train: 'camera', tricks: 'bike', dig: 'shovel' };
 /** True when the kid would play with the visitor's gear: they don't own that kind. */
 const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
@@ -65,7 +65,8 @@ export function visitPlan(kid, visitors) {
  */
 function heldRod(kid) {
   const k = itemById(kid.buddy?.outfit?.sport)?.kind;
-  return k === 'rod' ? 'fishing' : k === 'sled' ? 'sledding' : k === 'camera' ? 'train' : k === 'shovel' ? 'dig' : null;
+  // skis: the ski race down the map's hill (there's no field for it either)
+  return k === 'rod' ? 'fishing' : k === 'sled' ? 'sledding' : k === 'skis' ? 'race' : k === 'camera' ? 'train' : k === 'shovel' ? 'dig' : null;
 }
 
 /** Trick jumps when the kid's buddy is holding a bike (the hill is in the game). */
@@ -118,7 +119,8 @@ export function playWith(kid, v, kind) {
     maps: [...new Set([kidTheme(kid), 'bg-meadow', ...(kid.owned || []).filter((id) => id.startsWith('bg-'))])],
     // rounds on this map without its key piece (dig) or since its super rare (treasure hill)
     dry: (kind === 'dig' ? kid.digDry : kid.sledDry)?.[kidTheme(kid)] || 0,
-    book: kid.trickBook || {},
+    // the trick book (trick jumps) or the shortcut book (the ski race)
+    book: kind === 'race' ? (kid.skiBook || {}) : (kid.trickBook || {}),
     // a bike bought in the last day guarantees a golden ramp on its first ride
     newBike: kind === 'tricks' && !kid.trickBook,
     sounds,
@@ -143,6 +145,12 @@ export function playWith(kid, v, kind) {
       const kid = currentKid(kid0);
       const week = recordWeekBest(kid, kind, score, today());
       if (week !== kid.gameBests) { kid.gameBests = week; save(); }
+    },
+    // the ski race: shortcuts found and best times go in the shortcut book (in the house)
+    onBook: (book) => {
+      const kid = currentKid(kid0);
+      kid.skiBook = book;
+      save();
     },
     // fishing: the biggest of each kind of fish goes in the fish book (in the house)
     // trick jumps: every card landed goes in the trick book (in the status pop-up)
