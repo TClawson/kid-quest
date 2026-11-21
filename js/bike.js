@@ -5,9 +5,13 @@
 // ramp. Two thumbs:
 //   LEFT  hold: pedal on the ground (faster, so you fly farther). LET GO as you reach the
 //         ramp's lip to pop (a ring closes on the lip: Perfect, Good, or a little hop; a pop
-//         can't fail). Holding it in the air flips the bike backwards.
-//   RIGHT tap: a 360 spin that finishes itself.
-//   BOTH  held: a no-hander in the air (hold it long for a Superman), a wheelie on the ground.
+//         can't fail). Holding it in the air flips the bike backwards; let go past half a
+//         flip and it finishes the flip by itself.
+//   RIGHT press: a 360 spin that finishes itself, the moment the thumb touches (however long
+//         it stays down, and also with the left thumb still held). Pressed just before the
+//         lip, the spin starts as the bike leaves the ramp.
+//   BOTH  pressed together (within TOGETHER): a no-hander in the air (hold it long for a
+//         Superman), a wheelie on the ground.
 // Land with the wheels level with the ground: within 30 degrees the bike eases level by
 // itself (the landing assist), so only a flip held too long can crash. Perfect, Good or
 // Sketchy landings score 1.5x, 1x or 0.5x. Landed tricks in a row build a chain (up to x5);
@@ -37,14 +41,14 @@ export const G = 240;
 /** 10 field pixels are a meter (a buddy is about a meter and a half tall on its bike). */
 export const PX_PER_M = 10;
 /** Pop timing: release within this many seconds of the lip. Anything else is a small hop. */
-export const POP_WIN = { perfect: 0.08, good: 0.2 };
+export const POP_WIN = { perfect: 0.08, good: 0.28 };
 /** How hard each pop throws the bike up (pixels per second). */
 export const POP_V = { perfect: 84, good: 64, hop: 30 };
 /** Each bike tier: pop strength, flip speed (degrees a second), top speed, golden ramp chance a run. */
 export const BIKES = [
-  { tier: 1, pop: 1, flip: 330, top: 110, gold: 0.12 },
-  { tier: 2, pop: 1.15, flip: 360, top: 118, gold: 0.18 },
-  { tier: 3, pop: 1.3, flip: 390, top: 126, gold: 0.3 },
+  { tier: 1, pop: 1, flip: 400, top: 110, gold: 0.12 },
+  { tier: 2, pop: 1.15, flip: 430, top: 118, gold: 0.18 },
+  { tier: 3, pop: 1.3, flip: 460, top: 126, gold: 0.3 },
 ];
 /** Seconds one 360 spin takes. */
 export const SPIN_TIME = 0.42;
@@ -56,6 +60,14 @@ export const CHAIN_MAX = 5;
 export const CRASH_TIME = 1;
 /** A held grab: a no-hander from this long, a Superman from SUPERMAN. */
 export const GRAB_MIN = 0.2;
+/** Two thumbs pressed this close together are one move (a no-hander), not a flip and a spin. */
+export const TOGETHER = 0.15;
+/** A right press this soon before take-off spins once the bike is in the air. */
+export const SPIN_EARLY = 0.35;
+/** Let go of a flip past this much of a turn and it finishes by itself. */
+export const FLIP_FINISH = 0.5;
+/** Let go this little past a whole flip and it pulls back to the whole flip. */
+export const FLIP_BACK = 0.25;
 export const SUPERMAN = 0.8;
 
 // ---------- the trick cards ----------
@@ -462,8 +474,33 @@ export class Bike {
     const side = x < this.W / 2 ? 'L' : 'R';
     this.fingers.set(id, side);
     const k = this.kid;
-    if (side === 'R') k.rDown = this.t;
-    if (side === 'L' && k.state === 'air') k.air.flipping = true;
+    const a = k.state === 'air' ? k.air : null;
+    if (side === 'R') {
+      k.rDown = this.t;
+      if (!a) return;
+      // the left thumb went down a moment ago: both together is a no-hander, not a flip
+      if (this.t - (k.lDown ?? -9) < TOGETHER && a.flipping) { this.together(k); return; }
+      this.spin(k);
+      a.spinAt = this.t;
+    } else {
+      k.lDown = this.t;
+      if (!a) return;
+      // the right thumb went down a moment ago: take back its spin, it's a no-hander
+      if (this.t - (a.spinAt ?? -9) < TOGETHER) { this.together(k); return; }
+      if (!a.grabMode) { a.flipping = true; a.flipTo = undefined; }
+    }
+  }
+
+  /** Both thumbs pressed together in the air: a no-hander (it undoes the flip or spin it began as). */
+  together(k) {
+    const a = k.air;
+    if (a.spinAt !== undefined && this.t - a.spinAt < TOGETHER && a.spinsQueued >= 1) {
+      a.spinsQueued -= 1;
+      a.spin = Math.min(a.spin, a.spinsQueued);
+    }
+    if (a.flipping) { a.flip = Math.max(0, a.flip - k.bike.flip * Math.max(0, this.t - (k.lDown ?? this.t))); a.flipping = false; }
+    a.spinAt = undefined;
+    a.grabMode = true;
   }
 
   up(id) {
@@ -472,11 +509,8 @@ export class Bike {
     this.fingers.delete(id);
     const k = this.kid;
     if (side === 'L' && !this.L) this.releaseLeft(k);
-    if (side === 'R' && !this.R) {
-      // a short tap on the right is a spin (unless it was part of a grab)
-      if (k.state === 'air' && this.t - (k.rDown ?? -9) < 0.3 && !k.air.grabbedNow) this.spin(k);
-      if (k.air) k.air.grabbedNow = false;
-    }
+    // letting go of either thumb ends a no-hander
+    if (k.air && (!this.L || !this.R)) k.air.grabMode = false;
   }
 
   // one-finger fallbacks (mouse, tests): tap = down + up at once
@@ -518,13 +552,25 @@ export class Bike {
 
   // ---------- riding ----------
   releaseLeft(k) {
-    if (k.state === 'air') { k.air.flipping = false; if (k.air.popOpen > 0 && !k.air.popped) this.pop(k, popGrade(k.air.since)); return; }
+    if (k.state === 'air') { this.endFlip(k); if (k.air.popOpen > 0 && !k.air.popped) this.pop(k, popGrade(k.air.since)); return; }
     if (k.state !== 'ground') return;
     // a release just before the lip: the pop waits for the lip
     const kk = this.nextKicker(k.x);
     if (!kk) return;
     const tt = (kk.lip - k.x) / Math.max(20, k.vx || k.v);
     if (tt >= 0 && tt <= POP_WIN.good + 0.05) k.pending = { k: kk, grade: popGrade(tt) };
+  }
+
+  /** The left thumb lets go in the air: past half a flip, the flip finishes by itself. */
+  endFlip(k) {
+    const a = k.air;
+    if (a.flipping) {
+      const turns = a.flip / 360;
+      if (turns % 1 >= FLIP_FINISH) a.flipTo = Math.ceil(turns) * 360;
+      // a little past a whole flip: it pulls back to it
+      else if (turns >= 1 && turns % 1 <= FLIP_BACK) a.flipTo = Math.floor(turns) * 360;
+    }
+    a.flipping = false;
   }
 
   pop(k, grade) {
@@ -565,7 +611,13 @@ export class Bike {
     const ang = Math.atan(s);
     k.vx = Math.cos(ang) * k.v; k.vy = Math.sin(ang) * k.v * 0.6;
     k.angle = ang * DEG;
-    k.air = { ang0: k.angle, k: kk, t: 0, since: 0, x0: k.x, y0: k.y, top: k.y, flip: 0, flipping: false, spin: 0, spinsQueued: 0, grabT: 0, grabMax: 0, grabbedNow: false, popOpen: 0.2, popped: false, overLog: false, vent: false, rings: 0, puddle: false, boosted: false, flipBeforeGrab: false };
+    k.air = { ang0: k.angle, k: kk, t: 0, since: 0, x0: k.x, y0: k.y, top: k.y, flip: 0, flipping: false, spin: 0, spinsQueued: 0, grabT: 0, grabMax: 0, grabMode: false, popOpen: 0.2, popped: false, overLog: false, vent: false, rings: 0, puddle: false, boosted: false, flipBeforeGrab: false };
+    // a right press just before the lip: the spin starts now
+    if (k === this.kid && this.t - (k.rDown ?? -9) < SPIN_EARLY) {
+      k.rDown0 = k.rDown; k.rDown = -9;
+      if (this.L && this.R && Math.abs(k.rDown0 - (k.lDown ?? -9)) < TOGETHER) k.air.grabMode = true;
+      else { this.spin(k); k.air.spinAt = this.t; }
+    }
     if (k.pending && kk && k.pending.k === kk) this.pop(k, k.pending.grade);
     else if (kk && Math.abs(kk.lip - k.x) < 8 && k === this.kid && this.L) k.air.popOpen = 0.2; // still holding: a late release still pops
     else if (!kk || Math.abs(kk.lip - k.x) > 8) k.air.popOpen = 0;
@@ -668,12 +720,16 @@ export class Bike {
     a.top = Math.min(a.top, k.y);
     // controls: both held = grab; left alone = flip; right taps = spins (they finish themselves)
     const L = k.ai ? k.aiL : this.L; const R = k.ai ? k.aiR : this.R;
-    if (L && R) {
-      a.grabT += dt; a.grabbedNow = true; a.grabMax = Math.max(a.grabMax, a.grabT);
+    if (L && R && (k.ai || a.grabMode)) {
+      a.grabT += dt; a.grabMax = Math.max(a.grabMax, a.grabT);
       if (a.flip > 300) a.flipBeforeGrab = true;
     } else {
       if (a.grabT > 0 && !(L && R)) a.grabT = Math.max(0, a.grabT - dt * 6);
-      if (L && (k.ai || a.flipping)) a.flip += k.bike.flip * dt * (this.hill.id === 'bg-space' ? 1 : 1);
+      if (L && (k.ai || a.flipping)) a.flip += k.bike.flip * dt;
+      else if (a.flipTo !== undefined && a.flipTo !== a.flip) {
+        const step = k.bike.flip * dt;
+        a.flip = a.flipTo > a.flip ? Math.min(a.flipTo, a.flip + step) : Math.max(a.flipTo, a.flip - step);
+      }
     }
     if (a.spinsQueued > 0 || a.spin % 1 > 0) {
       a.spin += dt / SPIN_TIME;
@@ -687,7 +743,7 @@ export class Bike {
     const base = a.lean ?? a.ang0;
     a.lean = base + (gAng - base) * Math.min(1, a.t * 2.2); // the bike slowly tips to follow the hill
     let ang = a.lean + raw;
-    if (!(L && (k.ai || a.flipping))) {
+    if (!(L && (k.ai || a.flipping)) && !(a.flipTo !== undefined && a.flipTo !== a.flip)) {
       const d = fold(ang - gAng);
       if (Math.abs(d) < ASSIST) { const ease = d * Math.min(1, dt * 6); a.flip += ease; ang -= ease; }
     }
@@ -1249,7 +1305,7 @@ export class Bike {
     const hint = (s, y = (this.H - 5) * S) => text(s, W / 2, y, u * 1.5, '#ffffff');
     if (this.phase === 'play' && this.t - this.t0 < 6) {
       text('LEFT: hold to pedal, let go to jump, hold in the air to flip', u, (this.H - 9) * S, u * 1.2, '#ffffff', 'left');
-      text('RIGHT: tap to spin · BOTH: no-hander', W - u, (this.H - 4) * S, u * 1.2, '#ffffff', 'right');
+      text('RIGHT: tap to spin · BOTH at once: no-hander', W - u, (this.H - 4) * S, u * 1.2, '#ffffff', 'right');
     } else if (this.phase === 'play' && this.t - this.t0 < 10) hint(this.event === 'golden' ? '✨ A golden ramp is on the hill today!' : this.twist.say);
     else if (this.phase === 'play' && this.t - this.t0 < 14 && this.event === 'golden') hint(this.twist.say);
     if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) hint(this.locked ? "That's all our games today!" : 'Tap to ride!', (this.H - 7) * S);

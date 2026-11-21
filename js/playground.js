@@ -98,6 +98,7 @@ export function openPlay(opts) {
   const onDown = (e) => {
     if (e.target.closest('.play-close')) return;
     e.preventDefault();
+    try { root.setPointerCapture(e.pointerId); } catch { /* fine */ }
     const p = at(e);
     // games that take every finger (trick jumps: one thumb each side)
     if (game.multi) { game.down(e.pointerId, ...p); listen(); return; }
@@ -116,6 +117,7 @@ export function openPlay(opts) {
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKey);
   root.addEventListener('pointerdown', onDown);
+  const noMenu = (e) => e.preventDefault(); root.addEventListener('contextmenu', noMenu);
   root.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);

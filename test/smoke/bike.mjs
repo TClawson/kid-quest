@@ -2,6 +2,7 @@
 // - 95 seconds on every map, with each bike, ridden by a simple bot: it pops at the lips, flips,
 //   spins and grabs; it lands tricks, the riders never sink into the ground, nothing turns NaN,
 //   every card the kid lands is reported for the trick book, and the run ends
+// - the controls: spins on press, both thumbs together for a no-hander, early spins, flips that finish
 // - in the app: a visitor with a bike invites you to trick jumps, the first tap starts the clock,
 //   new cards go in kid.trickBook, the best score is kept, and the trick book opens from Status
 // Run: node test/smoke/bike.mjs   (SHOTS=dir for screenshots)
@@ -68,6 +69,51 @@ try {
       for (const c of r.cards) all.add(c);
     }
     for (const id of ['backflip', 'spin', 'nohander', 'moonwalk', 'rainbowloop', 'geyser']) assert.ok(all.has(id), `somebody lands ${id}`);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+
+  {
+    // the controls: a right press spins at once (however long it's held, and with the left thumb
+    // still down); both thumbs together is a no-hander; a right press just before the lip spins
+    // on take-off; a flip let go past half a turn finishes by itself
+    const page = await browser.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(site.url);
+    const r = await page.evaluate(async () => {
+      const { Bike } = await import('./js/bike.js');
+      const make = () => {
+        const g = new Bike({ W: 213, H: 120, map: 'bg-meadow', tier: 1, seed: 7, day: '2026-11-21', season: 'summer', onTrick: () => null, kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { bike: 1 } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} }, gear: { bike: 1 } } });
+        g.down('s', 1); g.up('s');
+        return g;
+      };
+      // ride to just before a lip (holding the left thumb), then let go: a good pop
+      const toLip = (g, before = 0.05) => {
+        g.down('L', 1);
+        for (let i = 0; i < 3000; i += 1) {
+          const k = g.kid; const kk = g.nextKicker(k.x);
+          if (k.state === 'ground' && kk && kk.kind === 'kicker' && (kk.lip - k.x) / k.vx < before) break;
+          g.step(1 / 60);
+        }
+        g.up('L');
+      };
+      const air = (g) => { for (let i = 0; i < 120 && g.kid.state !== 'air'; i += 1) g.step(1 / 60); return g.kid.air; };
+      const run = (g, s) => { for (let i = 0; i < s * 60 && g.kid.state === 'air'; i += 1) g.step(1 / 60); };
+      const out = {};
+      let g = make(); toLip(g); air(g); g.step(0.1); g.down('R', g.W - 1); out.longTap = g.kid.air.spinsQueued; run(g, 0.5); g.up('R');
+      g = make(); toLip(g); air(g); g.down('L', 1); g.step(0.2); g.down('R', g.W - 1); out.withLeft = g.kid.air.spinsQueued; g.up('R'); g.up('L');
+      g = make(); toLip(g); air(g); g.step(0.1); g.down('R', g.W - 1); g.step(1 / 60); g.down('L', 1); const a = g.kid.air; g.step(0.3); out.together = { spins: a.spinsQueued, grab: a.grabMax, flip: a.flip }; g.up('L'); g.up('R');
+      g = make(); toLip(g, 0.3); g.down('R', g.W - 1); g.up('R'); out.early = air(g)?.spinsQueued;
+      g = make(); toLip(g); const b = air(g); g.down('L', 1); for (let i = 0; i < 120 && b.flip < 220; i += 1) g.step(1 / 60); g.up('L'); g.step(0.5); out.finish = b.flip;
+      return out;
+    });
+    assert.equal(r.longTap, 1, 'a long right press is still a spin');
+    assert.equal(r.withLeft, 1, 'a right press spins even with the left thumb down');
+    assert.equal(r.together.spins, 0, 'both together is not a spin');
+    assert.ok(r.together.grab > 0.2 && r.together.flip < 30, `both together is a no-hander (${JSON.stringify(r.together)})`);
+    assert.equal(r.early, 1, 'a right press just before the lip spins on take-off');
+    assert.ok(r.finish >= 355, `a flip let go past half a turn finishes (${r.finish})`);
     assert.deepEqual(errors, []);
     await page.close();
   }
