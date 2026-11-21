@@ -111,6 +111,18 @@ try {
     assert.ok(held.aim > y0 + 5, `sliding down moves the line down (${y0} -> ${held.aim})`);
     await page.mouse.up();
     assert.equal(await page.evaluate(() => !!document.querySelector('.playground').game.touch), false, 'lifting the finger lets go');
+    // Android can send pointercancel while the finger is still held: that must not let go
+    const afterCancel = await page.evaluate(([x, y]) => {
+      const root = document.querySelector('.playground');
+      const ev = (type) => new PointerEvent(type, { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true });
+      root.querySelector('.play-field').dispatchEvent(ev('pointerdown'));
+      window.dispatchEvent(ev('pointercancel'));
+      const still = !!root.game.touch;
+      window.dispatchEvent(new TouchEvent('touchend', { touches: [], bubbles: true }));
+      return { still, gone: !root.game.touch };
+    }, mid);
+    assert.ok(afterCancel.still, 'a cancelled touch is still held');
+    assert.ok(afterCancel.gone, 'lifting the last finger lets go after a cancel');
     // finish the race at once through an open shortcut and check the book and the day's games
     await page.evaluate(() => {
       const g = document.querySelector('.playground').game;
