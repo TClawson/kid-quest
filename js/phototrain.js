@@ -11,9 +11,11 @@
 //
 // Snapping (Taylor, 2026-11-20: a shutter button, after letting go to snap confused): touch the
 // screen to aim: the camera comes up, and the viewfinder sits a little ABOVE the finger so the
-// finger doesn't hide the animal. Hold still and a focus ring closes in. Once it is sharp on an
-// animal (or on a sign, to be ready before it comes out), the viewfinder LOCKS ON and follows it
-// by itself, even after the finger lifts. Tap the shutter button (bottom right) to snap.
+// finger doesn't hide the animal. Hold still and a focus ring closes in; when it is sharp it
+// shows SHARP. It does NOT lock on or follow anything (Taylor, 2026-11-20: too easy):
+// keeping the animal in the frame is the kid's job. The frame sticks to the spot of scenery
+// that was touched and rides along with it (even after the finger lifts), so aim where the
+// animal will come out. Tap the shutter button (bottom right) to snap.
 // Dragging moves the viewfinder yourself (for fliers and runners, or to pick another animal),
 // and touching somewhere else aims there.
 //
@@ -391,9 +393,11 @@ export class PhotoTrain {
   /** Aims the camera: the viewfinder comes up over the finger (or moves there). */
   aim(x, y) {
     const v = this.view;
-    if (v) { v.fx = x; v.fy = y; if (v.lock) { v.lock = null; v.focus *= 0.5; } return; }
+    // the aim sticks to the spot of scenery touched (wx: where on the middle ground), so the
+    // frame rides along with the trees and bushes going by
+    if (v) { v.wx = x + this.dist * LAYER.mid; v.fy = y; return; }
     const f = this.frameAt(x, y);
-    this.view = { ...f, fx: x, fy: y, at: this.t, focus: 0, lock: null, vx: 0, vy: 0, lastX: f.x, lastY: f.y };
+    this.view = { ...f, wx: x + this.dist * LAYER.mid, fy: y, at: this.t, focus: 0, lock: null, vx: 0, vy: 0, lastX: f.x, lastY: f.y };
   }
 
   /** The shutter button (bottom right, game pixels). */
@@ -416,12 +420,10 @@ export class PhotoTrain {
 
   drag(x, y) {
     const v = this.view; if (!v) return;
-    v.fx = x; v.fy = y;
-    // pulling the finger away from a lock takes over by hand
-    if (v.lock && Math.hypot(x - v.lockFx, y - v.lockFy) > 14) { v.lock = null; v.focus *= 0.5; }
+    v.wx = x + this.dist * LAYER.mid; v.fy = y;
   }
 
-  /** The shutter: takes the photo now. The viewfinder stays up (and stays locked on). */
+  /** The shutter: takes the photo now. The viewfinder stays up where it was aimed. */
   press() {
     if (this.phase !== 'play') return;
     this.shutterAt = this.t;
@@ -435,27 +437,21 @@ export class PhotoTrain {
 
   stepView(dt) {
     const v = this.view; if (!v) return;
-    let tx; let ty;
-    if (v.lock) {
-      const s = this.subjects().find((o) => (o.k && o.k === v.lock) || (o.clue && o.clue === v.lock));
-      if (!s) { v.lock = null; } else { tx = s.box.x + s.box.w / 2; ty = s.box.y + s.box.h / 2; }
-    }
-    if (!v.lock) { const f = this.frameAt(v.fx, v.fy); tx = f.x; ty = f.y; }
-    const k = 1 - Math.exp(-(v.lock ? 14 : 30) * dt);
+    v.fx = this.sx('mid', v.wx);
+    const { x: tx, y: ty } = this.frameAt(v.fx, v.fy);
+    const k = 1 - Math.exp(-30 * dt);
     v.x += (tx - v.x) * k; v.y += (ty - v.y) * k;
     const { w: fw, h: fh } = this.frame;
     v.x = clamp(v.x, fw / 2, this.W - fw / 2); v.y = clamp(v.y, fh / 2, this.H - fh / 2);
     const sp = Math.hypot(v.x - v.lastX, v.y - v.lastY) / Math.max(dt, 1e-3);
     v.speed = sp; v.lastX = v.x; v.lastY = v.y;
-    // focus: closes in while the frame is steady (or locked on), drops while it swings about
-    if (v.lock || sp < 30) v.focus = Math.min(1, v.focus + dt / this.cam.focus);
+    // focus: closes in while the frame is steady (or panning slowly), drops while it swings about
+    if (sp < 30) v.focus = Math.min(1, v.focus + dt / this.cam.focus);
     else v.focus = Math.max(0, v.focus - dt * 1.5);
-    // sharp on something near the middle: lock on (a sign too, to be ready when it comes out)
-    if (!v.lock && v.focus >= 1) {
-      const { w, h } = this.frame;
-      const near = this.subjects().filter((o) => !o.far || this.cam.zoom).map((o) => ({ o, d: Math.hypot((o.box.x + o.box.w / 2 - v.x) / w, (o.box.y + o.box.h / 2 - v.y) / h) })).filter((q) => q.d < 0.42).sort((a, b) => a.d - b.d)[0];
-      if (near) { v.lock = near.o.k || near.o.clue; v.lockFx = v.fx; v.lockFy = v.fy; this.sound = 'lock'; }
-    }
+    // sharp: a little beep (the frame doesn't lock on or follow anything: Taylor, 2026-11-20,
+    // keeping the animal in the frame is the kid's job)
+    if (v.focus >= 1 && !v.beeped) { v.beeped = true; this.sound = 'lock'; }
+    if (v.focus < 1) v.beeped = false;
   }
 
   snap(v) {
@@ -1040,7 +1036,7 @@ export class PhotoTrain {
     if (v && this.phase === 'play') {
       const { w, h } = this.frame;
       const x0 = (v.x - w / 2) * S; const y0 = (v.y - h / 2) * S; const fw = w * S; const fh = h * S;
-      const col = v.lock ? '#ffd43b' : v.focus >= 1 ? '#b2f2bb' : '#ffffff';
+      const col = v.focus >= 1 ? '#ffd43b' : '#ffffff';
       ctx.fillStyle = 'rgba(10,8,20,0.18)';
       ctx.fillRect(0, 0, W, y0); ctx.fillRect(0, y0 + fh, W, H - y0 - fh); ctx.fillRect(0, y0, x0, fh); ctx.fillRect(x0 + fw, y0, W - x0 - fw, fh);
       const L = u * 1.6;
@@ -1059,15 +1055,14 @@ export class PhotoTrain {
       ctx.fillStyle = col; ctx.fillRect(x0 + fw / 2 - S * 0.5, y0 + fh / 2 - S * 2, S, S * 4); ctx.fillRect(x0 + fw / 2 - S * 2, y0 + fh / 2 - S * 0.5, S * 4, S);
       // the label sits over the frame, or under it when the frame is up by the top lines
       const ly = y0 - u * 0.8 < u * 6.6 ? y0 + fh + u * 0.8 : y0 - u * 0.8;
-      const waiting = v.lock?.state === 'sign';
-      text(waiting ? 'LOCKED: wait for it...' : v.lock ? 'LOCKED: snap!' : v.focus >= 1 ? 'SHARP' : 'hold still...', x0 + fw / 2, ly, u * 0.95, col);
+      text(v.focus >= 1 ? 'SHARP' : 'hold still...', x0 + fw / 2, ly, u * 0.95, col);
       // far specks get a hint
       if (!this.cam.zoom) for (const k of this.critters) if (k.far && !k.gone) { const [kx, ky] = this.where(k); if (Math.abs(kx - v.x) < w / 2 && Math.abs(ky - v.y) < h / 2 + 6) text('too far!', kx * S, (ky - 9) * S, u * 0.9, '#ffd43b'); }
     }
     // the shutter button: bright and bouncing when the photo is ready (sharp on an animal that's out)
     if (this.phase === 'play') {
       const b = this.shutter; const cx = b.x * S; const cy = b.y * S; const R = b.r * S;
-      const ready = v && v.focus >= 1 && !(v.lock?.state === 'sign');
+      const ready = v && v.focus >= 1;
       const pressed = this.t - this.shutterAt < 0.12;
       const k = pressed ? 0.9 : ready ? 1 + Math.sin(this.t * 10) * 0.05 : 1;
       ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k);
@@ -1118,7 +1113,7 @@ export class PhotoTrain {
     }
     if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) {
       text(this.locked ? "That's all our games today!" : 'All aboard! Tap to start the train.', W / 2, H * 0.32, u * 1.7);
-      if (!this.locked) text('Hold anywhere to aim and focus. Let go to snap!', W / 2, H * 0.32 + u * 2.2, u * 1.1);
+      if (!this.locked) text('Touch to aim, wait for SHARP, press SNAP!', W / 2, H * 0.32 + u * 2.2, u * 1.1);
     }
     if (this.phase === 'over' && this.t - this.overAt > 0.3) this.drawRoll(ctx, S, text);
   }
