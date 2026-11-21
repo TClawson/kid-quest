@@ -245,10 +245,11 @@ test('the fjord is for sale now that its music is written; nothing is "coming so
 test('new gear goes on sale on its Friday, one a week (Taylor, 2026-11-20)', async () => {
   const { GEAR_RELEASES, notYet, releaseDay, releaseLabel } = await import('../js/releases.js');
   const { comingSoon } = await import('../js/items.js');
-  const sled = itemById('sport-sled-good');
-  assert.equal(releaseDay(sled), GEAR_RELEASES.sled);
-  assert.equal(comingSoon(sled, '2026-11-26'), true, 'the day before');
-  assert.equal(comingSoon(sled, '2026-11-27'), false, 'on its Friday');
+  // (the skis branch: the sled isn't here yet, so check the skis)
+  const skis = itemById('sport-skis-good');
+  assert.equal(releaseDay(skis), GEAR_RELEASES.skis);
+  assert.equal(comingSoon(skis, '2026-12-17'), true, 'the day before');
+  assert.equal(comingSoon(skis, '2026-12-18'), false, 'on its Friday');
   assert.equal(notYet(itemById('sport-rod-good'), '2020-01-01'), false, 'old gear is always on sale');
   const days = Object.values(GEAR_RELEASES).sort();
   for (const d of days) assert.equal(new Date(`${d}T12:00:00`).getDay(), 5, `${d} is a Friday`);
