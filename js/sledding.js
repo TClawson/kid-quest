@@ -612,7 +612,11 @@ export class Sledding {
     this.onRun?.({ superRare: this.superRare });
   }
 
-  pop(text, x, y, color, big) { addPop(this, text, x, y, color, big, 6); }
+  pop(text, x, y, color, big) {
+    // never up under the score bar, and not on top of another word just said
+    const near = this.pops.filter((p) => this.t - p.at < 0.5 && Math.abs(p.x - x) < 40).length;
+    addPop(this, text, x, Math.max(y - near * 8, this.camY + this.fieldH * 0.2), color, big, 6);
+  }
 
   // ---------- drawing ----------
   draw(ctx) {
@@ -630,7 +634,8 @@ export class Sledding {
     // props along the back of the hill
     this.drawProps(ctx, cx, cy, W, H, P);
     // the ground, column by column
-    const g = pal.ground;
+    const g = GROUND_FIX[this.hill.id] || pal.ground;
+    this.deep = [shade(g[2], -0.22), shade(g[2], 0.18)];
     const snowy = this.hill.snowy;
     for (let sx = 0; sx < W; sx += 1) {
       const wx = cx + sx;
@@ -649,6 +654,13 @@ export class Sledding {
       // dithered into the deep color further down
       for (let y = gy + 10; y < Math.min(H, gy + 22); y += 1) if (((wx + y) & 3) === 0 || y > gy + 16 && ((wx + y) & 1) === 0) P(g[2], sx, y);
       if (gy + 22 < H) P(g[2], sx, gy + 22, 1, H - gy - 22);
+      // strata and stones down in the ground
+      for (let k = 1; k < 6; k += 1) {
+        const yy = gy + 22 + k * 11 + Math.round(Math.sin(wx / 23 + k) * 2);
+        if (yy >= H) break;
+        if (hash1(Math.floor(wx / 5) * 3.7 + k) > 0.3) P(this.deep[0], sx, yy);
+        if (hash1(wx * 1.3 + k * 17) < 0.06) { P(this.deep[1], sx, yy + 3, 2, 2); P(this.deep[0], sx, yy + 5, 2, 1); }
+      }
       // sparkle on snow and stardust; specks on sand, mud and ash
       const h = hash1(wx);
       if (snowy || this.hill.surface === 'stardust') { if (h < 0.04 && ((Math.floor(this.t * 3) + wx) % 5 === 0)) P('#ffffff', sx, gy + 3); }
@@ -659,6 +671,13 @@ export class Sledding {
     // the rainbow slide has stripes
     if (this.hill.surface === 'rainbow') {
       for (let sx = 0; sx < W; sx += 1) { const gy = Math.round(this.groundAt(cx + sx)) - cy; RAINBOW.forEach((c, i) => P(c, sx, gy + 2 + i, 1, 1)); }
+    }
+    // ramp lips: a bright cap and chevrons, so the jump can be seen coming
+    for (const p of this.ramps) {
+      const lx = p.x + p.w - cx; if (lx < -20 || lx > W + 20) continue;
+      const ly = Math.round(this.groundAt(p.x + p.w)) - cy;
+      P(INK, lx - 4, ly - 1, 6, 1); P(p.big ? '#ff922b' : '#ffd43b', lx - 4, ly, 6, 2); P(INK, lx + 1, ly, 1, 6);
+      for (let i = 0; i < 3; i += 1) { const ax = p.x - 14 + i * 5 - cx; const ay = Math.round(this.groundAt(p.x - 14 + i * 5)) - cy + 5; P('#ffffff', ax, ay, 1, 1); P('#ffffff', ax + 1, ay + 1, 1, 1); P('#ffffff', ax, ay + 2, 1, 1); }
     }
     // twist things on the ground
     this.drawTwist(ctx, cx, cy, P);
@@ -682,11 +701,14 @@ export class Sledding {
     for (const z of this.hazards) {
       if (z.x < cx - 12 || z.x > cx + W + 12) continue;
       const sy = z.surf ? this.groundAt(z.x) - z.surf.lift : this.groundAt(z.x);
-      drawHazard(P, z, Math.round(z.x - cx), Math.round(sy - cy), this.t, this.hill);
+      const hx = Math.round(z.x - cx); const hy = Math.round(sy - cy);
+      P('rgba(27,20,48,0.3)', hx - 5, hy, 11, 1); // its shadow
+      outlined(P, (Q) => drawHazard(Q, z, hx, hy, this.t, this.hill));
     }
     // finds
     const pics = this.pics || (this.pics = new Map());
-    const pic = (key) => { if (!pics.has(key)) pics.set(key, cellsPic(findCells(findByKey(key)))); return pics.get(key); };
+    const rim = DARK.has(this.hill.id) ? '#fff3bf' : null;
+    const pic = (key) => { if (!pics.has(`r${key}`)) pics.set(`r${key}`, cellsPic(findCells(findByKey(key)), rim)); return pics.get(`r${key}`); };
     const drawFind = (f) => {
       if (f.got || f.taken) return;
       const fy = f.star ? this.groundAt(f.x) - f.h : this.thingY(f.surf, f.x, f.h);
@@ -703,12 +725,12 @@ export class Sledding {
       const glow = f.big ? '#ffd43b' : f.rich ? '#fff3bf' : null;
       if (glow && tw < 4) { P(glow, sx - 7, sy - 5 + bob); P(glow, sx + 6, sy - 6 + bob); P(glow, sx, sy - 11 + bob); }
       if (f.mystery || f.big) drawBag(P, sx, sy + bob, true, this.hill, f.big); // a surprise until it's grabbed
-      else ctx.drawImage(pic(f.key), sx - 5, sy - 9 + bob);
+      else ctx.drawImage(pic(f.key), sx - 6, sy - 10 + bob);
     };
     for (const f of this.finds) drawFind(f);
     for (const s of this.stars) drawFind(s.find);
     if (this.big && !this.big.find.got) drawFind(this.big.find);
-    if (this.loose) ctx.drawImage(pic(this.loose.find.key), Math.round(this.loose.x - cx - 5), Math.round(this.loose.y - cy - 5));
+    if (this.loose) ctx.drawImage(pic(this.loose.find.key), Math.round(this.loose.x - cx - 6), Math.round(this.loose.y - cy - 6));
     // the visitor and the kid on their sleds
     const V = this.visPos;
     if (this.phase === 'play' || this.phase === 'over') this.drawRider(ctx, this.visP, V.x - cx, V.y - cy, this.visTier, V.tumble ? this.t * 2 : 0, P);
@@ -723,35 +745,62 @@ export class Sledding {
     this.drawWeather(P, W, H);
   }
 
+  /** Two layers of far hills, each map with its own colors and its own crest (trees, peaks, a castle...). */
   drawFar(ctx, cx, cy, W, H, P) {
-    const pal = this.hill.pal;
-    const layer = (k, amp, base, col, seed) => {
-      for (let sx = 0; sx < W; sx += 1) {
-        const wx = (cx * k + sx);
-        const y = Math.round(H * base - cy * k * 0.15 + Math.sin(wx / (40 + seed * 13)) * amp + Math.sin(wx / (17 + seed * 5)) * amp * 0.35 - (cx * k) * 0.0);
-        P(col, sx, y, 1, H - y);
-      }
-    };
-    layer(0.15, 9, 0.42, pal.far[0], 1);
-    // far snowcaps on the cold maps
-    if (this.hill.id === 'bg-fjord' || (this.hill.snowy && this.hill.id !== 'bg-castle')) {
-      for (let sx = 0; sx < W; sx += 1) { const wx = cx * 0.15 + sx; const y = Math.round(H * 0.42 - cy * 0.15 * 0.15 + Math.sin(wx / 53) * 9 + Math.sin(wx / 22) * 9 * 0.35); P('#ffffff', sx, y, 1, 2); }
+    const look = FAR_LOOK[this.hill.id] || FAR_LOOK['bg-meadow'];
+    const [c0, c1] = farColors(this.hill.id, this.season);
+    const t = this.t;
+    // the back layer
+    const k0 = 0.15; const base0 = H * 0.42 - cy * k0 * 0.15;
+    const y0 = (wx) => (look.back === 'peaks'
+      ? base0 + 6 - Math.abs(((wx / 34) % 2 + 2) % 2 - 1) * 26 + Math.sin(wx / 9) * 2
+      : base0 + Math.sin(wx / 53) * 9 + Math.sin(wx / 22) * 3);
+    for (let sx = 0; sx < W; sx += 1) {
+      const wx = cx * k0 + sx; let y = y0(wx);
+      // a volcano cone, or a castle, now and then along the back
+      const m = ((wx % 420) + 420) % 420;
+      if (look.back === 'cone' && m < 120) y = Math.min(y, base0 - 34 + Math.abs(m - 60) * 0.9);
+      if (look.back === 'castle' && m > 150 && m < 196) { const q = m - 150; y = Math.min(y, base0 - (q < 8 || q > 38 ? 26 + (q % 3 === 0 ? 0 : 3) : q % 4 < 2 ? 16 : 18)); }
+      if (look.back === 'craters' && m > 200 && m < 260) y += 3 - Math.abs(m - 230) / 10;
+      y = Math.round(y);
+      P(c0, sx, y, 1, H - y);
+      if (look.back === 'peaks' || this.hill.snowy) P('#ffffff', sx, y, 1, look.back === 'peaks' ? 3 : 1);
+      if (look.back === 'cone' && m > 52 && m < 68) P(m % 4 < 2 ? '#ff6b1a' : '#e03131', sx, y, 1, 4 + Math.round(Math.abs(m - 60) / 2));
+      if (look.back === 'cone' && m > 54 && m < 66 && Math.floor(t * 2 + m) % 5 === 0) P('#adb5bd', sx, y - 3 - Math.floor((t * 6) % 6), 1, 1);
     }
-    layer(0.3, 7, 0.52, pal.far[1], 2);
+    // a band of sea between the layers (the fjord)
+    if (look.water) for (let sx = 0; sx < W; sx += 1) P((sx + Math.floor(t * 3)) % 9 ? look.water : '#4dabf7', sx, Math.round(H * 0.5 - cy * 0.02), 1, 2);
+    // the front layer, with its crest
+    const k1 = 0.3; const base1 = H * 0.52 - cy * k1 * 0.15;
+    for (let sx = 0; sx < W; sx += 1) {
+      const wx = cx * k1 + sx;
+      let y = Math.round(base1 + Math.sin(wx / 66) * 7 + Math.sin(wx / 27) * 2.5);
+      const n = Math.floor(wx / 7); const in7 = ((wx % 7) + 7) % 7; const hh = hash1(n * 3.1);
+      if (look.front === 'trees') y -= Math.max(0, Math.round((3 + hh * 4) - Math.abs(in7 - 3) * (1.5 + hh)));
+      if (look.front === 'canopy') { const r = 5 + hh * 3; y -= Math.round(Math.sqrt(Math.max(0, r * r - (in7 - 3) ** 2 * 2.2)) * 0.8); }
+      if (look.front === 'reef' && hh > 0.55 && in7 === 3) P(c1, sx, y - 6 - Math.round(hh * 8), 1, 8 + Math.round(hh * 8));
+      if (look.front === 'dunes') y += Math.round(Math.sin(wx / 15) * 2);
+      P(c1, sx, y, 1, H - y);
+      if (look.front === 'canopy' && hh > 0.7 && in7 === 1) P(shade(c1, -0.25), sx, y + 2, 1, 9 + Math.round(hh * 6)); // hanging vines
+    }
+    // light through the water (the reef)
+    if (this.hill.id === 'bg-ocean') for (let i = 0; i < 4; i += 1) { const x0 = Math.round(((i * 61 - cx * 0.1) % W + W) % W); for (let y = 0; y < H * 0.5; y += 1) if (((x0 + y) & 1) === 0) P('rgba(165,216,255,0.35)', x0 + Math.round(y * 0.3), y, 3, 1); }
   }
 
   drawProps(ctx, cx, cy, W, H, P) {
-    const props = this.hill.props; const [c1, c2, c3] = this.hill.pal.props;
-    // every 46 px of hill (at 0.7 of the hill's scroll, so they sit back a little)
-    const k = 0.7; const step = 46;
-    const first = Math.floor((cx * k) / step) - 1;
+    const props = this.hill.props.map((k) => PROP_SWAP[k] || k);
+    const [, c1] = farColors(this.hill.id, this.season);
+    // scenery takes on 40% of the far hills' color, so it sits back behind the things that matter
+    const cols = this.hill.pal.props.map((c) => mix(c, c1, 0.4));
+    const step = 46;
+    const first = Math.floor(cx / step) - 1;
     for (let i = first; i < first + W / step + 3; i += 1) {
       const h = hash1(i * 7.3 + 1);
       if (h < 0.25) continue;
-      const sx = Math.round(i * step - cx * k + h * 20);
-      const wx = cx + sx;
-      const gy = Math.round(this.groundAt(wx) - cy) - 6 - Math.round(h * 4);
-      drawProp(P, props[i % props.length], sx, gy, [c1, c2, c3], this.t, this.hill);
+      const wx = Math.round(i * step + h * 20);
+      if (this.gapAt(wx) || this.onRamp(wx)) continue;
+      const gy = Math.round(this.groundAt(wx) - cy) + 2; // planted: the ground covers its foot
+      drawProp(P, props[i % props.length], wx - cx, gy, cols, this.t, this.hill);
     }
   }
 
@@ -794,10 +843,10 @@ export class Sledding {
       for (let i = 0; i < 40; i += 1) {
         const x = Math.round(((i * 53 + this.t * (10 + (i % 5) * 3) - this.camX * 0.6) % W + W) % W);
         const y = Math.round(((i * 37 + this.t * (14 + (i % 4) * 4)) % H + H) % H);
-        P('#ffffff', x, y);
+        P(i % 3 ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.8)', x, y);
       }
     }
-    if (this.hill.id === 'bg-ocean') for (let i = 0; i < 14; i += 1) P('#a5d8ff', Math.round(((i * 71 - this.camX * 0.4) % W + W) % W), Math.round(((i * 29 - this.t * 16) % H + H) % H), 1, 1);
+    if (this.hill.id === 'bg-ocean') for (let i = 0; i < 14; i += 1) P('rgba(165,216,255,0.5)', Math.round(((i * 71 - this.camX * 0.4) % W + W) % W), Math.round(((i * 29 - this.t * 16) % H + H) % H), 1, 1);
     if (this.hill.id === 'bg-space' || this.hill.id === 'bg-galaxy') for (let i = 0; i < 30; i += 1) { const x = Math.round(((i * 97 - this.camX * 0.05) % W + W) % W); const y = (i * 41) % Math.round(H * 0.45); if ((Math.floor(this.t * 2) + i) % 7) P(i % 5 ? '#ffffff' : '#ffe066', x, y); }
   }
 
@@ -806,7 +855,7 @@ export class Sledding {
     p.paint(this.t);
     // the sled under the buddy, following the slope a little
     const s = this.base.slope(x + this.camX);
-    if (!swing) drawSled(P, x, y, tier, spin ? 0 : s);
+    if (!swing) outlined(P, (Q) => drawSled(Q, x, y, tier, spin ? 0 : s));
     ctx.save();
     if (spin) {
       const turn = Math.floor(spin * 8) % 4;
@@ -848,7 +897,7 @@ export class Sledding {
     for (const p of this.pops) {
       const age = (this.t - p.at) / 1.4;
       ctx.globalAlpha = Math.min(1, (1 - age) * 3);
-      text(p.text, clamp(X(p.x), 26 * S, W - 26 * S), Y(p.y) - age * 8 * S, u * (p.big ? 1.9 : 1.3), p.color);
+      text(p.text, clamp(X(p.x), 26 * S, W - 26 * S), Math.max(u * 5.5, Y(p.y) - age * 8 * S), u * (p.big ? 1.9 : 1.3), p.color);
       ctx.globalAlpha = 1;
     }
     // the landing meter
@@ -861,30 +910,30 @@ export class Sledding {
     // a find card
     const c = this.showFind;
     if (c && this.phase === 'play') {
-      const cw = Math.min(W * 0.7, u * 30); const ch = u * 7; const cx = W / 2 - cw / 2; const cy = H - ch - u * 1.2;
-      ctx.fillStyle = 'rgba(27,20,48,0.88)'; ctx.fillRect(cx, cy, cw, ch);
+      const cw = Math.min(W * 0.46, u * 25); const ch = u * 5; const cx = u * 0.6; const cy = u * 2.8;
+      ctx.fillStyle = 'rgba(27,20,48,0.95)'; ctx.fillRect(cx, cy, cw, ch);
       ctx.strokeStyle = c.find.rarity === 'super' ? '#ff8cc6' : c.find.rarity === 'rare' ? '#ffd43b' : '#74c0fc'; ctx.lineWidth = S; ctx.strokeRect(cx, cy, cw, ch);
-      const z = Math.floor(ch * 0.8 / 10);
+      const z = Math.floor(ch * 0.8 / 12);
       ctx.imageSmoothingEnabled = false;
       const pics = this.pics || (this.pics = new Map());
       if (!pics.has(c.key)) pics.set(c.key, cellsPic(findCells(c.find)));
-      ctx.drawImage(pics.get(c.key), cx + u * 0.8, cy + ch / 2 - 5 * z, 10 * z, 10 * z);
+      ctx.drawImage(pics.get(c.key), cx + u * 0.6, cy + ch / 2 - 6 * z, 12 * z, 12 * z);
       ctx.textAlign = 'left';
-      const tx = cx + u * 0.8 + 10 * z + u * 0.8;
-      text(`${c.find.name}${c.find.rarity === 'super' ? ' · SUPER RARE!' : c.find.rarity === 'rare' ? ' · RARE!' : ''}`, tx, cy + ch * 0.32, u * 1.5, c.find.rarity === 'common' ? '#ffffff' : '#ffd43b');
-      text(`${CONDITIONS[c.q].stars} ${CONDITIONS[c.q].name} · ${fmtSize(c.inches)}${c.cls === 'trophy' ? ' 🏆' : ''} · +${c.points}`, tx, cy + ch * 0.68, u * 1.15, '#e9ecef');
+      const tx = cx + u * 0.6 + 12 * z + u * 0.6;
+      text(`${c.find.name}${c.find.rarity === 'super' ? ' · SUPER RARE!' : c.find.rarity === 'rare' ? ' · RARE!' : ''}`, tx, cy + ch * 0.32, u * 1.2, c.find.rarity === 'common' ? '#ffffff' : '#ffd43b');
+      text(`${CONDITIONS[c.q].stars} ${CONDITIONS[c.q].name} · ${fmtSize(c.inches)}${c.cls === 'trophy' ? ' 🏆' : ''} · +${c.points}`, tx, cy + ch * 0.7, u * 1.0, '#e9ecef');
       ctx.textAlign = 'center';
       if (c.record) {
         const label = { new: 'NEW FIND!', better: 'BETTER ★!', bigger: 'BIGGEST YET!' }[c.record];
-        const rw = u * 9.5; const rh = u * 1.8; const rx = cx + cw - rw + u * 0.6; const ry = cy - u * 0.8;
+        const rw = u * 8.5; const rh = u * 1.6; const rx = cx + cw - rw + u * 0.4; const ry = cy + ch - u * 0.4;
         ctx.fillStyle = '#2f9e44'; ctx.fillRect(rx, ry, rw, rh); ctx.strokeStyle = INK; ctx.lineWidth = S * 0.6; ctx.strokeRect(rx, ry, rw, rh);
-        text(label, rx + rw / 2, ry + rh / 2, u * 1.1, '#ffffff');
+        text(label, rx + rw / 2, ry + rh / 2, u * 0.95, '#ffffff');
       }
     }
     // before the run: today's snow, the find of the day and the hill's twist
     if (this.phase === 'ready') {
       const cw = Math.min(W * 0.86, u * 40); const ch = u * 11.5; const cx = W / 2 - cw / 2; const cy = H * 0.42 - ch / 2;
-      ctx.fillStyle = 'rgba(27,20,48,0.82)'; ctx.fillRect(cx, cy, cw, ch);
+      ctx.fillStyle = 'rgba(27,20,48,0.96)'; ctx.fillRect(cx, cy, cw, ch);
       ctx.strokeStyle = '#74c0fc'; ctx.lineWidth = S; ctx.strokeRect(cx, cy, cw, ch);
       const fod = findByKey(this.today);
       text(`${this.words.emoji} Today: ${this.words.name}`, W / 2, cy + u * 1.8, u * 1.6, '#ffffff');
@@ -896,23 +945,27 @@ export class Sledding {
     // the end of the run: everything found
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
       const mine = this.haul.filter((h) => !h.dropped);
-      const cw = Math.min(W * 0.9, u * 44); const ch = u * (mine.length ? 17 : 11); const cx = W / 2 - cw / 2; const cy = H * 0.45 - ch / 2;
-      ctx.fillStyle = 'rgba(27,20,48,0.9)'; ctx.fillRect(cx, cy, cw, ch);
+      const cw = Math.min(W * 0.9, u * 44); const ch = u * (mine.length ? 15 : 10); const cx = W / 2 - cw / 2; const cy = H * 0.45 - ch / 2;
+      ctx.fillStyle = 'rgba(27,20,48,0.96)'; ctx.fillRect(cx, cy, cw, ch);
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(cx, cy, cw, ch);
       text(`Bottom of the hill! ${this.points.kid} points`, W / 2, cy + u * 1.8, u * 2.1, '#ffd43b');
       text(`${mine.length} finds${this.records ? ` · ${this.records} new in your finds book` : ''} · ${this.visP.name} got ${this.points.vis}`, W / 2, cy + u * 3.8, u * 1.25, '#e9ecef');
       // the finds in a row, best first
-      const show = [...mine].sort((a, b) => b.points - a.points).slice(0, 10);
+      // one of each kind, best first, with how many
+      const kinds = new Map();
+      for (const h of [...mine].sort((a, b) => b.points - a.points)) { const k = kinds.get(h.key); if (k) { k.n += 1; k.isNew = k.isNew || h.record === 'new'; } else kinds.set(h.key, { h, n: 1, isNew: h.record === 'new' }); }
+      const show = [...kinds.values()].slice(0, 9);
       const fit = (cw - u * 2) / Math.max(1, show.length);
-      const z = Math.max(2, Math.min(Math.floor(u * 0.5), Math.floor((fit - u * 0.4) / 10))); const gap = 10 * z + u * 0.4; const x0 = W / 2 - (show.length * gap) / 2 + u * 0.2;
+      const z = Math.max(2, Math.min(Math.floor(u * 0.45), Math.floor((fit - u * 0.4) / 12))); const gap = 12 * z + u * 0.4; const x0 = W / 2 - (show.length * gap) / 2 + u * 0.2;
       const pics = this.pics || (this.pics = new Map());
       ctx.imageSmoothingEnabled = false;
-      show.forEach((h, i) => {
+      show.forEach(({ h, n, isNew }, i) => {
         if (!pics.has(h.key)) pics.set(h.key, cellsPic(findCells(h.find)));
-        ctx.drawImage(pics.get(h.key), x0 + i * gap, cy + u * 5.2, 10 * z, 10 * z);
-        if (h.record === 'new') text('NEW', x0 + i * gap + 5 * z, cy + u * 5.2 + 10 * z + u * 0.6, u * 0.9, '#b2f2bb');
+        ctx.drawImage(pics.get(h.key), x0 + i * gap, cy + u * 5, 12 * z, 12 * z);
+        if (n > 1) text(`x${n}`, x0 + i * gap + 10 * z, cy + u * 5 + 11 * z, u * 0.9, '#ffffff');
+        if (isNew) text('NEW', x0 + i * gap + 6 * z, cy + u * 5 + 12 * z + u * 0.6, u * 0.9, '#b2f2bb');
       });
-      const yy = cy + ch - u * 3.6;
+      const yy = cy + ch - u * 3.4;
       text(this.newBest ? 'New best!' : `Best ${this.best} points`, W / 2, yy, u * 1.5, this.newBest ? '#b2f2bb' : '#e9ecef');
       if (this.t - this.overAt > 1.2) text('Tap to sled again', W / 2, yy + u * 2, u * 1.3, '#ffffff');
     }
@@ -926,6 +979,60 @@ const LEDGE = {
   'bg-ocean': ['#ff8787', '#f06595', '#a61e4d'], 'bg-volcano': ['#495057', '#343a40', '#212529'], 'bg-rainforest': ['#8ce99a', '#6e4b2a', '#4a3220'],
   'bg-fjord': ['#e7f5ff', '#a5d8ff', '#4dabf7'], 'bg-space': ['#e9ecef', '#adb5bd', '#495057'], 'bg-rainbow': ['#ffffff', '#f1f3f5', '#d0bfff'], 'bg-galaxy': ['#fff3bf', '#ffd43b', '#b8860b'],
 };
+
+// ---------- art helpers ----------
+/** Far hill colors per map ([back, front]; seasons where they change) and what tops them. */
+const FAR = {
+  'bg-meadow': { all: ['#8fcf8a', '#3f9a45'], autumn: ['#e8a33d', '#a8612a'], winter: ['#c3d3e8', '#9db4d6'] },
+  'bg-castle': { all: ['#8c9bb8', '#6f7fa3'], winter: ['#a9b6cf', '#8392b3'] },
+  'bg-sunset': { all: ['#f4c27a', '#c98a4b'] },
+  'bg-ocean': { all: ['#1971c2', '#0b4f8a'] },
+  'bg-volcano': { all: ['#5a3a30', '#2e1f1b'] },
+  'bg-rainforest': { all: ['#2f9e44', '#1b5e20'] },
+  'bg-fjord': { all: ['#5c7cab', '#3b5a87'] },
+  'bg-space': { all: ['#5c5f8a', '#3d4070'] },
+  'bg-rainbow': { all: ['#ffc9e9', '#b197fc'] },
+  'bg-galaxy': { all: ['#5f3dc4', '#3b2470'] },
+};
+const farColors = (id, season) => (FAR[id] || FAR['bg-meadow'])[season] || (FAR[id] || FAR['bg-meadow']).all;
+const FAR_LOOK = {
+  'bg-meadow': { back: 'hills', front: 'trees' }, 'bg-castle': { back: 'castle', front: 'trees' }, 'bg-sunset': { back: 'hills', front: 'dunes' },
+  'bg-ocean': { back: 'hills', front: 'reef' }, 'bg-volcano': { back: 'cone', front: 'none' }, 'bg-rainforest': { back: 'hills', front: 'canopy' },
+  'bg-fjord': { back: 'peaks', front: 'trees', water: '#1b4f8a' }, 'bg-space': { back: 'craters', front: 'none' }, 'bg-rainbow': { back: 'hills', front: 'none' },
+  'bg-galaxy': { back: 'craters', front: 'none' },
+};
+/** Scenery that looked too much like something in the way gets something else instead. */
+const PROP_SWAP = { hay: 'pine', rock: 'bush', steam: 'deadtree', iceblock: 'spruce' };
+/** Ground colors where the hill's own ones are hard to read (the galaxy's gold finds on gold). */
+const GROUND_FIX = { 'bg-galaxy': ['#ffe066', '#d4a017', '#7a5b00'] };
+/** Dark maps: finds get a light rim so they show. */
+const DARK = new Set(['bg-volcano', 'bg-space', 'bg-galaxy', 'bg-ocean']);
+
+/** A color a little darker (k < 0) or lighter (k > 0). */
+function shade(col, k) {
+  const c = hex(col);
+  const f = (v) => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k);
+  return `rgb(${f(c[0])},${f(c[1])},${f(c[2])})`;
+}
+/** a, k of the way to b. */
+function mix(a, b, k) {
+  const x = hex(a); const y = hex(b);
+  return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * k)).join(',')})`;
+}
+/** Draws something with a dark outline around it: draw(Q) paints with Q like P, then the outline goes on. */
+function outlined(P, draw) {
+  const px = new Map();
+  draw((col, x, y, w = 1, h = 1) => {
+    for (let i = 0; i < w; i += 1) for (let j = 0; j < h; j += 1) px.set(`${Math.round(x) + i},${Math.round(y) + j}`, col);
+  });
+  const edge = new Set();
+  for (const k of px.keys()) {
+    const [x, y] = k.split(',').map(Number);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = `${x + dx},${y + dy}`; if (!px.has(n)) edge.add(n); }
+  }
+  for (const k of edge) { const [x, y] = k.split(',').map(Number); P(INK, x, y); }
+  for (const [k, col] of px) { const [x, y] = k.split(',').map(Number); P(col, x, y); }
+}
 
 function hash1(n) { const h = Math.sin(n * 127.1 + 311.7) * 43758.5453; return h - Math.floor(h); }
 
@@ -952,10 +1059,16 @@ function skyCanvas(W, H, [top, bottom], id) {
 }
 function hex(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
 
-function cellsPic(cells) {
-  const c = document.createElement('canvas'); c.width = 10; c.height = 10;
+/** A find's picture, 12x12: its 10x10 cells in the middle, with a light rim around them on dark maps. */
+function cellsPic(cells, rim = null) {
+  const c = document.createElement('canvas'); c.width = 12; c.height = 12;
   const x = c.getContext('2d');
-  cells.forEach((row, j) => row.forEach((col, i) => { if (col) { x.fillStyle = col; x.fillRect(i, j, 1, 1); } }));
+  const on = (i, j) => cells[j]?.[i];
+  if (rim) {
+    x.fillStyle = rim;
+    for (let j = -1; j <= 10; j += 1) for (let i = -1; i <= 10; i += 1) if (!on(i, j) && (on(i - 1, j) || on(i + 1, j) || on(i, j - 1) || on(i, j + 1))) x.fillRect(i + 1, j + 1, 1, 1);
+  }
+  cells.forEach((row, j) => row.forEach((col, i) => { if (col) { x.fillStyle = col; x.fillRect(i + 1, j + 1, 1, 1); } }));
   return c;
 }
 
@@ -974,19 +1087,31 @@ function drawBag(P, x, y, special, hill, big) {
   else { P('#fff3bf', x - 2, y - 5, 1, 2); }
 }
 
-/** The sled: wooden (1), a red plastic sled with handles (2), a blue racing sled on runners (3). */
+/**
+ * The sled (drawn inside outlined(), so it gets a dark outline): a wooden sled on runners with
+ * a curled front (1), a red plastic toboggan with a rolled-up front and rope handles (2), and a
+ * blue racer on shiny runners with a gold stripe and a fin (3).
+ */
 function drawSled(P, x, y, tier, slope) {
   const tilt = (dx) => Math.round(dx * clamp(slope, -0.4, 0.4));
+  const at = (col, dx, dy, w = 1, h = 1) => P(col, x + dx, y + dy + tilt(dx), w, h);
   if (tier === 1) {
-    for (let dx = -8; dx <= 8; dx += 1) { P('#a0612f', x + dx, y - 3 + tilt(dx), 1, 2); P('#6e4520', x + dx, y - 1 + tilt(dx)); if ((dx + 8) % 4 === 0) P('#6e4520', x + dx, y - 3 + tilt(dx)); }
-    P('#a0612f', x + 9, y - 4 + tilt(9), 1, 2); P('#a0612f', x + 10, y - 6 + tilt(10), 1, 3); P('#6e4520', x + 9, y - 6 + tilt(9));
+    for (let dx = -8; dx <= 7; dx += 1) { at((dx + 8) % 4 === 3 ? '#8b5a2b' : '#c98a4b', dx, -4); at('#8b5a2b', dx, -3); }
+    for (const dx of [-6, -1, 4]) at('#6e4520', dx, -2); // struts
+    for (let dx = -8; dx <= 8; dx += 1) at('#495057', dx, -1); // runners
+    at('#495057', 9, -2); at('#495057', 10, -3); at('#495057', 10, -4); at('#495057', 9, -5); // the curl
+    at('#c98a4b', 8, -5); at('#8b5a2b', 8, -4);
   } else if (tier === 2) {
-    for (let dx = -8; dx <= 8; dx += 1) { P('#e03131', x + dx, y - 3 + tilt(dx), 1, 2); P('#a61e1e', x + dx, y - 1 + tilt(dx)); }
-    P('#e03131', x + 9, y - 4 + tilt(9), 1, 3); P('#ff8787', x - 6, y - 3 + tilt(-6), 3, 1); P(INK, x - 9, y - 4 + tilt(-9), 1, 2); P(INK, x + 5, y - 4 + tilt(5), 2, 1);
+    for (let dx = -8; dx <= 7; dx += 1) { at('#fa5252', dx, -4); at('#e03131', dx, -3); at('#a61e1e', dx, -2); }
+    at('#ff8787', -7, -4, 4, 1);
+    at('#e03131', 8, -4); at('#e03131', 8, -5); at('#fa5252', 9, -6); at('#fa5252', 9, -7); at('#e03131', 8, -7); // rolled-up front
+    at('#ffd43b', -9, -5); at('#ffd43b', -9, -4); at('#ffd43b', 2, -5); // rope handles
   } else {
-    for (let dx = -8; dx <= 8; dx += 1) { P('#1c7ed6', x + dx, y - 4 + tilt(dx), 1, 2); P('#ffd43b', x + dx, y - 3 + tilt(dx)); P('#adb5bd', x + dx, y - 1 + tilt(dx)); }
-    P('#adb5bd', x + 9, y - 2 + tilt(9)); P('#adb5bd', x + 10, y - 3 + tilt(10)); P('#adb5bd', x + 10, y - 4 + tilt(10));
-    P('#adb5bd', x - 5, y - 2 + tilt(-5)); P('#adb5bd', x + 4, y - 2 + tilt(4)); P('#1c7ed6', x + 9, y - 5 + tilt(9), 1, 2);
+    for (let dx = -7; dx <= 7; dx += 1) { at('#1c7ed6', dx, -5); at(dx % 2 ? '#ffd43b' : '#fcc419', dx, -4); at('#1864ab', dx, -3); }
+    for (let dx = -8; dx <= 9; dx += 1) at(dx % 3 ? '#dee2e6' : '#ffffff', dx, -1);
+    for (const dx of [-5, 0, 5]) at('#adb5bd', dx, -2);
+    at('#dee2e6', 10, -2); at('#dee2e6', 11, -3); // runner tips
+    at('#1c7ed6', 8, -5); at('#4dabf7', 8, -6); at('#4dabf7', -7, -6); at('#1c7ed6', -7, -7); // nose and fin
   }
 }
 
@@ -1011,20 +1136,20 @@ function drawHazard(P, z, x, y, t, hill) {
   if (ty === 'sandcastle') { P('#e5b574', x - 5, y - 6, 11, 6); P('#e5b574', x - 5, y - 8, 2, 2); P('#e5b574', x + 4, y - 8, 2, 2); P('#e5b574', x - 1, y - 9, 3, 3); P('#c9965a', x - 1, y - 3, 3, 3); P('#e03131', x, y - 12, 1, 3); return; }
   if (ty === 'urchin') { blob('#e599f7', '#862e9c', '#5f3dc4', 7, 5); for (let i = 0; i < 6; i += 1) P(INK, x - 5 + i * 2, y - 7 + (i % 2)); return; }
   if (ty === 'clam') { blob('#ffe8cc', '#f4a261', '#c9965a', 9, 5); return; }
-  if (ty === 'vent') { blob('#495057', '#343a40', '#212529'); return; }
-  if (ty === 'lavarock') { blob('#495057', '#343a40', '#212529'); P('#ff6b1a', x - 1, y - 4, 1, 2); P('#ff6b1a', x + 2, y - 3, 2, 1); return; }
-  if (ty === 'ice') { for (let j = 0; j < 8; j += 1) P(j < 2 ? '#ffffff' : '#a5d8ff', x - 4 + Math.floor(j / 3), y - 8 + j, 9 - Math.floor(j / 3), 1); P('#74c0fc', x + 2, y - 5, 1, 4); return; }
-  if (ty === 'snowdrift') { blob('#ffffff', '#e7f5ff', '#a5d8ff', 13, 6); return; }
-  if (ty === 'crater' || ty === 'moonrock') { blob('#e9ecef', '#adb5bd', '#868e96'); P('#868e96', x + 1, y - 4, 2, 1); return; }
+  if (ty === 'vent') { blob('#868e96', '#5c636a', '#343a40'); return; }
+  if (ty === 'lavarock') { blob('#868e96', '#5c636a', '#343a40'); P('#ff6b1a', x - 1, y - 5, 1, 3); P('#ff6b1a', x + 2, y - 3, 2, 1); P('#ffd43b', x - 1, y - 4); return; }
+  if (ty === 'ice') { for (let j = 0; j < 8; j += 1) P(j < 2 ? '#a5d8ff' : '#4dabf7', x - 4 + Math.floor(j / 3), y - 8 + j, 9 - Math.floor(j / 3), 1); P('#1c7ed6', x + 2, y - 5, 1, 4); P('#e7f5ff', x - 3, y - 7, 2, 1); return; }
+  if (ty === 'snowdrift') { blob('#e7f5ff', '#a5d8ff', '#74c0fc', 13, 6); return; }
+  if (ty === 'crater' || ty === 'moonrock') { blob('#868e96', '#5c5f8a', '#3d4070'); P('#3d4070', x + 1, y - 4, 2, 1); P('#adb5bd', x - 2, y - 6); return; }
   if (ty === 'antenna') { P('#adb5bd', x, y - 10, 1, 10); P('#e9ecef', x - 3, y - 11, 7, 2); P('#fa5252', x, y - 13, 1, 1); P('#868e96', x - 2, y - 1, 5, 1); return; }
   if (ty === 'asteroid') { blob('#ced4da', '#868e96', '#495057'); P('#495057', x - 2, y - 4); P('#495057', x + 2, y - 5); return; }
-  if (ty === 'starburst') { const c = Math.floor(t * 6) % 2 ? '#ffd43b' : '#fff3bf'; P(c, x, y - 9, 1, 9); P(c, x - 4, y - 5, 9, 1); P(c, x - 2, y - 7, 1, 1); P(c, x + 2, y - 7); P(c, x - 2, y - 3); P(c, x + 2, y - 3); return; }
+  if (ty === 'starburst') { const c = Math.floor(t * 6) % 2 ? '#fa5252' : '#ff8787'; P(c, x, y - 9, 1, 9); P(c, x - 4, y - 5, 9, 1); P(c, x - 2, y - 7, 1, 1); P(c, x + 2, y - 7); P(c, x - 2, y - 3); P(c, x + 2, y - 3); return; }
   if (ty === 'ring') { P('#d0bfff', x - 5, y - 4, 11, 2); P('#ffd43b', x - 3, y - 7, 7, 6); P('#d0bfff', x - 5, y - 4, 11, 1); return; }
   if (ty === 'cloudpuff') { blob('#ffffff', '#f1f3f5', '#d0bfff', 11, 6); return; }
   if (ty === 'candycane') { for (let j = 0; j < 9; j += 1) P(j % 2 ? '#fa5252' : '#ffffff', x, y - 9 + j, 2, 1); P('#fa5252', x + 2, y - 10, 2, 1); P('#ffffff', x + 4, y - 9, 1, 2); return; }
   if (ty === 'puddle') return;
   if (ty === 'stone') { blob('#ced4da', '#868e96', '#495057'); P('#495057', x - 3, y - 4, 7, 1); return; }
-  if (ty === 'boulder') { blob('#6c6460', '#494240', '#2b2422', 11, 9); return; }
+  if (ty === 'boulder') { blob('#a8a29e', '#78716c', '#57534e', 11, 9); P('#ff6b1a', x + 2, y - 3); return; }
   // rock and anything else
   blob('#ced4da', '#868e96', '#495057');
 }
@@ -1054,7 +1179,8 @@ function drawProp(P, kind, x, y, [c1, c2, c3], t, hill) {
   if (kind === 'dish') { P('#adb5bd', x, y - 6, 1, 6); P('#e9ecef', x - 4, y - 10, 9, 2); P('#ced4da', x - 3, y - 8, 7, 1); return; }
   if (kind === 'cloud') { P('#ffffff', x - 6, y - 26, 13, 3); P('#ffffff', x - 3, y - 28, 7, 2); return; }
   if (kind === 'lollipop') { P('#ffffff', x, y - 10, 1, 10); P('#ff8cc6', x - 3, y - 15, 7, 6); P('#ffffff', x - 1, y - 13, 3, 1); return; }
-  if (kind === 'mushroom') { P('#fff5f5', x - 1, y - 5, 3, 5); P('#fa5252', x - 4, y - 8, 9, 3); P('#ffffff', x - 2, y - 8); P('#ffffff', x + 2, y - 7); return; }
+  if (kind === 'deadtree') { P(c3, x, y - 12, 2, 13); P(c3, x - 3, y - 10, 3, 1); P(c3, x - 4, y - 12, 1, 2); P(c3, x + 2, y - 8, 3, 1); P(c3, x + 4, y - 10, 1, 2); P(c3, x + 1, y - 14, 1, 2); return; }
+  if (kind === 'mushroom') { P('#fff5f5', x - 1, y - 5, 3, 5); P('#ffc9c9', x - 4, y - 8, 9, 3); P('#ff8787', x - 2, y - 8); P('#ff8787', x + 2, y - 7); return; }
   if (kind === 'star') { const c = Math.floor(t * 2 + x) % 2 ? '#ffd43b' : '#fff3bf'; P(c, x, y - 30, 1, 5); P(c, x - 2, y - 28, 5, 1); return; }
   if (kind === 'planet') { P('#9775fa', x - 3, y - 34, 7, 7); P('#ffd43b', x - 6, y - 31, 13, 1); return; }
   if (kind === 'comet') { P('#ffffff', x, y - 32, 2, 2); for (let i = 1; i < 6; i += 1) P(i < 3 ? '#fff3bf' : '#d0bfff', x - i * 2, y - 32 + i, 2, 1); return; }
