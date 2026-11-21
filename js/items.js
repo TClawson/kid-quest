@@ -123,6 +123,7 @@ export const SPORTS = [
   { id: 'hockey', name: 'Hockey stick', icon: '🏒' },
   // the ski race with a visitor (js/skirace.js)
   { id: 'skis', name: 'Skis', icon: '🎿' },
+  { id: 'camera', name: 'Camera', icon: '📷' },
 ];
 export const TIERS = [
   { tier: 1, id: 'regular', name: '', gems: 40 },
@@ -166,6 +167,9 @@ export const MOVES = [
   { id: 'dangle', kind: 'hockey', step: 1, name: 'Stickhandling' },
   { id: 'slapshot', kind: 'hockey', step: 2, name: 'Slap shot' },
   { id: 'spinorama', kind: 'hockey', step: 3, name: 'Spin-o-rama' },
+  { id: 'click', kind: 'camera', step: 1, name: 'Say cheese' },
+  { id: 'selfie', kind: 'camera', step: 2, name: 'Selfie' },
+  { id: 'paparazzi', kind: 'camera', step: 3, name: 'Flash frenzy' },
 ];
 export const moveById = (id) => MOVES.find((m) => m.id === id);
 export const moveWeeks = (move) => MOVE_WEEKS[move.step - 1];

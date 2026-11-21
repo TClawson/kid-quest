@@ -73,6 +73,7 @@ export function statusHtml(s) {
         <button class="t-tag" data-action="status-scores">📊 Family game scores</button>
         <button class="t-tag" data-action="status-fish">🐟 Fish book</button>
         <button class="t-tag" data-action="status-skis">🎿 Shortcut book</button>
+        <button class="t-tag" data-action="status-album">📷 Critter album</button>
       </div>
     </div>`;
 }

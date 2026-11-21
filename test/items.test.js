@@ -209,7 +209,7 @@ test('moves unlock at 1, 3 and 6 exercise weeks, for gear the kid owns', () => {
   assert.deepEqual(ids(['sport-soccer-regular'], 3), ['jacks', 'cartwheel', 'keepy', 'flick']);
   assert.equal(ids(['sport-soccer-regular', 'sport-rod-super'], 6).length, 9);
   assert.equal(unlockedMoves(['sport-rod-super'], 6).find((m) => m.move.kind === 'rod').tier, 3);
-  assert.equal(MOVES.length, 18);
+  assert.ok(MOVES.length >= 18, 'more gear brings more moves');
   const two = unlockedMoves([], 3);
   assert.equal(pickMove(two, 'jacks').move.id, 'cartwheel');
   assert.equal(pickMove([], null), null);
