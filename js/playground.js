@@ -4,6 +4,7 @@ import { Play, GAME_NAMES } from './play.js';
 import { Hockey } from './hockey.js';
 import { Fishing } from './fishing.js';
 import { Football } from './football.js';
+import { Bike } from './bike.js';
 import { Sledding } from './sledding.js';
 import { PhotoTrain } from './phototrain.js';
 import { Dig } from './dig.js';
@@ -23,6 +24,7 @@ function layout(vw, vh) {
  * opts: { kid, visitor: { buddy, name, gear }, kind, best, sounds, onScore(score): a new best, onOver(score): any game's end,
  *   onCatch(fish): fishing only, the kid landed a fish (see Fishing);
  *   onFind(find), onRun(run), dry, season: the sled's treasure hill only (see Sledding);
+ *   season, onTrick(card), book: trick jumps only, see Bike;
  *   onDigFind(find), onRound(round), bones, treasures, maps, dry: the dino dig only (see Dig) }
  * Returns a function that closes the screen.
  */
@@ -46,9 +48,9 @@ export function openPlay(opts) {
   for (const c of [field, hud]) { c.style.width = `${W * S}px`; c.style.height = `${H * S}px`; }
   stage.style.width = `${W * S}px`; stage.style.height = `${H * S}px`;
 
-  const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : opts.kind === 'sledding' ? Sledding : opts.kind === 'train' ? PhotoTrain : opts.kind === 'dig' ? Dig : Play;
+  const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : opts.kind === 'sledding' ? Sledding : opts.kind === 'train' ? PhotoTrain : opts.kind === 'tricks' ? Bike : opts.kind === 'dig' ? Dig : Play;
   // fishing: the lake for the kid's map, and today's bait odds
-  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, onFind: opts.kind === 'dig' ? opts.onDigFind : opts.onFind, onRun: opts.onRun, dry: opts.dry, season: opts.season, weather: opts.weather, clues: opts.clues, onPhoto: opts.onPhoto, onClue: opts.onClue, onRound: opts.onRound, bones: opts.bones, treasures: opts.treasures, maps: opts.maps });
+  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, onFind: opts.kind === 'dig' ? opts.onDigFind : opts.onFind, onRun: opts.onRun, dry: opts.dry, season: opts.season, weather: opts.weather, clues: opts.clues, onPhoto: opts.onPhoto, onClue: opts.onClue, onTrick: opts.onTrick, book: opts.book, newBike: opts.newBike, onRound: opts.onRound, bones: opts.bones, treasures: opts.treasures, maps: opts.maps });
   root.game = game; // for tests
   // fishing draws its lake and fish with finer pixels, and a better rod shows more of the
   // lake (fieldW x fieldH lake pixels, shrunk to fit the same screen)
@@ -82,7 +84,7 @@ export function openPlay(opts) {
     }
     // for tests: what the game is doing
     root.dataset.phase = game.phase;
-    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.kind === 'fishing' || game.kind === 'football' || game.kind === 'sledding' || game.kind === 'train' || game.kind === 'dig' ? game.score : game.free.toFixed(1);
+    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.kind === 'fishing' || game.kind === 'football' || game.kind === 'sledding' || game.kind === 'train' || game.kind === 'tricks' || game.kind === 'dig' ? game.score : game.free.toFixed(1);
     if (game.buzz) { navigator.vibrate?.(game.buzz); game.buzz = null; }
     const n = game.kind === 'soccer' && game.next();
     root.dataset.next = n ? String(Math.round((n.at - game.t) * 1000)) : '';
@@ -112,6 +114,8 @@ export function openPlay(opts) {
     lost = null;
     const p = at(e);
     lastXY = [e.clientX, e.clientY];
+    // games that take every finger (trick jumps: one thumb each side)
+    if (game.multi) { fingers.set(e.pointerId, e.clientX); game.down(e.pointerId, ...p); listen(); return; }
     if (!game.holdAnywhere && game.press && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
     down = e.pointerId;
     game.tap(...p);
@@ -122,8 +126,20 @@ export function openPlay(opts) {
     if (isButton) { button = null; game.release(); listen(); }
     if (isDown) { down = null; game.up?.(); if (game.holdAnywhere) { game.release(); listen(); } }
   };
-  const onUp = (e) => letGo(button === e.pointerId, down === e.pointerId);
+  // trick jumps: every finger; a cancelled touch stays held until a finger on its side lifts
+  const fingers = new Map(); // pointer id -> clientX where it went down
+  const lostFingers = new Set();
+  const liftFinger = (id) => { fingers.delete(id); lostFingers.delete(id); game.up(id); listen(); };
+  const onUp = (e) => {
+    if (game.multi) { if (fingers.has(e.pointerId)) liftFinger(e.pointerId); return; }
+    letGo(button === e.pointerId, down === e.pointerId);
+  };
   const onCancel = (e) => {
+    if (game.multi) {
+      if (!fingers.has(e.pointerId)) return;
+      if (e.pointerType !== 'touch') liftFinger(e.pointerId); else lostFingers.add(e.pointerId);
+      return;
+    }
     const isButton = button === e.pointerId; const isDown = down === e.pointerId;
     if (!isButton && !isDown) return;
     if (e.pointerType !== 'touch') { letGo(isButton, isDown); return; }
@@ -141,11 +157,26 @@ export function openPlay(opts) {
     game.drag(...at(best));
   };
   const onTouchEnd = (e) => {
+    if (game.multi && lostFingers.size) {
+      if (!e.touches.length) { for (const id of [...lostFingers]) liftFinger(id); return; }
+      // more fingers held than touch the screen (a live finger's pointerup came first): the
+      // lifted ones were cancelled ones, the nearest to where a finger just lifted
+      for (const t of e.changedTouches) {
+        if (fingers.size <= e.touches.length) break;
+        let best = null; let bd = Infinity;
+        for (const id of lostFingers) { const d = Math.abs(fingers.get(id) - t.clientX); if (d < bd) { bd = d; best = id; } }
+        if (best != null) liftFinger(best);
+      }
+      return;
+    }
     if (!lost || e.touches.length) return;
     const l = lost; lost = null;
     letGo(l.button && button != null, l.down && down != null);
   };
   const noMenu = (e) => e.preventDefault();
+  const onKey = (e) => { if (game.key && !e.repeat) { game.key(e.code, e.type === 'keydown'); listen(); } };
+  window.addEventListener('keydown', onKey);
+  window.addEventListener('keyup', onKey);
   root.addEventListener('pointerdown', onDown);
   root.addEventListener('pointermove', onMove);
   root.addEventListener('contextmenu', noMenu);
@@ -181,6 +212,8 @@ export function openPlay(opts) {
     window.removeEventListener('touchend', onTouchEnd);
     window.removeEventListener('touchcancel', onTouchEnd);
     document.removeEventListener('visibilitychange', onVis);
+    window.removeEventListener('keydown', onKey);
+    window.removeEventListener('keyup', onKey);
     root.remove();
     open = null;
     opts.onClose?.();
