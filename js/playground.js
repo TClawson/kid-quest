@@ -94,29 +94,62 @@ export function openPlay(opts) {
   };
   // one finger can hold the hockey button while another steers
   let down = null; let button = null;
+  // Android sends pointercancel when it decides a still-held finger might be a scroll, a
+  // long-press or a palm, even with touch-action: none. That is not a lift: the finger is
+  // still on the glass (Taylor, 2026-11-21: "I was continuing to hold in many cases where it
+  // thought I had let go"). So a cancelled touch stays held, keeps steering from touchmove,
+  // and lets go only when a real touchend/touchcancel leaves no finger on the screen.
+  let lost = null; // { down, button, x, y } held touches whose pointer events were cancelled
+  let lastXY = null;
   const onDown = (e) => {
     if (e.target.closest('.play-close')) return;
     e.preventDefault();
-    // keep this finger's events here even if it slides off the field
-    try { root.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    try { root.setPointerCapture(e.pointerId); } catch { /* old browsers */ }
+    lost = null;
     const p = at(e);
+    lastXY = [e.clientX, e.clientY];
     if (!game.holdAnywhere && game.press && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
     down = e.pointerId;
     game.tap(...p);
     listen();
   };
-  const onMove = (e) => { if (down === e.pointerId) game.drag(...at(e)); };
-  const onUp = (e) => {
-    if (button === e.pointerId) { button = null; game.release(); listen(); }
-    if (down === e.pointerId) { down = null; if (game.holdAnywhere) { game.release(); listen(); } }
+  const onMove = (e) => { if (down === e.pointerId) { lastXY = [e.clientX, e.clientY]; game.drag(...at(e)); } };
+  const letGo = (isButton, isDown) => {
+    if (isButton) { button = null; game.release(); listen(); }
+    if (isDown) { down = null; game.up?.(); if (game.holdAnywhere) { game.release(); listen(); } }
   };
-  // a long press must not open the browser's menu (that cancels the touch, which reads as a let-go)
+  const onUp = (e) => letGo(button === e.pointerId, down === e.pointerId);
+  const onCancel = (e) => {
+    const isButton = button === e.pointerId; const isDown = down === e.pointerId;
+    if (!isButton && !isDown) return;
+    if (e.pointerType !== 'touch') { letGo(isButton, isDown); return; }
+    lost = { button: isButton || lost?.button, down: isDown || lost?.down };
+  };
+  const onTouchMove = (e) => {
+    if (!lost?.down || !e.touches.length) return;
+    // follow the finger nearest to where the steering finger last was
+    let best = e.touches[0]; let bd = Infinity;
+    for (const t of e.touches) {
+      const d = lastXY ? (t.clientX - lastXY[0]) ** 2 + (t.clientY - lastXY[1]) ** 2 : 0;
+      if (d < bd) { bd = d; best = t; }
+    }
+    lastXY = [best.clientX, best.clientY];
+    game.drag(...at(best));
+  };
+  const onTouchEnd = (e) => {
+    if (!lost || e.touches.length) return;
+    const l = lost; lost = null;
+    letGo(l.button && button != null, l.down && down != null);
+  };
   const noMenu = (e) => e.preventDefault();
-  root.addEventListener('contextmenu', noMenu);
   root.addEventListener('pointerdown', onDown);
   root.addEventListener('pointermove', onMove);
+  root.addEventListener('contextmenu', noMenu);
   window.addEventListener('pointerup', onUp);
-  window.addEventListener('pointercancel', onUp);
+  window.addEventListener('pointercancel', onCancel);
+  window.addEventListener('touchmove', onTouchMove, { passive: true });
+  window.addEventListener('touchend', onTouchEnd);
+  window.addEventListener('touchcancel', onTouchEnd);
 
   let last = performance.now();
   let raf = 0;
@@ -136,8 +169,13 @@ export function openPlay(opts) {
   const close = () => {
     cancelAnimationFrame(raf);
     root.removeEventListener('pointerdown', onDown);
+    root.removeEventListener('pointermove', onMove);
+    root.removeEventListener('contextmenu', noMenu);
     window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
+    window.removeEventListener('pointercancel', onCancel);
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('touchend', onTouchEnd);
+    window.removeEventListener('touchcancel', onTouchEnd);
     document.removeEventListener('visibilitychange', onVis);
     root.remove();
     open = null;
