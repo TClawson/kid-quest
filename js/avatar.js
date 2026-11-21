@@ -785,6 +785,19 @@ const GEAR_ART = {
     { R: '#495057', C: '#e03131' },
     { R: '#fcc419', C: '#4dabf7' },
   ]],
+  // a camera, held up in front (the photo train)
+  camera: [15, 13, [
+    '.KKK...',
+    'KKKKKKK',
+    'KBBKKBK',
+    'KBKLKBK',
+    'KBBKKBK',
+    'KKKKKKK',
+  ], [
+    { B: SH('#343a40', '#5c636a', '#1b1e21'), L: '#74c0fc' },
+    { B: SH('#e03131', '#ff6b6b', '#a51d1d'), L: '#a5d8ff' },
+    { B: SH('#fcc419', '#ffe066', '#e67700'), L: '#d0ebff' },
+  ]],
   // worn on the feet
   shoes: [0, 0, null, [
     { S: SH('#e03131', '#ff6b6b', '#a51d1d'), W: '#ffffff' },
@@ -845,6 +858,7 @@ const PROP_ART = {
   bobber: [20, 18, ['KK', 'RW'], { R: '#e03131', W: '#ffffff' }],
   dust: [1, 20, ['.D.', 'DDD', '.D.'], { D: '#dee2e6' }],
   wind: [1, 9, ['WW....WW', '......', '..WWW...'], { W: '#e7f5ff' }],
+  flash: [16, 6, ['W...W', '.WYW.', '.YWY.', '.WYW.', 'W...W'], { W: '#ffffff', Y: '#fff3bf' }],
 };
 const FISH = ['.KKK.K', 'KFFFKF', 'KFEFFK', 'KFFFKF', '.KKK.K'];
 const FISH_PAL = [
@@ -902,6 +916,9 @@ export const MOVE_ART = {
   wheelie: { gear: 'free', ms: 1600 },
   bunnyhop: { gear: 'free', ms: 1400 },
   tailwhip: { gear: 'free', ms: 1600 },
+  click: { gear: 'char', props: ['flash'], ms: 1400 },
+  selfie: { gear: 'free', props: ['flash'], ms: 1800 },
+  paparazzi: { gear: 'char', props: ['flash'], ms: 2000 },
 };
 
 // ---------- what visitors catch in each map's pond ----------

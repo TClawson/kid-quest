@@ -196,3 +196,18 @@ button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink)
 .tb-page { text-align: center; }
 .tb-page .tb-big { width: 148px; image-rendering: pixelated; image-rendering: crisp-edges; }
 .tb-page p { text-align: left; }
+/* the critter album (js/albumview.js): fish book cards with season icons and a photo quality */
+.ca-grid .ca-card { grid-template-rows: 56px auto auto auto; }
+.ca-grid .ca-card img { height: 56px; }
+.ca-card small { font-style: italic; }
+.ca-seas { font-size: 0.72rem; letter-spacing: 1px; white-space: nowrap; }
+.ca-seas .off { opacity: 0.22; filter: grayscale(1); }
+.ca-q { font: 700 0.95rem/1 var(--px-font); color: #495057; }
+.ca-q.perfect { color: #b8860b; }
+.ca-q.good { color: #2b8a3e; }
+.critter-page .fp-head img { image-rendering: pixelated; }
+.ca-mine.perfect { --cls: #f0c040; }
+.ca-mine.good { --cls: #40c057; }
+.ca-slots { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ca-slots li { padding: 2px 8px; border: 2px dashed #d9c9a8; border-radius: 6px; color: var(--muted); font-size: 0.85rem; }
+.ca-slots li.got { border-style: solid; border-color: #40c057; color: var(--px-ink); }

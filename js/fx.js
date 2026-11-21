@@ -223,6 +223,11 @@ export const sounds = {
   bikeCard: () => play([N.E5, N.G5, N.C6, N.E6], 0.08, 0.14, 'square', 0.07),
   bikeRing: () => slide(1046, 1568, 0.1, 'triangle', 0.07),
   goal: () => play([N.C5, N.E5, N.G5, N.C6, N.G5, N.C6], 0.08, 0.16, 'square', 0.1),
+  // the photo train: a shutter click, focus lock, an animal's pose, a bush rustling
+  snap: () => { hiss(4000, 1200, 0.06, 0.12, 'highpass'); setTimeout(() => hiss(3000, 900, 0.05, 0.09, 'highpass'), 70); },
+  lock: () => play([N.C6, N.G6], 0.04, 0.06, 'square', 0.05),
+  chime: () => play([N.E6, N.G6], 0.06, 0.18, 'sine', 0.09),
+  rustle: () => hiss(2500, 1500, 0.25, 0.05),
   over: (best) => (best ? play([N.C5, N.E5, N.G5, N.C6], 0.09, 0.2, 'square', 0.1) : play([N.G5, N.E5, N.C5], 0.1, 0.18, 'triangle', 0.12)),
   // a quick rising whoosh for a buddy's sports move; fishing gets a plip
   move: (kind) => (kind === 'rod'

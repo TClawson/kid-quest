@@ -184,7 +184,7 @@ test('the panda’s bamboo leans on the side away from held gear', async () => {
   assert.ok(Math.max(...xs(draw('sport-rod-regular'))) <= 12, 'on the left when the rod is on the right');
 });
 
-test('sports gear: 5 kinds in 3 versions plus the fishing boat, bought with gems only', () => {
+test('sports gear: every kind in 3 versions plus the fishing boat, bought with gems only', () => {
   const gear = ITEMS.filter((i) => i.slot === 'sport');
   // every kind of gear (more come with new games) in 3 versions, plus the boat
   assert.equal(gear.length, ITEMS.filter((i) => i.slot === 'sport' && i.tier === 3).length * 3 + 1);

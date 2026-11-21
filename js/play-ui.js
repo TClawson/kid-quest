@@ -14,6 +14,8 @@ import { recordWeekBest } from './leaderboard.js';
 import { recordCatch, catchSpecies } from './fishbook.js';
 import { recordTrick } from './bike.js';
 import { shownSeason } from './seasons.js';
+import { recordPhoto, keepPhoto, addClue, spendClues } from './album.js';
+import { critterById } from './critters.js';
 import {
   state, today, esc, save, render, openModal, currentKid, mover, exerciseInfo, kidTheme,
 } from './ctx.js';
@@ -25,10 +27,10 @@ import {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
-const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', tricks: 'bike' };
+const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', train: 'camera', tricks: 'bike' };
 // the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
-const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', tricks: 'bike' };
-const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', tricks: 'bike' };
+const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', train: 'camera', tricks: 'bike' };
+const GEAR_NAME = { soccer: 'soccer ball', hockey: 'hockey stick', football: 'football', fishing: 'fishing rod', train: 'camera', tricks: 'bike' };
 /** True when the kid would play with the visitor's gear: they don't own that kind. */
 const borrows = (kid, kind) => !!GEAR_KEY[kind] && !(bestGear(kid.owned || [])[GEAR_KEY[kind]] > 0);
 /** The buddy move ids a kid (or a visitor: { owned, exBest }) has unlocked, for game celebrations. */
@@ -55,9 +57,13 @@ export function visitPlan(kid, visitors) {
   return planVisits(kid.id, visitors.map((v) => ({ id: v.id, gear: bestGear(v.owned) })), today(), heldGame(kid));
 }
 
-/** Fishing when the kid's buddy is holding a fishing rod (there's no field for it: the lake is in the game). */
+/**
+ * Fishing when the kid's buddy is holding a fishing rod, the photo train when it holds a camera
+ * (there's no field for them: the lake and the train are in the games).
+ */
 function heldRod(kid) {
-  return itemById(kid.buddy?.outfit?.sport)?.kind === 'rod' ? 'fishing' : null;
+  const k = itemById(kid.buddy?.outfit?.sport)?.kind;
+  return k === 'rod' ? 'fishing' : k === 'camera' ? 'train' : null;
 }
 
 /** Trick jumps when the kid's buddy is holding a bike (the hill is in the game). */
@@ -106,6 +112,8 @@ export function playWith(kid, v, kind) {
     // a bike bought in the last day guarantees a golden ramp on its first ride
     newBike: kind === 'tricks' && !kid.trickBook,
     sounds,
+    // the photo train: clues the kid has found toward each map's legend
+    clues: (map) => kid.critterClues?.[map] || 0,
     gamesLeft: () => playableFor(currentKid(kid0)),
     onStart: () => {
       const kid = currentKid(kid0);
@@ -143,6 +151,24 @@ export function playWith(kid, v, kind) {
       kid.fishRecords = got.records;
       save();
       return got.first ? 'first' : 'record';
+    },
+    // the photo train: the best photo of each animal goes in the critter album (the photo itself
+    // stays on this device; the game fills in shot.pic when it draws next)
+    onPhoto: (shot) => {
+      const kid = currentKid(kid0);
+      const got = recordPhoto(kid.critterAlbum, shot, today());
+      if (!got.isNew) return null;
+      kid.critterAlbum = got.album;
+      if (critterById(shot.critter)?.rarity === 'legend') kid.critterClues = spendClues(kid.critterClues, critterById(shot.critter).map);
+      save();
+      if (got.album[shot.critter].q === shot.quality) setTimeout(() => keepPhoto(kid.id, shot.critter, shot.pic), 120);
+      return got.first ? 'new' : 'better';
+    },
+    onClue: (map) => {
+      const kid = currentKid(kid0);
+      kid.critterClues = addClue(kid.critterClues, map);
+      save();
+      return kid.critterClues[map];
     },
   });
 }

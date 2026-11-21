@@ -5,6 +5,7 @@ import { Hockey } from './hockey.js';
 import { Fishing } from './fishing.js';
 import { Football } from './football.js';
 import { Bike } from './bike.js';
+import { PhotoTrain } from './phototrain.js';
 
 let open = null;
 
@@ -43,9 +44,9 @@ export function openPlay(opts) {
   for (const c of [field, hud]) { c.style.width = `${W * S}px`; c.style.height = `${H * S}px`; }
   stage.style.width = `${W * S}px`; stage.style.height = `${H * S}px`;
 
-  const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : opts.kind === 'tricks' ? Bike : Play;
+  const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : opts.kind === 'train' ? PhotoTrain : opts.kind === 'tricks' ? Bike : Play;
   // fishing: the lake for the kid's map, and today's bait odds
-  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, season: opts.season, onTrick: opts.onTrick, book: opts.book, newBike: opts.newBike });
+  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, season: opts.season, weather: opts.weather, clues: opts.clues, onPhoto: opts.onPhoto, onClue: opts.onClue, onTrick: opts.onTrick, book: opts.book, newBike: opts.newBike });
   root.game = game; // for tests
   // fishing draws its lake and fish with finer pixels, and a better rod shows more of the
   // lake (fieldW x fieldH lake pixels, shrunk to fit the same screen)
@@ -79,7 +80,7 @@ export function openPlay(opts) {
     }
     // for tests: what the game is doing
     root.dataset.phase = game.phase;
-    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.kind === 'fishing' || game.kind === 'football' || game.kind === 'tricks' ? game.score : game.free.toFixed(1);
+    root.dataset.score = game.kind === 'soccer' ? game.count : game.kind === 'hockey' ? game.goals.kid : game.kind === 'fishing' || game.kind === 'football' || game.kind === 'train' || game.kind === 'tricks' ? game.score : game.free.toFixed(1);
     if (game.buzz) { navigator.vibrate?.(game.buzz); game.buzz = null; }
     const n = game.kind === 'soccer' && game.next();
     root.dataset.next = n ? String(Math.round((n.at - game.t) * 1000)) : '';
@@ -95,32 +96,91 @@ export function openPlay(opts) {
   };
   // one finger can hold the hockey button while another steers
   let down = null; let button = null;
+  // Android sends pointercancel when it decides a still-held finger might be a scroll, a
+  // long-press or a palm, even with touch-action: none. That is not a lift: the finger is
+  // still on the glass (Taylor, 2026-11-21: "I was continuing to hold in many cases where it
+  // thought I had let go"). So a cancelled touch stays held, keeps steering from touchmove,
+  // and lets go only when a real touchend/touchcancel leaves no finger on the screen.
+  let lost = null; // { down, button, x, y } held touches whose pointer events were cancelled
+  let lastXY = null;
   const onDown = (e) => {
     if (e.target.closest('.play-close')) return;
     e.preventDefault();
-    try { root.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    try { root.setPointerCapture(e.pointerId); } catch { /* old browsers */ }
+    lost = null;
     const p = at(e);
+    lastXY = [e.clientX, e.clientY];
     // games that take every finger (trick jumps: one thumb each side)
-    if (game.multi) { game.down(e.pointerId, ...p); listen(); return; }
+    if (game.multi) { fingers.set(e.pointerId, e.clientX); game.down(e.pointerId, ...p); listen(); return; }
     if (!game.holdAnywhere && game.press && game.onButton?.(...p) && game.phase === 'play') { button = e.pointerId; game.press(); listen(); return; }
     down = e.pointerId;
     game.tap(...p);
     listen();
   };
-  const onMove = (e) => { if (down === e.pointerId) game.drag(...at(e)); };
-  const onUp = (e) => {
-    if (game.multi) { game.up(e.pointerId); listen(); return; }
-    if (button === e.pointerId) { button = null; game.release(); listen(); }
-    if (down === e.pointerId) { down = null; if (game.holdAnywhere) { game.release(); listen(); } }
+  const onMove = (e) => { if (down === e.pointerId) { lastXY = [e.clientX, e.clientY]; game.drag(...at(e)); } };
+  const letGo = (isButton, isDown) => {
+    if (isButton) { button = null; game.release(); listen(); }
+    if (isDown) { down = null; game.up?.(); if (game.holdAnywhere) { game.release(); listen(); } }
   };
+  // trick jumps: every finger; a cancelled touch stays held until a finger on its side lifts
+  const fingers = new Map(); // pointer id -> clientX where it went down
+  const lostFingers = new Set();
+  const liftFinger = (id) => { fingers.delete(id); lostFingers.delete(id); game.up(id); listen(); };
+  const onUp = (e) => {
+    if (game.multi) { if (fingers.has(e.pointerId)) liftFinger(e.pointerId); return; }
+    letGo(button === e.pointerId, down === e.pointerId);
+  };
+  const onCancel = (e) => {
+    if (game.multi) {
+      if (!fingers.has(e.pointerId)) return;
+      if (e.pointerType !== 'touch') liftFinger(e.pointerId); else lostFingers.add(e.pointerId);
+      return;
+    }
+    const isButton = button === e.pointerId; const isDown = down === e.pointerId;
+    if (!isButton && !isDown) return;
+    if (e.pointerType !== 'touch') { letGo(isButton, isDown); return; }
+    lost = { button: isButton || lost?.button, down: isDown || lost?.down };
+  };
+  const onTouchMove = (e) => {
+    if (!lost?.down || !e.touches.length) return;
+    // follow the finger nearest to where the steering finger last was
+    let best = e.touches[0]; let bd = Infinity;
+    for (const t of e.touches) {
+      const d = lastXY ? (t.clientX - lastXY[0]) ** 2 + (t.clientY - lastXY[1]) ** 2 : 0;
+      if (d < bd) { bd = d; best = t; }
+    }
+    lastXY = [best.clientX, best.clientY];
+    game.drag(...at(best));
+  };
+  const onTouchEnd = (e) => {
+    if (game.multi && lostFingers.size) {
+      if (!e.touches.length) { for (const id of [...lostFingers]) liftFinger(id); return; }
+      // more fingers held than touch the screen (a live finger's pointerup came first): the
+      // lifted ones were cancelled ones, the nearest to where a finger just lifted
+      for (const t of e.changedTouches) {
+        if (fingers.size <= e.touches.length) break;
+        let best = null; let bd = Infinity;
+        for (const id of lostFingers) { const d = Math.abs(fingers.get(id) - t.clientX); if (d < bd) { bd = d; best = id; } }
+        if (best != null) liftFinger(best);
+      }
+      return;
+    }
+    if (!lost || e.touches.length) return;
+    const l = lost; lost = null;
+    letGo(l.button && button != null, l.down && down != null);
+  };
+  const noMenu = (e) => e.preventDefault();
   const onKey = (e) => { if (game.key && !e.repeat) { game.key(e.code, e.type === 'keydown'); listen(); } };
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKey);
   root.addEventListener('pointerdown', onDown);
-  const noMenu = (e) => e.preventDefault(); root.addEventListener('contextmenu', noMenu);
   root.addEventListener('pointermove', onMove);
+  root.addEventListener('contextmenu', noMenu);
   window.addEventListener('pointerup', onUp);
-  window.addEventListener('pointercancel', onUp);
+  window.addEventListener('pointercancel', onCancel);
+  window.addEventListener('touchmove', onTouchMove, { passive: true });
+  window.addEventListener('touchend', onTouchEnd);
+  window.addEventListener('touchcancel', onTouchEnd);
 
   let last = performance.now();
   let raf = 0;
@@ -140,8 +200,13 @@ export function openPlay(opts) {
   const close = () => {
     cancelAnimationFrame(raf);
     root.removeEventListener('pointerdown', onDown);
+    root.removeEventListener('pointermove', onMove);
+    root.removeEventListener('contextmenu', noMenu);
     window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
+    window.removeEventListener('pointercancel', onCancel);
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('touchend', onTouchEnd);
+    window.removeEventListener('touchcancel', onTouchEnd);
     document.removeEventListener('visibilitychange', onVis);
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('keyup', onKey);

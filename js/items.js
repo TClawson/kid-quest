@@ -122,6 +122,7 @@ export const SPORTS = [
   { id: 'football', name: 'Football', icon: '🏈' },
   { id: 'hockey', name: 'Hockey stick', icon: '🏒' },
   { id: 'bike', name: 'Bike', icon: '🚲' },
+  { id: 'camera', name: 'Camera', icon: '📷' },
 ];
 export const TIERS = [
   { tier: 1, id: 'regular', name: '', gems: 40 },
@@ -168,6 +169,9 @@ export const MOVES = [
   { id: 'wheelie', kind: 'bike', step: 1, name: 'Wheelie' },
   { id: 'bunnyhop', kind: 'bike', step: 2, name: 'Bunny hop' },
   { id: 'tailwhip', kind: 'bike', step: 3, name: 'Tailwhip' },
+  { id: 'click', kind: 'camera', step: 1, name: 'Say cheese' },
+  { id: 'selfie', kind: 'camera', step: 2, name: 'Selfie' },
+  { id: 'paparazzi', kind: 'camera', step: 3, name: 'Flash frenzy' },
 ];
 export const moveById = (id) => MOVES.find((m) => m.id === id);
 export const moveWeeks = (move) => MOVE_WEEKS[move.step - 1];
