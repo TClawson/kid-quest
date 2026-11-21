@@ -357,7 +357,9 @@ export class Sledding {
         // holding the button over the lip: big air (high enough for the high line)
         if (lip && R.on === 'g') {
           const big = R.held && !lip.big;
-          this.launch(R, lip.kick + (big ? JUMP_V * 0.5 : 0), lip.big);
+          // sail off the top of the lip (not from the ground just past it), heading up the ramp's way
+          R.y = this.groundAt(lip.x + lip.w);
+          this.launch(R, lip.kick + (big ? JUMP_V * 0.5 : 0), lip.big, 0);
           if (big) { R.holdT = 0; this.pop('Big air!', R.x, R.y - 30, '#a5d8ff'); this.sound = 'board'; }
         }
         // a crater's far rim launches too
@@ -398,8 +400,8 @@ export class Sledding {
     }
   }
 
-  launch(R, kick, big = false) {
-    R.on = null; R.vy = this.base.slope(R.x) * R.v - kick; R.jumps = 1; R.airT = 0; R.highFived = false;
+  launch(R, kick, big = false, slope = this.base.slope(R.x)) {
+    R.on = null; R.vy = slope * R.v - kick; R.jumps = 1; R.airT = 0; R.highFived = false;
     if (big) this.startBig(R);
   }
 

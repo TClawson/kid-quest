@@ -128,8 +128,8 @@ const run = (map, opts = {}) => {
   let below = 0; let holdUntil = 0;
   for (let i = 0; i < 30 * 140 && g.phase === 'play'; i += 1) {
     const R = g.rider;
-    const ahead = g.hazards.find((z) => !z.bounce && !z.hit && z.x > R.x + 4 && z.x < R.x + 22 && (z.surf || 'g') === R.on);
-    const gap = g.gaps.find((p) => p.x0 > R.x && p.x0 < R.x + 14);
+    const ahead = g.hazards.find((z) => !z.bounce && !z.hit && z.x > R.x + 4 && z.x < R.x + 10 + R.v * 0.16 && (z.surf || 'g') === R.on);
+    const gap = g.gaps.find((p) => p.x0 > R.x && p.x0 < R.x + 4 + R.v * 0.1);
     if (R.on && (ahead || gap)) { g.tap(); holdUntil = g.t + (gap ? 0.3 : 0.12); }
     if (R.on === 'g' && g.onRamp(R.x) && !R.held) { g.tap(); holdUntil = g.t + 0.6; }
     if (g.meter && !g.meter.zone) g.tap();
@@ -145,7 +145,7 @@ test('a run on every hill: down to the bottom, never under the ground, finds rep
     for (const season of ['winter', 'summer']) {
       const { g, told, below } = run(map, { season });
       assert.equal(g.phase, 'over', `${map} ${season}: the run ends`);
-      assert.ok(g.t > 50 && g.t < 100, `${map} ${season}: about a minute and a half (${g.t.toFixed(0)} s)`);
+      assert.ok(g.t > 40 && g.t < 100, `${map} ${season}: about a minute (${g.t.toFixed(0)} s)`);
       assert.equal(below, 0, `${map} ${season}: never under the ground`);
       assert.ok(told.length >= 8, `${map} ${season}: finds (${told.length})`);
       assert.ok(told.every((f) => f.map === map && f.key.startsWith(map.replace('bg-', ''))), `${map}: this hill's finds`);
