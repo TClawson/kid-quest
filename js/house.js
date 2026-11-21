@@ -29,6 +29,8 @@ export const HOUSE_SPOTS = {
   tank: { x: 156, y: 131 }, // just behind the tank, looking in
   book: { x: 186, y: 131 },
   music: { x: 66, y: 66 }, // in front of the turntable
+  stand: { x: 172, y: 98 }, // in front of the dino dig's skeleton stand
+  pedestal: { x: 66, y: 122 }, // in front of the treasure pedestal
 };
 const M = ROOM.at.music;
 // the tappable things: [x, y, w, h] boxes over the art
@@ -39,6 +41,8 @@ const HOT = {
   bed: [9, 20, 36, 80],
   sink: [250, 8, 24, 52],
   music: [M.x, M.y, TURNTABLE.w, TURNTABLE.h],
+  stand: [ROOM.at.stand.x + 2, ROOM.at.stand.y + 2, 56, 44],
+  pedestal: [ROOM.at.pedestal.x + 2, ROOM.at.pedestal.y + 4, 20, 36],
 };
 /**
  * Where the buddy stands to look in the tank and read the fish book, and their tap boxes, for
@@ -82,6 +86,8 @@ const DONE_SAY = {
  *   of fish the kid has caught, garden: { thirsty } (plants waiting for water, for the Garden tag),
  *   harvest: gardenrules.js houseHarvest (the vases, baskets and fruit bowl the garden puts out),
  *   hud: markup laid over a corner of the room (the Today button), or '',
+ *   dig: the dino dig's displays, { skeleton, pedestal } (dino id and treasure key, or null), or
+ *   null before the kid has a shovel (digbook-ui.js digShow),
  * }
  */
 export function houseHtml(h) {
@@ -91,6 +97,7 @@ export function houseHtml(h) {
     chores: h.chores, mess: h.mess || 0, shelf: h.shelf || 0, gear: h.gear || {},
     tank: fishes.map((f) => ({ species: f.species, len: f.len, nickname: f.nickname })),
     harvest: h.harvest || null,
+    dig: h.dig || null,
   };
   const spec = tankSpec(h.layout?.tank?.art);
   const T = spec.at;
@@ -126,6 +133,8 @@ export function houseHtml(h) {
           ${data.layout.music ? `${spot('music', 'Turntable', '<span class="h-tag">🎶 Turntable</span>')}
           <span class="h-spin" style="left:${M.x + TURNTABLE.record.x}px;top:${M.y + TURNTABLE.record.y}px" aria-hidden="true"><i></i></span>
           <span class="h-notes" style="left:${M.x + TURNTABLE.record.x}px;top:${M.y + 2}px" aria-hidden="true"><i>♪</i><i>♫</i><i>♪</i></span>` : ''}
+          ${h.dig ? `${spot('stand', 'Skeleton stand', `<span class="h-tag">🦴 ${h.dig.skeleton ? 'Skeleton' : 'Stand'}</span>`)}
+          ${spot('pedestal', 'Treasure pedestal', '<span class="h-tag">💎 Pedestal</span>')}` : ''}
           ${spot('bed', 'Bed')}
           ${spot('sink', 'Sink')}
           ${spot('door', 'Go outside', `<span class="h-tag out">⬇ Outside${h.quests ? ` · ${h.quests} ${h.quests === 1 ? 'quest' : 'quests'}` : ''}</span>`)}
@@ -157,6 +166,7 @@ export function houseGoal(kidId, kind) { goals.set(kidId, kind); }
  *   onTank(): the fish picker, onFishBook(), onGarden(): the buddy went out to the garden,
  *   onExit(): the buddy went out the door, sound(name), onTurntable(): the turntable's screen,
  *   spinning(kidId): whether that kid's turntable is playing (the record goes round),
+ *   onStand(), onPedestal(): the dino dig's displays (pick what's on show),
  * }
  */
 export function mountHouses(root, handlers) {
@@ -165,12 +175,12 @@ export function mountHouses(root, handlers) {
 
 let roomCache = { key: '', canvas: null, res: null };
 function room(doc, data) {
-  const key = JSON.stringify([data.layout, data.chores && Object.fromEntries(Object.entries(data.chores).map(([k, v]) => [k, v ? v.st : null])), data.mess, data.shelf, data.gear, data.color]);
+  const key = JSON.stringify([data.layout, data.chores && Object.fromEntries(Object.entries(data.chores).map(([k, v]) => [k, v ? v.st : null])), data.mess, data.shelf, data.gear, data.color, data.dig]);
   if (roomCache.key !== key) {
     const canvas = doc.createElement('canvas');
     const done = (k) => !data.chores?.[k] || data.chores[k].st === 'done' || data.chores[k].st === 'pending';
     const layout = Object.fromEntries(Object.entries(data.layout).map(([k, id]) => [k, id ? furnitureById(id) : null]));
-    const res = paintRoom(canvas, { layout, made: done('bed'), teeth: done('teeth'), mess: data.mess, shelf: data.shelf, gear: data.gear, color: data.color });
+    const res = paintRoom(canvas, { layout, made: done('bed'), teeth: done('teeth'), mess: data.mess, shelf: data.shelf, gear: data.gear, color: data.color, dig: data.dig });
     roomCache = { key, canvas, res };
   }
   return roomCache;
@@ -295,6 +305,8 @@ function mount(section, handlers) {
     else if (goal.use === 'tank') handlers.onTank?.();
     else if (goal.use === 'book') handlers.onFishBook?.();
     else if (goal.use === 'music') handlers.onTurntable?.();
+    else if (goal.use === 'stand') handlers.onStand?.();
+    else if (goal.use === 'pedestal') handlers.onPedestal?.();
     else if (goal.use) choreTalk(goal.use);
   };
   const walkTo = (x, y, goal = null) => {
@@ -339,7 +351,7 @@ function mount(section, handlers) {
   });
 
   // the trophy, chart, tank and book tags show when the buddy is close
-  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"]')].map((el) => ({ el, at: SPOTS[el.dataset.spot] }));
+  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"], .h-spot[data-spot="stand"], .h-spot[data-spot="pedestal"]')].map((el) => ({ el, at: SPOTS[el.dataset.spot] }));
   const tankSpecNow = tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art);
   const swim = tankSwimmer(section, data.tank, tankSpecNow);
   const plaque = section.querySelector('.h-plaque');

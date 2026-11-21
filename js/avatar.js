@@ -782,6 +782,26 @@ const GEAR_ART = {
     { B: SH('#e03131', '#ff6b6b', '#a51d1d'), L: '#a5d8ff' },
     { B: SH('#fcc419', '#ffe066', '#e67700'), L: '#d0ebff' },
   ]],
+  // the dig's shovel: a wooden spade, a steel spade with a red grip, the golden shovel
+  shovel: [18, 6, [
+    'KKKK.',
+    'KGGK.',
+    '.KSK.',
+    '.KSK.',
+    '.KSK.',
+    '.KSK.',
+    '.KSK.',
+    'KKSKK',
+    'KBBBK',
+    'KBLBK',
+    'KBBBK',
+    '.KBK.',
+    '..K..',
+  ], [
+    { S: '#c98a4b', G: '#8b5a2b', B: SH('#868e96', '#adb5bd', '#495057'), L: '#ced4da' },
+    { S: '#495057', G: '#e03131', B: SH('#adb5bd', '#e9ecef', '#6c757d'), L: '#ffffff' },
+    { S: '#fcc419', G: '#e67700', B: SH('#fcc419', '#ffe066', '#e67700'), L: '#fff3bf' },
+  ]],
   // worn on the feet
   shoes: [0, 0, null, [
     { S: SH('#e03131', '#ff6b6b', '#a51d1d'), W: '#ffffff' },
@@ -1300,7 +1320,7 @@ export function liveLook(buddy) {
       front: toCells(musicPx(music, 'front')),
       flames: (MUSIC_ART[music].flames || []).map((_, i) => toCells(musicPx(music, i))),
     } : null,
-    gear: gear && GEAR_ART[gear.kind] ? { kind: gear.kind, held: ['shoes', 'rod', 'hockey'].includes(gear.kind), c: toCells(gearPx(gear.kind, gear.tier)) } : null,
+    gear: gear && GEAR_ART[gear.kind] ? { kind: gear.kind, held: ['shoes', 'rod', 'hockey', 'shovel'].includes(gear.kind), c: toCells(gearPx(gear.kind, gear.tier)) } : null,
   };
 }
 

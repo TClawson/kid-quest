@@ -197,3 +197,26 @@ button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink)
 .ca-slots { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .ca-slots li { padding: 2px 8px; border: 2px dashed #d9c9a8; border-radius: 6px; color: var(--muted); font-size: 0.85rem; }
 .ca-slots li.got { border-style: solid; border-color: #40c057; color: var(--px-ink); }
+
+/* the dig book and the dino dig's displays (digbook-ui.js) */
+.book-tabs { display: flex; gap: 6px; margin: 0 0 8px; }
+.book-tabs .btn { flex: 1; }
+.dig-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+.dig-grid .fb-fish { grid-template-rows: 40px auto auto; }
+.dig-grid .fb-fish img { height: 40px; }
+.dig-dino.done { border-color: #f0c040; background: #fffbe6; }
+.digbook .fb-fish img, .digpage img, .digpick img { image-rendering: pixelated; image-rendering: crisp-edges; }
+.fd-stars { color: #e67700; letter-spacing: -1px; }
+.dig-sk { text-align: center; margin: 6px 0; }
+.dig-sk img { max-width: 100%; }
+.digpage h3 { margin: 10px 0 6px; }
+.dig-bones { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+.dig-bone { display: flex; gap: 8px; align-items: flex-start; padding: 6px; background: #fff; border: 2px solid #e8d6b8; border-radius: 6px; }
+.dig-bone img { width: 44px; height: auto; flex: none; }
+.dig-bone.none { background: #f4ede0; border-style: dashed; }
+.dig-bone small { color: var(--muted); }
+.digpage .fp-head img { height: 72px; width: auto; }
+.digpick .tp-fish img { height: 40px; width: auto; max-width: 100%; }
+.dig-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 6px 0; }
+.dig-facts dt { font-weight: 700; white-space: nowrap; }
+.dig-facts dd { margin: 0; }
