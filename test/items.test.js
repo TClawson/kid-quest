@@ -186,7 +186,8 @@ test('the panda’s bamboo leans on the side away from held gear', async () => {
 
 test('sports gear: every kind in 3 versions plus the fishing boat, bought with gems only', () => {
   const gear = ITEMS.filter((i) => i.slot === 'sport');
-  assert.equal(gear.length, ITEMS.filter((i) => i.slot === 'sport' && i.tier === 3).length * 3 + 1); assert.ok(gear.length >= 16);
+  assert.equal(gear.length, ITEMS.filter((i) => i.slot === 'sport' && i.tier === 3).length * 3 + 1);
+  assert.ok(gear.length >= 16);
   assert.ok(SPORTS.some((k) => k.id === 'sled'), 'the sled');
   const boat = itemById('sport-boat');
   assert.equal(boat.gems, 100);
