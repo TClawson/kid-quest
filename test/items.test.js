@@ -230,7 +230,7 @@ test('every Places background has a map, a fishing spot and a hidden spot', asyn
 test('the fjord is for sale now that its music is written; nothing is "coming soon"', async () => {
   const { comingSoon } = await import('../js/items.js');
   assert.equal(comingSoon(itemById('bg-fjord')), false);
-  assert.deepEqual(ITEMS.filter(comingSoon), []);
+  assert.deepEqual(ITEMS.filter((i) => comingSoon(i, '2027-01-01')), [], 'once all the new gear is out');
   // an item marked soon is on show but can't be bought
   assert.equal(comingSoon({ id: 'x', soon: true }), true);
   // the fjord has its own song, show tune and concert piece
@@ -239,4 +239,18 @@ test('the fjord is for sale now that its music is written; nothing is "coming so
   assert.equal(SONGS['bg-fjord'].name, 'Alaskan Fjord');
   assert.equal(SHOW_SONGS['bg-fjord'].name, 'Lighthouse Call');
   assert.equal(LONG_PIECES['long:bg-fjord'].map, 'bg-fjord');
+});
+
+test('new gear goes on sale on its Friday, one a week (Taylor, 2026-11-20)', async () => {
+  const { GEAR_RELEASES, notYet, releaseDay, releaseLabel } = await import('../js/releases.js');
+  const { comingSoon } = await import('../js/items.js');
+  const sled = itemById('sport-sled-good');
+  assert.equal(releaseDay(sled), GEAR_RELEASES.sled);
+  assert.equal(comingSoon(sled, '2026-11-26'), true, 'the day before');
+  assert.equal(comingSoon(sled, '2026-11-27'), false, 'on its Friday');
+  assert.equal(notYet(itemById('sport-rod-good'), '2020-01-01'), false, 'old gear is always on sale');
+  const days = Object.values(GEAR_RELEASES).sort();
+  for (const d of days) assert.equal(new Date(`${d}T12:00:00`).getDay(), 5, `${d} is a Friday`);
+  assert.equal(new Set(days).size, days.length, 'one a week');
+  assert.equal(releaseLabel('2026-11-27'), 'Friday, Nov 27');
 });
