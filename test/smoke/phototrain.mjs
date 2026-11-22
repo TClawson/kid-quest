@@ -1,5 +1,5 @@
 // Browser test for the photo train (js/phototrain.js) and the critter album (js/albumview.js):
-// - a 90 second ride on each map in every season, at tablet and phone size, with a bot that
+// - a 90 second ride on every map in every season, at tablet and phone size, with a bot that
 //   holds focus on an animal's sign and lets go when it poses: the ride ends, perfect photos
 //   happen, every kept photo is told to the album, and nothing throws while drawing
 // - aiming takes no photo, even when the finger lifts; the shutter button takes it
@@ -25,9 +25,9 @@ try {
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
     const { rides: results, early } = await page.evaluate(async () => {
-      const { PhotoTrain, LIFT } = await import('./js/phototrain.js');
+      const { PhotoTrain, LIFT, TRAIN_MAPS } = await import('./js/phototrain.js');
       const out = [];
-      for (const map of ['bg-meadow', 'bg-fjord', 'bg-space', 'bg-volcano']) {
+      for (const map of TRAIN_MAPS) {
         for (const season of ['spring', 'summer', 'autumn', 'winter']) {
           for (const [W, H] of [[213, 120], [130, 150]]) {
             const told = [];

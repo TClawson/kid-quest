@@ -66,6 +66,8 @@ export const LAYER = { far: 0.1, mid: 0.35, track: 1, fore: 1.6 };
 /** A quick tap (shorter than this) doesn't snap: it reminds the kid to hold. */
 /** Seconds an animal holds its pose. */
 const POSE = 1.1;
+/** Shy animals hold it for less (the Super camera's quiet shutter helps most with them). */
+const SHY_POSE = 0.6;
 
 const INK = '#1b1430';
 const Z = 2; // fine pixels for each game pixel
@@ -75,7 +77,7 @@ const Z = 2; // fine pixels for each game pixel
 const THEMES = {
   'bg-meadow': {
     sky: ['#7cc7ff', '#d0ecff'], hills: ['#7fb685', '#5f9e6e'], far: 'hills', ground: ['#6cc35a', '#4fa64a', '#8b5a2b'],
-    props: ['oak', 'oak', 'pine', 'bush', 'bush', 'rock', 'log', 'pond', 'flowers'], train: ['#e03131', '#ffd43b'],
+    props: ['oak', 'oak', 'pine', 'bush', 'bush', 'rock', 'log', 'pond', 'flowers'], train: ['#e03131', '#ffd43b'], clues: ['tracks', 'feather', 'antler'],
     seasons: {
       autumn: { ground: ['#b5a04a', '#8f8a3a', '#7a5230'], leaf: ['#e8590c', '#f59f00', '#c92a2a'] },
       winter: { ground: ['#d6deec', '#c3cde0', '#8b5a2b'], bank: '#b4c1d6', hills: ['#e3e9f3', '#b9c6da'], leaf: ['#2f7d32'], snow: true, sky: ['#9fbcd8', '#f6dcc8'] },
@@ -85,6 +87,7 @@ const THEMES = {
   'bg-fjord': {
     sky: ['#9cc3dc', '#e7f5ff'], hills: ['#8d99a6', '#6c7a89'], far: 'peaks', ground: ['#4a6a52', '#2b4a36', '#6c757d'],
     water: ['#2a8aa0', '#1c6a80', '#12586e'], props: ['spruce', 'spruce', 'spruce', 'rock', 'bush'], train: ['#1971c2', '#f8f9fa'],
+    covers: { tree: 'spruce' }, clues: ['tracks', 'feather'],
     seasons: {
       winter: { ground: ['#d6deec', '#c3cde0', '#6c757d'], bank: '#b4c1d6', snow: true, sky: ['#a9c0d6', '#f6dcc8'] },
       autumn: { ground: ['#8a7a3a', '#5c6b2a', '#6c757d'] },
@@ -93,10 +96,60 @@ const THEMES = {
   'bg-space': {
     sky: ['#0b1026', '#252a5c'], hills: ['#5c5f8a', '#46496e'], far: 'craters', ground: ['#9a9fc4', '#7d82a8', '#5c5f8a'],
     props: ['moonrock', 'moonrock', 'crater', 'antenna', 'crystal'], train: ['#ced4da', '#4dabf7'], stars: true, lowG: true,
+    covers: { rock: 'moonrock', tree: 'moonrock' }, skyBody: 'earth', post: 'lamp', clues: ['tracks', 'glow'],
+  },
+  'bg-castle': {
+    sky: ['#8fb8ff', '#d8e8ff'], hills: ['#86b97a', '#5f9e5a'], far: 'castle', ground: ['#6cc35a', '#4fa64a', '#8b5a2b'],
+    water: ['#4c6ef5', '#3b5bdb', '#2f46b0'], props: ['oak', 'hedge', 'tower', 'oak', 'rock', 'hedge', 'flowers'], train: ['#7048e8', '#fcc419'],
+    covers: { bush: 'hedge', tower: 'tower' }, perchKind: 'tower', tunnelStyle: 'gate', drawbridge: true, clues: ['tracks', 'feather', 'scale'],
+    seasons: {
+      autumn: { ground: ['#b5a04a', '#8f8a3a', '#7a5230'], leaf: ['#e8590c', '#f59f00', '#c92a2a'] },
+      winter: { ground: ['#d6deec', '#c3cde0', '#8b5a2b'], bank: '#b4c1d6', hills: ['#e3e9f3', '#b9c6da'], leaf: ['#2f7d32'], snow: true, sky: ['#9fbcd8', '#f6dcc8'] },
+      spring: { leaf: ['#69db7c', '#8ce99a'], blossom: '#fcc2d7' },
+    },
+  },
+  'bg-sunset': {
+    sky: ['#ff8a3d', '#ffd8a8'], hills: ['#b0603a', '#8a4a2a'], far: 'islands', ground: ['#f3c98b', '#e0b070', '#c08a3e'],
+    water: ['#3bc9db', '#1098ad', '#0b7285'], props: ['palm', 'palm', 'dunegrass', 'shell', 'rock', 'log', 'dunegrass'], train: ['#12b886', '#ff8787'],
+    covers: { tree: 'palm', reeds: 'dunegrass', log: 'log', rock: 'rock' }, warm: true, dusk: true, skyBody: 'sunset', fore: '#2b8a3e', clues: ['tracks', 'feather', 'shell'],
+  },
+  'bg-ocean': {
+    sky: ['#74c0fc', '#1c5fa8'], hills: ['#3d7cc0', '#2f68a8'], far: 'reef', ground: ['#f0d9a0', '#d9bf82', '#a07a3c'],
+    props: ['coral', 'seafan', 'seaweed', 'anemone', 'rock', 'clam', 'coral', 'seaweed'], train: ['#fab005', '#1c7ed6'],
+    covers: { anemone: 'anemone', coral: 'coral', rock: 'rock', sky: 'seaweed', tree: 'seaweed' }, underwater: true, warm: true, skyBody: 'rays',
+    tunnelStyle: 'cave', post: 'tube', fore: '#0ca678', foreKind: 'seaweed', clues: ['shell', 'tooth'],
+    weatherNames: { sunny: { name: 'Sunbeams', icon: '🔆' }, rain: { name: 'Plankton bloom', icon: '🟢' }, snow: { name: 'Marine snow', icon: '❄️' }, mist: { name: 'Murky water', icon: '🌫️' }, wind: { name: 'Strong current', icon: '🌊' } },
+  },
+  'bg-volcano': {
+    sky: ['#f08c5a', '#ffe0c2'], hills: ['#5b4b45', '#3d3330'], far: 'volcano', ground: ['#7a6656', '#6b5a4e', '#3d3330'],
+    water: ['#1c9cb0', '#127a8c', '#0b5a6a'], props: ['cactus', 'lavarock', 'vent', 'cactus', 'scrub', 'lavarock', 'vent'], train: ['#343a40', '#ff6b1a'],
+    covers: { rock: 'lavarock', tree: 'cactus', bush: 'scrub' }, warm: true, tunnelStyle: 'lava', vents: true, fore: '#5c6b2a', clues: ['tracks', 'feather', 'shell'],
+  },
+  'bg-rainforest': {
+    sky: ['#a9e2b8', '#e6fcf5'], hills: ['#2f7a45', '#1f5c33'], far: 'jungle', ground: ['#3a9e4a', '#24733a', '#6e4b2a'],
+    water: ['#9a8a5a', '#7e6f42', '#5e5230'], props: ['kapok', 'fern', 'palm', 'kapok', 'fern', 'bromeliad', 'log'], train: ['#2b8a3e', '#ffd43b'],
+    covers: { tree: 'kapok', bush: 'fern', log: 'log' }, warm: true, downpour: true, leaf: ['#2b8a3e', '#37b24d'], fore: '#2b8a3e', foreKind: 'fern', clues: ['tracks', 'feather'],
+  },
+  'bg-rainbow': {
+    sky: ['#c5f6fa', '#fff0f6'], hills: ['#96f2d7', '#fcc2d7'], far: 'candy', ground: ['#8ce99a', '#69db7c', '#fcc2d7'],
+    props: ['lollipop', 'gumdrop', 'candytree', 'cane', 'lollipop', 'gumdrop', 'flowers', 'pond'], train: ['#f783ac', '#ffffff'],
+    covers: { tree: 'candytree', bush: 'gumdrop', rock: 'gumdrop', reeds: 'cane' }, skyBody: 'rainbow', rainbowHunt: true, post: 'cane', fore: '#f783ac', clues: ['tracks', 'sprinkle'],
+    weatherNames: { sunny: { name: 'Sunny', icon: '☀️' }, rain: { name: 'Sprinkles', icon: '🍬' }, snow: { name: 'Sugar snow', icon: '❄️' }, mist: { name: 'Cotton candy fog', icon: '🌫️' }, wind: { name: 'Breezy', icon: '🍃' } },
+  },
+  'bg-galaxy': {
+    sky: ['#1a0f40', '#4a2c8a'], hills: ['#5f3dc4', '#4527a0'], far: 'spires', ground: ['#fcc419', '#f08c00', '#4527a0'],
+    props: ['goldspire', 'goldcrystal', 'asteroid', 'goldcrystal', 'goldspire'], train: ['#5f3dc4', '#fcc419'], stars: true, lowG: true,
+    covers: { rock: 'goldcrystal', burrow: 'burrow', tree: 'goldspire', sky: 'goldspire' }, skyBody: 'planets', goldCamo: true, tunnelStyle: 'wormhole', post: 'star', fore: '#e67700', clues: ['tracks', 'glow'],
+    weatherNames: { sunny: { name: 'Starshine', icon: '⭐' }, rain: { name: 'Meteor shower', icon: '☄️' }, snow: { name: 'Star dust', icon: '✨' }, mist: { name: 'Nebula haze', icon: '🌌' }, wind: { name: 'Solar wind', icon: '🌞' } },
   },
 };
 /** The moon's own weather names for the day's weather. */
 const SPACE_WEATHER = { sunny: { name: 'Earthrise', icon: '🌍' }, rain: { name: 'Meteor shower', icon: '☄️' }, snow: { name: 'Star dust', icon: '✨' }, mist: { name: 'Moon dust', icon: '🌫️' }, wind: { name: 'Solar wind', icon: '🌞' } };
+THEMES['bg-space'].weatherNames = SPACE_WEATHER;
+/** Rainbow land's colors: one photo of each in a ride brings the unicorn. */
+export const RAINBOW_BONUS = 50;
+export const RAINBOW = [['red', '#ff6b6b'], ['orange', '#ffa94d'], ['yellow', '#ffe066'], ['green', '#69db7c'], ['blue', '#4dabf7'], ['purple', '#b197fc']];
+export const TRAIN_MAPS = Object.keys(THEMES);
 const themeFor = (map, season) => {
   const base = THEMES[map] || THEMES['bg-meadow'];
   return { ...base, ...(base.seasons?.[season] || {}), season };
@@ -116,8 +169,10 @@ export class PhotoTrain {
     this.map = THEMES[opts.map] ? opts.map : (mapCritters(opts.map)[0]?.map || 'bg-meadow');
     this.day = opts.day || '2026-01-01';
     this.season = opts.season || seasonOf(this.day);
-    this.weather = opts.weather || weatherOf(this.day, this.season);
     this.theme = themeFor(this.map, this.season);
+    this.weather = opts.weather || weatherOf(this.day, this.season);
+    if (this.weather === 'snow' && this.theme.warm) this.weather = 'rain'; // no snow on warm maps
+    if (this.theme.downpour && this.weather === 'rain' && this.season !== 'winter') this.weather = 'mist'; // the rain comes later, in the ride
     this.wanted = wantedOf(this.day, this.map, this.season);
     this.clues = (typeof opts.clues === 'function' ? opts.clues(this.map) : opts.clues) || 0;
     this.onPhoto = opts.onPhoto || null; this.onClue = opts.onClue || null;
@@ -133,8 +188,9 @@ export class PhotoTrain {
     this.horizon = Math.round(H * 0.46);
     // feet on the middle ground: kept well above the car and the buddies' heads, so nothing on it hides behind the train
     this.groundY = Math.min(Math.round(H * 0.68), Math.round(H * 0.86) - 42);
-    this.waterTop = this.theme.water ? Math.round(H * 0.5) : null;
     this.shoreY = this.theme.water ? Math.min(Math.round(H * 0.71), Math.round(H * 0.86) - 40) : this.groundY;
+    // the water: at least 8 game pixels of it in front of the far shore, even on a wide, short screen
+    this.waterTop = this.theme.water ? Math.min(Math.round(H * 0.5), this.shoreY - 8) : null;
     this.trackY = Math.round(H * 0.86);
     this.carX = Math.round(this.W * 0.2);
     const sit = (b) => ({ ...b, outfit: { ...(b?.outfit || {}), music: undefined, sport: undefined } });
@@ -151,8 +207,9 @@ export class PhotoTrain {
     this.dist = 0; this.speed = SPEED; this.brake = null; this.tunnel = null;
     this.props = []; this.nextProp = { mid: -20, fore: 60 };
     this.critters = []; this.nextAt = 2.5; this.landBusy = false;
-    this.setPieces = { track: false, tunnel: false, clue: false };
-    this.plan = { trackAt: 32 + this.r() * 22, tunnelAt: 14 + this.r() * 40, clueAt: 20 + this.r() * 50, legendAt: 72 + this.r() * 8 };
+    this.setPieces = { track: false, tunnel: false, clue: false, bridge: false };
+    this.bridge = null; this.poured = false; this.colors = new Set(); this.rainbowFull = false;
+    this.plan = { trackAt: 32 + this.r() * 22, tunnelAt: 14 + this.r() * 40, clueAt: 20 + this.r() * 50, legendAt: 72 + this.r() * 8, bridgeAt: 58 + this.r() * 8, pourAt: 40 + this.r() * 10 };
     if (Math.abs(this.plan.trackAt - this.plan.tunnelAt) < 10) this.plan.tunnelAt = (this.plan.trackAt + 25) % 70 + 10;
     this.roll = []; this.bestBy = {}; this.records = 0; this.cluesFound = 0;
     this.view = null; this.flash = 0; this.lastShot = null; this.overAt = 0;
@@ -191,6 +248,12 @@ export class PhotoTrain {
     if (legend) pairs = pairs.filter(([c]) => c.rarity === 'legend');
     else pairs = pairs.filter(([c]) => c.rarity !== 'legend' || this.act() === 3);
     if (this.act() === 3) pairs = pairs.map(([c, w]) => [c, c.rarity === 'rare' || c.rarity === 'legend' ? w * 3 : w]);
+    // the sunset: day animals go home for the finale, dusk animals only come out then
+    if (this.theme.dusk) pairs = pairs.filter(([c]) => (this.act() === 3 ? !c.day : !c.dusk));
+    // Rainbow land: after 30 s, colors still missing from the rainbow come three times as often
+    if (this.theme.rainbowHunt && GAME_SECONDS - this.left > 30) pairs = pairs.map(([c, w]) => [c, c.color && !this.colors.has(c.color) ? w * 3 : w]);
+    // the downpour: sun lovers hide
+    if (this.poured) pairs = pairs.filter(([c]) => !c.weather?.includes('sunny'));
     // Fjord rule (Taylor): one land animal at a time
     if (this.landBusy) pairs = pairs.filter(([c]) => !c.land);
     // nothing twice at once
@@ -226,10 +289,15 @@ export class PhotoTrain {
       k.x = mid + this.W + 12;
       k.y = how === 'surface' ? this.waterY() : how === 'perch' ? (this.theme.water ? this.shoreY : this.groundY) - 30 - Math.round(r() * 8) : this.footY(c);
       k.emergeX = this.W * (0.55 + r() * 0.32);
-      const cover = how === 'surface' ? 'ripple' : how === 'perch' ? 'branch' : c.from === 'burrow' ? 'burrow' : c.from === 'log' ? 'log' : c.from === 'rock' ? 'moonrock' : c.from === 'reeds' ? 'reeds' : c.from === 'bush' ? 'bush' : this.theme.water ? 'spruce' : this.map === 'bg-space' ? 'moonrock' : 'oak';
+      const cov = this.theme.covers || {};
+      const base = { burrow: 'burrow', log: 'log', rock: 'rock', reeds: 'reeds', bush: 'bush', tower: 'tower' };
+      let cover = how === 'surface' ? 'ripple' : how === 'perch' ? 'branch' : cov[c.from] || base[c.from] || cov.tree || 'oak';
+      if (this.theme.vents && c.from === 'rock' && how === 'rise' && r() < 0.5) cover = 'vent'; // up from behind a steam vent
       k.cover = { layer: 'mid', kind: cover, x: k.x + (how === 'step' ? 6 : 0), y: how === 'perch' ? (this.theme.water ? this.shoreY : this.groundY) : k.y, seed: Math.floor(r() * 1e6), hides: k };
       this.props = this.props.filter((q) => q.layer !== 'mid' || q.hides || Math.abs(q.x - k.cover.x) > (q.kind === 'pond' ? 40 : 16));
-      if (how !== 'perch') this.props.push(k.cover); else this.props.push({ ...k.cover, kind: this.theme.water ? 'spruce' : 'oak', x: k.x + 4, perch: true });
+      if (c.camo) k.cover = null; // the octopus IS the rock
+      else if (how !== 'perch') this.props.push(k.cover);
+      else this.props.push({ ...k.cover, kind: c.from === 'tower' ? 'tower' : this.theme.perchKind || cov.tree || 'oak', x: k.x + 4, perch: true });
       if (how === 'perch') { k.state = 'inbound'; k.fromX = this.W + 30; }
     }
     if (c.land) { this.landBusy = true; k.land = true; }
@@ -263,10 +331,11 @@ export class PhotoTrain {
       if (k.gone) continue;
       const age = this.t - k.t0;
       const [x] = this.where(k);
-      const posing = POSE + this.cam.posePlus;
+      const posing = (k.c.shy ? SHY_POSE : POSE) + this.cam.posePlus;
       switch (k.state) {
         case 'sign':
           if (k.how === 'fly') { if (age > k.signFor) { k.state = 'fly'; } break; }
+          if (k.wait && this.t < k.wait) break;
           if (x < k.emergeX) { k.state = 'emerge'; k.st = this.t; this.sound = 'rustle'; }
           break;
         case 'emerge': {
@@ -333,6 +402,26 @@ export class PhotoTrain {
       }
       return;
     }
+    // the Castle: the drawbridge is up, so the train waits at the moat, and moat animals come up in a row
+    if (this.theme.drawbridge && !this.setPieces.bridge && e > this.plan.bridgeAt && !this.brake && !this.tunnel) {
+      this.setPieces.bridge = true;
+      const until = this.t + 5.5;
+      this.bridge = { x: this.dist + this.carX + 100, until };
+      this.brake = { at: this.t, bridge: true, until };
+      addPop(this, 'The drawbridge is up! Wait...', this.W / 2, this.H * 0.2, '#ffd43b', true);
+      const sea = mapCritters(this.map).filter((x) => x.sea && inSeason(x, this.season));
+      const mid = this.dist * LAYER.mid;
+      for (let i = 0; i < 3 && sea.length; i += 1) {
+        const k = this.spawn(pickWeighted(sea.map((x) => [x, RARITIES[x.rarity].weight]), this.r()), 'surface');
+        k.x = mid + this.W * (0.3 + i * 0.22); k.emergeX = this.W * 2; k.wait = this.t + 1.2 + i * 1.5; k.point = null;
+      }
+      return;
+    }
+    // the Rainforest: the afternoon downpour
+    if (this.theme.downpour && !this.poured && e > this.plan.pourAt && this.season !== 'winter' && this.weather !== 'rain') {
+      this.poured = true; this.weather = 'rain'; this.theme = { ...this.theme, sky: ['#5c7a6a', '#a9c2b4'] }; this.sky = this.paintSky();
+      addPop(this, 'Here comes the rain! Frogs love it.', this.W / 2, this.H * 0.2, '#a5d8ff', true);
+    }
     if (!this.setPieces.tunnel && e > this.plan.tunnelAt && !this.brake) {
       this.setPieces.tunnel = true;
       const L = 220; const x0 = this.dist + this.W + 20;
@@ -341,16 +430,16 @@ export class PhotoTrain {
     }
     if (!this.setPieces.clue && e > this.plan.clueAt && this.clues < 3) {
       this.setPieces.clue = true;
-      const kinds = this.theme.water ? ['tracks', 'feather'] : this.map === 'bg-space' ? ['tracks', 'glow'] : ['tracks', 'feather', 'antler'];
+      const kinds = this.theme.clues || ['tracks', 'feather'];
       const kind = kinds[Math.floor(this.r() * kinds.length)];
       this.props.push({ layer: 'mid', kind: `clue-${kind}`, clue: true, x: this.dist * LAYER.mid + this.W + 10, y: this.groundY + 1, seed: 1 });
     }
     if (this.t < this.nextAt || this.brake) return;
     // the legend: three clues bring it in the finale (with a hush first)
     let c = null; let how = null;
-    if (e > this.plan.legendAt && this.clues >= 3 && !this.legendCame) {
+    if (((e > this.plan.legendAt && this.clues >= 3) || this.rainbowFull) && !this.legendCame) {
       c = this.pickCritter({ legend: true }); this.legendCame = true;
-      if (c) addPop(this, 'Shh... the birds went quiet...', this.W / 2, this.H * 0.2, '#e9ecef', true);
+      if (c) addPop(this, this.rainbowFull ? 'The rainbow is shining...' : this.theme.underwater ? 'Shh... the fish went quiet...' : 'Shh... the birds went quiet...', this.W / 2, this.H * 0.2, '#e9ecef', true);
     }
     if (!c) c = this.pickCritter();
     if (!c) { this.nextAt = this.t + 1; return; }
@@ -488,9 +577,12 @@ export class PhotoTrain {
     const o = best.o;
     const moving = Boolean(o.k && (o.k.mover || o.k.state === 'leave' || o.k.state === 'enter'));
     const locked = v.lock && (v.lock === o.k || v.lock === o.clue);
-    const sharp = v.focus >= 1 && (locked || !moving || (v.speed > 8 && v.speed < 80)) && (!o.k || o.k.state !== 'sign');
+    let sharp = v.focus >= 1 && (locked || !moving || (v.speed > 8 && v.speed < 80)) && (!o.k || o.k.state !== 'sign');
     const posed = Boolean(o.k && o.k.state === 'pose');
     const centred = best.off < 0.45 && best.inF >= 0.8;
+    // the Volcano: a puff of steam in front spoils the photo
+    let steamy = false;
+    if (sharp && o.k && this.steamOver(o.box)) { sharp = false; steamy = true; this.film += 1; } // the steam's fault: the film comes back
     const fill = (o.box.w * (o.far ? 2.2 : 1)) / w;
     Object.assign(shot, { sharp, posed, centred, moving: moving && sharp, fill });
     shot.quality = qualityOf(shot);
@@ -522,7 +614,30 @@ export class PhotoTrain {
     shot.points = pts;
     this.lastShot = shot; this.roll.push(shot);
     const q = QUALITY[shot.quality];
-    addPop(this, shot.quality === 'blurry' ? 'Blurry...' : `${q.short}! +${pts}`, v.x, v.y - h / 2 - 3, q.color, shot.quality === 'perfect');
+    addPop(this, shot.quality === 'blurry' ? (steamy ? 'Steam in the way!' : 'Blurry...') : `${q.short}! +${pts}`, v.x, v.y - h / 2 - 3, q.color, shot.quality === 'perfect');
+    // Rainbow land: one photo of each color fills the rainbow, and the unicorn comes
+    if (this.theme.rainbowHunt && c.color && shot.quality !== 'blurry' && !this.colors.has(c.color)) {
+      this.colors.add(c.color);
+      addPop(this, `${c.color[0].toUpperCase()}${c.color.slice(1)} for the rainbow!`, this.W / 2, this.H * 0.3, RAINBOW.find(([k]) => k === c.color)[1]);
+      if (this.colors.size === RAINBOW.length && !this.legendCame) {
+        this.rainbowFull = true; this.nextAt = Math.min(this.nextAt, this.t + 1.5);
+        addPop(this, 'The rainbow is full! Something magical is coming...', this.W / 2, this.H * 0.22, '#ffffff', true);
+      } else if (this.colors.size === RAINBOW.length) { // the unicorn came already: a rainbow bonus instead
+        this.points += RAINBOW_BONUS;
+        addPop(this, `Full rainbow! +${RAINBOW_BONUS}`, this.W / 2, this.H * 0.22, '#ffffff', true);
+      }
+    }
+  }
+
+  /** How much a steam vent is puffing now (0..1), and whether steam covers a box (game pixels). */
+  puff(p) { const ph = (this.t * 0.42 + h2(p.seed, 1)) % 1; return ph < 0.38 ? Math.sin((ph / 0.38) * Math.PI) : 0; }
+  steamOver(box) {
+    if (!this.theme.vents) return false;
+    return this.props.some((p) => {
+      if (p.kind !== 'vent' || p.layer !== 'mid' || this.puff(p) < 0.35) return false;
+      const x = this.sx('mid', p.x);
+      return Math.abs(box.x + box.w / 2 - x) < 13 + box.w * 0.3 && box.y + box.h > p.y - 46 && box.y < p.y;
+    });
   }
 
   // ---------- the ride ----------
@@ -548,7 +663,9 @@ export class PhotoTrain {
     // time's up: the ride ends (a shutter press in the same moment still counts)
     if (this.left <= 0) { this.finish(); return; }
     // the train: slows to a stop for an animal on the track, then chugs on
-    const want = this.brake ? (this.brake.k.state === 'leave' && this.t - this.brake.k.st > 1 ? SPEED : 0) : SPEED;
+    const want = !this.brake ? SPEED : this.brake.bridge ? (this.t < this.brake.until ? 0 : SPEED) : (this.brake.k.state === 'leave' && this.t - this.brake.k.st > 1 ? SPEED : 0);
+    if (this.brake?.bridge && this.t > this.brake.until + 1) this.brake = null;
+    if (this.bridge && this.sx('track', this.bridge.x) < -80) this.bridge = null;
     this.speed += (want - this.speed) * (1 - Math.exp(-(want < this.speed ? 2.6 : 0.9) * dt));
     if (this.speed < 0.5 && want === 0) this.speed = 0;
     this.dist += this.speed * dt;
@@ -585,10 +702,34 @@ export class PhotoTrain {
       }
     }
     if (th.stars) for (let i = 0; i < 90; i += 1) { x.fillStyle = ['#ffffff', '#ffd43b', '#b197fc'][i % 3]; x.fillRect(Math.floor(h2(i, 1) * W), Math.floor(h2(i, 2) * this.horizon * Z), 1, 1); }
-    if (th.stars) { // the earth
+    const body = th.skyBody || (th.stars ? 'earth' : null);
+    if (body === 'planets') { // a ringed golden planet, a little blue one, and a swirl of a galaxy
+      const disc = (cx, cy, R, fn) => { for (let j = -R; j <= R; j += 1) for (let i = -R; i <= R; i += 1) if (i * i + j * j <= R * R) { x.fillStyle = fn(i, j); x.fillRect(cx + i, cy + j, 1, 1); } };
+      const px0 = Math.round(W * 0.74); const py0 = Math.round(H * 0.15);
+      for (let a = 0; a < Math.PI * 2; a += 0.02) { const rx = Math.round(Math.cos(a) * 21); const ry = Math.round(Math.sin(a) * 5); if (ry < 0) { x.fillStyle = '#fff3bf'; x.fillRect(px0 + rx, py0 + ry, 1, 1); } }
+      disc(px0, py0, 11, (i, j) => (j + Math.round(i * 0.2)) % 6 < 2 ? '#f59f00' : i + j < -8 ? '#fff3bf' : '#ffd43b');
+      for (let a = 0; a < Math.PI * 2; a += 0.02) { const rx = Math.round(Math.cos(a) * 21); const ry = Math.round(Math.sin(a) * 5); if (ry >= 0) { x.fillStyle = '#fff3bf'; x.fillRect(px0 + rx, py0 + ry, 1, 1); } }
+      disc(Math.round(W * 0.2), Math.round(H * 0.09), 5, (i, j) => (i + j < -3 ? '#d0ebff' : '#4dabf7'));
+      const gx = W * 0.46; const gy = H * 0.22;
+      for (let k = 0; k < 2; k += 1) for (let t = 0; t < 1; t += 0.02) { const a = t * 9 + k * Math.PI; const rr = t * 16; x.fillStyle = t < 0.3 ? '#ffffff' : t < 0.6 ? '#e5dbff' : '#9775fa'; x.fillRect(Math.round(gx + Math.cos(a) * rr), Math.round(gy + Math.sin(a) * rr * 0.45), 1, 1); }
+    } else if (body === 'rainbow') { // a rainbow arching over Rainbow land
+      const cx = W * 0.5; const cy = this.horizon * Z + 30; const R0 = W * 0.32;
+      x.globalAlpha = 0.55;
+      for (let j = 0; j < this.horizon * Z; j += 1) for (let i = 0; i < W; i += 1) {
+        const d = Math.hypot(i - cx, (j - cy) * 1.15); const band = Math.floor((d - R0) / 3);
+        if (band >= 0 && band < RAINBOW.length) { x.fillStyle = RAINBOW[RAINBOW.length - 1 - band][1]; x.fillRect(i, j, 1, 1); }
+      }
+      x.globalAlpha = 1;
+    } else if (body === 'rays') { // under the sea: sun rays slanting down, and the shimmering surface far above
+      x.globalAlpha = 0.1; x.fillStyle = '#ffffff';
+      for (let k = 0; k < 6; k += 1) { const x0 = W * (0.05 + k * 0.19); x.beginPath(); x.moveTo(x0, 0); x.lineTo(x0 + 14, 0); x.lineTo(x0 + 70, H * 0.8); x.lineTo(x0 + 40, H * 0.8); x.closePath(); x.fill(); }
+      x.globalAlpha = 1;
+      for (let i = 0; i < W; i += 1) { const y = 2 + Math.round(Math.sin(i / 7) * 1.5 + Math.sin(i / 3) * 0.6); x.fillStyle = '#d0ebff'; x.fillRect(i, y, 1, 1); }
+    }
+    if (body === 'earth') { // the earth
       const ex = W * 0.4; const ey = H * 0.25; const R = 9;
       for (let j = -R; j <= R; j += 1) for (let i = -R; i <= R; i += 1) if (i * i + j * j <= R * R) { x.fillStyle = h2(i + 40, j + 40) > 0.62 ? '#51cf66' : (i + j < -6 ? '#a5d8ff' : '#4dabf7'); x.fillRect(ex + i, ey + j, 1, 1); }
-    } else if (this.weather === 'sunny') {
+    } else if (this.weather === 'sunny' && body !== 'sunset' && body !== 'rays' && body !== 'planets') {
       const sx = W * 0.78; const sy = H * 0.12;
       for (let j = -8; j <= 8; j += 1) for (let i = -8; i <= 8; i += 1) { const d = i * i + j * j; if (d <= 64) { x.fillStyle = d < 36 ? '#fff3bf' : '#ffe066'; x.fillRect(sx + i, sy + j, 1, 1); } }
     }
@@ -603,28 +744,43 @@ export class PhotoTrain {
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(Math.round(a), Math.round(b), w, h); };
     const shake = this.speed > 1 ? Math.round(Math.sin(this.t * 31) * 0.6) : 0;
     // clouds, drifting
-    if (!th.stars) for (let i = 0; i < 4; i += 1) {
+    // the sunset: the sun sinks into the sea during the ride
+    const dusk = th.dusk ? clamp((GAME_SECONDS - this.left) / GAME_SECONDS, 0, 1) : 0;
+    if (th.dusk) {
+      ctx.fillStyle = `rgba(214,51,108,${0.32 * dusk})`; ctx.fillRect(0, 0, W, this.horizon * Z);
+      const sx0 = Math.round(W * 0.66); const sy0 = Math.round(H * 0.12 + (this.horizon * Z - H * 0.12 + 4) * dusk); const R = 15;
+      for (let j = -R; j <= R; j += 1) for (let i = -R; i <= R; i += 1) { const d = i * i + j * j; if (d <= R * R) P(d < (R - 5) ** 2 ? '#fff3bf' : mix('#ffd43b', '#ff6b6b', dusk), sx0 + i, sy0 + j); }
+    }
+    if (!th.stars && !th.underwater) for (let i = 0; i < 4; i += 1) {
       const cx = ((i * 157 - this.dist * 0.03 - this.t * 2) % (W + 120) + W + 120) % (W + 120) - 60; const cy = 16 + i * 13;
-      const col = this.weather === 'rain' || this.weather === 'snow' ? '#c9d1db' : '#ffffff';
+      const col = this.weather === 'rain' || this.weather === 'snow' ? '#c9d1db' : th.dusk ? mix('#ffffff', '#ffa8a8', dusk) : '#ffffff';
       P(col, cx, cy, 34, 6); P(col, cx + 6, cy - 4, 18, 4); P(mix(col, '#9aa8b8', 0.4), cx + 2, cy + 6, 30, 2);
     }
     // far: hills (or peaks, or craters), scrolling slowly
     const far = this.dist * LAYER.far * Z;
     const hz = this.horizon * Z;
+    if (th.far === 'islands') { ctx.fillStyle = mix(th.water[0], th.sky[1], 0.35); ctx.fillRect(0, hz - 3, W, 40); }
     for (let i = 0; i < W; i += 1) {
       const wx = i + far;
       let hgt;
       if (th.far === 'peaks') hgt = 46 + Math.abs(((wx * 0.9) % 180) - 90) * 0.55 + Math.sin(wx / 23) * 6;
       else if (th.far === 'craters') hgt = 18 + Math.sin(wx / 40) * 6 + Math.sin(wx / 13) * 2;
+      else if (th.far === 'islands') { const isl = Math.sin(wx / 37) * 1.3 + Math.sin(wx / 11) * 0.15 - 0.75; if (isl <= 0) continue; hgt = 3 + isl * 34; ctx.fillStyle = th.hills[0]; ctx.fillRect(i, hz - 3 - Math.round(hgt), 1, Math.round(hgt)); ctx.fillStyle = th.hills[1]; ctx.fillRect(i, hz - 3 - Math.round(hgt * 0.4), 1, Math.round(hgt * 0.4)); continue; }
+      else if (th.far === 'reef') hgt = 24 + Math.abs(Math.sin(wx / 9)) * 7 + Math.sin(wx / 31) * 8;
+      else if (th.far === 'volcano') { const d = Math.abs((((wx % 760) + 760) % 760) - 380); hgt = Math.max(16 + Math.sin(wx / 23) * 5, 112 - d * 0.62); }
+      else if (th.far === 'jungle') hgt = 36 + Math.abs(Math.sin(wx / 11)) * 9 + Math.abs(Math.sin(wx / 29)) * 9;
+      else if (th.far === 'spires') { const cell = Math.floor(wx / 46); const d = Math.abs((((wx % 46) + 46) % 46) - 23); hgt = 14 + Math.sin(wx / 30) * 4 + (h2(cell, 3) > 0.4 ? Math.max(0, 40 + h2(cell, 4) * 60 - d * 5) : 0); }
       else hgt = 26 + Math.sin(wx / 47) * 10 + Math.sin(wx / 17) * 4;
       const top = hz - Math.round(hgt);
       const snowLine = th.far === 'peaks' ? hz - hgt + 14 + Math.sin(wx / 7) * 3 : -1;
       ctx.fillStyle = th.hills[0]; ctx.fillRect(i, top, 1, hz - top + 80);
       if (th.far === 'peaks') { ctx.fillStyle = '#f1f3f5'; ctx.fillRect(i, top, 1, Math.max(0, snowLine - top)); }
       if (th.snow && th.far !== 'peaks') { ctx.fillStyle = '#ffffff'; ctx.fillRect(i, top, 1, 3); }
+      if (th.far === 'candy') { ctx.fillStyle = '#ffffff'; ctx.fillRect(i, top, 1, 2 + Math.round(Math.abs(Math.sin(wx / 5)) * 2)); }
       const t2 = hz - Math.round(hgt * 0.45 + 6 + Math.sin(wx / 29) * 3);
       ctx.fillStyle = th.hills[1]; ctx.fillRect(i, t2, 1, hz - t2 + 80);
     }
+    this.drawFarSights(ctx, far, hz);
     // far animals (specks without a zoom lens)
     for (const k of this.critters) if (k.far && !k.gone) this.drawCritter(ctx, k);
     // water (the fjord): a bay between the far shore and the near shore
@@ -646,7 +802,7 @@ export class PhotoTrain {
     for (let i = 0; i < 60; i += 1) {
       const span = W + 40; const gx = ((h2(i, 7) * 2000 - gm) % span + span) % span - 20; const gyy = gy + 4 + Math.floor(h2(i, 8) * (this.trackY * Z - gy - 30));
       const tuft = th.snow ? '#ffffff' : th.stars ? '#b4b8d8' : mix(g[0], '#ffffff', 0.2); const dk = mix(g[1], INK, 0.15);
-      if (th.stars) { P(tuft, gx, gyy, 3, 2); P(dk, gx, gyy + 2, 3, 1); P(tuft, gx + 5, gyy + 1, 2, 1); continue; }
+      if (th.stars || th.underwater || th.far === 'islands') { P(tuft, gx, gyy, 3, 2); P(dk, gx, gyy + 2, 3, 1); P(tuft, gx + 5, gyy + 1, 2, 1); continue; }
       P(tuft, gx, gyy, 1, 2); P(tuft, gx + 2, gyy - 1, 1, 3); P(tuft, gx + 4, gyy, 1, 2); P(dk, gx, gyy + 2, 5, 1);
     }
     // sea animals surface in the bay, behind the near shore
@@ -658,6 +814,8 @@ export class PhotoTrain {
       if (o.c) this.drawCritter(ctx, o);
       else this.drawProp(ctx, o);
     }
+    // the Volcano: steam vents puff over whatever is behind them
+    if (th.vents) for (const p of this.props) if (p.kind === 'vent' && p.layer === 'mid') this.drawSteam(ctx, p);
     // the track
     const ty = this.trackY * Z;
     const tr = this.dist * Z;
@@ -666,7 +824,10 @@ export class PhotoTrain {
     P('#adb5bd', 0, ty - 1, W, 2); P('#ffffff', 0, ty - 1, W, 1);
     // a post now and then, whooshing by
     for (let i = -((tr * 1) % 260); i < W; i += 260) {
-      if (th.stars) { P('#adb5bd', i + 40, ty - 34, 2, 34); P(Math.floor(this.t * 2 + i) % 2 ? '#ff6b6b' : '#c92a2a', i + 39, ty - 36, 4, 3); continue; }
+      if (th.post === 'lamp') { P('#adb5bd', i + 40, ty - 34, 2, 34); P(Math.floor(this.t * 2 + i) % 2 ? '#ff6b6b' : '#c92a2a', i + 39, ty - 36, 4, 3); continue; }
+      if (th.post === 'cane') { for (let k = 0; k < 34; k += 1) P(Math.floor((k + 0) / 4) % 2 ? '#e03131' : '#ffffff', i + 40, ty - 34 + k, 3, 1); for (let a = 0; a <= Math.PI; a += 0.15) P(Math.floor(a * 3) % 2 ? '#e03131' : '#ffffff', i + 35 + Math.round(Math.cos(a) * 6.5), ty - 34 - Math.round(Math.sin(a) * 6), 3, 2); continue; }
+      if (th.post === 'star') { P('#b197fc', i + 40, ty - 34, 2, 34); const tw = Math.floor(this.t * 3 + i) % 2; P('#ffd43b', i + 37, ty - 38, 8, 2); P('#ffd43b', i + 40, ty - 41, 2, 8); if (tw) P('#fff9db', i + 40, ty - 38, 2, 2); continue; }
+      if (th.post === 'tube') continue;
       P('#5c3a1e', i + 40, ty - 34, 3, 34); P('#8b5a2b', i + 32, ty - 36, 18, 6); P('#b07a45', i + 33, ty - 35, 16, 1); P('#5c3a1e', i + 34, ty - 33, 14, 1);
     }
     // the embankment
@@ -676,14 +837,34 @@ export class PhotoTrain {
     const drawTunnel = () => {
     if (this.tunnel) {
       const a = (this.tunnel.x0 - this.dist) * Z; const b = (this.tunnel.x1 - this.dist) * Z;
-      if (b > -120 && a < W + 120) {
-        const hill = th.snow ? '#e9eef5' : th.stars ? '#7d82a8' : mix(th.hills[1], g[1], 0.5);
+      const style = th.tunnelStyle || 'stone';
+      if (style === 'wormhole' && b > -120 && a < W + 120) { // a swirling portal at each end, and nothing else
+        for (const sx of [a, b]) {
+          if (sx < -70 || sx > W + 70) continue;
+          const cols = ['#ffd43b', '#f783ac', '#9775fa', '#4dabf7', '#1a0f40'];
+          for (let k = 0; k < 5; k += 1) { const R = 44 - k * 8; for (let q = 0; q < Math.PI * 2; q += 0.03) { const wob = Math.sin(q * 5 + this.t * 4 + k) * 1.5; P(cols[k], sx + Math.cos(q) * (R * 0.55 + wob), ty - 40 + Math.sin(q) * (R + wob), 3, 3); } }
+          for (let j = -26; j <= 26; j += 1) { const half = Math.round(13 * Math.sqrt(1 - (j * j) / 676)); P('#0b0620', sx - half, ty - 40 + j, half * 2 + 1, 1); }
+        }
+      } else if (b > -120 && a < W + 120) {
+        const hill = style === 'lava' ? '#3d3330' : style === 'cave' ? '#4a6a8a' : style === 'gate' ? '#9aa0a6' : th.snow ? '#e9eef5' : th.stars ? '#7d82a8' : mix(th.hills[1], g[1], 0.5);
+        if (style === 'gate') { // the castle gatehouse: a stone wall with battlements and two towers
+          const x0 = Math.max(-10, Math.floor(a - 40)); const x1 = Math.min(W + 10, Math.ceil(b + 40));
+          if (x1 > x0) {
+            P(mix(hill, '#000000', 0.35), x0, ty - 121, x1 - x0, 125); P(hill, x0, ty - 120, x1 - x0, 124);
+            for (let j = ty - 116; j < ty; j += 8) for (let i = x0 + ((j / 8) % 2) * 8; i < x1; i += 16) P(mix(hill, '#000000', 0.15), i, j, 1, 8);
+            for (let j = ty - 116; j < ty; j += 8) P(mix(hill, '#000000', 0.15), x0, j, x1 - x0, 1);
+            for (let i = x0; i < x1; i += 14) { P(mix(hill, '#000000', 0.35), i - 1, ty - 131, 9, 11); P(hill, i, ty - 130, 7, 10); }
+          }
+          for (const tx of [a - 44, b + 44]) { if (tx < -40 || tx > W + 40) continue; P(mix(hill, '#000000', 0.35), tx - 17, ty - 151, 34, 155); P(mix(hill, '#ffffff', 0.08), tx - 16, ty - 150, 32, 154); for (let i = -16; i < 16; i += 10) P(mix(hill, '#ffffff', 0.08), tx + i, ty - 158, 6, 8); P('#15111c', tx - 2, ty - 120, 4, 9); P('#fcc419', tx - 1, ty - 182, 2, 26); P(Math.floor(this.t * 3) % 2 ? '#7048e8' : '#845ef7', tx + 1, ty - 182, 12, 8); }
+        } else
         for (let i = Math.max(0, Math.floor(a - 50)); i < Math.min(W, Math.ceil(b + 50)); i += 1) {
           const e = Math.min(i - (a - 50), b + 50 - i);
           const top = ty - Math.min(150, 10 + e * 1.4) + Math.sin(i / 9) * 2;
           P(mix(hill, '#000000', 0.3), i, top - 1, 1, 1); P(hill, i, top, 1, ty - top + 4); P(mix(hill, '#ffffff', 0.25), i, top, 1, 2);
           const band = top + (ty - top) * 0.45; P(mix(hill, '#000000', 0.08), i, band, 1, ty - band + 4);
-          if (!th.stars && !th.snow && (i * 7) % 23 === 0) { P(mix(hill, '#ffffff', 0.3), i, top + 6 + (i % 13), 1, 2); P(mix(hill, '#ffffff', 0.3), i + 2, top + 5 + (i % 13), 1, 3); }
+          if (style === 'lava' && (i * 5) % 17 === 0) { P('#ff6b1a', i, top + 10 + (i % 19), 1, 4); P('#ffd43b', i, top + 11 + (i % 19), 1, 1); }
+          else if (style === 'cave' && (i * 7) % 29 === 0) { P('#ff8787', i, top + 1, 2, 3); P('#ffa94d', i + 3, top, 1, 4); }
+          else if (!th.stars && !th.snow && (i * 7) % 23 === 0) { P(mix(hill, '#ffffff', 0.3), i, top + 6 + (i % 13), 1, 2); P(mix(hill, '#ffffff', 0.3), i + 2, top + 5 + (i % 13), 1, 3); }
         }
         for (const sx of [a, b]) {
           if (sx < -60 || sx > W + 60) continue;
@@ -693,9 +874,12 @@ export class PhotoTrain {
             const out = u <= 0 ? 29 : u <= 29 ? Math.round(Math.sqrt(29 * 29 - u * u)) : -1;
             const inn = u <= 0 ? 20 : u <= 20 ? Math.round(Math.sqrt(20 * 20 - u * u)) : -1;
             if (out < 0) continue;
-            P('#3b3f46', sx - out - 1, ty - d, out * 2 + 3, 1);
-            P((d + Math.floor(sx)) % 6 < 1 ? '#5c636a' : '#868e96', sx - out, ty - d, out * 2 + 1, 1);
-            if (inn >= 0) P('#15111c', sx - inn, ty - d, inn * 2 + 1, 1);
+            const [s0, s1, s2] = style === 'lava' ? ['#1a1210', '#4a3a34', '#2b211d'] : style === 'cave' ? ['#1f3550', '#3d5a7a', '#2f4a68'] : ['#3b3f46', '#5c636a', '#868e96'];
+            P(s0, sx - out - 1, ty - d, out * 2 + 3, 1);
+            P((d + Math.floor(sx)) % 6 < 1 ? s1 : s2, sx - out, ty - d, out * 2 + 1, 1);
+            if (inn >= 0) P(style === 'lava' ? '#3a1408' : '#15111c', sx - inn, ty - d, inn * 2 + 1, 1);
+            if (style === 'lava' && inn >= 0) { P('#ff6b1a', sx - inn, ty - d, 1, 1); P('#ff6b1a', sx + inn, ty - d, 1, 1); }
+            if (style === 'gate' && inn >= 0 && d > 30 && d % 4 === 0) P('#343a40', sx - inn, ty - d, inn * 2 + 1, 1); // the portcullis, raised
           }
         }
       }
@@ -706,15 +890,27 @@ export class PhotoTrain {
     const dk = this.dark();
     if (dk > 0) {
       ctx.globalAlpha = dk;
-      ctx.fillStyle = '#2a2430'; ctx.fillRect(0, 0, W, ty + 6);
+      const style = th.tunnelStyle || 'stone';
+      const [w0, w1, w2] = { lava: ['#3a160c', '#5a2410', '#ff6b1a'], cave: ['#0f2a44', '#173a5c', '#1f4a70'], wormhole: ['#140a33', '#2a1660', '#9775fa'] }[style] || ['#2a2430', '#3a3342', '#463e50'];
+      ctx.fillStyle = w0; ctx.fillRect(0, 0, W, ty + 6);
       const sh = (this.dist * Z) % 24;
-      for (let j = 0; j < ty; j += 10) for (let i = -sh - ((j / 10) % 2) * 12; i < W; i += 24) { P('#3a3342', i, j, 22, 8); P('#463e50', i, j, 22, 1); }
+      if (style === 'wormhole') { for (let i = 0; i < 40; i += 1) { const x2 = ((h2(i, 1) * W * 2 - this.dist * Z * (1 + h2(i, 2) * 2)) % W + W) % W; P(['#ffd43b', '#f783ac', '#4dabf7', '#ffffff'][i % 4], x2, h2(i, 3) * ty, 10 + h2(i, 4) * 16, 1); } }
+      else if (style === 'lava') { for (let j = 0; j < ty; j += 14) for (let i = -sh - ((j / 14) % 2) * 12; i < W; i += 24) { P(w1, i, j, 20, 11); if ((i + j) % 3 === 0) P(w2, i + 4, j + 11, 12, 1); } }
+      else for (let j = 0; j < ty; j += 10) for (let i = -sh - ((j / 10) % 2) * 12; i < W; i += 24) { P(w1, i, j, 22, 8); P(w2, i, j, 22, 1); }
       ctx.globalAlpha = 1;
     }
     // the track animal (in front of the middle ground)
     for (const k of this.critters) if (!k.gone && k.layer === 'screen' && !k.far && k.how === 'track') this.drawCritter(ctx, k);
+    // the Castle's drawbridge
+    if (this.bridge) this.drawBridge(ctx, ty);
     // the train
     this.drawTrain(ctx, shake);
+    // under the sea: the glass tube the train runs in
+    if (th.underwater) {
+      ctx.fillStyle = 'rgba(208,235,255,0.07)'; ctx.fillRect(0, ty - 78, W, 84);
+      P('rgba(231,245,255,0.55)', 0, ty - 78, W, 2); P('rgba(231,245,255,0.25)', 0, ty - 74, W, 1);
+      for (let i = -((tr) % 130); i < W; i += 130) { ctx.fillStyle = 'rgba(231,245,255,0.3)'; ctx.fillRect(Math.round(i + 20), ty - 78, 3, 84); ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(Math.round(i + 60), ty - 70, 10, 2); }
+    }
     if (this.tunnel && dk === 0) { // going in: the hill and the dark opening cover the front of the train
       const sx = (this.tunnel.x0 - this.dist) * Z;
       if (sx > 0 && sx < W) { ctx.save(); ctx.beginPath(); ctx.rect(sx, 0, W - sx, ty + 6); ctx.clip(); drawTunnel(); ctx.restore(); }
@@ -728,7 +924,8 @@ export class PhotoTrain {
     // the tunnel's dark, with glowing eyes; a snap's flash lights it up
     if (dk > 0) {
       const lit = this.t - this.flash < 0.25;
-      ctx.fillStyle = `rgba(8,6,16,${(lit ? 0.05 : 0.8) * dk})`;
+      const dim = th.tunnelStyle === 'lava' ? 0.55 : th.tunnelStyle === 'wormhole' ? 0.45 : 0.8;
+      ctx.fillStyle = th.tunnelStyle === 'lava' ? `rgba(30,6,0,${(lit ? 0.05 : dim) * dk})` : `rgba(8,6,16,${(lit ? 0.05 : dim) * dk})`;
       ctx.fillRect(0, 0, W, H);
       const tx1 = this.carX * Z + 122;
       if (!lit) {
@@ -743,6 +940,8 @@ export class PhotoTrain {
       }
       if (!lit) for (const k of this.critters) if (k.bat && !k.gone) { const g = this.geom(k); const ex = g.sx + (g.pic.eye?.[0] ?? g.w / 2); const ey = g.top + (g.pic.eye?.[1] ?? g.h / 3); const f = Math.sin(this.t * 14 + (k.x || 0)) > 0 ? 1 : 0; P('#8a6a4a', ex - 10, ey + 2 - f * 3, 7, 1); P('#8a6a4a', ex + 5, ey + 2 - f * 3, 7, 1); P('#ffd43b', ex - 3, ey, 2, 2); P('#ffd43b', ex + 2, ey, 2, 2); }
     }
+    // the sunset: everything turns pink and dusky as the sun goes down
+    if (dusk > 0.4) { ctx.fillStyle = `rgba(80,30,110,${0.32 * ((dusk - 0.4) / 0.6) ** 1.5})`; ctx.fillRect(0, 0, W, H); }
     // the photo: copy what was really in the viewfinder
     if (this.capture) {
       const s = this.capture; this.capture = null;
@@ -756,6 +955,72 @@ export class PhotoTrain {
     if (this.t - this.flash < 0.09) { ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillRect(0, 0, W, H); }
   }
 
+  /** Things on the far hills that scroll with them: the Castle's castle, the Volcano's smoking cone. */
+  drawFarSights(ctx, far, hz) {
+    const th = this.theme; const W = this.W * Z;
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(Math.round(a), Math.round(b), w, h); };
+    if (th.far === 'castle') {
+      const per = 560;
+      for (let k = Math.floor((far - 120) / per); k * per - far < W + 120; k += 1) {
+        const cx = k * per + 280 - far; if (cx < -80 || cx > W + 80) continue;
+        const base = hz - Math.round(26 + Math.sin((cx + far) / 47) * 10 + Math.sin((cx + far) / 17) * 4) + 3;
+        const col = th.snow ? '#aab4c4' : '#8f99ab'; const dk = mix(col, '#2b2f3a', 0.3);
+        P(col, cx - 30, base - 16, 60, 16); P(col, cx - 10, base - 30, 20, 30);
+        for (const tx of [cx - 34, cx + 26]) { P(col, tx, base - 28, 9, 28); P(dk, tx + 1, base - 32, 2, 4); P(dk, tx + 6, base - 32, 2, 4); P(dk, tx + 3, base - 22, 2, 3); }
+        for (let i = -28; i < 30; i += 5) P(col, cx + i, base - 19, 3, 3);
+        for (let i = -9; i < 10; i += 5) P(col, cx + i, base - 33, 3, 3);
+        P(dk, cx - 3, base - 8, 6, 8); P(dk, cx - 2, base - 24, 2, 3); P(dk, cx + 2, base - 24, 2, 3);
+        P('#fcc419', cx, base - 44, 1, 11); P(Math.floor(this.t * 3) % 2 ? '#7048e8' : '#845ef7', cx + 1, base - 44, 7, 4);
+      }
+    }
+    if (th.far === 'volcano') {
+      for (let k = Math.floor((far - 200) / 760); k * 760 - far < W + 200; k += 1) {
+        const px = k * 760 + 380 - far; if (px < -120 || px > W + 120) continue;
+        const top = hz - 112;
+        // lava glowing down the cone
+        for (let i = -10; i <= 10; i += 1) { const len = 12 + Math.round(h2(k, i + 20) * 34); for (let j = 0; j < len; j += 1) if ((j + i * 3) % 7 < 4) P(j < 3 ? '#ffd43b' : '#ff6b1a', px + i + Math.round(Math.sin(j / 5 + i) * (j / 12)), top + 4 + j, 1, 1); }
+        P('#ff922b', px - 8, top, 16, 3); P('#ffd43b', px - 4, top, 8, 2);
+        // a plume of smoke drifting off
+        for (let i = 0; i < 7; i += 1) { const a = (this.t * 0.18 + i / 7) % 1; const r = 5 + a * 16; ctx.fillStyle = `rgba(90,80,80,${0.55 * (1 - a)})`; const cy = top - 6 - a * 70; const cx = px + a * 40 + Math.sin(i) * 4; for (let j = -r; j <= r; j += 1) { const half = Math.sqrt(Math.max(0, r * r - j * j)); ctx.fillRect(Math.round(cx - half), Math.round(cy + j * 0.7), Math.round(half * 2), 1); } }
+      }
+    }
+  }
+
+  /** The Volcano's steam vents: a puff now and then that hides what is behind it. */
+  drawSteam(ctx, p) {
+    const f = this.puff(p); if (f <= 0) return;
+    const x = Math.round(this.sx('mid', p.x) * Z); const y = Math.round(p.y * Z);
+    for (let i = 0; i < 6; i += 1) {
+      const a = ((this.t * 0.42 + h2(p.seed, 1)) % 1) / 0.38;
+      const r = 8 + i * 3 + a * 6; const cy = y - 12 - i * 13 - a * 10; const cx = x + Math.sin(i * 1.7 + this.t) * 4;
+      ctx.fillStyle = `rgba(245,245,250,${0.82 * f * (1 - i / 9)})`;
+      for (let j = -r; j <= r; j += 1) { const half = Math.sqrt(Math.max(0, r * r - j * j)); ctx.fillRect(Math.round(cx - half), Math.round(cy + j * 0.8), Math.round(half * 2), 1); }
+    }
+  }
+
+  /** The Castle's drawbridge: up while the train waits at the moat, then down to cross. */
+  drawBridge(ctx, ty) {
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(Math.round(a), Math.round(b), w, h); };
+    const sx = this.sx('track', this.bridge.x) * Z; const L = 76;
+    const f = clamp((this.t - (this.bridge.until - 1.6)) / 1.6, 0, 1);
+    // the moat under the bridge, and the gate tower on the far side
+    P(this.theme.water[1], sx, ty - 2, L, 14); P('#a5d8ff', sx + 10, ty + 2, 10, 1); P('#a5d8ff', sx + 44, ty + 6, 12, 1);
+    P('#5c636a', sx + L - 1, ty - 141, 30, 151); P('#9aa0a6', sx + L, ty - 140, 28, 150);
+    for (let i = 0; i < 28; i += 9) P('#9aa0a6', sx + L + i, ty - 148, 5, 8);
+    for (let j = ty - 132; j < ty; j += 10) P('#868e96', sx + L, j, 28, 1);
+    P('#15111c', sx + L + 2, ty - 60, 24, 60);
+    // the plank, hinged at the tower: straight up, then lowered flat
+    const ang = (1 - f) * Math.PI / 2; const px = sx + L; const py = ty - 2;
+    for (let t = 0; t <= L; t += 1) {
+      const x = px - Math.cos(ang) * t; const y = py - Math.sin(ang) * t;
+      P('#3d2a18', x - 3, y - 3, 7, 7);
+    }
+    for (let t = 0; t <= L; t += 1) { const x = px - Math.cos(ang) * t; const y = py - Math.sin(ang) * t; P(t % 8 < 1 ? '#5c3a1e' : '#8b5a2b', x - 2, y - 2, 5, 5); }
+    // chains from the top of the tower to the end of the plank
+    const ex = px - Math.cos(ang) * L; const ey = py - Math.sin(ang) * L;
+    for (let t = 0; t <= 1; t += 0.03) P('#495057', px + 2 + (ex - px - 2) * t, ty - 110 + (ey - ty + 110) * t, 2, 2);
+  }
+
   drawWeather(ctx) {
     const W = this.W * Z; const H = this.H * Z; const t = this.t;
     if (this.theme.stars) {
@@ -765,6 +1030,17 @@ export class PhotoTrain {
       if (this.weather === 'mist') { ctx.fillStyle = 'rgba(180,184,216,0.2)'; ctx.fillRect(0, this.groundY * Z - 20, W, 50); }
       return;
     }
+    if (this.theme.underwater) {
+      // bubbles always rise; the day's weather is sea weather
+      for (let i = 0; i < 14; i += 1) { const x = (h2(i, 1) * W + Math.sin(t * 2 + i) * 3 - (this.weather === 'wind' ? t * 30 : 0) % W + W) % W; const y = H - ((t * (18 + h2(i, 3) * 20) + h2(i, 2) * H) % H); ctx.fillStyle = 'rgba(231,245,255,0.7)'; ctx.fillRect(Math.round(x), Math.round(y), 2, 2); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+      if (this.weather === 'snow') { ctx.fillStyle = 'rgba(255,255,255,0.8)'; for (let i = 0; i < 50; i += 1) ctx.fillRect((h2(i, 1) * W - t * 4 + W * 4) % W, (h2(i, 2) * H + t * 6) % H, 1, 1); }
+      if (this.weather === 'rain') { ctx.fillStyle = 'rgba(105,219,124,0.12)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = 'rgba(169,227,75,0.7)'; for (let i = 0; i < 40; i += 1) ctx.fillRect((h2(i, 1) * W - t * 8 + W * 4) % W, (h2(i, 2) * H + Math.sin(t + i) * 4 + H) % H, 1, 1); }
+      if (this.weather === 'mist') { ctx.fillStyle = 'rgba(40,90,100,0.22)'; ctx.fillRect(0, 0, W, H); }
+      if (this.weather === 'wind') { ctx.fillStyle = 'rgba(231,245,255,0.35)'; for (let i = 0; i < 6; i += 1) { const x = W - ((t * 90 + i * 97) % (W + 60)); ctx.fillRect(x, 20 + h2(i, 3) * H * 0.6 + Math.sin(t * 3 + i) * 3, 18, 1); } }
+      return;
+    }
+    if (this.theme.rainbowHunt && this.weather === 'rain') { const cols = RAINBOW.map((c) => c[1]); for (let i = 0; i < 60; i += 1) { ctx.fillStyle = cols[i % cols.length]; const x = (h2(i, 1) * W - t * 10 + W * 4) % W; const y = (h2(i, 2) * H + t * 70) % H; ctx.fillRect(x, y, 1, 3); } return; }
+    if (this.theme.rainbowHunt && this.weather === 'mist') { ctx.fillStyle = 'rgba(252,194,215,0.25)'; ctx.fillRect(0, this.horizon * Z - 30, W, 70); ctx.fillStyle = 'rgba(255,240,246,0.15)'; ctx.fillRect(0, 0, W, H); return; }
     if (this.weather === 'rain') { ctx.fillStyle = 'rgba(200,220,255,0.55)'; for (let i = 0; i < 70; i += 1) { const x = (h2(i, 1) * W + t * 40 - (t * 160 + h2(i, 2) * H) * 0.3) % W; const y = (h2(i, 2) * H + t * 160) % H; ctx.fillRect((x + W) % W, y, 1, 4); } }
     if (this.weather === 'snow') { ctx.fillStyle = '#ffffff'; for (let i = 0; i < 60; i += 1) { const x = (h2(i, 1) * W - t * 25 + Math.sin(t + i) * 6 + W * 4) % W; const y = (h2(i, 2) * H + t * 18) % H; ctx.fillRect(x, y, i % 3 ? 1 : 2, i % 3 ? 1 : 2); } }
     if (this.weather === 'mist') { ctx.fillStyle = 'rgba(235,240,245,0.28)'; ctx.fillRect(0, this.horizon * Z - 30, W, 70); ctx.fillStyle = 'rgba(235,240,245,0.15)'; ctx.fillRect(0, 0, W, H); }
@@ -846,14 +1122,20 @@ export class PhotoTrain {
     const far = k.far;
     if (k.how === 'step' && k.state === 'sign') show = 0.25; // its tail end, poking out from behind the trunk
     if (k.how === 'perch' && k.state === 'inbound') { show = 1; }
-    if (k.state === 'sign' && k.how !== 'step') { this.drawSign(ctx, k); return; }
+    if (k.c.camo && (k.state === 'sign' || k.state === 'emerge')) show = 1;
+    else if (k.state === 'sign' && k.how !== 'step') { this.drawSign(ctx, k); return; }
     const vis = Math.round(h * show);
     if (vis <= 0) return;
     const sx = Math.round(x * Z - w / 2 + dx);
     ctx.save();
     if (k.face > 0) { ctx.translate(Math.round(x * Z * 2 + dx * 2), 0); ctx.scale(-1, 1); }
+    const camo = k.c.camo && (k.state === 'sign' || k.state === 'emerge');
     if (far && !this.cam.zoom) {
       ctx.globalAlpha = 0.9; ctx.filter = 'brightness(0.35)';
+    } else if (camo) { // the octopus, still pretending to be a rock: it blinks before it changes color
+      ctx.filter = k.state === 'emerge' ? 'grayscale(0.5) brightness(0.9)' : Math.floor(this.t * 3) % 4 === 0 ? 'grayscale(1) brightness(1.05)' : 'grayscale(1) brightness(0.72)';
+    } else if (this.theme.goldCamo && k.state !== 'pose' && !far) { // gold on gold: true colors only when it poses
+      ctx.filter = 'sepia(1) saturate(2.4) brightness(1.06)';
     } else if (k.state === 'pose') ctx.filter = 'brightness(1.12)'; // brighter means "now!"
     // a little perk hop as it turns to look
     const perk = k.state === 'pose' && this.t - k.st < 0.12 ? -Z : 0;
@@ -879,6 +1161,14 @@ export class PhotoTrain {
   drawSign(ctx, k) {
     const [x, y] = this.where(k); const t = this.t;
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(Math.round(a), Math.round(b), w, h); };
+    if (this.theme.goldCamo && k.how !== 'fly' && k.how !== 'perch') { // gold on gold: no rustle, only a glint now and then
+      if (Math.floor(t * 2.5 + (k.id % 7)) % 2 === 0) {
+        const gx = x * Z + ((k.id >> 3) % 9) - 4; const gy = y * Z - 10;
+        P('#d9480f', gx - 4, gy - 1, 9, 3); P('#d9480f', gx - 1, gy - 4, 3, 9); P('#ffffff', gx - 3, gy, 7, 1); P('#ffffff', gx, gy - 3, 1, 7);
+        if (!this.glintHint) { this.glintHint = true; addPop(this, 'Watch for the glint!', x, y - 16, '#ffd43b'); }
+      }
+      return;
+    }
     if (k.how === 'surface') { const r = 4 + ((t * 10) % 8); P('#e7f5ff', x * Z - r, y * Z - 1, r * 2, 1); P('#a5d8ff', x * Z - r / 2, y * Z + 1, r, 1); return; }
     if (k.how === 'fly' || k.how === 'perch') { if (Math.floor(t * 4) % 2) { P('#ffffff', this.W * Z - 14, this.H * Z * 0.2, 2, 6); P('#ffffff', this.W * Z - 14, this.H * Z * 0.2, 5, 2); P('#ffffff', this.W * Z - 16, this.H * Z * 0.2 + 5, 3, 2); } return; }
     // bits of leaf or dust jumping off the cover
@@ -889,7 +1179,7 @@ export class PhotoTrain {
     const th = this.theme;
     const x = Math.round(this.sx(p.layer, p.x) * Z); const y = Math.round(p.y * Z);
     // scenery has no ink outline (that is for the animals): its edge is a dark shade of the ground
-    const EDGE = mix(th.stars ? '#46496e' : (th.ground || ['#2b4a36'])[1], '#000000', 0.45);
+    const EDGE = mix(th.stars && !th.goldCamo ? '#46496e' : (th.ground || ['#2b4a36'])[1], '#000000', 0.45);
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col === INK ? EDGE : col; ctx.fillRect(Math.round(a), Math.round(b), w, h); };
     const r = (i) => h2(p.seed, i);
     // a sign: the cover shakes
@@ -984,8 +1274,123 @@ export class PhotoTrain {
       case 'crater': { P(INK, x - 16, y - 3, 32, 5); P('#5c5f8a', x - 15, y - 2, 30, 3); P('#9a9fc4', x - 16, y - 4, 32, 1); return; }
       case 'antenna': { if (front) return; P(INK, x - 2, y - 40, 4, 40); P('#ced4da', x - 1, y - 40, 2, 40); P(Math.floor(this.t * 2) % 2 ? '#ff6b6b' : '#c92a2a', x - 2, y - 43, 4, 3); return; }
       case 'crystal': { for (let k = 0; k < 14; k += 1) P(k < 2 ? INK : k % 4 ? '#99e9f2' : '#e3fafc', x - Math.round((14 - k) / 3), y - 14 + k, Math.round((14 - k) / 1.5) + 1, 1); return; }
+      // ---------- the other maps' scenery ----------
+      case 'tower': { // the Castle: a round stone tower with battlements and a flag
+        if (front) return;
+        const h = 70 + Math.round(r(1) * 24); const col = th.snow ? '#b9c0cc' : '#a5abb5';
+        P(INK, x - 10, y - h, 21, h); P(col, x - 9, y - h, 19, h); P(mix(col, '#ffffff', 0.2), x - 9, y - h, 4, h); P(mix(col, '#000000', 0.18), x + 6, y - h, 3, h);
+        for (let j = y - h + 6; j < y; j += 8) P(mix(col, '#000000', 0.12), x - 9, j, 19, 1);
+        for (let i = -11; i < 12; i += 8) { P(INK, x + i - 1, y - h - 7, 6, 8); P(col, x + i, y - h - 6, 4, 7); }
+        P('#15111c', x - 2, y - h + 16, 4, 8); P('#15111c', x - 2, y - h + 15, 4, 1);
+        P('#5c3a1e', x, y - h - 26, 1, 20); P(r(2) < 0.5 ? '#7048e8' : '#fcc419', x + 1, y - h - 26 + (Math.floor(this.t * 3 + r(3) * 4) % 2), 9, 6);
+        if (th.snow) P('#ffffff', x - 9, y - h - 1, 19, 2);
+        if (p.perch && p.hides) P('#6c757d', x - 16, p.hides.y * Z + 1, 16, 2);
+        return;
+      }
+      case 'hedge': { // a clipped garden hedge
+        const col = th.snow ? '#e9eef5' : mix(leaf[0], '#1b4d28', 0.25); const lt = mix(col, '#ffffff', 0.18);
+        P(INK, x - 15 + shake, y - 17, 31, 17); P(col, x - 14 + shake, y - 16, 29, 16); P(lt, x - 14 + shake, y - 16, 29, 3);
+        for (let i = 0; i < 8; i += 1) P(mix(col, '#000000', 0.15), x - 12 + r(i) * 24 + shake, y - 12 + r(i + 9) * 10, 2, 1);
+        return;
+      }
+      case 'palm': { // Sunset beach: a leaning palm with coconuts
+        if (front) return;
+        const h = 64 + Math.round(r(1) * 20); const lean = (r(2) < 0.5 ? -1 : 1) * (6 + r(3) * 8);
+        let tx = x; let tyy = y;
+        for (let k = 0; k < h; k += 1) { const f = k / h; tx = x + lean * f * f; tyy = y - k; P(INK, tx - 3, tyy, 7, 1); P(k % 5 < 1 ? '#8a6a3a' : '#b08a52', tx - 2, tyy, 5, 1); }
+        for (let i = 0; i < 7; i += 1) {
+          const a = -Math.PI + (i / 6) * Math.PI; const len = 22 + r(10 + i) * 8;
+          for (let t2 = 0; t2 <= len; t2 += 1) { const fx = tx + Math.cos(a) * t2; const fy = tyy + Math.sin(a) * t2 * 0.5 + (t2 / len) ** 2 * 12; P(INK, fx - 1, fy - 1, 3, 3); P(t2 % 4 < 2 ? '#2f9e44' : '#51cf66', fx, fy, 2, 2); }
+        }
+        P('#5c3a1e', tx - 3, tyy + 2, 3, 3); P('#5c3a1e', tx + 1, tyy + 3, 3, 3);
+        if (p.perch && p.hides) P('#8a6a3a', tx - 14, p.hides.y * Z + 1, 14, 2);
+        return;
+      }
+      case 'dunegrass': { for (let i = 0; i < 9; i += 1) { const hh = 8 + r(i) * 10; const bend = (r(i + 20) - 0.5) * 6; for (let k = 0; k < hh; k += 1) P(k < 2 ? '#8a7a3a' : '#a9b85a', x - 9 + i * 2 + bend * (k / hh), y - k, 1, 1); } return; }
+      case 'shell': { P(INK, x - 4, y - 4, 9, 5); P('#ffc9c9', x - 3, y - 3, 7, 3); P('#ffffff', x - 2, y - 3, 1, 3); P('#ffffff', x + 1, y - 3, 1, 3); return; }
+      case 'coral': { // Under the sea: branching coral (or a round brain coral)
+        const col = ['#ff8787', '#ffa94d', '#f783ac', '#da77f2'][Math.floor(r(1) * 4)];
+        if (r(2) < 0.35) { blob(x + shake, y - 7, 13, 8, col, mix(col, '#ffffff', 0.3)); for (let i = -9; i < 10; i += 3) P(mix(col, '#000000', 0.2), x + i + shake, y - 9 + Math.round(Math.sin(i) * 2), 2, 1); return; }
+        const br = (x0, y0, a, len, d) => { const x1 = x0 + Math.cos(a) * len; const y1 = y0 + Math.sin(a) * len; for (let i = 0; i <= len; i += 1) { const px = x0 + ((x1 - x0) * i) / len; const py = y0 + ((y1 - y0) * i) / len; P(INK, px - 2, py - 1, 5, 3); } for (let i = 0; i <= len; i += 1) { const px = x0 + ((x1 - x0) * i) / len; const py = y0 + ((y1 - y0) * i) / len; P(col, px - 1, py, 3, 1); } if (d > 0) { br(x1, y1, a - 0.5, len * 0.7, d - 1); br(x1, y1, a + 0.45, len * 0.7, d - 1); } };
+        br(x + shake, y, -Math.PI / 2, 9 + r(3) * 4, 2);
+        return;
+      }
+      case 'seafan': { if (front) return; const col = '#9775fa'; for (let i = 0; i < 9; i += 1) { const a = -Math.PI / 2 + (i - 4) * 0.17; for (let t2 = 0; t2 < 26; t2 += 1) P(t2 % 5 ? col : mix(col, '#ffffff', 0.3), x + Math.cos(a) * t2, y + Math.sin(a) * t2, 1, 1); } for (let k = 8; k < 26; k += 5) for (let i = -4; i <= 4; i += 1) { const a = -Math.PI / 2 + i * 0.17; P(col, x + Math.cos(a) * k, y + Math.sin(a) * k, 2, 1); } return; }
+      case 'seaweed': { // kelp, swaying
+        const n = 4; const hh = 30 + r(1) * 26;
+        for (let s2 = 0; s2 < n; s2 += 1) for (let k = 0; k < hh - s2 * 4; k += 1) { const sw = Math.sin(this.t * 1.6 + k / 7 + s2) * (k / hh) * 5; P(INK, x - 6 + s2 * 4 + sw - 1, y - k, 4, 1); P(k % 6 < 3 ? '#2f9e44' : '#40c057', x - 6 + s2 * 4 + sw, y - k, 2, 1); }
+        return;
+      }
+      case 'anemone': { // the clownfish's home: a ring of waving arms
+        const col = r(1) < 0.5 ? '#f783ac' : '#b197fc';
+        P(INK, x - 12, y - 5, 25, 6); P(mix(col, '#000000', 0.3), x - 11, y - 4, 23, 4);
+        for (let i = 0; i < 12; i += 1) { const bx = x - 11 + i * 2; const hh = 10 + (i % 3) * 3; for (let k = 0; k < hh; k += 1) P(k === hh - 1 ? '#ffffff' : col, bx + Math.sin(this.t * 2 + i + k / 4) * (k / hh) * 3, y - 4 - k, 2, 1); }
+        return;
+      }
+      case 'clam': { P(INK, x - 11, y - 9, 23, 10); P('#ced4da', x - 10, y - 8, 21, 8); P('#3bc9db', x - 8, y - 6, 17, 3); P('#1098ad', x - 8, y - 4, 17, 1); for (let i = -9; i < 10; i += 4) P('#868e96', x + i, y - 8, 1, 2); return; }
+      case 'cactus': { // the Galápagos: a prickly pear tree with flat pads
+        if (front) return;
+        const h = 40 + Math.round(r(1) * 18);
+        P(INK, x - 4, y - h, 9, h); P('#8a6a4a', x - 3, y - h, 7, h); P('#a8865e', x - 3, y - h, 2, h);
+        const pads = [[0, -h - 6], [-9, -h + 2], [9, -h], [-5, -h - 14], [6, -h - 13]];
+        for (const [dx, dy] of pads) { blob(x + dx, y + dy, 6, 8, '#5c940d', '#82c91e'); P('#fcc419', x + dx, y + dy - 7, 2, 1); }
+        if (p.perch && p.hides) P('#8a6a4a', x - 14, p.hides.y * Z + 1, 14, 2);
+        return;
+      }
+      case 'lavarock': { blob(x + shake, y - 7, 13, 8, '#3d3330', '#5c4b45'); P('#ff6b1a', x - 4 + shake, y - 4, 6, 1); P('#ffd43b', x - 2 + shake, y - 4, 2, 1); return; }
+      case 'vent': { P(INK, x - 10, y - 6, 21, 7); P('#4a3f3a', x - 9, y - 5, 19, 5); P('#2b211d', x - 3, y - 6, 7, 2); P('#e8590c', x - 2, y - 6, 5, 1); return; }
+      case 'scrub': { const col = '#8f9a6a'; canopy(x + shake, y - 8, 9, col); return; }
+      case 'kapok': { // the Rainforest: a giant tree with buttress roots and hanging vines
+        if (front) return;
+        const h = 96 + Math.round(r(1) * 20);
+        P(INK, x - 7, y - h, 15, h); P('#8a7a5a', x - 6, y - h, 13, h); P('#a8987a', x - 6, y - h, 3, h); P('#6e5f42', x + 4, y - h, 2, h);
+        for (const s2 of [-1, 1]) for (let k = 0; k < 16; k += 1) P(k < 1 ? INK : '#8a7a5a', x + s2 * (6 + k * 0.7), y - 16 + k, 2, 16 - k > 0 ? 1 : 1);
+        canopy(x, y - h, 24, leaf[0]);
+        for (let i = 0; i < 4; i += 1) { const vx = x - 18 + r(5 + i) * 36; const vl = 20 + r(9 + i) * 30; for (let k = 0; k < vl; k += 1) P(k % 7 === 6 ? '#69db7c' : '#2b8a3e', vx + Math.sin(k / 6 + i) * 1.5, y - h + 14 + k, 1, 1); }
+        if (p.perch && p.hides) P('#6e5f42', x - 16, p.hides.y * Z + 1, 16, 2);
+        return;
+      }
+      case 'fern': { // a fern: arching fronds
+        for (let i = 0; i < 7; i += 1) { const a = -Math.PI + 0.35 + (i / 6) * (Math.PI - 0.7); const len = 13 + r(i) * 6; for (let t2 = 0; t2 <= len; t2 += 1) { const fx = x + Math.cos(a) * t2 + shake; const fy = y - 2 + Math.sin(a) * t2 * 1.3 + (t2 / len) ** 2 * 7; P(INK, fx - 1, fy - 1, 3, 3); } }
+        for (let i = 0; i < 7; i += 1) { const a = -Math.PI + 0.35 + (i / 6) * (Math.PI - 0.7); const len = 13 + r(i) * 6; for (let t2 = 0; t2 <= len; t2 += 1) { const fx = x + Math.cos(a) * t2 + shake; const fy = y - 2 + Math.sin(a) * t2 * 1.3 + (t2 / len) ** 2 * 7; P(t2 % 3 ? '#37b24d' : '#69db7c', fx, fy, 2, 1); } }
+        return;
+      }
+      case 'bromeliad': { for (let i = 0; i < 6; i += 1) { const a = -Math.PI + 0.4 + (i / 5) * (Math.PI - 0.8); for (let t2 = 0; t2 < 10; t2 += 1) P('#5c940d', x + Math.cos(a) * t2, y - 1 + Math.sin(a) * t2, 2, 1); } P('#e03131', x - 2, y - 8, 4, 5); P('#ff8787', x - 1, y - 8, 2, 2); return; }
+      case 'lollipop': { // Rainbow land: a lollipop tree
+        if (front) return;
+        const h = 40 + Math.round(r(1) * 20); const R = 11 + Math.round(r(2) * 4);
+        P(INK, x - 2, y - h, 5, h); P('#f8f9fa', x - 1, y - h, 3, h);
+        const cols = [['#ff6b6b', '#ffffff'], ['#4dabf7', '#ffe066'], ['#b197fc', '#ffffff'], ['#69db7c', '#ffd8a8']][Math.floor(r(3) * 4)];
+        for (let j = -R - 1; j <= R + 1; j += 1) for (let i = -R - 1; i <= R + 1; i += 1) { const d = Math.hypot(i, j); if (d <= R + 1) { const a = Math.atan2(j, i) + d * 0.35; P(d > R ? INK : Math.floor((a / (Math.PI * 2)) * 6 + 6) % 2 ? cols[0] : cols[1], x + i, y - h - R + j); } }
+        return;
+      }
+      case 'gumdrop': { const col = ['#ff8787', '#ffd43b', '#69db7c', '#74c0fc', '#b197fc'][Math.floor(r(1) * 5)]; blob(x + shake, y - 8, 11, 9, col, mix(col, '#ffffff', 0.35)); for (let i = 0; i < 6; i += 1) P('#ffffff', x - 7 + r(i + 3) * 14 + shake, y - 13 + r(i + 9) * 9, 1, 1); return; }
+      case 'candytree': { // a cotton candy tree on a striped trunk
+        if (front) return;
+        const h = 58 + Math.round(r(1) * 20);
+        for (let k = 0; k < h - 10; k += 1) { P(INK, x - 3, y - k, 7, 1); P(Math.floor(k / 4) % 2 ? '#f783ac' : '#ffffff', x - 2, y - k, 5, 1); }
+        canopy(x, y - h, 17 + Math.round(r(3) * 5), r(2) < 0.5 ? '#fcc2d7' : '#a5d8ff');
+        if (p.perch && p.hides) P('#f783ac', x - 14, p.hides.y * Z + 1, 14, 2);
+        return;
+      }
+      case 'cane': { for (let k = 0; k < 22; k += 1) { P(INK, x - 2, y - k, 5, 1); P(Math.floor(k / 3) % 2 ? '#e03131' : '#ffffff', x - 1, y - k, 3, 1); } for (let a = 0; a <= Math.PI; a += 0.2) P(Math.floor(a * 3) % 2 ? '#e03131' : '#ffffff', x - 4 + Math.round(Math.cos(a) * 4), y - 22 - Math.round(Math.sin(a) * 4), 3, 2); return; }
+      case 'goldspire': { // Golden galaxy: a tall golden crystal spire
+        if (front) return;
+        const h = 50 + Math.round(r(1) * 30);
+        for (let k = 0; k < h; k += 1) { const w = Math.max(1, Math.round((k / h) * 8)); P(INK, x - w - 1, y - h + k, w * 2 + 3, 1); P(k % 9 < 2 ? '#fff3bf' : '#fcc419', x - w, y - h + k, w, 1); P('#f08c00', x, y - h + k, w + 1, 1); }
+        if (Math.floor(this.t * 2 + r(2) * 5) % 5 === 0) { P('#ffffff', x - 3, y - h + 4, 7, 1); P('#ffffff', x, y - h + 1, 1, 7); }
+        if (p.perch && p.hides) P('#f08c00', x - 14, p.hides.y * Z + 1, 14, 2);
+        return;
+      }
+      case 'goldcrystal': { for (let k = 0; k < 16; k += 1) { const w = Math.round((16 - k) / 1.4) + 1; P(k < 2 ? INK : k % 4 ? '#fcc419' : '#fff3bf', x - Math.round((16 - k) / 2.8) + shake, y - 16 + k, w, 1); } P('#f08c00', x + 2 + shake, y - 10, 2, 9); return; }
+      case 'asteroid': { if (front) return; const bob = Math.round(Math.sin(this.t * 1.2 + r(1) * 6) * 3); blob(x, y - 50 + bob, 9, 6, '#7950f2', '#9775fa'); P('#5f3dc4', x - 3, y - 51 + bob, 3, 2); P('#fcc419', x + 4, y - 48 + bob, 2, 1); return; }
       case 'fore': {
-        const col = th.snow ? '#c5d3e3' : th.stars ? '#46496e' : ramp(leaf[0], 3, 1)[1];
+        if (th.foreKind === 'seaweed' || th.foreKind === 'fern') { // big fronds right in front
+          const col = th.fore;
+          for (let s2 = 0; s2 < 6; s2 += 1) for (let k = 0; k < 60; k += 1) { const sw = th.foreKind === 'seaweed' ? Math.sin(this.t * 1.4 + k / 9 + s2) * (k / 60) * 8 : (s2 - 2.5) * k * 0.45; P(mix(col, '#000000', 0.3), x - 18 + s2 * 7 + sw, y - k, 5, 1); P(k % 7 < 3 ? col : mix(col, '#ffffff', 0.15), x - 17 + s2 * 7 + sw, y - k, 3, 1); }
+          return;
+        }
+        const col = th.snow ? '#c5d3e3' : th.goldCamo ? '#c98a1e' : th.stars ? '#46496e' : th.fore ? ramp(th.fore, 3, 1)[1] : ramp(leaf[0], 3, 1)[1];
         canopy(x, y - 4, 17, col);
         return;
       }
@@ -997,6 +1402,10 @@ export class PhotoTrain {
           if (k === 'feather') { P(INK, x - 6, y - 3, 12, 3); P('#f8f9fa', x - 5, y - 2, 10, 1); P('#adb5bd', x + 4, y - 2, 2, 1); }
           if (k === 'antler') { P('#e9d8b4', x - 6, y - 2, 12, 2); P('#e9d8b4', x - 3, y - 6, 2, 4); P('#e9d8b4', x + 2, y - 7, 2, 5); }
           if (k === 'glow') { P('#ffd43b', x - 2, y - 4, 4, 4); }
+          if (k === 'scale') { P(INK, x - 5, y - 4, 10, 5); P('#2f9e44', x - 4, y - 3, 8, 3); P('#8ce99a', x - 3, y - 3, 3, 1); }
+          if (k === 'shell') { P(INK, x - 4, y - 4, 9, 5); P('#ffd8a8', x - 3, y - 3, 7, 3); P('#ffffff', x - 1, y - 3, 1, 3); }
+          if (k === 'tooth') { P(INK, x - 3, y - 6, 6, 6); P('#f8f9fa', x - 2, y - 5, 4, 4); P('#f8f9fa', x - 1, y - 1, 2, 1); }
+          if (k === 'sprinkle') { for (let i = 0; i < 5; i += 1) P(RAINBOW[i][1], x - 8 + i * 4, y - 3 - (i % 2) * 2, 3, 1); }
           if (Math.floor(this.t * 3) % 2) P('#ffffff', x + 6, y - 10, 2, 2);
         }
     }
@@ -1024,12 +1433,20 @@ export class PhotoTrain {
       ctx.fillStyle = i < this.film ? '#ffe066' : 'rgba(255,255,255,0.25)'; ctx.fillRect(fx, fy, u * 0.8, u * 1.1);
       ctx.strokeStyle = INK; ctx.lineWidth = S * 0.4; ctx.strokeRect(fx, fy, u * 0.8, u * 1.1);
     }
-    const wn = this.theme.stars ? SPACE_WEATHER[this.weather] : WEATHERS[this.weather];
+    const wn = (this.theme.weatherNames || WEATHERS)[this.weather];
     text(`${wn?.icon || ''} ${wn?.name || ''}`, W - u * 1, u * 3.6, u * 1.2, '#ffffff', 'right');
     const want = critterById(this.wanted);
     if (want) {
       const done = this.bestBy[want.id];
       text(`WANTED: ${want.name}${done ? ' ✓' : ' (x2)'}`, W - u * 1, u * 5.4, u * 1.1, done ? '#b2f2bb' : '#ffd43b', 'right');
+    }
+    // Rainbow land: a dot for each color, lit when it has been photographed
+    if (this.theme.rainbowHunt) {
+      RAINBOW.forEach(([k, col], i) => {
+        const cx = W - u * 1.4 - (RAINBOW.length - 1 - i) * u * 1.5; const cy = u * 7.1; const got = this.colors.has(k);
+        ctx.beginPath(); ctx.arc(cx, cy, u * 0.62, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, u * 0.45, 0, Math.PI * 2); ctx.fillStyle = got ? col : 'rgba(255,255,255,0.25)'; ctx.fill();
+      });
     }
     // the viewfinder
     const v = this.view;
