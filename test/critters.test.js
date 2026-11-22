@@ -4,7 +4,7 @@ import { CRITTERS, CRITTER_MAPS, critterById, mapCritters, inSeason, weatherOf, 
 import { recordPhoto, albumCount, albumPages, addClue, spendClues, CLUES_FOR_LEGEND } from '../js/album.js';
 import { gameFor, GAME_NAMES } from '../js/play.js';
 import { ITEMS, bestGear, MOVES } from '../js/items.js';
-import { CAMERAS, cameraFor } from '../js/phototrain.js';
+import { CAMERAS, cameraFor, TRAIN_MAPS, RAINBOW } from '../js/phototrain.js';
 
 test('every animal has an id, a map, a known rarity, ways to show itself, a look and real facts', () => {
   const ids = new Set();
@@ -34,8 +34,28 @@ test('winter brings its own animals: the snowshoe hare and the snowy owl only in
   assert.ok(!oddsFor('bg-meadow', 'summer', 'sunny').map(([c]) => c.id).includes('meadow-hare'));
 });
 
-test('a map without its own animals rides through the Forest Village', () => {
-  assert.deepEqual(mapCritters('bg-volcano').map((c) => c.id), mapCritters('bg-meadow').map((c) => c.id));
+test('every map has its own animals, its own ride, and a page in the album', () => {
+  assert.deepEqual([...CRITTER_MAPS].sort(), [...TRAIN_MAPS].sort());
+  assert.equal(CRITTER_MAPS.length, 10);
+  for (const map of CRITTER_MAPS) {
+    const list = mapCritters(map);
+    assert.ok(list.every((c) => c.map === map), map);
+    assert.ok(list.filter((c) => c.how.includes('far')).length >= 1, `${map}: something for the zoom lens`);
+  }
+  // the seven new maps (Fable's roster rule): two far animals, a tunnel animal, two rares
+  for (const map of ['bg-castle', 'bg-sunset', 'bg-ocean', 'bg-volcano', 'bg-rainforest', 'bg-rainbow', 'bg-galaxy']) {
+    const list = mapCritters(map);
+    assert.ok(list.filter((c) => c.how.includes('far')).length >= 2, `${map}: two far animals`);
+    assert.equal(list.filter((c) => c.tunnel).length, 1, `${map}: a tunnel animal`);
+    assert.ok(list.filter((c) => c.rarity === 'rare').length >= 2, `${map}: two rares`);
+    assert.ok(list.some((c) => c.how.includes('track')), `${map}: something to stop the train`);
+  }
+  // pretend maps teach about real cousins
+  for (const map of ['bg-rainbow', 'bg-galaxy']) assert.ok(mapCritters(map).every((c) => c.cousin), map);
+  // every color of the rainbow has a Rainbow land animal that isn't far away
+  for (const [color] of RAINBOW) assert.ok(mapCritters('bg-rainbow').some((c) => c.color === color && !c.how.every((h) => h === 'far')), color);
+  // the album names every map
+  for (const p of albumPages({})) assert.ok(!p.name.startsWith('bg-'), p.name);
 });
 
 test('the day decides the weather and the Wanted animal, the same on every device', () => {

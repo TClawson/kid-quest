@@ -34,7 +34,11 @@ export function albumCount(album = {}) {
   return { found: ids.length, total: CRITTERS.length };
 }
 
-const MAP_NAMES = { 'bg-meadow': 'Forest Village', 'bg-fjord': 'Alaskan Fjord', 'bg-space': 'Moon Base' };
+const MAP_NAMES = {
+  'bg-meadow': 'Forest Village', 'bg-fjord': 'Alaskan Fjord', 'bg-space': 'Moon Base', 'bg-castle': 'Castle',
+  'bg-sunset': 'Sunset Beach', 'bg-ocean': 'Under the Sea', 'bg-volcano': 'Volcano Island', 'bg-rainforest': 'Rainforest',
+  'bg-rainbow': 'Rainbow Land', 'bg-galaxy': 'Golden Galaxy',
+};
 /** The album's pages: one per map (the kid's own map first), each with its animals. */
 export function albumPages(album = {}, first = 'bg-meadow', season = null) {
   const maps = [...CRITTER_MAPS].sort((a, b) => (a === first ? -1 : b === first ? 1 : 0));
