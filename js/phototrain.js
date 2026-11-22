@@ -121,7 +121,7 @@ const THEMES = {
     weatherNames: { sunny: { name: 'Sunbeams', icon: '🔆' }, rain: { name: 'Plankton bloom', icon: '🟢' }, snow: { name: 'Marine snow', icon: '❄️' }, mist: { name: 'Murky water', icon: '🌫️' }, wind: { name: 'Strong current', icon: '🌊' } },
   },
   'bg-volcano': {
-    sky: ['#f08c5a', '#ffe0c2'], hills: ['#5b4b45', '#3d3330'], far: 'volcano', ground: ['#5c524c', '#3d3330', '#2b211d'],
+    sky: ['#f08c5a', '#ffe0c2'], hills: ['#5b4b45', '#3d3330'], far: 'volcano', ground: ['#7a6656', '#6b5a4e', '#3d3330'],
     water: ['#1c9cb0', '#127a8c', '#0b5a6a'], props: ['cactus', 'lavarock', 'vent', 'cactus', 'scrub', 'lavarock', 'vent'], train: ['#343a40', '#ff6b1a'],
     covers: { rock: 'lavarock', tree: 'cactus', bush: 'scrub' }, warm: true, tunnelStyle: 'lava', vents: true, fore: '#5c6b2a', clues: ['tracks', 'feather', 'shell'],
   },
@@ -147,6 +147,7 @@ const THEMES = {
 const SPACE_WEATHER = { sunny: { name: 'Earthrise', icon: '🌍' }, rain: { name: 'Meteor shower', icon: '☄️' }, snow: { name: 'Star dust', icon: '✨' }, mist: { name: 'Moon dust', icon: '🌫️' }, wind: { name: 'Solar wind', icon: '🌞' } };
 THEMES['bg-space'].weatherNames = SPACE_WEATHER;
 /** Rainbow land's colors: one photo of each in a ride brings the unicorn. */
+export const RAINBOW_BONUS = 50;
 export const RAINBOW = [['red', '#ff6b6b'], ['orange', '#ffa94d'], ['yellow', '#ffe066'], ['green', '#69db7c'], ['blue', '#4dabf7'], ['purple', '#b197fc']];
 export const TRAIN_MAPS = Object.keys(THEMES);
 const themeFor = (map, season) => {
@@ -171,6 +172,7 @@ export class PhotoTrain {
     this.theme = themeFor(this.map, this.season);
     this.weather = opts.weather || weatherOf(this.day, this.season);
     if (this.weather === 'snow' && this.theme.warm) this.weather = 'rain'; // no snow on warm maps
+    if (this.theme.downpour && this.weather === 'rain' && this.season !== 'winter') this.weather = 'mist'; // the rain comes later, in the ride
     this.wanted = wantedOf(this.day, this.map, this.season);
     this.clues = (typeof opts.clues === 'function' ? opts.clues(this.map) : opts.clues) || 0;
     this.onPhoto = opts.onPhoto || null; this.onClue = opts.onClue || null;
@@ -248,6 +250,8 @@ export class PhotoTrain {
     if (this.act() === 3) pairs = pairs.map(([c, w]) => [c, c.rarity === 'rare' || c.rarity === 'legend' ? w * 3 : w]);
     // the sunset: day animals go home for the finale, dusk animals only come out then
     if (this.theme.dusk) pairs = pairs.filter(([c]) => (this.act() === 3 ? !c.day : !c.dusk));
+    // Rainbow land: after 30 s, colors still missing from the rainbow come three times as often
+    if (this.theme.rainbowHunt && GAME_SECONDS - this.left > 30) pairs = pairs.map(([c, w]) => [c, c.color && !this.colors.has(c.color) ? w * 3 : w]);
     // the downpour: sun lovers hide
     if (this.poured) pairs = pairs.filter(([c]) => !c.weather?.includes('sunny'));
     // Fjord rule (Taylor): one land animal at a time
@@ -401,7 +405,7 @@ export class PhotoTrain {
     // the Castle: the drawbridge is up, so the train waits at the moat, and moat animals come up in a row
     if (this.theme.drawbridge && !this.setPieces.bridge && e > this.plan.bridgeAt && !this.brake && !this.tunnel) {
       this.setPieces.bridge = true;
-      const until = this.t + 6.5;
+      const until = this.t + 5.5;
       this.bridge = { x: this.dist + this.carX + 100, until };
       this.brake = { at: this.t, bridge: true, until };
       addPop(this, 'The drawbridge is up! Wait...', this.W / 2, this.H * 0.2, '#ffd43b', true);
@@ -415,7 +419,7 @@ export class PhotoTrain {
     }
     // the Rainforest: the afternoon downpour
     if (this.theme.downpour && !this.poured && e > this.plan.pourAt && this.season !== 'winter' && this.weather !== 'rain') {
-      this.poured = true; this.weather = 'rain'; this.sky = this.paintSky();
+      this.poured = true; this.weather = 'rain'; this.theme = { ...this.theme, sky: ['#5c7a6a', '#a9c2b4'] }; this.sky = this.paintSky();
       addPop(this, 'Here comes the rain! Frogs love it.', this.W / 2, this.H * 0.2, '#a5d8ff', true);
     }
     if (!this.setPieces.tunnel && e > this.plan.tunnelAt && !this.brake) {
@@ -578,7 +582,7 @@ export class PhotoTrain {
     const centred = best.off < 0.45 && best.inF >= 0.8;
     // the Volcano: a puff of steam in front spoils the photo
     let steamy = false;
-    if (sharp && o.k && this.steamOver(o.box)) { sharp = false; steamy = true; }
+    if (sharp && o.k && this.steamOver(o.box)) { sharp = false; steamy = true; this.film += 1; } // the steam's fault: the film comes back
     const fill = (o.box.w * (o.far ? 2.2 : 1)) / w;
     Object.assign(shot, { sharp, posed, centred, moving: moving && sharp, fill });
     shot.quality = qualityOf(shot);
@@ -618,6 +622,9 @@ export class PhotoTrain {
       if (this.colors.size === RAINBOW.length && !this.legendCame) {
         this.rainbowFull = true; this.nextAt = Math.min(this.nextAt, this.t + 1.5);
         addPop(this, 'The rainbow is full! Something magical is coming...', this.W / 2, this.H * 0.22, '#ffffff', true);
+      } else if (this.colors.size === RAINBOW.length) { // the unicorn came already: a rainbow bonus instead
+        this.points += RAINBOW_BONUS;
+        addPop(this, `Full rainbow! +${RAINBOW_BONUS}`, this.W / 2, this.H * 0.22, '#ffffff', true);
       }
     }
   }
@@ -1155,7 +1162,11 @@ export class PhotoTrain {
     const [x, y] = this.where(k); const t = this.t;
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(Math.round(a), Math.round(b), w, h); };
     if (this.theme.goldCamo && k.how !== 'fly' && k.how !== 'perch') { // gold on gold: no rustle, only a glint now and then
-      if (Math.floor(t * 2.5 + (k.id % 7)) % 4 === 0) { const gx = x * Z + ((k.id >> 3) % 9) - 4; const gy = y * Z - 10; P('#ffffff', gx - 3, gy, 7, 1); P('#ffffff', gx, gy - 3, 1, 7); }
+      if (Math.floor(t * 2.5 + (k.id % 7)) % 2 === 0) {
+        const gx = x * Z + ((k.id >> 3) % 9) - 4; const gy = y * Z - 10;
+        P('#d9480f', gx - 4, gy - 1, 9, 3); P('#d9480f', gx - 1, gy - 4, 3, 9); P('#ffffff', gx - 3, gy, 7, 1); P('#ffffff', gx, gy - 3, 1, 7);
+        if (!this.glintHint) { this.glintHint = true; addPop(this, 'Watch for the glint!', x, y - 16, '#ffd43b'); }
+      }
       return;
     }
     if (k.how === 'surface') { const r = 4 + ((t * 10) % 8); P('#e7f5ff', x * Z - r, y * Z - 1, r * 2, 1); P('#a5d8ff', x * Z - r / 2, y * Z + 1, r, 1); return; }

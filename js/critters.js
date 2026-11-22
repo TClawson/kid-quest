@@ -397,7 +397,7 @@ export const CRITTERS = [
   },
   {
     id: 'sunset-pelican', map: 'bg-sunset', name: 'Brown pelican', rarity: 'common', how: ['fly', 'perch'], from: 'tree', day: true,
-    look: { plan: 'bird', len: 30, fur: '#7a6a58', belly: '#a0907a', face: '#fff3bf', bill: 0.32, bigBill: true, beak: '#d9a35f' },
+    look: { plan: 'bird', len: 30, fur: '#7a6a58', belly: '#a0907a', face: '#fff3bf', bill: 0.5, bigBill: true, beak: '#d9a35f' },
     where: 'Brown pelicans live along the warm coasts of the Americas, from the Carolinas and California down to South America.',
     eats: 'Fish, which it scoops up in the stretchy pouch under its beak.',
     wow: 'A brown pelican dives into the sea head first from high in the air. Its pouch can hold about three gallons of water, more than its stomach can hold.',
@@ -425,7 +425,7 @@ export const CRITTERS = [
   },
   {
     id: 'sunset-dolphin', map: 'bg-sunset', name: 'Bottlenose dolphin', rarity: 'uncommon', how: ['surface', 'far'], from: 'water', sea: true,
-    look: { plan: 'swim', swim: 'back', len: 50, fur: '#7d8a99', belly: '#dee2e6', fin: 'small', spout: false, back: 0.2 },
+    look: { plan: 'swim', swim: 'back', len: 50, fur: '#6d7f94', belly: '#dee2e6', fin: 'mid', rostrum: true, spout: false, back: 0.2 },
     where: 'Bottlenose dolphins live in warm and mild seas all over the world, often close to the shore.',
     eats: 'Fish, squid and shrimp, which they find by clicking and listening to the echoes.',
     wow: 'Every bottlenose dolphin has its own signature whistle, like a name, and friends call each other by it. Dolphins sleep with one half of the brain at a time.',
@@ -453,7 +453,7 @@ export const CRITTERS = [
   },
   {
     id: 'sunset-manatee', map: 'bg-sunset', name: 'West Indian manatee', rarity: 'legend', how: ['surface'], from: 'water', sea: true,
-    look: { plan: 'swim', swim: 'back', len: 70, fur: '#8a8f86', belly: '#adb5bd', spout: false, back: 0.15 },
+    look: { plan: 'swim', swim: 'back', len: 70, fur: '#9a9f92', belly: '#adb5bd', roundSnout: true, spout: false, back: 0.15 },
     where: 'West Indian manatees live in warm, shallow coastal water, rivers and springs from Florida and the Caribbean to Brazil.',
     eats: 'Sea grass and water plants: up to 10% of its own weight every day.',
     wow: 'Manatees are gentle giants called "sea cows", and their closest living relatives are elephants. They come up to breathe every few minutes and can live over 60 years.',
@@ -564,7 +564,7 @@ export const CRITTERS = [
   // Twist: steam vents puff and hide animals; the giant tortoise stops the train; the tunnel is a lava tube.
   {
     id: 'volcano-iguana', map: 'bg-volcano', name: 'Marine iguana', rarity: 'common', how: ['step', 'step'], from: 'rock', weather: ['sunny'],
-    look: { plan: 'lizard', len: 52, fur: '#3d3a38', extra: 'crest', accent: '#c0504d', mark: 'spots', dark: '#1a1817' },
+    look: { plan: 'lizard', len: 52, fur: '#4a4542', extra: 'crest', accent: '#e9ecef', mark: 'spots', face: '#dee2e6', dark: '#1a1817' },
     where: 'Marine iguanas live only on the rocky shores of the Galápagos Islands.',
     eats: 'Seaweed, which it dives into the cold sea to nibble off the rocks.',
     wow: 'It is the only lizard in the world that swims in the sea. It sneezes out the extra salt from the seawater, so its head is often crusty white.',
@@ -585,7 +585,7 @@ export const CRITTERS = [
   },
   {
     id: 'volcano-finch', map: 'bg-volcano', name: 'Darwin\'s finch', rarity: 'common', how: ['perch', 'perch'], from: 'tree',
-    look: { plan: 'bird', len: 14, fur: '#3d3a38', belly: '#6c6460', beak: '#212529', bill: 0.2, bigBill: true },
+    look: { plan: 'bird', len: 16, fur: '#495057', belly: '#868e96', beak: '#fcc419', bill: 0.2, bigBill: true },
     where: 'Darwin\'s finches live only on the Galápagos Islands (and one kind on Cocos Island). There are about 18 kinds.',
     eats: 'Seeds, cactus flowers, insects. Each kind has a beak shaped for its own food.',
     wow: 'Charles Darwin studied these finches. Their different beaks helped scientists understand how animals change over many generations to fit where they live.',
@@ -634,7 +634,7 @@ export const CRITTERS = [
   },
   {
     id: 'volcano-cormorant', map: 'bg-volcano', name: 'Flightless cormorant', rarity: 'rare', how: ['surface'], from: 'water', sea: true, shy: true,
-    look: { plan: 'swim', swim: 'head', len: 26, fur: '#2b2b2b', belly: '#3d3a38', eye: '#3bc9db', snout: 1.4, ears: 'none', headR: 0.15 },
+    look: { plan: 'swim', swim: 'head', len: 28, fur: '#495057', belly: '#adb5bd', muzzle: true, nose: '#fcc419', eye: '#3bc9db', snout: 1.6, ears: 'none', headR: 0.16 },
     where: 'Flightless cormorants live only on the shores of two Galápagos islands, Fernandina and Isabela.',
     eats: 'Eels, octopus and fish, hunted on the sea floor.',
     wow: 'With no enemies on land, its wings shrank over time until it could no longer fly, but it is a superb swimmer. After a dive it still holds its tiny wings out to dry.',
@@ -700,7 +700,7 @@ export const CRITTERS = [
   },
   {
     id: 'jungle-caiman', map: 'bg-rainforest', name: 'Spectacled caiman', rarity: 'uncommon', how: ['surface'], from: 'water', sea: true,
-    look: { plan: 'swim', swim: 'head', len: 30, fur: '#6b6e3a', belly: '#c9c48a', snout: 2.0, headR: 0.12, ears: 'none', eye: '#fcc419' },
+    look: { plan: 'swim', swim: 'head', len: 32, fur: '#6b6e3a', belly: '#e0d9a0', muzzle: true, snout: 2.2, headR: 0.13, ears: 'round', mark: 'mask', dark: '#3d3f1e', eye: '#fcc419' },
     where: 'Spectacled caimans live in rivers, swamps and lakes from southern Mexico through Central America to the Amazon.',
     eats: 'Fish, snails, crabs, birds and small mammals.',
     wow: 'It is named for a bony ridge between its eyes that looks like the bridge of a pair of glasses. It floats with only its eyes and nose above the water.',
@@ -765,6 +765,13 @@ export const CRITTERS = [
     wow: 'Flamingos are born grey. They turn pink or orange from the color in the shrimp and algae they eat. They often stand on one leg, maybe to keep warm.',
   },
   {
+    id: 'rainbow-tiger', map: 'bg-rainbow', name: 'Tangerine tiger', rarity: 'common', how: ['step', 'step'], from: 'tree', color: 'orange', cousin: 'Bengal tiger',
+    look: { plan: 'quad', len: 40, fur: '#ff922b', belly: '#fff4e6', mark: 'stripes', dark: '#862e9c', legs: 0.32, ears: 'round', tail: 'long', headR: 0.22, snout: 0.6 },
+    where: 'Its real cousin, the Bengal tiger, lives in the forests and grasslands of India, Bangladesh and Nepal.',
+    eats: 'Bengal tigers hunt deer, wild pigs and buffalo, mostly at night, and can eat 60 pounds of meat in one meal.',
+    wow: 'Tigers are the biggest cats in the world, and every tiger has its own pattern of stripes, even on its skin under the fur. Unlike most cats, tigers love to swim.',
+  },
+  {
     id: 'rainbow-snail', map: 'bg-rainbow', name: 'Lollipop snail', rarity: 'common', how: ['rise', 'rise'], from: 'bush', color: 'yellow', cousin: 'Cuban painted snail',
     look: { plan: 'snail', len: 22, fur: '#ffd43b', belly: '#fff3bf', dark: '#f783ac' },
     where: 'Its real cousin, the Cuban painted snail, lives only in the forests of eastern Cuba.',
@@ -773,14 +780,14 @@ export const CRITTERS = [
   },
   {
     id: 'rainbow-frog', map: 'bg-rainbow', name: 'Gumdrop frog', rarity: 'common', how: ['rise', 'step'], from: 'bush', color: 'green', cousin: 'glass frog',
-    look: { plan: 'frog', len: 18, fur: '#8ce99a', belly: '#e6fcf5', eye: '#f8f9fa', croak: false },
+    look: { plan: 'frog', len: 18, fur: '#51cf66', belly: '#d3f9d8', eye: '#212529', croak: false },
     where: 'Its real cousins, the glass frogs, live in the rainforests of Central and South America, on leaves over streams.',
     eats: 'Glass frogs eat small insects and spiders.',
     wow: 'A glass frog\'s tummy is see-through: you can watch its heart beat! When it sleeps it hides most of its blood away in its liver, so it turns almost clear.',
   },
   {
     id: 'rainbow-parrot', map: 'bg-rainbow', name: 'Rainbow parrot', rarity: 'uncommon', how: ['perch', 'fly'], from: 'tree', color: 'blue', cousin: 'rainbow lorikeet',
-    look: { plan: 'bird', len: 22, fur: '#40c057', belly: '#40c057', face: '#4263eb', mark: 'chest', accent: '#fd7e14', beak: '#e03131', tail: 'long' },
+    look: { plan: 'bird', len: 22, fur: '#3b5bdb', belly: '#4dabf7', face: '#4263eb', mark: 'chest', accent: '#fd7e14', wingTag: 'dark', dark: '#40c057', beak: '#e03131', tail: 'long' },
     where: 'Its real cousin, the rainbow lorikeet, lives in forests, parks and gardens along the coasts of Australia.',
     eats: 'Rainbow lorikeets drink nectar and eat pollen and fruit.',
     wow: 'A lorikeet\'s tongue has a brush on the end, like a tiny mop, for lapping up nectar from flowers. They are so noisy they can be heard from far away.',
@@ -815,7 +822,7 @@ export const CRITTERS = [
   },
   {
     id: 'rainbow-unicorn', map: 'bg-rainbow', name: 'Rainbow unicorn', rarity: 'legend', how: ['step', 'track'], from: 'tree', cousin: 'Arabian oryx',
-    look: { plan: 'quad', len: 50, fur: '#f8f9fa', belly: '#ffffff', horns: 'horn', accent: '#f783ac', extra: 'mane', hooves: true, legs: 0.55, tail: 'long', headR: 0.17, snout: 1.2, ears: 'point', eye: '#7048e8' },
+    look: { plan: 'quad', len: 50, fur: '#f8f9fa', belly: '#ffffff', horns: 'horn', accent: '#fcc419', extra: 'mane', rainbow: true, hooves: true, legs: 0.55, tail: 'long', headR: 0.17, snout: 1.2, ears: 'point', eye: '#7048e8' },
     where: 'Its real cousin, the Arabian oryx, lives in the deserts of the Arabian Peninsula.',
     eats: 'Arabian oryx eat desert grass and plants, and can go weeks without drinking, getting water from dew and their food.',
     wow: 'Seen from the side, an oryx\'s two long straight horns can look like one, which may be how stories of unicorns began. The oryx died out in the wild in 1972, and was brought back by zoos.',
@@ -847,7 +854,7 @@ export const CRITTERS = [
   },
   {
     id: 'galaxy-gecko', map: 'bg-galaxy', name: 'Galaxy gecko', rarity: 'common', how: ['step', 'rise'], from: 'rock', cousin: 'leopard gecko',
-    look: { plan: 'lizard', len: 30, fur: '#fab005', mark: 'spots', accent: '#5f3dc4', dark: '#7048e8' },
+    look: { plan: 'lizard', len: 40, fur: '#7950f2', mark: 'spots', accent: '#fcc419', dark: '#5f3dc4' },
     where: 'Its real cousin, the leopard gecko, lives in rocky deserts and dry grasslands of Afghanistan, Pakistan, India and Iran.',
     eats: 'Leopard geckos eat crickets, beetles, spiders and scorpions.',
     wow: 'A leopard gecko stores fat in its chubby tail for hard times. Unlike most geckos it has eyelids and blinks, and it licks its own eyes clean.',

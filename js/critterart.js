@@ -139,7 +139,7 @@ function horns(b, look, hx, hy, r, frame) {
       thick(b, x + dir * 1, y - Math.round(r * 0.6), x + dir * Math.round(r * 0.7), y - Math.round(r * 1.05), 2, 'dark');
     } else if (k === 'horn') { // one unicorn horn in the middle
       const hx0 = pose ? hx : x - 1;
-      for (let t = 0; t < r * 1.4; t += 1) px(b, Math.round(hx0 - (pose ? 0 : t * 0.3)), Math.round(y - t), t % 2 ? 'accent' : 'horn');
+      for (let t = 0; t < r * (look.rainbow ? 2.2 : 1.4); t += 1) px(b, Math.round(hx0 - (pose ? 0 : t * 0.3)), Math.round(y - t), t % 2 ? 'accent' : 'horn');
       if (pose) break;
     }
   }
@@ -216,7 +216,8 @@ const PLANS = {
     ell(b, bx, by, L * 0.48, bodyH * 0.5, 'fur');
     if (look.belly) ell(b, bx, by + bodyH * 0.3, L * 0.36, bodyH * 0.2, 'belly');
     if (look.extra === 'hump') ell(b, bx - L * 0.2, by - bodyH * 0.45, L * 0.2, bodyH * 0.25, 'fur');
-    if (look.extra === 'mane') for (let t = 0; t < 1; t += 0.12) ell(b, bx - L * 0.38 + t * L * 0.25, by - bodyH * 0.5 - t * 2, 1.6, 2.2, 'accent');
+    if (look.extra === 'mane') for (let t = 0; t < 1; t += 0.12) ell(b, bx - L * 0.38 + t * L * 0.25, by - bodyH * 0.5 - t * 2, 1.6, 2.2, look.rainbow ? 'rb' : 'accent', look.rainbow ? ['#ff6b6b', '#ffa94d', '#ffe066', '#69db7c', '#4dabf7', '#b197fc'][Math.round(t * 8) % 6] : 'accent');
+    if (look.rainbow) { const RB = ['#ff6b6b', '#ffa94d', '#ffe066', '#69db7c', '#4dabf7', '#b197fc']; for (let k = 0; k < 6; k += 1) thick(b, Math.round(bx + L * 0.45), Math.round(by - bodyH * 0.25 + k), Math.round(bx + L * 0.75), Math.round(by + bodyH * 0.6 + k * 1.2 + (frame === 'walk' ? -3 : 0)), 1, 'rb'); b.each((x, y) => { if (b.tag(x, y) === 'rb' && b.get(x, y) === 'rb') b.set(x, y, RB[((y % 6) + 6) % 6], 'rb'); }); }
     if (look.mark === 'spots') for (let k = 0; k < 6; k += 1) px(b, Math.round(bx - L * 0.25 + (k * L * 0.53) % (L * 0.6)), Math.round(by - bodyH * 0.15 + ((k * 7) % 3) * 2 - 1), look.spotTag || 'belly');
     if (look.mark === 'stripes') for (let k = 0; k < 5; k += 1) thick(b, Math.round(bx - L * 0.25 + k * L * 0.13), Math.round(by - bodyH * 0.45), Math.round(bx - L * 0.28 + k * L * 0.13), Math.round(by + bodyH * 0.2), 1, 'dark');
     tail(b, look, bx + L * 0.45, by - bodyH * 0.2, L * 0.18, frame);
@@ -435,7 +436,9 @@ const PLANS = {
     if (kind === 'back') {
       const arch = frame === 'walk' ? 0.6 : frame === 'pose' ? 1 : 0.8;
       for (let x = -L * 0.5; x <= L * 0.5; x += 1) { const hgt = Math.round(L * (look.back ?? 0.16) * arch * Math.cos((x / L) * Math.PI)); for (let y = 0; y < hgt; y += 1) b.set(Math.round(bx + x), wy - y, 'fur', 'fur'); }
-      if (look.fin) { const fh = Math.round(L * (look.fin === 'tall' ? 0.32 : 0.12) * arch); for (let k = 0; k < fh; k += 1) b.rect(Math.round(bx + L * 0.05 - k * 0.25), wy - Math.round(L * 0.15 * arch) - k, Math.max(1, Math.round((fh - k) * 0.45)), 1, 'dark', 'dark'); }
+      if (look.rostrum) { thick(b, Math.round(bx - L * 0.5), wy - Math.round(L * 0.03), Math.round(bx - L * 0.6), wy - 1, 2, 'fur'); b.set(Math.round(bx - L * 0.44), wy - Math.round(L * 0.08 * arch) - 1, INK, 'eye'); }
+      if (look.roundSnout) { ell(b, bx - L * 0.5, wy - L * 0.06, L * 0.07, L * 0.06, 'fur'); b.set(Math.round(bx - L * 0.5), wy - Math.round(L * 0.08), INK, 'eye'); b.set(Math.round(bx - L * 0.56), wy - Math.round(L * 0.04), INK, 'nose'); }
+      if (look.fin) { const fh = Math.round(L * (look.fin === 'tall' ? 0.32 : look.fin === 'mid' ? 0.2 : 0.12) * arch); for (let k = 0; k < fh; k += 1) b.rect(Math.round(bx + L * 0.05 - k * 0.25), wy - Math.round(L * 0.15 * arch) - k, Math.max(1, Math.round((fh - k) * 0.45)), 1, 'dark', 'dark'); }
       if (look.mark === 'patch') { ell(b, bx - L * 0.3, wy - L * 0.09 * arch, Math.max(2, L * 0.05), Math.max(1.4, L * 0.025), 'belly'); ell(b, bx + L * 0.16, wy - L * 0.17 * arch, L * 0.08, L * 0.03, 'accent'); }
       if (frame === 'pose' && look.fluke !== false) { // the tail fluke up out of the water
         const fx = bx + L * 0.42; const fw = Math.max(7, L * 0.13); const ftop = wy - Math.round(L * 0.26);
@@ -539,7 +542,7 @@ const PLANS = {
     if (look.mark === 'spots') for (let k = 0; k < 4; k += 1) px(b, Math.round(bx - L * 0.15 + k * 3), Math.round(by - 1), 'accent');
     if (look.mark === 'stripes') for (let k = 0; k < 4; k += 1) px(b, Math.round(bx - L * 0.15 + k * 3), Math.round(by), 'dark');
     const hx = bx - L * 0.33; const hy = by - (frame === 'pose' ? L * 0.08 : L * 0.02);
-    ell(b, hx, hy, L * 0.1, L * 0.065, 'fur');
+    ell(b, hx, hy, L * 0.1, L * 0.065, look.face ? 'face' : 'fur', look.face || 'fur');
     if (frame === 'pose') { b.set(Math.round(hx - L * 0.05), Math.round(hy - 1), INK, 'eye'); b.set(Math.round(hx + L * 0.03), Math.round(hy - 1), INK, 'eye'); }
     else b.set(Math.round(hx - L * 0.03), Math.round(hy - 1), INK, 'eye');
     return { feet, eye: [Math.round(hx), Math.round(hy - 1)] };
