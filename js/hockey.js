@@ -354,7 +354,7 @@ export class Hockey {
     if (tw.vents) for (let i = 0; i < tw.vents; i += 1) add('vent', rk.x0 + 50 + ((rk.x1 - rk.x0 - 100) * (i + 0.5)) / tw.vents, midY + (i % 2 ? -1 : 1) * span * 0.22, 5, { phase: i * 1.3 });
     if (tw.mud) for (let i = 0; i < tw.mud; i += 1) add('mud', rk.x0 + 45 + ((rk.x1 - rk.x0 - 90) * (i + 0.2 + r() * 0.6)) / tw.mud, rk.y0 + 12 + r() * (span - 24), 9);
     if (tw.bumpers) { add('bumper', this.cx - 40, midY - span * 0.18, 6); add('bumper', this.cx + 40, midY + span * 0.18, 6); }
-    if (tw.seal) add('hole', this.cx + (this.r() < 0.5 ? -1 : 1) * 55, midY + span * 0.2, 4);
+    if (tw.seal) add('hole', this.cx + (this.r() < 0.5 ? -1 : 1) * 55, midY + span * 0.2, 6);
     if (tw.well) add('well', this.cx, midY, 7);
     this.sealAt = tw.seal ? tw.seal.every : Infinity; this.waveAt = tw.waves ? tw.waves.every : Infinity;
     this.flow = 1; this.flowAt = tw.current ? tw.current.flip : Infinity;
@@ -426,14 +426,18 @@ export class Hockey {
     const ring = (cx, cy, rad, col, sq = 0.6) => { ctx.fillStyle = col; const n = Math.max(12, Math.round(rad * 7)); for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(cx + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(cy + Math.sin((a / n) * Math.PI * 2) * rad * sq), 1, 1); };
     const blob = (cx, cy, rad, col, sq = 0.6) => { ctx.fillStyle = col; for (let yy = -Math.ceil(rad * sq); yy <= Math.ceil(rad * sq); yy += 1) { const w = Math.round(Math.sqrt(Math.max(0, rad * rad - (yy / sq) * (yy / sq)))); ctx.fillRect(cx - w, cy + yy, w * 2 + 1, 1); } };
     for (const o of this.things) {
-      if (o.kind === 'mud') { blob(o.x, o.y, o.r + 1, '#5c3a1e'); blob(o.x, o.y, o.r, '#7a5230'); ctx.fillStyle = '#a0784e'; ctx.fillRect(o.x - 3, o.y - 2, 3, 1); }
+      if (o.kind === 'mud') { blob(o.x, o.y, o.r + 1, '#2b1a0c'); blob(o.x, o.y, o.r, '#4a2f18'); ctx.fillStyle = '#c9a27a'; ctx.fillRect(o.x - 4, o.y - 2, 4, 1); ctx.fillRect(o.x + 2, o.y + 1, 2, 1); }
       else if (o.kind === 'door') {
         const open = this.t - (this.puck.doorAt || -9) < 0.4;
         blob(o.x, o.y, o.r + 1, O, 0.7); blob(o.x, o.y, o.r, open ? '#e5dbff' : '#7048e8', 0.7); blob(o.x, o.y, o.r - 2, open ? '#ffffff' : '#b197fc', 0.7);
         ctx.fillStyle = '#ffd43b'; ctx.fillRect(o.x - 1 + Math.round(Math.sin(this.t * 4 + o.x) * 2), o.y - 1, 1, 1);
       } else if (o.kind === 'vent') {
         const st = this.ventState(o);
-        blob(o.x, o.y, o.r, O); blob(o.x, o.y, o.r - 1, st ? '#e8590c' : '#3d3330'); if (st === 'glow' && Math.floor(this.t * 8) % 2) blob(o.x, o.y, o.r - 2, '#ffd43b');
+        // a ring of grey rocks round a cracked hole: bigger than the ember puck, and a different shape
+        blob(o.x, o.y, o.r + 3, O); blob(o.x, o.y, o.r + 2, '#868e96'); blob(o.x, o.y, o.r, '#1a1210');
+        for (let a = 0; a < 8; a += 1) { ctx.fillStyle = a % 2 ? '#adb5bd' : '#5a4a46'; ctx.fillRect(Math.round(o.x + Math.cos(a * 0.785) * (o.r + 2)) - 1, Math.round(o.y + Math.sin(a * 0.785) * (o.r + 2) * 0.6), 2, 1); }
+        const hotC = st === 'glow' ? (Math.floor(this.t * 8) % 2 ? '#ffd43b' : '#e8590c') : st ? '#ffd43b' : '#5c2d12';
+        ctx.fillStyle = hotC; ctx.fillRect(o.x - o.r + 2, o.y, o.r * 2 - 3, 1); ctx.fillRect(o.x, o.y - 2, 1, 5); ctx.fillRect(o.x - 3, o.y - 1, 1, 1); ctx.fillRect(o.x + 3, o.y + 1, 1, 1);
         if (st === 'puff') for (let i = 0; i < 6; i += 1) { ctx.fillStyle = i % 2 ? '#dee2e6' : '#adb5bd'; ctx.fillRect(o.x - 3 + i, o.y - 4 - Math.round(((this.t * 30 + i * 3) % 14)), 2, 2); }
       } else if (o.kind === 'bumper') {
         const hit = this.t - (o.hitAt || -9) < 0.2;
@@ -444,7 +448,9 @@ export class Hockey {
         blob(o.x, o.y, 3, '#ffd43b'); blob(o.x, o.y, 1, '#ffffff');
       } else if (o.kind === 'hole') {
         const st = this.sealState();
-        blob(o.x, o.y, o.r + 1, '#a5d8ff', 0.6); blob(o.x, o.y, o.r, '#1c7ed6', 0.6);
+        // a hole in the ice: a white snowy rim, dark water, a ripple (much bigger than a puck)
+        blob(o.x, o.y, o.r + 3, '#ffffff', 0.6); blob(o.x, o.y, o.r + 1, '#1b1430', 0.6); blob(o.x, o.y, o.r, '#0b4f8a', 0.6);
+        ring(o.x, o.y, o.r - 2 + ((this.t * 3) % 2), '#4dabf7', 0.6);
         if (st === 'warn') for (let i = 0; i < 4; i += 1) { ctx.fillStyle = '#ffffff'; ctx.fillRect(o.x - 3 + ((i * 3 + Math.floor(this.t * 10)) % 7), o.y - 1 - (i % 2), 1, 1); }
       }
     }
@@ -531,6 +537,13 @@ export class Hockey {
     // the boards: candy-cane stripes, driftwood, logs, gold, stone...
     if (R.candy) { x.fillStyle = R.boardHi; for (let i = rk.x0; i < rk.x1; i += 4) { x.fillRect(i, rk.y0 - 1, 2, 1); x.fillRect(i + 1, rk.y1 + 1, 2, 1); } }
     round(R.ice, 0);
+    // the village pond: a grassy bank with cattails, so it can't be mistaken for the frozen fjord
+    if (R.bank) for (let i = rk.x0 + 4; i < rk.x1 - 4; i += 7 + (i % 3)) {
+      for (const [yb, up] of [[rk.y0 - 2, 5], [rk.y1 + 3, 4]]) {
+        x.fillStyle = '#2b8a3e'; x.fillRect(i, yb - up, 1, up); x.fillRect(i + 2, yb - up + 2, 1, up - 2);
+        x.fillStyle = '#6e4b2a'; x.fillRect(i, yb - up - 1, 1, 2);
+      }
+    }
     // the ice itself, pixel by pixel (mud, stars, candy swirls, scuffs)
     for (let yy = rk.y0 + 1; yy < rk.y1; yy += 1) for (let xx = rk.x0 + 1; xx < rk.x1; xx += 1) {
       const col = iceAt(this.look, xx, yy);

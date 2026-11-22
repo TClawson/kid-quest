@@ -65,7 +65,7 @@ export const FIELD_LOOKS = {
     edge: '#3c9a3c', // around the field on a tall or wide screen
     name: 'Forest Village',
     ground: ['#4fae47', '#5cbd52', '#3c9a3c'], tex: 'mown', line: '#f1f3f5', end: ['#e03131', '#c92a2a'],
-    rink: { ice: '#e7f5ff', scuff: '#d0ebff', board: '#ffffff', boardHi: '#e9ecef', rim: '#adb5bd', soft: true, line: '#fa5252', blue: '#4dabf7', name: 'the village pond' },
+    rink: { ice: '#e7f5ff', scuff: '#d0ebff', board: '#5cbd52', boardHi: '#8ce99a', rim: '#2b8a3e', soft: true, bank: true, line: '#fa5252', blue: '#4dabf7', name: 'the village pond' },
     shade: 'rgba(20,50,20,0.3)',
     back(x, W, h) {
       band(x, 0, h, W, '#7cc7ff', '#c5e8ff');
@@ -95,7 +95,7 @@ export const FIELD_LOOKS = {
   'bg-ocean': {
     edge: '#1864ab', // around the field on a tall or wide screen
     name: 'Under the Sea',
-    ground: ['#e9d29a', '#f0d9a0', '#c9a35d'], tex: 'ripples', line: '#ffffff', end: ['#20c997', '#12b886'],
+    ground: ['#6cbcae', '#8fd3c3', '#4e9c8e'], tex: 'ripples', line: '#ffffff', end: ['#20c997', '#12b886'],
     rink: { ice: '#c5f6fa', scuff: '#99e9f2', board: '#ff8787', boardHi: '#ffc9c9', rim: '#c92a2a', line: '#f783ac', blue: '#1c7ed6', name: 'a smooth patch of sea floor' },
     shade: 'rgba(10,40,80,0.3)', water: true,
     back(x, W, h) {
@@ -188,7 +188,7 @@ export const FIELD_LOOKS = {
   'bg-fjord': {
     edge: '#9fb8cc', // around the field on a tall or wide screen
     name: 'Alaskan Fjord',
-    ground: ['#eef4f8', '#f6f9fb', '#c9d8e4'], tex: 'snow', line: '#4a8a9c', end: ['#1c8a9c', '#12586e'],
+    ground: ['#eef4f8', '#f6f9fb', '#c9d8e4'], tex: 'snow', line: '#2f6f80', end: ['#1c8a9c', '#12586e'],
     rink: { ice: '#d0f0fb', scuff: '#a5e0f2', board: '#ffffff', boardHi: '#f1f3f5', rim: '#9fb8cc', soft: true, line: '#e03131', blue: '#1c7ed6', name: 'the frozen fjord' },
     shade: 'rgba(40,70,100,0.25)',
     back(x, W, h) {
@@ -207,7 +207,7 @@ export const FIELD_LOOKS = {
   'bg-rainbow': {
     edge: '#fcc2d7', // around the field on a tall or wide screen
     name: 'Rainbow Land',
-    ground: ['#c3f0ca', '#d7f5dc', '#a5e3b0'], tex: 'candy', line: '#ffffff', end: ['#f783ac', '#e64980'],
+    ground: ['#c3f0ca', '#d7f5dc', '#a5e3b0'], tex: 'candy', line: '#845ef7', end: ['#f783ac', '#e64980'],
     stripes: ['#ffd6e0', '#ffe8cc', '#fff3bf', '#d3f9d8', '#d0ebff', '#e5dbff'],
     rink: { ice: '#fff0f6', scuff: '#ffdeeb', board: '#ffffff', boardHi: '#ff6b6b', rim: '#e64980', candy: true, line: '#845ef7', blue: '#4dabf7', name: 'the candy rink' },
     shade: 'rgba(120,60,120,0.22)',
@@ -256,14 +256,14 @@ export function groundAt(look, gx, gy) {
   switch (look.tex) {
     case 'mown': return Math.floor(gx / 12) % 2 ? a : b;
     case 'sand': return n < 0.06 ? speck : n > 0.97 ? '#fff3bf' : vnoise(gx, gy, 9, 2) > 0.6 ? b : a;
-    case 'ripples': return Math.sin(gy * 0.9 + vnoise(gx, gy, 14, 3) * 9) > 0.88 ? b : n < 0.03 ? speck : n > 0.98 ? '#fff4d1' : a;
+    case 'ripples': return Math.sin(gy * 0.9 + vnoise(gx, gy, 14, 3) * 9) > 0.88 ? b : n < 0.03 ? speck : n > 0.985 ? '#e3fafc' : n > 0.975 ? '#e9d29a' : a; // blue-green sea floor, light ripples, bubbles, a little sand
     case 'dust': { const c = vnoise(gx, gy, 6, 5); return c > 0.86 ? speck : c > 0.81 ? '#c5c9e6' : n < 0.05 ? speck : vnoise(gx, gy, 20, 6) > 0.6 ? b : a; }
     case 'cobbles': { const c = cobble(gx, gy, 2); return c.mortar ? speck : h2(c.id, 0, 3) > 0.5 ? a : b; }
     case 'ash': { const c = vnoise(gx, gy, 22, 6); return Math.abs(c - 0.5) < 0.006 ? '#ff6b1a' : n < 0.05 ? speck : vnoise(gx, gy, 9, 2) > 0.6 ? b : a; }
     case 'leaves': return n < 0.05 ? '#51cf66' : n > 0.96 ? speck : vnoise(gx, gy, 8, 4) > 0.6 ? b : a;
     case 'snow': return n < 0.05 ? speck : n > 0.985 ? '#d0ebff' : vnoise(gx, gy, 12, 3) > 0.62 ? b : a;
     case 'candy': return look.stripes[Math.floor(gx / 16) % look.stripes.length];
-    case 'starry': return n < 0.012 ? '#ffd43b' : n > 0.992 ? '#fff3bf' : vnoise(gx, gy, 16, 8) > 0.6 ? b : a;
+    case 'starry': return n < 0.006 ? '#ffd43b' : n > 0.996 ? '#fff3bf' : vnoise(gx, gy, 16, 8) > 0.6 ? b : a;
     default: return a;
   }
 }

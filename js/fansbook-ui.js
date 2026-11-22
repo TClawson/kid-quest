@@ -82,7 +82,7 @@ export function openFanPage(kid, id) {
         <span class="fp-badge">📣</span>
         <div><b>Cheered for you ${rec.n} ${rec.n === 1 ? 'time' : 'times'}</b><small>Your fan since ${esc(day(rec.first))}</small></div>
       </div>
-      ${f.cousin ? `<h3>🐾 Real cousin: ${esc(f.cousin)}</h3>` : '<h3>🤩 Wow!</h3>'}
+      ${f.cousin ? `<h3>🐾 ${esc(f.heading || 'Real cousin')}: ${esc(f.cousin)}</h3>` : '<h3>🤩 Wow!</h3>'}
       <p>${esc(f.fact)}</p>
       <button class="btn" data-action="fans-book-back">Back to the fans</button>
     </div>`);

@@ -809,12 +809,16 @@ export class Play {
           const near = Math.abs(left) <= this.windows().perfect;
           ctx.fillStyle = near ? '#ffd43b' : this.map === 'bg-fjord' ? '#1c7ed6' : b.moon ? '#d0ebff' : 'rgba(255,255,255,0.85)';
           const n = Math.max(10, Math.round(rad * 5));
+          // a dark edge under the ring so it shows on snow, candy and stars
+          const col = ctx.fillStyle; ctx.fillStyle = 'rgba(27,20,48,0.55)';
+          for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(b.tx + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(b.ty + Math.sin((a / n) * Math.PI * 2) * rad * 0.5) + 1, 1, 1);
+          ctx.fillStyle = col;
           for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(b.tx + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(b.ty + Math.sin((a / n) * Math.PI * 2) * rad * 0.5), 1, 1);
         }
       }
-      ctx.fillStyle = shadeFor(this.map);
-      const sw = Math.max(3, 6 - Math.round(b.h / 12));
-      ctx.fillRect(Math.round(b.x - sw / 2), Math.round(b.y), sw, 1);
+      ctx.fillStyle = 'rgba(27,20,48,0.4)'; // a dark shadow, so the ball's spot shows on any ground
+      const sw = Math.max(3, 7 - Math.round(b.h / 12));
+      ctx.fillRect(Math.round(b.x - sw / 2), Math.round(b.y), sw, 1); ctx.fillRect(Math.round(b.x - sw / 2) + 1, Math.round(b.y) + 1, sw - 2, 1);
       const hot = this.hot;
       things.push({ y: b.y + 0.5, draw: () => {
         const bx = Math.round(b.x - 3); const by = Math.round(b.y - b.h - 6);

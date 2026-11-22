@@ -28,7 +28,7 @@ const fan = (id, map, rarity, name, look, fact, cousin) => ({ id, map, rarity, n
 export const FANS = [
   // Forest Village: North American woods
   fan('fan-squirrel', 'bg-meadow', 'common', 'Gray squirrel', { plan: 'small', len: 16, fur: '#868e96', belly: '#f1f3f5', tail: 'bushy', tailUp: true, sits: true, ears: 'round' },
-    'Gray squirrels bury thousands of nuts each fall and find most of them again by smell. The ones they forget can grow into new oak trees!'),
+    'Gray squirrels bury thousands of nuts each fall and find many of them again using memory and smell. The ones they forget can grow into new oak trees!'),
   fan('fan-raccoon', 'bg-meadow', 'uncommon', 'Raccoon', { plan: 'small', len: 18, fur: '#868e96', belly: '#f1f3f5', dark: '#212529', tail: 'ring', mark: 'mask', brow: true, bodyH: 0.26, headR: 0.24, ears: 'round' },
     'A raccoon\'s front paws are so sensitive that it can tell what something is just by feeling it. Wet paws feel even better, which is why raccoons seem to wash their food.'),
   fan('fan-owl', 'bg-meadow', 'rare', 'Great horned owl', { plan: 'big-bird', len: 18, fur: '#8a6a4a', belly: '#d8c8a8', owl: true, eye: '#fcc419', mark: 'spots', dark: '#3b2a20', beak: '#343a40', ears: 'tuft' },
@@ -38,57 +38,57 @@ export const FANS = [
     'Ghost crabs are sand colored, so they seem to vanish on the beach. They are some of the fastest crabs: they can scuttle sideways at about 10 miles an hour.'),
   fan('fan-pelican', 'bg-sunset', 'uncommon', 'Brown pelican', { plan: 'bird', len: 20, fur: '#7a6a5a', belly: '#adb5bd', beak: '#e9b96e', bill: 0.6, bigBill: true, face: '#f8f9fa', dark: '#343a40' },
     'Brown pelicans dive headfirst from high in the air to catch fish. The pouch under the beak can hold about three gallons of water, more than the pelican\'s stomach.'),
-  fan('fan-dolphin', 'bg-sunset', 'rare', 'Bottlenose dolphin', { plan: 'swim', swim: 'back', len: 26, fur: '#748ca8', belly: '#dee2e6', fin: 'tall', dark: '#495057', back: 0.3 },
+  fan('fan-dolphin', 'bg-sunset', 'rare', 'Bottlenose dolphin', { plan: 'swim', swim: 'leap', len: 26, fur: '#748ca8', belly: '#dee2e6', dark: '#495057' },
     'Every bottlenose dolphin has its own signature whistle, a bit like a name. Dolphins call each other by copying a friend\'s whistle.'),
   // Under the Sea
-  fan('fan-hermit', 'bg-ocean', 'common', 'Hermit crab', { plan: 'crab', len: 14, fur: '#ff8787' },
-    'Hermit crabs live in old snail shells. When one grows too big for its shell, crabs line up from biggest to smallest and all swap shells at once!'),
+  fan('fan-hermit', 'bg-ocean', 'common', 'Hermit crab', { plan: 'crab', len: 14, fur: '#ff8787', mark: 'shell', shellCol: '#ffe8cc' },
+    'Hermit crabs live in old snail shells. When one grows too big for its shell, crabs line up from biggest to smallest and swap shells one after another!'),
   fan('fan-nudibranch', 'bg-ocean', 'uncommon', 'Sea slug', { plan: 'snail', len: 16, fur: '#da77f2', accent: '#ffd43b', mark: 'spots', shell: false },
-    'Sea slugs called nudibranchs are snails with no shell. Their bright colors warn fish that they taste bad, and some even keep the stinging cells of the animals they eat.'),
+    'Sea slugs called nudibranchs are cousins of snails that lose their shell. Their bright colors warn fish that they taste bad, and some even keep the stinging cells of the animals they eat.'),
   fan('fan-monkseal', 'bg-ocean', 'rare', 'Hawaiian monk seal', { plan: 'swim', swim: 'head', seal: true, len: 22, fur: '#8a8f98', belly: '#ced4da', ears: 'none', headR: 0.2, dark: '#5c6068' },
     'Hawaiian monk seals hunt around coral reefs and nap on warm beaches. They are one of the rarest seals in the world: only about 1,600 are left.'),
   // Moon Base (pretend critters, real cousins)
   fan('fan-dustmouse', 'bg-space', 'common', 'Dust mouse', { plan: 'small', len: 14, fur: '#d0d4ee', belly: '#ffffff', dark: '#7d82a8', tail: 'long', ears: 'round', sits: true, eye: '#5c7cfa' },
-    'Pretend! Its cousin is the jerboa, a tiny desert mouse with long back legs that hops like a kangaroo and can leap many times its own length.', 'Jerboa'),
+    'Pretend! Its cousin is the jerboa, a tiny mouse-like desert animal with long back legs that hops like a kangaroo and can leap many times its own length.', 'Jerboa'),
   fan('fan-moonmoth', 'bg-space', 'uncommon', 'Moon moth', { plan: 'bug', len: 16, fur: '#b2f2bb', belly: '#d3f9d8', dark: '#495057', mark: 'spots', accent: '#ffd43b' },
     'Pretend! Its cousin, the luna moth, is pale green with long tails on its wings. Grown-up luna moths have no mouth and live only about a week.', 'Luna moth'),
-  fan('fan-moonroo', 'bg-space', 'rare', 'Moon kangaroo', { plan: 'hop', len: 20, fur: '#9a9fc4', belly: '#e7e9f7', dark: '#5c5f8a', ears: 'long', eye: '#ffd43b' },
+  fan('fan-moonroo', 'bg-space', 'rare', 'Moon kangaroo', { plan: 'hop', roo: true, len: 20, fur: '#9a9fc4', belly: '#e7e9f7', dark: '#5c5f8a', ears: 'point', eye: '#ffd43b' },
     'Pretend! Its cousin, the red kangaroo, can cover more than 25 feet in a single hop, and its big tail works like an extra leg when it moves slowly.', 'Red kangaroo'),
   // Royal Castle
   fan('fan-pigeon', 'bg-castle', 'common', 'Rock pigeon', { plan: 'bird', len: 14, fur: '#868e96', belly: '#adb5bd', beak: '#495057', mark: 'wingbar', dark: '#343a40', accent: '#63e6be' },
     'Pigeons first nested on rocky cliffs, so castle walls feel like home. A homing pigeon can find its way home from hundreds of miles away.'),
-  fan('fan-hedgehog', 'bg-castle', 'uncommon', 'Hedgehog', { plan: 'small', len: 15, fur: '#8a6a4a', belly: '#e9d8b4', dark: '#3b2a20', mark: 'spots', tail: 'none', ears: 'round' },
+  fan('fan-hedgehog', 'bg-castle', 'uncommon', 'Hedgehog', { plan: 'small', len: 15, fur: '#c8a27a', belly: '#e9d8b4', dark: '#5a4030', spines: true, bodyH: 0.24, tail: 'none', ears: 'round' },
     'A hedgehog has about 5,000 to 7,000 spines. When it is scared it rolls into a prickly ball with all of them pointing out.'),
-  fan('fan-corgi', 'bg-castle', 'rare', 'Royal corgi', { plan: 'quad', len: 20, fur: '#e8963a', belly: '#ffffff', legs: 0.2, bulk: 0.5, ears: 'point', tail: 'short', muzzle: true, dark: '#3b2a20' },
-    'Queen Elizabeth II of England had more than 30 corgis in her long life. Corgis were first bred in Wales to herd cows, nipping at their heels while ducking under their kicks.'),
+  fan('fan-corgi', 'bg-castle', 'rare', 'Royal corgi', { plan: 'quad', len: 20, fur: '#e8963a', belly: '#ffffff', legs: 0.1, bulk: 0.55, neck: 0.1, ears: 'point', headR: 0.24, tail: 'short', muzzle: true, dark: '#3b2a20' },
+    'Queen Elizabeth II had more than 30 corgis in her long life. Corgis were first bred in Wales to herd cows, nipping at their heels while ducking under their kicks.'),
   // Volcano Island
-  fan('fan-lavalizard', 'bg-volcano', 'common', 'Lava lizard', { plan: 'lizard', len: 15, fur: '#6c5a4a', belly: '#e8590c', dark: '#2b211d', mark: 'spots' },
+  fan('fan-lavalizard', 'bg-volcano', 'common', 'Lava lizard', { plan: 'lizard', len: 20, fur: '#c98a5a', belly: '#e8590c', dark: '#2b211d', mark: 'spots', accent: '#ffe8cc', throat: '#e03131' },
     'Lava lizards live on the volcanic Galápagos Islands. To show off, they do push-ups on the warm black rocks!'),
-  fan('fan-iguana', 'bg-volcano', 'uncommon', 'Marine iguana', { plan: 'lizard', len: 20, fur: '#343a40', belly: '#495057', dark: '#1a1210', extra: 'crest', accent: '#c92a2a' },
-    'Marine iguanas are the only lizards that swim in the sea to eat seaweed. They sneeze out the extra salt, so their heads often look frosty white.'),
-  fan('fan-salamander', 'bg-volcano', 'rare', 'Fire salamander', { plan: 'lizard', len: 16, fur: '#212529', belly: '#343a40', mark: 'spots', accent: '#ffd43b', dark: '#111111' },
+  fan('fan-booby', 'bg-volcano', 'uncommon', 'Blue-footed booby', { plan: 'bird', len: 18, fur: '#a07a5a', belly: '#ffffff', face: '#f1f3f5', beak: '#74c0fc', dark: '#1c7ed6', bill: 0.3 },
+    'Blue-footed boobies nest on the volcanic Galápagos Islands. To win a mate, a male struts and lifts his bright blue feet in a dance: the bluer the feet, the better!'),
+  fan('fan-salamander', 'bg-volcano', 'rare', 'Fire salamander', { plan: 'lizard', len: 18, fur: '#212529', belly: '#343a40', mark: 'spots', accent: '#ffd43b', dark: '#111111', extra: 'crest' },
     'Long ago people thought fire salamanders were born in fire, because they ran out of logs thrown on a campfire. Really they were just hiding in the damp wood.'),
   // Rainforest
-  fan('fan-dartfrog', 'bg-rainforest', 'common', 'Poison dart frog', { plan: 'frog', len: 12, fur: '#1c7ed6', belly: '#74c0fc', mark: 'spots', dark: '#111111', croak: false },
+  fan('fan-dartfrog', 'bg-rainforest', 'common', 'Poison dart frog', { plan: 'frog', len: 16, fur: '#1c7ed6', belly: '#74c0fc', mark: 'spots', dark: '#111111', croak: false },
     'A poison dart frog\'s bright colors say "don\'t eat me!" Wild ones get their poison from the bugs they eat; ones raised in zoos are not poisonous at all.'),
   fan('fan-toucan', 'bg-rainforest', 'uncommon', 'Toucan', { plan: 'bird', len: 18, fur: '#212529', belly: '#ffffff', beak: '#fd7e14', bill: 0.45, bigBill: true, face: '#ffd43b' },
-    'A toucan\'s huge beak is light as a feather: thin and hollow, with a honeycomb of bone inside. It also helps the toucan cool down, like a radiator.'),
-  fan('fan-sloth', 'bg-rainforest', 'rare', 'Three-toed sloth', { plan: 'quad', len: 20, fur: '#a08b6a', belly: '#d8c8a8', legs: 0.3, bulk: 0.55, ears: 'none', tail: 'none', mark: 'mask', dark: '#3b2a20', headR: 0.24 },
-    'Sloths move so slowly that tiny green algae grow in their fur, helping them hide in the trees. They climb down only about once a week, to poop!'),
+    'A toucan\'s huge beak is very light: a thin shell with a honeycomb of bone inside. It also helps the toucan cool down, like a radiator.'),
+  fan('fan-jaguar', 'bg-rainforest', 'rare', 'Jaguar', { plan: 'quad', len: 22, fur: '#e8a33a', belly: '#fff3bf', mark: 'spots', spotTag: 'dark', dark: '#3b2a20', tail: 'long', legs: 0.24, ears: 'round', bulk: 0.45, neck: 0.08, headR: 0.22, muzzle: true },
+    'Jaguars are the biggest cats in the Americas, and unlike most cats they love to swim. Their bite is so strong they can crack a turtle\'s shell.'),
   // Alaskan Fjord
   fan('fan-ermine', 'bg-fjord', 'common', 'Ermine', { plan: 'small', len: 16, fur: '#f8f9fa', belly: '#ffffff', tail: 'long', tailTag: 'dark', dark: '#212529', ears: 'round', sits: true },
     'The ermine is a little weasel that turns snow white in winter, all but the black tip of its tail. In summer its coat turns brown again.'),
   fan('fan-otter', 'bg-fjord', 'uncommon', 'Sea otter', { plan: 'swim', swim: 'float', len: 22, fur: '#6f5a48', belly: '#d8c8b0', accent: '#adb5bd' },
     'Sea otters have the thickest fur of any animal: up to a million hairs in a patch the size of a stamp. They wrap themselves in kelp so they don\'t drift off while they sleep.'),
-  fan('fan-arcticfox', 'bg-fjord', 'rare', 'Arctic fox', { plan: 'quad', len: 22, fur: '#f8f9fa', belly: '#ffffff', tail: 'bushy', legs: 0.32, ears: 'round', dark: '#343a40', muzzle: true },
+  fan('fan-arcticfox', 'bg-fjord', 'rare', 'Arctic fox', { plan: 'quad', len: 22, fur: '#f8f9fa', belly: '#ffffff', tail: 'bushy', legs: 0.2, bulk: 0.45, neck: 0.1, ears: 'point', dark: '#343a40', muzzle: true },
     'Arctic foxes can hear lemmings moving under the snow, then pounce nose first to catch them. Their fur is white in winter and brown in summer.'),
   // Rainbow Land (pretend critters, real cousins)
   fan('fan-gumdrop', 'bg-rainbow', 'common', 'Gumdrop snail', { plan: 'snail', len: 15, fur: '#ffd8a8', accent: '#f783ac', mark: 'spots' },
     'Pretend! Its cousin, the garden snail, has thousands of tiny teeth on a tongue shaped like a ribbon, which it uses to scrape up leaves.', 'Garden snail'),
   fan('fan-candybunny', 'bg-rainbow', 'uncommon', 'Candy bunny', { plan: 'hop', len: 15, fur: '#fcc2d7', belly: '#ffffff', dark: '#e64980', ears: 'long', eye: '#845ef7' },
     'Pretend! Its cousin, the real rabbit, has front teeth that never stop growing. Chewing on hay and twigs keeps them the right length.', 'Rabbit'),
-  fan('fan-unicorn', 'bg-rainbow', 'rare', 'Baby unicorn', { plan: 'quad', len: 22, fur: '#ffffff', belly: '#ffffff', horns: 'horn', hooves: true, legs: 0.5, extra: 'mane', accent: '#b197fc', tail: 'bushy', eye: '#845ef7' },
-    'Pretend! Long ago sailors sold narwhal tusks as "unicorn horns". The narwhal is a real whale, and its long spiral tusk is really a tooth!', 'Narwhal'),
+  { heading: 'Real story', ...fan('fan-unicorn', 'bg-rainbow', 'rare', 'Baby unicorn', { plan: 'quad', len: 22, fur: '#ffffff', belly: '#ffffff', horns: 'horn', hooves: true, legs: 0.5, extra: 'mane', accent: '#b197fc', tail: 'bushy', eye: '#845ef7' },
+    'Pretend! Long ago sailors sold narwhal tusks as "unicorn horns". The narwhal is a real whale, and its long spiral tusk is really a tooth!', 'Narwhal') },
   // Golden Galaxy (pretend critters, real cousins)
   fan('fan-starbeetle', 'bg-galaxy', 'common', 'Star beetle', { plan: 'bug', len: 14, fur: '#ffd43b', belly: '#fff3bf', dark: '#5f3dc4', mark: 'glow', accent: '#ffffff' },
     'Pretend! Its cousin is the firefly, a beetle that makes cold light: almost none of its energy turns into heat, so its glow never gets hot.', 'Firefly'),
@@ -174,10 +174,13 @@ export class FanWatch {
     const k = Math.min(1, age, Math.max(0, left));
     const fx = Math.round(edge + (x - edge) * k);
     const moving = age < 1 || left < 1;
-    const frame = moving ? (Math.floor(this.t * 8) % 2 ? 'walk' : 'stand') : 'pose';
+    const step = Math.floor(this.t * 8) % 2;
+    // birds' 'walk' frame is a wings-out flying pose, so they hop in standing, with a little bob
+    const bird = f.look.plan === 'bird' || f.look.plan === 'big-bird';
+    const frame = moving ? (step && !bird ? 'walk' : 'stand') : 'pose';
     const pic = critterPic(f.look, frame);
     const cheer = this.t - this.cheerAt < 1.2;
-    const hop = cheer ? Math.round(Math.abs(Math.sin((this.t - this.cheerAt) * 10)) * 3) : 0;
+    const hop = (cheer ? Math.round(Math.abs(Math.sin((this.t - this.cheerAt) * 10)) * 3) : 0) + (moving && bird && step ? 1 : 0);
     // it faces left; turn it to face the field when it sits on the left
     const faceRight = moving ? this.side > 0 === (age < 1) : this.side < 0;
     ctx.save();

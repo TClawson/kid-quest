@@ -546,11 +546,15 @@ export class Football {
   drawThings(ctx) {
     const blob = (cx, cy, rad, col, sq = 0.6) => { ctx.fillStyle = col; for (let yy = -Math.ceil(rad * sq); yy <= Math.ceil(rad * sq); yy += 1) { const w = Math.round(Math.sqrt(Math.max(0, rad * rad - (yy / sq) * (yy / sq)))); ctx.fillRect(cx - w, cy + yy, w * 2 + 1, 1); } };
     for (const o of this.things) {
-      if (o.kind === 'mud') { blob(o.x, o.y, o.r + 1, '#5c3a1e', 0.66); blob(o.x, o.y, o.r, '#7a5230', 0.66); ctx.fillStyle = '#a0784e'; ctx.fillRect(o.x - 3, o.y - 2, 3, 1); }
+      if (o.kind === 'mud') { blob(o.x, o.y, o.r + 1, '#2b1a0c', 0.66); blob(o.x, o.y, o.r, '#4a2f18', 0.66); ctx.fillStyle = '#c9a27a'; ctx.fillRect(o.x - 4, o.y - 2, 4, 1); ctx.fillRect(o.x + 2, o.y + 1, 2, 1); }
       else if (o.kind === 'ice') { blob(o.x, o.y, o.r, '#a5d8ff', 0.66); blob(o.x, o.y, o.r - 1, '#d0ebff', 0.66); ctx.fillStyle = '#ffffff'; ctx.fillRect(o.x - 5, o.y - 2, 4, 1); ctx.fillRect(o.x + 2, o.y + 1, 3, 1); }
       else if (o.kind === 'vent') {
-        blob(o.x, o.y, o.r, '#1b1430'); blob(o.x, o.y, o.r - 1, '#e8590c'); blob(o.x, o.y, o.r - 3, '#ffd43b');
-        for (let i = 0; i < 4; i += 1) { ctx.fillStyle = i % 2 ? '#dee2e6' : '#adb5bd'; ctx.fillRect(o.x - 2 + i, o.y - 3 - Math.round(((this.t * 20 + i * 4) % 12)), 2, 2); }
+        // a steam vent: a ring of rocks round a dark hole, white puffs rising (a boost, not a fire)
+        blob(o.x, o.y, o.r + 1, '#1b1430'); blob(o.x, o.y, o.r, '#868e96'); blob(o.x, o.y, o.r - 2, '#343a40');
+        for (let i = 0; i < 3; i += 1) {
+          const k = ((this.t * 1.4 + i / 3) % 1); const py = Math.round(o.y - 2 - k * 16); const px = Math.round(o.x + Math.sin(k * 6 + i) * 2); const pr = 2 + Math.round(k * 2);
+          blob(px, py, pr, k > 0.7 ? 'rgba(255,255,255,0.55)' : '#ffffff', 0.8);
+        }
       } else if (o.kind === 'well') {
         ctx.fillStyle = '#9775fa';
         for (let k = 0; k < 2; k += 1) { const rad = 4 + ((this.t * 8 + k * 7) % 14); const n = Math.round(rad * 6); for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(o.x + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(o.y + Math.sin((a / n) * Math.PI * 2) * rad * 0.6), 1, 1); }
@@ -603,8 +607,11 @@ export class Football {
     if (b.state === 'air') {
       const mx = Math.round(b.tx); const my = Math.round(b.ty);
       const mark = this.look.tex === 'snow' ? 'rgba(28,126,214,' : 'rgba(255,255,255,';
-      ring(mx, my, this.reach, `${mark}0.55)`, undefined, 1);
-      ctx.fillStyle = `${mark}0.9)`; ctx.fillRect(mx - 2, my, 5, 1); ctx.fillRect(mx, my - 1, 1, 3);
+      // a dark edge under the ring and cross, so they show on sand, stone and candy
+      ring(mx, my + 1, this.reach, 'rgba(27,20,48,0.5)', undefined, 1);
+      ring(mx, my, this.reach, `${mark}0.85)`, undefined, 1);
+      ctx.fillStyle = '#1b1430'; ctx.fillRect(mx - 3, my - 1, 7, 3); ctx.fillRect(mx - 1, my - 2, 3, 5);
+      ctx.fillStyle = `${mark}1)`; ctx.fillRect(mx - 2, my, 5, 1); ctx.fillRect(mx, my - 1, 1, 3);
     }
     // the CATCH button: gray until the throw, then red, yellow, green
     if (this.phase === 'play' && d.catcher === this.kid && (d.stage === 'wait' || d.stage === 'air')) {

@@ -536,33 +536,69 @@ export class Fishing {
       return;
     }
     const k = (t - e.on) / (e.off - e.on);
-    // the hot spot: a soft shimmer where the fish gather (so it's clear where to cast)
+    // the hot spot: a shimmer where the fish gather, and a bouncing arrow over it (cast here!)
     if (this.hotSpot()) {
-      const n = 40; const pulse = 0.25 + 0.15 * Math.sin(t * 4);
+      const n = 40; const pulse = 0.35 + 0.2 * Math.sin(t * 4);
       for (let a = 0; a < n; a += 1) if (a % 2) P(`rgba(255,243,191,${pulse})`, e.x + Math.cos(a / n * 6.283) * e.r * 0.7, e.y + Math.sin(a / n * 6.283) * Math.min(e.r * 0.35, 12), 1, 1);
+      const ay = S - 14 - Math.round(Math.abs(Math.sin(t * 5)) * 4); const ax = Math.round(e.x);
+      P('#1b1430', ax - 4, ay - 1, 9, 5); P('#1b1430', ax - 2, ay - 6, 5, 6);
+      P('#ffd43b', ax - 1, ay - 5, 3, 5); P('#ffd43b', ax - 3, ay, 7, 1); P('#ffd43b', ax - 2, ay + 1, 5, 1); P('#ffd43b', ax - 1, ay + 2, 3, 1); P('#ffd43b', ax, ay + 3, 1, 1);
+    }
+    if (this.ev.kind === 'tide') {
+      // the tide: the water rises up the shore, with foam rolling in along the top
+      const up = Math.round(Math.min(1, (t - e.on) / 1.5, (e.off - t) / 1.5) * 8);
+      const x0 = this.leftLimit; const x1 = this.W;
+      P('rgba(21,170,191,0.8)', x0, S - up, x1 - x0, up);
+      for (let x = Math.floor(x0); x < x1; x += 1) if ((x + Math.floor(t * 12)) % 6 < 4) P('#ffffff', x, S - up - (Math.sin(x * 0.4 + t * 5) > 0.3 ? 1 : 0), 1, 1);
+    }
+    if (look === 'shake') {
+      // the rumble: the sky flashes red and glowing rocks splash into the lake
+      if (t - e.on < 2.5 && Math.floor(t * 6) % 2) P('rgba(255,107,26,0.18)', 0, 0, this.W, this.H);
+      for (let i = 0; i < 6; i += 1) {
+        const ph = (t * 0.6 + i * 0.17) % 1; const rx = this.homeX + 30 + ((i * 97) % Math.max(40, this.W - this.homeX - 50));
+        const ry = S - 40 + ph * 40;
+        if (ry < S) { P('#1b1430', rx - 1, ry - 1, 4, 4); P(i % 2 ? '#ff6b1a' : '#ffd43b', rx, ry, 2, 2); P('rgba(173,181,189,0.7)', rx + 1, ry - 4, 1, 2); }
+        else P('#ffffff', rx - 2, S, 6, 1 / Z);
+      }
     }
     if (look === 'rings' || look === 'sprinkles' || look === 'goo') {
       for (let i = 0; i < (look === 'sprinkles' ? 24 : 6); i += 1) {
         const ph = (t * 0.7 + i * 0.37) % 1; const ox = Math.sin(i * 12.9) * e.r * 0.8;
         if (look === 'rings') {
           const rad = 1 + ph * 8;
-          for (let a = 0; a < 20; a += 1) P(`rgba(255,255,255,${0.9 - ph * 0.7})`, e.x + ox + Math.cos(a / 20 * 6.283) * rad, S + 1 + Math.sin(a / 20 * 6.283) * rad * 0.3, 1, 1 / Z);
+          for (let a = 0; a < 24; a += 1) P(`rgba(255,255,255,${1 - ph * 0.6})`, e.x + ox + Math.cos(a / 24 * 6.283) * rad, S + 1 + Math.sin(a / 24 * 6.283) * rad * 0.3, 1, 1);
           // a mayfly flutters above
           const mx = e.x + ox + Math.sin(t * 3 + i) * 3; const my = S - 4 - ph * 8;
           P('#1b1430', mx - 1, my, 2, 1); P('#fff3bf', mx - 1, my - 1, 1, 1); P('#fff3bf', mx + 1, my - 1, 1, 1);
         } else if (look === 'sprinkles') { const sy = S - 12 + ph * 16; P(['#ff6b6b', '#ffd43b', '#4dabf7', '#69db7c', '#b197fc'][i % 5], e.x + ox, sy, 1, 2); if (sy > S) P('#ffffff', e.x + ox - 1, S, 3, 1 / Z); }
-        else { const by = S + 34 - ph * 34; P('#1b1430', e.x + ox * 0.5 - 1, by - 1, 4, 4); P('rgba(178,242,187,0.95)', e.x + ox * 0.5, by, 2, 2); }
+        else {
+          // round goo bubbles rising, and a goo spout at the top
+          const by = S + 34 - ph * 34; const gx = e.x + ox * 0.5;
+          P('#1b1430', gx - 1, by - 2, 4, 6); P('#1b1430', gx - 2, by - 1, 6, 4); P('#8ce99a', gx - 1, by - 1, 4, 4); P('#ffffff', gx - 1, by - 1, 1, 1);
+          if (i === 0) { const sh = 4 + Math.round(Math.abs(Math.sin(t * 3)) * 6); P('#1b1430', e.x - 2, S - sh - 1, 5, sh + 1); P('#69db7c', e.x - 1, S - sh, 3, sh); P('#b2f2bb', e.x - 3, S - sh - 2, 2, 2); P('#b2f2bb', e.x + 2, S - sh - 1, 2, 2); }
+        }
       }
     } else if (look === 'bread') {
       for (let i = 0; i < 9; i += 1) { const bx = e.x - 12 + i * 3 + Math.sin(t + i) * 1; const by = S + 1 + (i % 3) * 2 + k * 10; P('#1b1430', bx - 1, by - 1, 4, 3); P(i % 2 ? '#e9b96e' : '#c98a4b', bx, by, 2, 1); }
     } else if (look === 'fruit') {
-      P('#8b5a2b', e.x - 6, S - 1, 12, 2); P('#ff6b6b', e.x - 4, S - 3, 2, 2); P('#ffd43b', e.x - 1, S - 3, 3, 2); P('#ff922b', e.x + 3, S - 3, 2, 2);
+      // a little raft of leaves piled with fruit
+      const bob = Math.sin(t * 3) > 0 ? 0 : 1; const fx = Math.round(e.x); const fy = S - 1 + bob;
+      P('#1b1430', fx - 11, fy - 1, 22, 4); P('#2f9e44', fx - 10, fy, 20, 2); P('#8ce99a', fx - 9, fy, 6, 1);
+      for (const [dx, c] of [[-8, '#ff6b6b'], [-3, '#ffd43b'], [2, '#ff922b'], [6, '#e64980']]) { P('#1b1430', fx + dx - 1, fy - 5, 5, 5); P(c, fx + dx, fy - 4, 3, 3); P('#ffffff', fx + dx, fy - 4, 1, 1); }
     } else if (look === 'turtle') {
-      const tx = e.x; const ty = e.y; const fl = Math.sin(t * 4) > 0 ? 1 : 0;
-      P('#1b1430', tx - 6, ty - 3, 12, 6); P('#2b8a3e', tx - 5, ty - 2, 10, 4); P('#69db7c', tx - 3, ty - 2, 2, 1); P('#5c940d', tx + 1, ty, 2, 1);
-      P('#94d82d', tx - 9, ty - 1, 3, 2); P('#1b1430', tx - 9, ty - 1, 1, 1);
-      P('#94d82d', tx - 4, ty + 3 - fl, 3, 1 + fl); P('#94d82d', tx + 2, ty + 3 - fl, 3, 1 + fl);
+      // a sea turtle seen from above: a big domed shell with plates, four flippers, a head
+      const tx = Math.round(e.x); const ty = Math.round(e.y); const fl = Math.sin(t * 4) > 0 ? 2 : 0;
+      for (const [dx, dy, w, h] of [[-8, -6 - fl, 5, 3], [4, -6 - fl, 5, 3], [-7, 5 + fl, 4, 2], [4, 5 + fl, 4, 2]]) { P('#1b1430', tx + dx - 1, ty + dy - 1, w + 2, h + 2); P('#d8c88a', tx + dx, ty + dy, w, h); }
+      P('#1b1430', tx - 16, ty - 3, 6, 6); P('#d8c88a', tx - 15, ty - 2, 4, 4); P('#1b1430', tx - 15, ty - 1, 1, 1);
+      P('#1b1430', tx - 11, ty - 6, 20, 12); P('#1b1430', tx - 9, ty - 7, 16, 14);
+      P('#8a6a2a', tx - 10, ty - 5, 18, 10); P('#8a6a2a', tx - 8, ty - 6, 14, 12);
+      for (const [dx, dy] of [[-7, -4], [-2, -5], [3, -4], [-7, 1], [-2, 2], [3, 1]]) P('#c9a24a', tx + dx, ty + dy, 4, 3);
+      P('#5c3a1e', tx - 3, ty - 1, 2, 2);
     } else if (look === 'star') {
+      // the star streaks down the sky into the lake, then sparkles where it fell
+      const d = t - e.on;
+      if (d < 1) { const sx = e.x + (1 - d) * 60; const sy = S - (1 - d) * 50; for (let j = 0; j < 14; j += 1) P(j < 3 ? '#ffffff' : j < 8 ? '#ffd43b' : 'rgba(255,212,59,0.5)', sx + j * 1.2, sy - j, 2, 2); }
+      for (let i = 0; i < 8; i += 1) { const a = t * 1.5 + i * 0.785; const rr = 5 + (i % 2) * 3; P(i % 2 ? '#fff3bf' : '#ffd43b', e.x + Math.cos(a) * rr, S + 2 + Math.sin(a) * rr * 0.4, 2, 1); }
       for (let i = 0; i < 5; i += 1) P(i % 2 ? '#fff3bf' : '#ffd43b', e.x + Math.cos(t * 2 + i * 1.26) * 4, e.y + Math.sin(t * 2 + i * 1.26) * 2.5, 1, 1);
     }
   }
@@ -1090,14 +1126,21 @@ export class Fishing {
   /** Red short, yellow medium, green far; a better rod widens green a little. */
   zoneOf(m, tier = this.rodTier) { const g = 0.82 - 0.04 * (tier - 1); return m < 0.45 ? 'red' : m < g ? 'yellow' : 'green'; }
 
-  cast(L, m = this.meter(L)) {
-    const tier = L === this.lines.vis ? this.visTier : this.rodTier;
+  /** Where (lake x) a cast with the needle at m comes down. */
+  landAt(m, tier = this.rodTier) {
     const zone = this.zoneOf(m, tier);
     const g = 0.82 - 0.04 * (tier - 1);
     const reach = this.W - this.homeX - 14;
     const span = { red: [0.12, 0.32], yellow: [0.38, 0.62], green: [0.7, 0.95] }[zone];
     const k = zone === 'red' ? m / 0.45 : zone === 'yellow' ? (m - 0.45) / (g - 0.45) : (m - g) / (1 - g);
-    const land = this.homeX + 14 + reach * (span[0] + (span[1] - span[0]) * clamp(k, 0, 1));
+    return this.homeX + 14 + reach * (span[0] + (span[1] - span[0]) * clamp(k, 0, 1));
+  }
+
+  cast(L, m = this.meter(L)) {
+    const tier = L === this.lines.vis ? this.visTier : this.rodTier;
+    const zone = this.zoneOf(m, tier);
+    const reach = this.W - this.homeX - 14;
+    const land = this.landAt(m, tier);
     const [rx, ry] = this.rodTip(L.who);
     L.state = 'air'; L.from = [rx, ry]; L.to = [Math.round(land), this.surface]; L.t0 = this.t; L.flight = 0.5 + 0.5 * (land - rx) / reach;
     L.zone = zone; L.tried = new Set(); L.snagged = null; L.fish = null; L.tension = 0;
@@ -1470,7 +1513,7 @@ export class Fishing {
     const secs = Math.ceil(this.left);
     text(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, (this.chips()[0].y + 16) * S, u * 1.3, secs <= 10 && this.phase === 'play' ? '#ff8787' : '#e9ecef');
     // the lake's event, while it's on
-    if (this.eventOn && this.phase === 'play') text(`${this.ev.name}! ${Math.ceil(this.event.off - this.t)} s`, W / 2, SY + u * 2.2, u * 1.6, '#ffd43b');
+    if (this.eventOn && this.phase === 'play') text(`${this.ev.name}! ${Math.ceil(this.event.off - this.t)} s`, W / 2, Y(this.H) - u * 1.6, u * 1.5, '#ffd43b'); // along the bottom, off the water's surface
     // points
     const ch0 = this.chips()[0]; const ch2 = this.chips()[2];
     ctx.textAlign = 'right'; text(`${this.kid.name} ${this.points.kid}`, (ch0.x - 3) * S, (ch0.y + 6) * S, u * 1.5, '#ffd43b');
@@ -1493,6 +1536,12 @@ export class Fishing {
       const m = this.meter(L);
       const mx = X(this.homeX) + 4 * S; const my = SY - 22 * S; const mw = u * 18; const mh = u * 1.6;
       drawMeter(ctx, (k) => this.zoneOf(k), m, mx, my, mw, mh, S);
+      // the lake's hot spot: a gold bar over the part of the meter that lands in it
+      const hot = this.hotSpot();
+      if (hot) {
+        ctx.fillStyle = Math.floor(this.t * 4) % 2 ? '#ffd43b' : '#fff3bf';
+        for (let i = 0; i < 100; i += 1) if (Math.abs(this.landAt((i + 0.5) / 100) - hot.x) < hot.r * 0.8) ctx.fillRect(mx + (i * mw) / 100, my - u * 0.9, mw / 100 + 0.5, u * 0.6);
+      }
       ctx.textAlign = 'left'; text('short', mx + u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'right'; text('far', mx + mw - u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'center';
     }
     // line tension while a fish is on

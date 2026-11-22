@@ -237,6 +237,16 @@ const PLANS = {
       const eye = head(b, { ...look, snout: 0.4 }, bx - L * 0.15, by, L * 0.24, 'pose');
       return { feet: Math.round(by + L * 0.25), eye };
     }
+    if (look.roo) { // a kangaroo: upright, a thick tail that props it up, big back feet
+      const jump = frame === 'walk' ? L * 0.12 : 0;
+      thick(b, Math.round(bx + L * 0.2), Math.round(by + L * 0.1 - jump), Math.round(bx + L * 0.75), feet - 1 - Math.round(jump * 0.5), Math.max(2, Math.round(L * 0.12)), 'fur');
+      ell(b, bx + L * 0.05, feet - 1 - jump, L * 0.3, L * 0.07, 'fur');
+      ell(b, bx, by - jump, L * 0.26, L * 0.4, 'fur');
+      if (look.belly) ell(b, bx - L * 0.08, by + L * 0.05 - jump, L * 0.14, L * 0.26, 'belly');
+      thick(b, Math.round(bx - L * 0.2), Math.round(by - L * 0.15 - jump), Math.round(bx - L * 0.32), Math.round(by + L * 0.02 - jump), 2, 'fur');
+      const eye = head(b, { ...look, snout: 0.5, ears: look.ears || 'point' }, bx - L * 0.14, by - L * 0.5 - jump, L * 0.18, frame);
+      return { feet, eye };
+    }
     const stretch = frame === 'walk' ? 1.25 : 1;
     ell(b, bx + L * 0.05, by + L * 0.02, L * 0.42 * stretch, L * 0.32 / stretch, 'fur');
     // back foot and front paw
@@ -270,6 +280,12 @@ const PLANS = {
     const sw = frame === 'walk' ? L * 0.08 : 0;
     for (const [i, lx] of [bx - L * 0.28, bx + L * 0.22].entries()) thick(b, Math.round(lx), Math.round(by + L * 0.1), Math.round(lx + (i ? sw : -sw)), feet, 2, 'dark');
     ell(b, bx, by, L * 0.4, L * (look.bodyH ?? 0.2), 'fur');
+    if (look.spines) { // a hedgehog: a spiky coat over the back
+      const bh = L * (look.bodyH ?? 0.2);
+      for (let k = -0.32; k <= 0.42; k += 0.09) { const sx = bx + k * L; const sy = by - bh * Math.sqrt(Math.max(0, 1 - (k / 0.42) ** 2)) * 0.95; thick(b, Math.round(sx), Math.round(sy + 2), Math.round(sx + 1), Math.round(sy - 2), 1, 'dark'); }
+      ell(b, bx + L * 0.05, by - bh * 0.15, L * 0.32, bh * 0.7, 'dark');
+      for (let k = 0; k < 7; k += 1) px(b, Math.round(bx - L * 0.2 + k * L * 0.08), Math.round(by - bh * 0.3 + (k % 2) * 2), 'fur');
+    }
     if (look.belly) ell(b, bx - L * 0.05, by + L * 0.1, L * 0.28, L * 0.09, 'belly');
     if (look.mark === 'stripes') for (let k = 0; k < 3; k += 1) thick(b, Math.round(bx - L * 0.25), Math.round(by - L * 0.12 + k * 3), Math.round(bx + L * 0.3), Math.round(by - L * 0.12 + k * 3), 1, k === 1 ? 'belly' : 'dark');
     tail(b, look, bx + L * 0.35, by - L * 0.05, L * 0.22, frame);
@@ -409,6 +425,21 @@ const PLANS = {
     const wy = Math.round(L * 0.9); // the water line
     const bx = L * 0.8;
     const kind = look.swim || 'head'; // 'head' (seal, otter), 'back' (whale, orca, dolphin), 'float' (otter on its back)
+    if (kind === 'leap') { // a dolphin jumping in an arc: a beak, a smile, a fin and a fluke
+      const hgt = L * (frame === 'walk' ? 0.32 : 0.42); const th = Math.max(3, Math.round(L * 0.13));
+      const pt = (t) => [bx - L * 0.5 + t * L, wy - Math.sin(t * Math.PI) * hgt];
+      for (let t = 0.08; t <= 0.92; t += 0.02) { const [x, y] = pt(t); const w = Math.round(th * (0.55 + Math.sin(t * Math.PI) * 0.5)); b.rect(Math.round(x), Math.round(y - w / 2), 1, w, 'fur', 'fur'); }
+      for (let t = 0.2; t <= 0.8; t += 0.03) { const [x, y] = pt(t); b.set(Math.round(x), Math.round(y + th * 0.4), 'belly', 'belly'); }
+      const [hx, hy] = pt(0.12); const [fx, fy] = pt(0.5); const [tx, ty] = pt(0.9);
+      thick(b, Math.round(hx - 1), Math.round(hy + 1), Math.round(hx - 4), Math.round(hy + 3), 2, 'fur'); // the beak
+      b.set(Math.round(hx - 1), Math.round(hy + 2), INK, 'smile'); b.set(Math.round(hx), Math.round(hy + 2), INK, 'smile');
+      b.set(Math.round(hx + 1), Math.round(hy - 1), INK, 'eye');
+      for (let k = 0; k < 4; k += 1) b.rect(Math.round(fx - k * 0.4), Math.round(fy - th * 0.5 - k), Math.max(1, 3 - k), 1, 'dark', 'dark');
+      for (const s of [-1, 1]) thick(b, Math.round(tx), Math.round(ty), Math.round(tx + 3), Math.round(ty + s * 3), 1, 'fur');
+      const after = [];
+      for (let x = Math.round(bx - L * 0.6); x <= Math.round(bx + L * 0.6); x += 1) if ((x & 3) !== 3) after.push([x, wy + 1, '#ffffff']);
+      return { feet: wy, eye: [Math.round(hx + 1), Math.round(hy - 1)], after };
+    }
     if (kind === 'back') {
       const arch = frame === 'walk' ? 0.6 : frame === 'pose' ? 1 : 0.8;
       for (let x = -L * 0.5; x <= L * 0.5; x += 1) { const hgt = Math.round(L * (look.back ?? 0.16) * arch * Math.cos((x / L) * Math.PI)); for (let y = 0; y < hgt; y += 1) b.set(Math.round(bx + x), wy - y, 'fur', 'fur'); }
@@ -501,6 +532,7 @@ const PLANS = {
     if (look.mark === 'stripes') for (let k = 0; k < 4; k += 1) px(b, Math.round(bx - L * 0.15 + k * 3), Math.round(by), 'dark');
     const hx = bx - L * 0.33; const hy = by - (frame === 'pose' ? L * 0.08 : L * 0.02);
     ell(b, hx, hy, L * 0.1, L * 0.065, 'fur');
+    if (look.throat) ell(b, hx + L * 0.02, hy + L * 0.06, L * 0.07, L * 0.04, 'throat', look.throat);
     if (frame === 'pose') { b.set(Math.round(hx - L * 0.05), Math.round(hy - 1), INK, 'eye'); b.set(Math.round(hx + L * 0.03), Math.round(hy - 1), INK, 'eye'); }
     else b.set(Math.round(hx - L * 0.03), Math.round(hy - 1), INK, 'eye');
     return { feet, eye: [Math.round(hx), Math.round(hy - 1)] };
@@ -560,6 +592,11 @@ const PLANS = {
     const bx = L * 0.8; const by = L * 0.8; const feet = Math.round(by + L * 0.2);
     for (let k = 0; k < 3; k += 1) for (const s of [-1, 1]) thick(b, Math.round(bx + s * L * 0.15), Math.round(by), Math.round(bx + s * L * (0.32 + k * 0.05)), Math.round(feet - (k === 1 && frame === 'walk' ? 1 : 0)), 1, 'fur');
     ell(b, bx, by, L * 0.28, L * 0.15, 'fur');
+    if (look.mark === 'shell') { // a hermit crab's borrowed snail shell on its back
+      const sc = look.shellCol || '#e9d8b4'; const sx = bx + L * 0.12; const sy = by - L * 0.22;
+      ell(b, sx, sy, L * 0.3, L * 0.26, 'shell', sc);
+      for (let a = 0; a < 9; a += 0.5) b.set(Math.round(sx + Math.cos(a) * a * 0.55), Math.round(sy + Math.sin(a) * a * 0.55), '#8d6e63', 'shellLine');
+    }
     const up = frame === 'pose' || frame === 'walk';
     for (const s of [-1, 1]) {
       const cx = bx + s * L * 0.35; const cy = by - (up ? L * 0.3 : L * 0.05);
@@ -575,8 +612,14 @@ const PLANS = {
     const L = look.len;
     const bx = L * 0.7; const by = L * 0.9; const feet = Math.round(by + 1);
     thick(b, Math.round(bx - L * 0.45), feet - 1, Math.round(bx + L * 0.3), feet - 1, 2, 'belly');
-    ell(b, bx, by - L * 0.2, L * 0.26, L * 0.24, 'fur');
-    for (let a = 0; a < 9; a += 0.5) px(b, Math.round(bx + Math.cos(a) * a * 0.55), Math.round(by - L * 0.2 + Math.sin(a) * a * 0.55), 'dark');
+    if (look.shell === false) { // a sea slug: a soft body with frilly gills on the back
+      ell(b, bx - L * 0.05, by - L * 0.06, L * 0.4, L * 0.1, 'fur');
+      for (let k = 0; k < 5; k += 1) { const gx = bx - L * 0.25 + k * L * 0.12; thick(b, Math.round(gx), Math.round(by - L * 0.12), Math.round(gx + (k % 2 ? 1 : -1)), Math.round(by - L * 0.3 - (k % 2) * 2), 2, k % 2 ? 'accent' : 'fur'); }
+      if (look.mark === 'spots') for (let k = 0; k < 4; k += 1) px(b, Math.round(bx - L * 0.3 + k * L * 0.15), Math.round(by - L * 0.05), 'accent');
+    } else {
+      ell(b, bx, by - L * 0.2, L * 0.26, L * 0.24, 'fur');
+      for (let a = 0; a < 9; a += 0.5) px(b, Math.round(bx + Math.cos(a) * a * 0.55), Math.round(by - L * 0.2 + Math.sin(a) * a * 0.55), 'dark');
+    }
     const out = frame === 'pose' ? L * 0.3 : L * 0.2;
     thick(b, Math.round(bx - L * 0.42), feet - 2, Math.round(bx - L * 0.45), Math.round(feet - 2 - out), 1, 'belly');
     b.set(Math.round(bx - L * 0.45), Math.round(feet - 3 - out), INK, 'eye');
