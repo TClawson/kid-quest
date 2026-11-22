@@ -31,6 +31,9 @@
 import { Player, playLook, rng, canvas, cellsCanvas, clamp, HAPPY } from './play.js';
 import { ballCells } from './avatar.js';
 import { ZONE_COLORS, needle, zoneAt as zoneOf, pickZone, drawMeter, addPop } from './meter.js';
+import { paintBackdrop, paintGround, fieldLook, shadeFor, sprite } from './fieldlooks.js';
+import { FOOTBALL_TWISTS, twistFor } from './mapplay.js';
+import { FanWatch } from './fans.js';
 
 export const GAME_SECONDS = 90;
 
@@ -126,6 +129,12 @@ export class Football {
     this.endX = Math.round(this.W * 0.8);
     this.tier = Math.max(opts.kid.gear?.football || 1, opts.visitor.gear?.football || 1);
     this.reach = reachFor(this.tier);
+    // the kid's map: its own field and twist (fieldlooks.js, mapplay.js)
+    this.map = opts.map || 'bg-meadow';
+    this.look = fieldLook(this.map); this.tw = twistFor(FOOTBALL_TWISTS, this.map);
+    this.things = [];
+    // the map's critters come to watch (fans.js)
+    this.fans = new FanWatch({ map: this.map, r: this.r, dry: opts.fanDry || 0, onFan: opts.onFan, onSeen: opts.onFanSeen });
     this.kid = new Player(playLook(opts.kid.buddy, opts.kid.gear, 'football'), opts.kid.name, 11, this.qbX, this.cy);
     this.vis = new Player(playLook(opts.visitor.buddy, opts.visitor.gear, 'football'), opts.visitor.name, 23, this.qbX + 12, this.cy + 12);
     this.kid.moves = new Set(opts.kid.moves || []); this.vis.moves = new Set(opts.visitor.moves || []);
@@ -154,6 +163,8 @@ export class Football {
     const cones = {};
     for (const k of Object.keys(ROUTES)) cones[k] = [Math.round(this.W * ROUTES[k].at), Math.round(f.y0 + 20 + this.r() * (f.y1 - f.y0 - 28))];
     this.down = { stage: 'pick', thrower, catcher: c, at: this.t, cones };
+    if (this.tw.banner) this.down.banner = Object.keys(ROUTES)[Math.floor(this.r() * 3)];
+    this.placeThings(cones);
     thrower.goTo(this.qbX, this.cy); c.goTo(this.qbX + 12, this.cy + 12);
     this.ball.state = 'held';
   }
@@ -245,7 +256,11 @@ export class Football {
     d.land = [clamp(cx + Math.cos(a) * miss, this.qbX + 24, f.x1 - 6), clamp(cy + Math.sin(a) * miss, f.y0 + 16, f.y1 - 2)];
     const c = d.catcher;
     d.flight = ROUTES[d.route].flight * (FLIGHT_MIN + this.r() * (FLIGHT_MAX - FLIGHT_MIN)); // each throw is a little faster or slower
-    d.wait = waitFor(Math.hypot(cx - c.x, cy - c.y), Math.hypot(d.land[0] - cx, d.land[1] - cy), d.flight);
+    // floaty water hangs every throw; on the moon deep throws fly sky high
+    d.flight *= (this.tw.hang || 1) * (d.route === 'deep' && this.tw.moonDeep ? this.tw.moonDeep : 1);
+    // sand, mud and ice slow the catcher: the thrower waits that much longer
+    const slow = this.tw.slow || 1;
+    d.wait = waitFor(Math.hypot(cx - c.x, cy - c.y) / slow, Math.hypot(d.land[0] - cx, d.land[1] - cy) / slow, d.flight);
     d.throwAt = this.t + d.wait;
     d.thrower.brain.set({ focus: 0.7 });
     this.pop(zone === 'green' ? 'Perfect aim!' : zone === 'yellow' ? 'A little off...' : 'Way off!', d.thrower.x, d.thrower.y + 8, ZONE_COLORS[zone]);
@@ -293,6 +308,7 @@ export class Football {
       if (this.left <= 0 && (d.stage === 'pick' || d.stage === 'aim')) this.end();
     }
     for (const p of [this.kid, this.vis]) {
+      this.footing(p);
       p.move(dt);
       if (Math.hypot(p.tx - p.x, p.ty - p.y) < 1 && this.ball.state === 'air') p.face = this.ball.x < p.x ? -1 : 1;
       p.lookAt = this.ball.state === 'held' ? null : [this.ball.x, this.ball.y - this.ball.h];
@@ -309,6 +325,8 @@ export class Football {
       this.pop('Spike!', d.catcher.x, d.catcher.y - 28, '#ffd43b');
       d.catcher.brain.impulse('kick', 1);
     }
+    this.stepDog(dt);
+    this.fans.step(dt, this.phase === 'play');
     this.stepBall(dt);
   }
 
@@ -316,7 +334,15 @@ export class Football {
   wander() {
     const d = this.down; const b = this.ball; const f = this.f;
     const [dx, dy] = wanderAt(d.zone, Math.min(this.t, d.catchAt) - b.t0, d.ph);
-    b.tx = clamp(d.land[0] + dx, this.qbX + 24, f.x1 - 6); b.ty = clamp(d.land[1] + dy, f.y0 + 16, f.y1 - 2);
+    let [px, py] = [0, 0];
+    const well = this.things.find((o) => o.kind === 'well');
+    if (well && !d.bounced) {
+      // the gravity well pulls the landing spot toward it, a little at a time
+      const gx = well.x - d.land[0]; const gy = well.y - d.land[1]; const gd = Math.hypot(gx, gy) || 1;
+      const k = Math.min(gd * 0.6, 18, this.tw.well * (Math.min(this.t, d.catchAt) - b.t0));
+      px = (gx / gd) * k; py = (gy / gd) * k;
+    }
+    b.tx = clamp(d.land[0] + dx + px, this.qbX + 24, f.x1 - 6); b.ty = clamp(d.land[1] + dy + py, f.y0 + 16, f.y1 - 2);
     if (d.catcher === this.vis) this.vis.goTo(b.tx, b.ty);
   }
 
@@ -353,13 +379,19 @@ export class Football {
     // what went wrong with the tap, so the kid can tell it apart from standing in the wrong spot
     const badTap = c === this.kid && d.tap !== 'green' && d.tap !== 'yellow';
     if (badTap) timing = d.tap === 'early' ? 'Too early!' : 'Too late!';
+    // Rainbow Land: a fumble at the spot bounces up off the candy grass for one more try
+    if (this.tw.bouncy && near && !d.bounced) {
+      const fumble = c === this.kid ? d.tap === 'yellow' ? this.r() >= 0.5 : d.tap !== 'green' : this.r() >= visCatch(d.route, d.zone, this.tier);
+      if (fumble) { this.bounceUp(); return; }
+      if (c === this.kid && d.tap === 'yellow') d.tap = 'green'; else d.sure = true;
+    }
     if (!near) { caught = false; words = 'Missed!'; }
     else if (c === this.kid) {
       if (d.tap === 'green') { caught = true; words = 'Great catch!'; }
       else if (d.tap === 'yellow') { caught = this.r() < 0.5; words = caught ? 'Bobbled... got it!' : 'Fumbled!'; }
       else { caught = false; words = timing; timing = ''; }
     } else {
-      caught = this.r() < visCatch(d.route, d.zone, this.tier);
+      caught = d.sure || this.r() < visCatch(d.route, d.zone, this.tier);
       words = caught ? 'Caught it!' : 'Dropped!';
     }
     // wrong spot AND a bad tap: say both
@@ -377,10 +409,13 @@ export class Football {
     this.plays += 1;
     if (caught) {
       const R = ROUTES[d.route];
-      this.score += R.pts; this.caught += 1;
+      const pts = this.pts(d.route) * (d.banner === d.route ? 2 : 1);
+      const fw = this.fans.great(); if (fw) this.pop(fw, this.W * this.fans.seat, this.f.y0 + 8, '#ff8fa3', true);
+      this.score += pts; this.caught += 1;
       b.state = 'held';
       const td = d.route === 'deep';
-      this.pop(td ? `Touchdown! +${R.pts}` : `+${R.pts}`, d.catcher.x, d.catcher.y - 40, '#ffd43b', true);
+      this.pop(td ? `Touchdown! +${pts}` : `+${pts}`, d.catcher.x, d.catcher.y - 40, '#ffd43b', true);
+      if (d.banner === d.route) this.pop('Royal catch! x2', d.catcher.x, d.catcher.y - 52, '#e599f7');
       d.catcher.brain.impulse('cheer', 1); d.thrower.brain.impulse('cheer', 1);
       d.nextAt = this.t + (td ? 2.1 : 1.5);
       this.sound = td ? 'goal' : 'catch';
@@ -388,6 +423,8 @@ export class Football {
       this.buzz = 30;
     } else {
       if (why !== 'slow') { b.state = 'loose'; b.vh = -30; b.vx = (b.tx - b.x0) / b.T * 0.25; b.vy = (b.ty - b.y0) / b.T * 0.25; }
+      // the village dog fetches a dropped ball
+      if (this.tw.dog && why !== 'slow') { this.dog = { t0: this.t, x: this.W + 6, y: b.ty, to: [b.tx, b.ty], got: false }; d.nextAt = this.t + 2.2; }
       d.catcher.brain.impulse('surprise', 1);
       d.nextAt = this.t + 1.3;
       this.sound = 'drop';
@@ -405,30 +442,95 @@ export class Football {
     this.sound = 'over';
   }
 
+  /** A map's points for a route (the moon's deep throw is worth more). */
+  pts(route) { return route === 'deep' && this.tw.deep ? this.tw.deep : ROUTES[route].pts; }
+
+  /** Puddles, vents, ice and the gravity well for a play, kept away from the cones and the line. */
+  placeThings(cones) {
+    const tw = this.tw; const f = this.f;
+    this.things = [];
+    const free = (x, y, rad) => Object.values(cones).every(([cx, cy]) => Math.hypot(cx - x, cy - y) > rad + 12) && this.things.every((o) => Math.hypot(o.x - x, o.y - y) > o.r + rad + 4);
+    const add = (kind, n, rad) => {
+      for (let i = 0, tries = 0; i < n && tries < 60; tries += 1) {
+        const x = this.qbX + 30 + this.r() * (this.endX - this.qbX - 36); const y = f.y0 + 12 + this.r() * (f.y1 - f.y0 - 18);
+        if (!free(x, y, rad)) continue;
+        this.things.push({ kind, x: Math.round(x), y: Math.round(y), r: rad }); i += 1;
+      }
+    };
+    if (tw.mud) add('mud', tw.mud, 9);
+    if (tw.ice) add('ice', tw.ice, 12);
+    if (tw.vents) add('vent', tw.vents, 5);
+    if (tw.well) add('well', 1, 6);
+  }
+
+  /** How fast a buddy runs where it is standing: sand, mud, ice, a steam boost. */
+  footing(p) {
+    const tw = this.tw;
+    let k = 1;
+    if (tw.sand) k = p.y > this.f.y1 - 14 ? tw.sand.wet : tw.sand.soft;
+    let grip = 0;
+    for (const o of this.things) {
+      const near = Math.hypot(p.x - o.x, (p.y - o.y) * 1.5) < o.r;
+      if (!near) continue;
+      if (o.kind === 'mud') k *= tw.mudSlow;
+      if (o.kind === 'ice') grip = 2.6;
+      if (o.kind === 'vent' && !(p.boostUntil > this.t)) { p.boostUntil = this.t + 1.5; this.pop('Steam boost!', p.x, p.y - 30, '#ffa94d'); }
+    }
+    if (p.boostUntil > this.t) k *= tw.boost;
+    p.speed = RUN * k; p.grip = grip;
+  }
+
+  /** Rainbow Land: the fumbled ball bounces up off the candy grass for one more catch. */
+  bounceUp() {
+    const d = this.down; const b = this.ball;
+    d.bounced = true; d.landed = false; d.tried = false; d.tap = null; d.zone = 'green';
+    b.x0 = b.tx; b.y0 = b.ty; b.h0 = HANDS; b.t0 = this.t; b.T = 0.7;
+    d.land = [b.tx, b.ty];
+    b.vh = (GRAV * b.T) / 2;
+    d.catchAt = this.t + b.T;
+    this.pop('Boing! Again!', b.tx, b.ty - 26, '#f783ac', true);
+    this.sound = 'board';
+  }
+
+  /** The village dog trots in, picks up the ball and brings it back: +2. */
+  stepDog(dt) {
+    const g = this.dog; if (!g) return;
+    const [tx, ty] = g.got ? [this.qbX, this.cy + 20] : g.to;
+    const dx = tx - g.x; const dy = ty - g.y; const dd = Math.hypot(dx, dy);
+    if (dd > 2) { g.x += (dx / dd) * 110 * dt; g.y += (dy / dd) * 110 * dt; g.face = dx > 0 ? 1 : -1; }
+    else if (!g.got) { g.got = true; this.score += this.tw.dog; this.pop(`Good dog! +${this.tw.dog}`, g.x, g.y - 14, '#ffd43b', true); this.sound = 'catch'; }
+    if (g.got) { this.ball.x = g.x + 3 * (g.face || 1); this.ball.y = g.y; this.ball.h = 2; this.ball.state = 'dog'; }
+    if (this.t - g.t0 > 2.2) { this.dog = null; if (this.ball.state === 'dog') this.ball.state = 'held'; }
+  }
+
   // ---------- drawing ----------
   paintField() {
     const W = this.W; const H = this.H; const c = canvas(W, H); const x = c.getContext('2d');
-    const r = rng(7); const f = this.f;
-    // the stands along the top
-    x.fillStyle = '#495057'; x.fillRect(0, 0, W, H);
-    for (let yy = 1; yy < f.y0 - 2; yy += 3) { x.fillStyle = '#868e96'; x.fillRect(0, yy + 2, W, 1); }
-    for (let i = 0; i < (W * f.y0) / 7; i += 1) {
-      x.fillStyle = ['#ff8787', '#ffd43b', '#74c0fc', '#b2f2bb', '#e599f7', '#ffffff'][Math.floor(r() * 6)];
-      x.fillRect(Math.floor(r() * W), Math.floor(r() * (f.y0 - 2)), 1, 1);
+    const r = rng(7); const f = this.f; const look = this.look;
+    // the map's backdrop along the top, then its ground
+    paintBackdrop(x, this.map, W, f.y0 - 1);
+    paintGround(x, this.map, 0, f.y0, W, H - f.y0);
+    if (look.tex === 'mown') for (let xx = 0; xx < W; xx += 1) { x.fillStyle = Math.floor(xx / 12) % 2 ? '#37b24d' : '#2f9e44'; x.fillRect(xx, f.y0, 1, H - f.y0); }
+    // Sunset Beach: the surf along the bottom, wet sand above it (fast running)
+    if (this.tw.sand) {
+      x.fillStyle = '#d9a35f'; x.fillRect(0, f.y1 - 14, W, 12);
+      for (let i = 0; i < W; i += 3) { x.fillStyle = '#c99657'; x.fillRect(i + (i % 2), f.y1 - 14 + ((i * 7) % 11), 1, 1); }
+      x.fillStyle = '#3bc9db'; x.fillRect(0, f.y1 - 2, W, H - f.y1 + 2);
+      x.fillStyle = '#e3fafc'; for (let i = 0; i < W; i += 2) x.fillRect(i, f.y1 - 2 - (Math.floor(i / 5) % 2), 1, 1);
     }
-    x.fillStyle = '#1b1430'; x.fillRect(0, f.y0 - 2, W, 2);
-    // grass, mowed in stripes, with a white border
-    for (let xx = 0; xx < W; xx += 1) { x.fillStyle = Math.floor(xx / 12) % 2 ? '#37b24d' : '#2f9e44'; x.fillRect(xx, f.y0, 1, H - f.y0); }
-    x.fillStyle = '#e03131'; x.fillRect(this.endX, f.y0, W - this.endX, H - f.y0);
-    x.fillStyle = '#c92a2a';
+    // the end zone
+    const [e0, e1] = look.end === 'surf' ? ['#ffa94d', '#f08c00'] : look.end;
+    x.fillStyle = e0; x.fillRect(this.endX, f.y0, W - this.endX, H - f.y0);
+    x.fillStyle = e1;
     for (let i = 0; i < 50; i += 1) x.fillRect(this.endX + 2 + Math.floor(r() * (W - this.endX - 4)), f.y0 + 2 + Math.floor(r() * (H - f.y0 - 4)), 2, 1);
-    x.fillStyle = 'rgba(255,255,255,0.75)';
+    const line = look.line;
+    x.fillStyle = line; x.globalAlpha = 0.75;
     for (let lx = this.qbX + 12; lx < this.endX - 4; lx += 12) {
       x.fillRect(lx, f.y0, 1, H - f.y0);
       // hash marks
       for (const hy of [f.y0 + Math.round((H - f.y0) * 0.35), f.y0 + Math.round((H - f.y0) * 0.65)]) x.fillRect(lx + 6, hy, 1, 2);
     }
-    x.fillStyle = '#ffffff';
+    x.globalAlpha = 1;
     x.fillRect(this.endX, f.y0, 2, H - f.y0);
     x.fillRect(0, f.y0, W, 1); x.fillRect(0, H - 1, W, 1); x.fillRect(f.x1, f.y0, 1, H - f.y0);
     // line of scrimmage
@@ -438,6 +540,35 @@ export class Football {
     x.fillStyle = '#1b1430'; x.fillRect(W - 7, gy - 13, 4, 27);
     x.fillStyle = '#ffd43b'; x.fillRect(W - 6, gy - 12, 2, 25); x.fillRect(W - 4, gy - 1, 3, 2);
     return c;
+  }
+
+  /** This play's puddles, ice, vents and the gravity well, under the buddies. */
+  drawThings(ctx) {
+    const blob = (cx, cy, rad, col, sq = 0.6) => { ctx.fillStyle = col; for (let yy = -Math.ceil(rad * sq); yy <= Math.ceil(rad * sq); yy += 1) { const w = Math.round(Math.sqrt(Math.max(0, rad * rad - (yy / sq) * (yy / sq)))); ctx.fillRect(cx - w, cy + yy, w * 2 + 1, 1); } };
+    for (const o of this.things) {
+      if (o.kind === 'mud') { blob(o.x, o.y, o.r + 1, '#2b1a0c', 0.66); blob(o.x, o.y, o.r, '#4a2f18', 0.66); ctx.fillStyle = '#c9a27a'; ctx.fillRect(o.x - 4, o.y - 2, 4, 1); ctx.fillRect(o.x + 2, o.y + 1, 2, 1); }
+      else if (o.kind === 'ice') { blob(o.x, o.y, o.r, '#a5d8ff', 0.66); blob(o.x, o.y, o.r - 1, '#d0ebff', 0.66); ctx.fillStyle = '#ffffff'; ctx.fillRect(o.x - 5, o.y - 2, 4, 1); ctx.fillRect(o.x + 2, o.y + 1, 3, 1); }
+      else if (o.kind === 'vent') {
+        // a steam vent: a ring of rocks round a dark hole, white puffs rising (a boost, not a fire)
+        blob(o.x, o.y, o.r + 1, '#1b1430'); blob(o.x, o.y, o.r, '#868e96'); blob(o.x, o.y, o.r - 2, '#343a40');
+        for (let i = 0; i < 3; i += 1) {
+          const k = ((this.t * 1.4 + i / 3) % 1); const py = Math.round(o.y - 2 - k * 16); const px = Math.round(o.x + Math.sin(k * 6 + i) * 2); const pr = 2 + Math.round(k * 2);
+          blob(px, py, pr, k > 0.7 ? 'rgba(255,255,255,0.55)' : '#ffffff', 0.8);
+        }
+      } else if (o.kind === 'well') {
+        ctx.fillStyle = '#9775fa';
+        for (let k = 0; k < 2; k += 1) { const rad = 4 + ((this.t * 8 + k * 7) % 14); const n = Math.round(rad * 6); for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(o.x + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(o.y + Math.sin((a / n) * Math.PI * 2) * rad * 0.6), 1, 1); }
+        blob(o.x, o.y, 2, '#ffd43b'); ctx.fillStyle = '#ffffff'; ctx.fillRect(o.x, o.y, 1, 1);
+      }
+    }
+  }
+
+  /** The village dog (Forest Village), fetching a dropped ball. */
+  drawDog(ctx) {
+    const g = this.dog; if (!g) return;
+    const pal = { B: '#a0612f', b: '#d08a5a', E: '#1b1430', N: '#1b1430', W: '#ffffff' };
+    const step = Math.floor(this.t * 12) % 2;
+    sprite(ctx, ['.......KK', 'K.....KbBK', 'KBKKKKKBEN', '.KBBBBBBK.', '.KBbBBbK..', step ? '.K.K.K.K..' : 'K.K...K.K.'], pal, Math.round(g.x), Math.round(g.y) + 1, (g.face || -1) < 0);
   }
 
   drawPlayer(ctx, p) {
@@ -457,21 +588,30 @@ export class Football {
     ctx.drawImage(this.field, 0, 0);
     const d = this.down; const b = this.ball;
     const ring = (cx, cy, rad, col, n = Math.max(10, Math.round(rad * 6)), squash = 0.6) => { ctx.fillStyle = col; for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(cx + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(cy + Math.sin((a / n) * Math.PI * 2) * rad * squash), 1, 1); };
-    const cone = (cx, cy) => { ctx.fillStyle = '#1b1430'; ctx.fillRect(cx - 2, cy - 4, 5, 5); ctx.fillStyle = '#ff922b'; ctx.fillRect(cx - 1, cy - 4, 3, 4); ctx.fillRect(cx - 2, cy - 1, 5, 1); ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - 1, cy - 2, 3, 1); };
+    const cone = (cx, cy, k) => {
+      ctx.fillStyle = '#1b1430'; ctx.fillRect(cx - 2, cy - 4, 5, 5); ctx.fillStyle = '#ff922b'; ctx.fillRect(cx - 1, cy - 4, 3, 4); ctx.fillRect(cx - 2, cy - 1, 5, 1); ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - 1, cy - 2, 3, 1);
+      // the royal banner, on a pole beside its cone
+      if (k && k === d.banner) { ctx.fillStyle = '#1b1430'; ctx.fillRect(cx + 3, cy - 12, 1, 12); ctx.fillRect(cx + 4, cy - 12, 6, 5); ctx.fillStyle = Math.floor(this.t * 4) % 2 ? '#7048e8' : '#845ef7'; ctx.fillRect(cx + 4, cy - 11, 5, 3); ctx.fillStyle = '#ffd43b'; ctx.fillRect(cx + 6, cy - 10, 1, 1); }
+    };
+    this.drawThings(ctx);
     if (this.phase === 'play') {
       if (d.stage === 'pick') {
         const pulse = Math.floor(this.t * 3) % 2;
-        for (const k of Object.keys(ROUTES)) { const [cx, cy] = d.cones[k]; ring(cx, cy, 8, pulse ? '#ffd43b' : '#ffe066'); cone(cx, cy); }
+        for (const k of Object.keys(ROUTES)) { const [cx, cy] = d.cones[k]; ring(cx, cy, 8, pulse ? '#ffd43b' : '#ffe066'); cone(cx, cy, k); }
       } else if (d.route && d.stage !== 'done') {
-        const [cx, cy] = d.cones[d.route]; cone(cx, cy);
+        const [cx, cy] = d.cones[d.route]; cone(cx, cy, d.route);
       }
     }
     for (const p of [this.kid, this.vis]) p.paint(this.t);
     // where it's coming down: a cross with a ring as big as the catcher's reach
     if (b.state === 'air') {
       const mx = Math.round(b.tx); const my = Math.round(b.ty);
-      ring(mx, my, this.reach, 'rgba(255,255,255,0.45)', undefined, 1);
-      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(mx - 2, my, 5, 1); ctx.fillRect(mx, my - 1, 1, 3);
+      const mark = this.look.tex === 'snow' ? 'rgba(28,126,214,' : 'rgba(255,255,255,';
+      // a dark edge under the ring and cross, so they show on sand, stone and candy
+      ring(mx, my + 1, this.reach, 'rgba(27,20,48,0.5)', undefined, 1);
+      ring(mx, my, this.reach, `${mark}0.85)`, undefined, 1);
+      ctx.fillStyle = '#1b1430'; ctx.fillRect(mx - 3, my - 1, 7, 3); ctx.fillRect(mx - 1, my - 2, 3, 5);
+      ctx.fillStyle = `${mark}1)`; ctx.fillRect(mx - 2, my, 5, 1); ctx.fillRect(mx, my - 1, 1, 3);
     }
     // the CATCH button: gray until the throw, then red, yellow, green
     if (this.phase === 'play' && d.catcher === this.kid && (d.stage === 'wait' || d.stage === 'air')) {
@@ -485,14 +625,16 @@ export class Football {
       ctx.fillStyle = 'rgba(255,255,255,0.35)'; disc(bt.r, -bt.r + 2, -bt.r + 3, 3);
     }
     const things = [this.kid, this.vis].map((p) => ({ y: p.y, draw: () => this.drawPlayer(ctx, p) }));
+    if (this.dog) things.push({ y: this.dog.y, draw: () => this.drawDog(ctx) });
     if (this.phase !== 'ready') {
       // the ball's shadow, then the ball
-      ctx.fillStyle = 'rgba(20,40,20,0.35)';
+      ctx.fillStyle = shadeFor(this.map);
       const sw = Math.max(2, 6 - Math.round(b.h / 8));
       if (b.state !== 'held') ctx.fillRect(Math.round(b.x - sw / 2), Math.round(b.y), sw, 1);
       things.push({ y: b.y + 0.6, draw: () => this.drawBall(ctx) });
     }
     things.sort((a, c) => a.y - c.y).forEach((th) => th.draw());
+    this.fans.draw(ctx, Math.round(this.W * this.fans.seat), this.f.y0 - 1, this.W);
   }
 
   drawBall(ctx) {
@@ -536,7 +678,7 @@ export class Football {
     if (this.phase === 'play') {
       if (d.stage === 'pick') {
         if (this.ready()) hint(`${d.thrower.name} throws to ${d.catcher.name}. Tap a cone!`);
-        for (const k of Object.keys(ROUTES)) text(`${ROUTES[k].name} ${ROUTES[k].pts}`, d.cones[k][0] * S, (d.cones[k][1] + 7) * S, u * 1.4, '#ffd43b');
+        for (const k of Object.keys(ROUTES)) text(`${ROUTES[k].name} ${this.pts(k) * (d.banner === k ? 2 : 1)}`, d.cones[k][0] * S, (d.cones[k][1] + 7) * S, u * 1.4, d.banner === k ? '#e599f7' : '#ffd43b');
       }
       // the aiming meter over the thrower; it stays a moment once stopped
       if (d.stage === 'aim' || d.stage === 'wait') {
@@ -556,6 +698,10 @@ export class Football {
       ctx.globalAlpha = 1;
     }
     if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) text(this.locked ? "That's all our games today!" : 'Tap to play!', W / 2, (this.H - 7) * S, u * 1.8);
+    if (this.phase === 'ready' && !this.locked) {
+      text(this.tw.name, W / 2, u * 10, u * 1.8, '#ffd43b');
+      text(this.tw.tip, W / 2, u * 12.2, u * 1.4, '#ffffff');
+    }
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
       const cy = (this.top + 26) * S;
       ctx.fillStyle = 'rgba(27,20,48,0.85)';

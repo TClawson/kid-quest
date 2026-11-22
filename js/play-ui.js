@@ -18,6 +18,7 @@ import { recordFind } from './finds.js';
 import { shownSeason } from './seasons.js';
 import { recordPhoto, keepPhoto, addClue, spendClues } from './album.js';
 import { critterById } from './critters.js';
+import { recordFan } from './fans.js';
 import {
   state, today, esc, save, render, openModal, currentKid, mover, exerciseInfo, kidTheme,
 } from './ctx.js';
@@ -29,6 +30,8 @@ import {
 // and the kid picks. Best scores live on the kid (kid.playBest). A kid gets
 // gamesLeft() games a day: 4, plus 2 a week of the current exercise streak (up to 3 weeks).
 const PLAY_KINDS = ['soccer', 'hockey', 'football'];
+// these games keep a best for each map (each map plays differently: mapplay.js) and have fans (fans.js)
+const MAP_GAMES = PLAY_KINDS;
 const GEAR_WORD = { soccer: 'ball', hockey: 'stick', football: 'football', fishing: 'rod', sledding: 'sled', race: 'skis', train: 'camera', tricks: 'bike', dig: 'shovel' };
 // the gear a game needs (the key in bestGear) and what a visitor calls it when lending it
 const GEAR_KEY = { soccer: 'soccer', hockey: 'hockey', football: 'football', fishing: 'rod', sledding: 'sled', race: 'skis', train: 'camera', tricks: 'bike', dig: 'shovel' };
@@ -102,7 +105,8 @@ export function pickGame(kid, v, games) {
 export function playWith(kid, v, kind) {
   const kid0 = kid; // callbacks run later: look the kid up again each time
   const gear = bestGear(v.owned);
-  const best = kid.playBest?.[kind] || 0;
+  const map0 = kidTheme(kid);
+  const best = MAP_GAMES.includes(kind) ? (kid.mapBest?.[kind]?.[map0] || 0) : (kid.playBest?.[kind] || 0);
   openPlay({
     kind,
     best,
@@ -131,14 +135,34 @@ export function playWith(kid, v, kind) {
       const kid = currentKid(kid0);
       if (borrows(kid, kind)) kid.lendLog = logLend(kid, today(), GEAR_KEY[kind]);
       kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
+      // one more game on this map without its rare fan (reset when the rare one comes)
+      if (MAP_GAMES.includes(kind)) kid.fanDry = { ...(kid.fanDry || {}), [kidTheme(kid)]: (kid.fanDry?.[kidTheme(kid)] || 0) + 1 };
       save();
     },
     // the map's bubbles change when the games run out
     onClose: () => render(),
     onScore: (score) => {
       const kid = currentKid(kid0);
-      kid.playBest = { ...(kid.playBest || {}), [kind]: score };
+      if (MAP_GAMES.includes(kind)) {
+        // the best on this map, and the best anywhere
+        const map = kidTheme(kid);
+        kid.mapBest = { ...(kid.mapBest || {}), [kind]: { ...(kid.mapBest?.[kind] || {}), [map]: score } };
+        if (score > (kid.playBest?.[kind] || 0)) kid.playBest = { ...(kid.playBest || {}), [kind]: score };
+      } else kid.playBest = { ...(kid.playBest || {}), [kind]: score };
       save();
+    },
+    // fans: the map's critters that watch keepy-uppy, hockey and football (fans book in the house)
+    fanDry: kid.fanDry?.[map0] || 0,
+    onFanSeen: (f) => {
+      const kid = currentKid(kid0);
+      if (f.rarity === 'rare') { kid.fanDry = { ...(kid.fanDry || {}), [f.map]: 0 }; save(); }
+    },
+    onFan: (f) => {
+      const kid = currentKid(kid0);
+      const got = recordFan(kid.fans, f.id, today());
+      kid.fans = got.fans;
+      save();
+      return got.first ? 'new' : 'again';
     },
     // every game's score counts toward this week's family chart (the chart on the house wall)
     onOver: (score) => {

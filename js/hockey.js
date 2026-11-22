@@ -20,6 +20,10 @@
 import { Player, playLook, rng, canvas, cellsCanvas, clamp, HAPPY } from './play.js';
 import { ballCells } from './avatar.js';
 import { ZONE_COLORS, needle as sweepAt, zoneAt as zoneOf, pickZone, drawMeter, addPop } from './meter.js';
+import { paintBackdrop, fieldLook, iceAt, mapBallCells, shadeFor, sprite } from './fieldlooks.js';
+import { HOCKEY_TWISTS, twistFor } from './mapplay.js';
+import { FanWatch } from './fans.js';
+import { SPRITES } from './maparts.js';
 
 export const GAME_SECONDS = 60;
 export const SHOT_ODDS = { red: 0.05, yellow: 0.25, green: 0.55 };
@@ -35,7 +39,7 @@ const PUCK_KEEP = 0.55; // a sliding puck keeps this much of its speed each seco
 const SHOT_SPEED = 230;
 const PICKUP = 7;
 const STEAL_REACH = 17;
-const MOUTH = 9; // half the goal's width
+const MOUTH = 9; // half the goal's width (a map can make it wider)
 const SWEEP = 0.65; // seconds for the needle to cross the meter once
 export const CLOSE = 45; // shots from this close (pixels) or closer get the full SHOT_ODDS
 const RINK_LENGTH = 1.6; // the rink is this many screens long
@@ -57,6 +61,8 @@ function gauss(r) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
+const mixDark = (c) => c; // the color under the rink: the rim color
+
 export class Hockey {
   constructor(opts) {
     this.kind = 'hockey';
@@ -70,12 +76,19 @@ export class Hockey {
     const rk = this.rink;
     this.cx = Math.round((rk.x0 + rk.x1) / 2); this.cy = Math.round((rk.y0 + rk.y1) / 2) + 4;
     this.goalL = rk.x0 + 14; this.goalR = rk.x1 - 14;
+    // the kid's map: its own rink and twist (fieldlooks.js, mapplay.js)
+    this.map = opts.map || 'bg-meadow';
+    this.look = fieldLook(this.map); this.tw = twistFor(HOCKEY_TWISTS, this.map);
+    this.mouth = this.tw.mouth || MOUTH; this.keep = this.tw.keep || PUCK_KEEP; this.glide = this.tw.glide || GLIDE;
+    this.setupTwist();
+    // the map's critters come to watch (fans.js)
+    this.fans = new FanWatch({ map: this.map, r: this.r, dry: opts.fanDry || 0, onFan: opts.onFan, onSeen: opts.onFanSeen });
     this.kid = new Player(playLook(opts.kid.buddy, opts.kid.gear, 'hockey'), opts.kid.name, 11, this.cx - 34, this.cy);
     this.vis = new Player(playLook(opts.visitor.buddy, opts.visitor.gear, 'hockey'), opts.visitor.name, 23, this.cx + 34, this.cy);
     this.kid.tier = opts.kid.gear?.hockey || 1; this.vis.tier = opts.visitor.gear?.hockey || 1;
     for (const p of [this.kid, this.vis]) { p.svx = 0; p.svy = 0; p.frozen = 0; p.noPick = 0; }
     this.field = this.paintRink();
-    this.puckPic = cellsCanvas(ballCells('hockey', 1));
+    this.puckPic = cellsCanvas((this.tw.puck && mapBallCells(this.tw.puck)) || ballCells('hockey', 1));
     // in the corner, where the rink curves away
     this.button = { x: this.W - 15, y: this.H - 15, r: 12 };
     this.camX = this.camFor(this.cx);
@@ -165,13 +178,15 @@ export class Hockey {
     const gx = p === this.kid ? this.goalR : this.goalL;
     const dx = gx - pk.x; const dy = this.cy - pk.y;
     const dist = Math.hypot(dx, dy);
-    const half = Math.atan2(MOUTH - 1.5, Math.max(4, Math.abs(dx))) * (Math.abs(dx) / Math.max(dist, 1));
+    const half = Math.atan2(this.mouth - 1.5, Math.max(4, Math.abs(dx))) * (Math.abs(dx) / Math.max(dist, 1));
     // the aim spread is sized so the odds hold from CLOSE in; farther out the
     // same spread misses more often, since the goal looks smaller
     const spread = (Math.max(0.02, half) * Math.max(1, dist / CLOSE)) / Z[zone];
     const aim = Math.atan2(dy, dx) + gauss(this.r) * spread;
     pk.owner = null; pk.vx = Math.cos(aim) * SHOT_SPEED; pk.vy = Math.sin(aim) * SHOT_SPEED;
     p.noPick = this.t + 0.35;
+    // Moon Base: a lob flies over the other buddy for the first part of its flight
+    if (this.tw.lob) { pk.lob = { t0: this.t, T: this.tw.lob, by: p }; }
     p.face = dx > 0 ? 1 : -1;
     p.brain.impulse('kick', 1);
     this.pop(zone === 'green' ? 'Great shot!' : zone === 'yellow' ? 'Shot!' : 'Wild shot!', p.x, p.y - 28, ZONE_COLORS[zone]);
@@ -215,6 +230,8 @@ export class Hockey {
       if (this.celebrate && this.t >= this.celebrate) { this.celebrate = 0; this.faceoff(true); }
       if (this.left <= 0 && !this.celebrate) { this.end(); }
     }
+    this.stepTwist(dt);
+    this.fans.step(dt, this.phase === 'play');
     for (const p of [this.kid, this.vis]) this.skate(p, dt);
     // the buddies bump instead of skating through each other
     const k = this.kid; const v = this.vis;
@@ -240,11 +257,11 @@ export class Hockey {
 
   skate(p, dt) {
     const frozen = this.t < p.frozen || (this.phase === 'play' && this.t < this.dropAt);
-    const top = frozen || this.phase === 'over' ? 0 : SKATE * (this.puck.owner === p ? CARRY : 1);
+    const top = frozen || this.phase === 'over' ? 0 : SKATE * (this.puck.owner === p ? CARRY : 1) * (this.inMud(p) ? 0.6 : 1);
     const dx = p.tx - p.x; const dy = p.ty - p.y; const d = Math.hypot(dx, dy);
     let wx = 0; let wy = 0;
     if (d > 1.5 && top > 0) { const sp = top * Math.min(1, d / 14); wx = (dx / d) * sp; wy = (dy / d) * sp; }
-    const k = 1 - Math.exp(-GLIDE * dt);
+    const k = 1 - Math.exp(-this.glide * dt);
     p.svx += (wx - p.svx) * k; p.svy += (wy - p.svy) * k;
     p.x += p.svx * dt; p.y += p.svy * dt;
     const b = this.bounds;
@@ -269,11 +286,13 @@ export class Hockey {
     }
     const px = pk.x;
     pk.x += pk.vx * dt; pk.y += pk.vy * dt;
-    const keep = Math.pow(PUCK_KEEP, dt);
+    const keep = Math.pow(this.keep, dt);
     pk.vx *= keep; pk.vy *= keep;
     if (pk.inNet) { pk.vx *= 0.5; pk.vy *= 0.5; return; }
+    if (pk.lob && this.t - pk.lob.t0 >= pk.lob.T) pk.lob = null;
+    this.twistPuck(pk, dt);
     // goals: crossing a goal line between the posts
-    const inMouth = Math.abs(pk.y - this.cy) < MOUTH;
+    const inMouth = Math.abs(pk.y - this.cy) < this.mouth;
     if (this.phase === 'play' && !this.celebrate && inMouth) {
       if (px < this.goalR && pk.x >= this.goalR) return this.goal(this.kid);
       if (px > this.goalL && pk.x <= this.goalL) return this.goal(this.vis);
@@ -282,8 +301,8 @@ export class Hockey {
     for (const gx of [this.goalL, this.goalR]) {
       const back = gx === this.goalL ? gx - 6 : gx + 6;
       const lo = Math.min(gx, back); const hi = Math.max(gx, back);
-      if (pk.x > lo && pk.x < hi && Math.abs(pk.y - this.cy) < MOUTH + 1 && !inMouth) pk.vy = -pk.vy;
-      if (pk.x > lo - 1 && pk.x < hi + 1 && Math.abs(pk.y - this.cy) < MOUTH && ((gx === this.goalL && px < lo) || (gx === this.goalR && px > hi))) { pk.vx = -pk.vx * 0.6; pk.x = px; }
+      if (pk.x > lo && pk.x < hi && Math.abs(pk.y - this.cy) < this.mouth + 1 && !inMouth) pk.vy = -pk.vy;
+      if (pk.x > lo - 1 && pk.x < hi + 1 && Math.abs(pk.y - this.cy) < this.mouth && ((gx === this.goalL && px < lo) || (gx === this.goalR && px > hi))) { pk.vx = -pk.vx * 0.6; pk.x = px; }
     }
     // the boards
     if (pk.x < rk.x0 + 3) { pk.x = rk.x0 + 3; pk.vx = Math.abs(pk.vx) * 0.75; this.sound = 'board'; }
@@ -294,6 +313,7 @@ export class Hockey {
     if (this.phase !== 'play' || this.t < this.dropAt || this.celebrate) return;
     for (const p of [this.kid, this.vis]) {
       if (this.t < p.noPick || this.t < p.frozen) continue;
+      if (pk.lob && this.t - pk.lob.t0 < pk.lob.T) continue;
       const [bx, by] = this.blade(p);
       if (Math.hypot(bx - pk.x, by - pk.y) < PICKUP || Math.hypot(p.x - pk.x, p.y - pk.y) < PICKUP) {
         const fast = Math.hypot(pk.vx, pk.vy) > 120;
@@ -307,13 +327,156 @@ export class Hockey {
   goal(scorer) {
     const pk = this.puck;
     pk.inNet = true;
-    if (scorer === this.kid) this.goals.kid += 1; else this.goals.vis += 1;
+    if (scorer === this.kid) {
+      this.goals.kid += 1;
+      const w = this.fans.great(); if (w) this.pop(w, this.camX + this.W * this.fans.seat, this.rink.y0 + 8, '#ff8fa3', true);
+    } else this.goals.vis += 1;
     scorer.brain.impulse('cheer', 1);
     this.other(scorer).brain.impulse('surprise', 1);
     this.pop('GOAL!', pk.x < this.cx ? pk.x + 26 : pk.x - 26, this.cy - 22, '#ffd43b', true);
     this.celebrate = this.t + 2;
     this.charge = null; this.ai.charge = null;
     this.sound = 'goal';
+  }
+
+  // ---------- the map's twist ----------
+  /** Places the map's things on the rink: doors, vents, mud, bumpers, the seal's hole. */
+  setupTwist() {
+    const tw = this.tw; const rk = this.rink; const r = rng(91);
+    const midY = (rk.y0 + rk.y1) / 2; const span = rk.y1 - rk.y0;
+    this.things = [];
+    const add = (kind, x, y, rad, more = {}) => this.things.push({ kind, x: Math.round(x), y: Math.round(y), r: rad, ...more });
+    if (tw.doors) {
+      // a pair: top board on the left half, bottom board on the right half
+      add('door', this.cx - (this.cx - rk.x0) * 0.55, rk.y0 + 7, 6, { twin: 1 });
+      add('door', this.cx + (rk.x1 - this.cx) * 0.55, rk.y1 - 6, 6, { twin: 0 });
+    }
+    if (tw.vents) for (let i = 0; i < tw.vents; i += 1) add('vent', rk.x0 + 50 + ((rk.x1 - rk.x0 - 100) * (i + 0.5)) / tw.vents, midY + (i % 2 ? -1 : 1) * span * 0.22, 5, { phase: i * 1.3 });
+    if (tw.mud) for (let i = 0; i < tw.mud; i += 1) add('mud', rk.x0 + 45 + ((rk.x1 - rk.x0 - 90) * (i + 0.2 + r() * 0.6)) / tw.mud, rk.y0 + 12 + r() * (span - 24), 9);
+    if (tw.bumpers) { add('bumper', this.cx - 40, midY - span * 0.18, 6); add('bumper', this.cx + 40, midY + span * 0.18, 6); }
+    if (tw.seal) add('hole', this.cx + (this.r() < 0.5 ? -1 : 1) * 55, midY + span * 0.2, 6);
+    if (tw.well) add('well', this.cx, midY, 7);
+    this.sealAt = tw.seal ? tw.seal.every : Infinity; this.waveAt = tw.waves ? tw.waves.every : Infinity;
+    this.flow = 1; this.flowAt = tw.current ? tw.current.flip : Infinity;
+  }
+
+  inMud(p) { return this.things.some((o) => o.kind === 'mud' && Math.hypot(p.x - o.x, (p.y - o.y) * 1.6) < o.r); }
+
+  /** A vent's state: 'glow' (warning), 'puff' or null. */
+  ventState(o) {
+    const c = (this.t + o.phase) % 4;
+    return c > 3.3 ? 'puff' : c > 2.1 ? 'glow' : null;
+  }
+
+  /** The seal's state: 'warn' (bubbles), 'up' (in the way) or null. */
+  sealState() {
+    const s = this.tw.seal; if (!s) return null;
+    const d = this.t - this.sealAt;
+    return d < -s.warn ? null : d < 0 ? 'warn' : d < s.up ? 'up' : null;
+  }
+
+  /** Clocks for the map's comings and goings: the seal, the waves, the current. */
+  stepTwist(dt) {
+    const tw = this.tw;
+    if (tw.seal && this.t - this.sealAt > tw.seal.up) this.sealAt = this.t + tw.seal.every * (0.8 + this.r() * 0.4);
+    if (tw.waves && this.t - this.waveAt > tw.waves.last) this.waveAt = this.t + tw.waves.every * (0.8 + this.r() * 0.4);
+    if (tw.current && this.t > this.flowAt) { this.flow = -this.flow; this.flowAt = this.t + tw.current.flip; }
+    // a wave washes up the rink: it nudges the buddies too
+    if (this.waving()) for (const p of [this.kid, this.vis]) p.svy -= tw.waves.push * 0.35 * dt;
+  }
+
+  /** Sunset Beach: a wave is washing up the rink (after a moment of foam). */
+  waving() { const w = this.tw.waves; return Boolean(w) && this.t >= this.waveAt && this.t - this.waveAt < w.last; }
+
+  /** What the map does to a loose puck. */
+  twistPuck(pk, dt) {
+    const tw = this.tw;
+    if (tw.current) pk.vx += tw.current.push * this.flow * dt;
+    if (this.waving()) pk.vy -= tw.waves.push * dt;
+    for (const o of this.things) {
+      const dx = pk.x - o.x; const dy = pk.y - o.y; const d = Math.hypot(dx, dy) || 0.01;
+      if (o.kind === 'well' && d < 60) {
+        const pull = Math.min(160, tw.well / (d * d + 120));
+        pk.vx -= (dx / d) * pull * dt * 10; pk.vy -= (dy / d) * pull * dt * 10;
+      } else if (o.kind === 'bumper' && d < o.r + 2) {
+        const sp = Math.max(150, Math.hypot(pk.vx, pk.vy) * 1.3);
+        pk.vx = (dx / d) * sp; pk.vy = (dy / d) * sp; pk.x = o.x + (dx / d) * (o.r + 2.5); pk.y = o.y + (dy / d) * (o.r + 2.5);
+        this.pop('Boing!', o.x, o.y - 10, '#f783ac'); this.sound = 'board'; pk.lob = null; o.hitAt = this.t;
+      } else if (o.kind === 'vent' && d < o.r + 1 && this.ventState(o) === 'puff' && !(o.tossed > this.t - 0.6)) {
+        o.tossed = this.t;
+        const a = this.r() * Math.PI * 2; pk.vx = Math.cos(a) * 140; pk.vy = Math.sin(a) * 140;
+        this.pop('Puff!', o.x, o.y - 10, '#ffa94d');
+      } else if (o.kind === 'door' && d < o.r && !(pk.doorAt > this.t - 0.5)) {
+        const tw2 = this.things.filter((t) => t.kind === 'door')[o.twin];
+        pk.doorAt = this.t; pk.x = tw2.x; pk.y = tw2.y + (tw2.y < this.cy ? 5 : -5);
+        if ((tw2.y < this.cy && pk.vy < 0) || (tw2.y > this.cy && pk.vy > 0)) pk.vy = -pk.vy;
+        pk.vy += tw2.y < this.cy ? 40 : -40;
+        this.pop('Whoosh!', tw2.x, tw2.y - 8, '#d0bfff'); pk.lob = null;
+      } else if (o.kind === 'hole' && this.sealState() === 'up' && d < 6) {
+        pk.vx = (dx / d) * Math.max(60, Math.hypot(pk.vx, pk.vy) * 0.6); pk.vy = (dy / d) * Math.max(60, Math.hypot(pk.vx, pk.vy) * 0.6);
+        pk.x = o.x + (dx / d) * 6.5; pk.y = o.y + (dy / d) * 6.5;
+        if (!(o.bonk > this.t - 0.5)) { o.bonk = this.t; this.pop('Bonk!', o.x, o.y - 12, '#d0ebff'); this.sound = 'board'; }
+      }
+    }
+  }
+
+  /** The map's things on the ice, under the buddies. */
+  drawThings(ctx) {
+    const O = '#1b1430';
+    const ring = (cx, cy, rad, col, sq = 0.6) => { ctx.fillStyle = col; const n = Math.max(12, Math.round(rad * 7)); for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(cx + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(cy + Math.sin((a / n) * Math.PI * 2) * rad * sq), 1, 1); };
+    const blob = (cx, cy, rad, col, sq = 0.6) => { ctx.fillStyle = col; for (let yy = -Math.ceil(rad * sq); yy <= Math.ceil(rad * sq); yy += 1) { const w = Math.round(Math.sqrt(Math.max(0, rad * rad - (yy / sq) * (yy / sq)))); ctx.fillRect(cx - w, cy + yy, w * 2 + 1, 1); } };
+    for (const o of this.things) {
+      if (o.kind === 'mud') { blob(o.x, o.y, o.r + 1, '#2b1a0c'); blob(o.x, o.y, o.r, '#4a2f18'); ctx.fillStyle = '#c9a27a'; ctx.fillRect(o.x - 4, o.y - 2, 4, 1); ctx.fillRect(o.x + 2, o.y + 1, 2, 1); }
+      else if (o.kind === 'door') {
+        const open = this.t - (this.puck.doorAt || -9) < 0.4;
+        blob(o.x, o.y, o.r + 1, O, 0.7); blob(o.x, o.y, o.r, open ? '#e5dbff' : '#7048e8', 0.7); blob(o.x, o.y, o.r - 2, open ? '#ffffff' : '#b197fc', 0.7);
+        ctx.fillStyle = '#ffd43b'; ctx.fillRect(o.x - 1 + Math.round(Math.sin(this.t * 4 + o.x) * 2), o.y - 1, 1, 1);
+      } else if (o.kind === 'vent') {
+        const st = this.ventState(o);
+        // a ring of grey rocks round a cracked hole: bigger than the ember puck, and a different shape
+        blob(o.x, o.y, o.r + 3, O); blob(o.x, o.y, o.r + 2, '#868e96'); blob(o.x, o.y, o.r, '#1a1210');
+        for (let a = 0; a < 8; a += 1) { ctx.fillStyle = a % 2 ? '#adb5bd' : '#5a4a46'; ctx.fillRect(Math.round(o.x + Math.cos(a * 0.785) * (o.r + 2)) - 1, Math.round(o.y + Math.sin(a * 0.785) * (o.r + 2) * 0.6), 2, 1); }
+        const hotC = st === 'glow' ? (Math.floor(this.t * 8) % 2 ? '#ffd43b' : '#e8590c') : st ? '#ffd43b' : '#5c2d12';
+        ctx.fillStyle = hotC; ctx.fillRect(o.x - o.r + 2, o.y, o.r * 2 - 3, 1); ctx.fillRect(o.x, o.y - 2, 1, 5); ctx.fillRect(o.x - 3, o.y - 1, 1, 1); ctx.fillRect(o.x + 3, o.y + 1, 1, 1);
+        if (st === 'puff') for (let i = 0; i < 6; i += 1) { ctx.fillStyle = i % 2 ? '#dee2e6' : '#adb5bd'; ctx.fillRect(o.x - 3 + i, o.y - 4 - Math.round(((this.t * 30 + i * 3) % 14)), 2, 2); }
+      } else if (o.kind === 'bumper') {
+        const hit = this.t - (o.hitAt || -9) < 0.2;
+        blob(o.x, o.y, o.r + 1, O, 0.8); blob(o.x, o.y, o.r, hit ? '#ffffff' : '#f783ac', 0.8); blob(o.x, o.y - 1, o.r - 3, '#ffdeeb', 0.8);
+        ctx.fillStyle = '#ffffff'; for (let a = 0; a < 6; a += 1) ctx.fillRect(Math.round(o.x + Math.cos(a + this.t) * (o.r - 1)), Math.round(o.y + Math.sin(a + this.t) * (o.r - 1) * 0.8), 1, 1);
+      } else if (o.kind === 'well') {
+        for (let k = 0; k < 3; k += 1) ring(o.x, o.y, o.r + 4 + ((this.t * 6 + k * 6) % 18) * -1 + 18, k === 0 ? '#9775fa' : '#5f3dc4');
+        blob(o.x, o.y, 3, '#ffd43b'); blob(o.x, o.y, 1, '#ffffff');
+      } else if (o.kind === 'hole') {
+        const st = this.sealState();
+        // a hole in the ice: a white snowy rim, dark water, a ripple (much bigger than a puck)
+        blob(o.x, o.y, o.r + 3, '#ffffff', 0.6); blob(o.x, o.y, o.r + 1, '#1b1430', 0.6); blob(o.x, o.y, o.r, '#0b4f8a', 0.6);
+        ring(o.x, o.y, o.r - 2 + ((this.t * 3) % 2), '#4dabf7', 0.6);
+        if (st === 'warn') for (let i = 0; i < 4; i += 1) { ctx.fillStyle = '#ffffff'; ctx.fillRect(o.x - 3 + ((i * 3 + Math.floor(this.t * 10)) % 7), o.y - 1 - (i % 2), 1, 1); }
+      }
+    }
+    if (this.tw.current) {
+      // bubbles drifting the way the current flows
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      for (let i = 0; i < 18; i += 1) { const span = this.RW; const bx = ((i * 71 + this.flow * this.t * 34) % span + span) % span; ctx.fillRect(Math.round(bx), this.rink.y0 + 6 + ((i * 29) % (this.rink.y1 - this.rink.y0 - 10)), 1, 1); }
+    }
+    const w = this.tw.waves;
+    if (w) {
+      const d = this.t - this.waveAt; const rk = this.rink;
+      if (d > -1 && d < w.last) {
+        // foam first, then the wave sweeping up the rink
+        const k = d < 0 ? 0 : d / w.last; const top = Math.round(rk.y1 - 4 - k * (rk.y1 - rk.y0) * 0.7);
+        ctx.fillStyle = 'rgba(59,201,219,0.35)'; if (d >= 0) ctx.fillRect(rk.x0 + 2, top, rk.x1 - rk.x0 - 4, rk.y1 - top);
+        ctx.fillStyle = '#ffffff'; for (let x = rk.x0 + 2; x < rk.x1 - 2; x += 2) if ((x + Math.floor(this.t * 20)) % 5) ctx.fillRect(x, top + Math.round(Math.sin(x * 0.3 + this.t * 6)), 1, 1);
+      }
+    }
+  }
+
+  /** The seal, popped up through its hole (drawn with the buddies, by depth). */
+  drawSeal(ctx) {
+    const o = this.things.find((t) => t.kind === 'hole');
+    if (!o || this.sealState() !== 'up') return;
+    const pal = { G: '#868e96', g: '#adb5bd', d: '#495057', E: '#1b1430', W: '#ffffff' };
+    sprite(ctx, ['..KKKK..', '.KgGGgK.', 'KGEGGEGK', 'KGGdWGGK', '.KGGGGK.', 'KGGGGGGK', 'KGgGGgGK'], { ...pal, K: '#1b1430' }, o.x, o.y + 1);
   }
 
   // ---------- the visitor ----------
@@ -356,12 +519,10 @@ export class Hockey {
   // ---------- drawing ----------
   paintRink() {
     const c = canvas(this.RW, this.H); const x = c.getContext('2d');
-    const rk = this.rink; const r = rng(5);
-    x.fillStyle = '#3b5bdb'; x.fillRect(0, 0, this.RW, this.H); // the stands
-    for (let i = 0; i < (this.RW * this.top) / 6; i += 1) {
-      x.fillStyle = ['#ff8787', '#ffd43b', '#74c0fc', '#b2f2bb', '#e599f7'][Math.floor(r() * 5)];
-      x.fillRect(Math.floor(r() * this.RW), Math.floor(r() * (rk.y0 - 2)), 1, 1);
-    }
+    const rk = this.rink; const r = rng(5); const R = this.look.rink;
+    // the map's backdrop above the rink, two screens of it side by side
+    paintBackdrop(x, this.map, this.RW, rk.y0 - 2);
+    x.fillStyle = mixDark(R.rim); x.fillRect(0, rk.y0 - 2, this.RW, this.H - rk.y0 + 2);
     const round = (fill, inset) => {
       x.fillStyle = fill;
       const x0 = rk.x0 + inset; const x1 = rk.x1 - inset; const y0 = rk.y0 + inset; const y1 = rk.y1 - inset; const rad = 10 - inset;
@@ -372,35 +533,50 @@ export class Hockey {
         x.fillRect(x0 + cut, yy, x1 - x0 - 2 * cut + 1, 1);
       }
     };
-    round('#1b1430', -2); round('#ffd43b', -1); round('#e7f5ff', 0);
-    x.fillStyle = '#d0ebff';
+    round('#1b1430', -2); round(R.board, -1);
+    // the boards: candy-cane stripes, driftwood, logs, gold, stone...
+    if (R.candy) { x.fillStyle = R.boardHi; for (let i = rk.x0; i < rk.x1; i += 4) { x.fillRect(i, rk.y0 - 1, 2, 1); x.fillRect(i + 1, rk.y1 + 1, 2, 1); } }
+    round(R.ice, 0);
+    // the village pond: a grassy bank with cattails, so it can't be mistaken for the frozen fjord
+    if (R.bank) for (let i = rk.x0 + 4; i < rk.x1 - 4; i += 7 + (i % 3)) {
+      for (const [yb, up] of [[rk.y0 - 2, 5], [rk.y1 + 3, 4]]) {
+        x.fillStyle = '#2b8a3e'; x.fillRect(i, yb - up, 1, up); x.fillRect(i + 2, yb - up + 2, 1, up - 2);
+        x.fillStyle = '#6e4b2a'; x.fillRect(i, yb - up - 1, 1, 2);
+      }
+    }
+    // the ice itself, pixel by pixel (mud, stars, candy swirls, scuffs)
+    for (let yy = rk.y0 + 1; yy < rk.y1; yy += 1) for (let xx = rk.x0 + 1; xx < rk.x1; xx += 1) {
+      const col = iceAt(this.look, xx, yy);
+      if (col !== R.ice) { x.fillStyle = col; x.fillRect(xx, yy, 1, 1); }
+    }
     for (let i = 0; i < (this.RW * this.H) / 50; i += 1) {
       const gx = rk.x0 + 3 + Math.floor(r() * (rk.x1 - rk.x0 - 6)); const gy = rk.y0 + 3 + Math.floor(r() * (rk.y1 - rk.y0 - 6));
-      x.fillRect(gx, gy, 2, 1);
+      x.fillStyle = R.scuff; x.fillRect(gx, gy, 2, 1);
     }
     const vline = (lx, col) => { x.fillStyle = col; x.fillRect(lx, rk.y0 + 1, 2, rk.y1 - rk.y0 - 1); };
-    vline(this.cx - 1, '#fa5252');
-    vline(Math.round(this.cx - (this.cx - rk.x0) * 0.42), '#4dabf7');
-    vline(Math.round(this.cx + (rk.x1 - this.cx) * 0.42), '#4dabf7');
-    vline(this.goalL, '#fa5252'); vline(this.goalR - 1, '#fa5252');
+    vline(this.cx - 1, R.line);
+    vline(Math.round(this.cx - (this.cx - rk.x0) * 0.42), R.blue);
+    vline(Math.round(this.cx + (rk.x1 - this.cx) * 0.42), R.blue);
+    vline(this.goalL, R.line); vline(this.goalR - 1, R.line);
     const ring = (cx, cy, rad, col) => { x.fillStyle = col; for (let a = 0; a < 80; a += 1) x.fillRect(Math.round(cx + Math.cos((a / 80) * Math.PI * 2) * rad), Math.round(cy + Math.sin((a / 80) * Math.PI * 2) * rad * 0.6), 1, 1); };
-    ring(this.cx, this.cy, 15, '#4dabf7');
-    x.fillStyle = '#4dabf7'; x.fillRect(this.cx - 1, this.cy - 1, 3, 2);
+    if (!this.tw.well) { ring(this.cx, this.cy, 15, R.blue); x.fillStyle = R.blue; x.fillRect(this.cx - 1, this.cy - 1, 3, 2); }
     // goal creases
-    x.fillStyle = '#a5d8ff';
-    for (let yy = -MOUTH; yy <= MOUTH; yy += 1) {
-      const w = Math.round(Math.sqrt(MOUTH * MOUTH - yy * yy) * 0.9);
+    x.fillStyle = R.dark ? '#5f3dc4' : '#a5d8ff';
+    for (let yy = -this.mouth; yy <= this.mouth; yy += 1) {
+      const w = Math.round(Math.sqrt(this.mouth * this.mouth - yy * yy) * 0.9);
       x.fillRect(this.goalL + 2, this.cy + yy, w, 1); x.fillRect(this.goalR - 2 - w, this.cy + yy, w, 1);
     }
-    // nets: red posts, white mesh
+    // nets: red posts, white mesh (a clam shell under the sea)
+    const clam = this.tw.goal === 'clam';
     for (const [gx, dir] of [[this.goalL, -1], [this.goalR, 1]]) {
-      for (let yy = -MOUTH; yy <= MOUTH; yy += 1) {
+      for (let yy = -this.mouth; yy <= this.mouth; yy += 1) {
         for (let d = 1; d <= 6; d += 1) {
-          const edge = Math.abs(yy) === MOUTH || d === 6;
-          x.fillStyle = edge ? '#e03131' : ((yy + d) % 2 ? '#ffffff' : '#ced4da');
+          const edge = Math.abs(yy) === this.mouth || d === 6;
+          x.fillStyle = clam ? (edge ? '#c2255c' : (Math.abs(yy) % 3 === 0 ? '#f783ac' : '#fcc2d7')) : edge ? '#e03131' : ((yy + d) % 2 ? '#ffffff' : '#ced4da');
           x.fillRect(gx + dir * d, this.cy + yy, 1, 1);
         }
       }
+      if (clam) { x.fillStyle = '#ffffff'; x.fillRect(gx + dir * 3, this.cy, 1, 1); }
     }
     return c;
   }
@@ -410,13 +586,21 @@ export class Hockey {
     ctx.save();
     ctx.translate(-Math.round(this.camX), 0);
     ctx.drawImage(this.field, 0, 0);
+    this.drawThings(ctx);
     for (const p of [this.kid, this.vis]) p.paint(this.t);
     const pk = this.puck;
     const things = [this.kid, this.vis].map((p) => ({ y: p.y, draw: () => p.draw(ctx) }));
-    things.push({ y: pk.y + 0.5, draw: () => ctx.drawImage(this.puckPic, Math.round(pk.x - 1), Math.round(pk.y - 1)) });
+    const hole = this.things.find((t) => t.kind === 'hole');
+    if (hole) things.push({ y: hole.y, draw: () => this.drawSeal(ctx) });
+    // a lob flies up in an arc, its shadow on the ice
+    const lift = pk.lob ? Math.round(Math.sin(Math.min(1, (this.t - pk.lob.t0) / pk.lob.T) * Math.PI) * 10) : 0;
+    if (lift) { ctx.fillStyle = shadeFor(this.map); ctx.fillRect(Math.round(pk.x - 1), Math.round(pk.y), 3, 1); }
+    things.push({ y: pk.y + 0.5, draw: () => ctx.drawImage(this.puckPic, Math.round(pk.x - 1), Math.round(pk.y - 1 - lift)) });
     things.sort((a, b) => a.y - b.y).forEach((th) => th.draw());
     // who has the puck: a little marker under their feet
     if (pk.owner) { ctx.fillStyle = pk.owner === this.kid ? '#ffd43b' : '#ff8787'; ctx.fillRect(Math.round(pk.owner.x) - 3, Math.round(pk.owner.y) + 2, 7, 1); }
+    // a fan watching from above the boards, where the view is
+    this.fans.draw(ctx, Math.round(this.camX + this.W * this.fans.seat), this.rink.y0 - 2, this.W);
     ctx.restore();
   }
 
@@ -472,6 +656,10 @@ export class Hockey {
     }
     if (this.phase === 'play' && this.t < this.dropAt) text(this.t > this.dropAt - 0.5 ? 'GO!' : 'Ready…', W / 2, (this.cy - 22) * S, u * 2.4, '#ffffff');
     if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) text(this.locked ? "That's all our games today!" : 'Tap to drop the puck!', W / 2, (this.H - 9) * S, u * 1.8);
+    if (this.phase === 'ready' && !this.locked) {
+      text(this.tw.name, W / 2, u * 10, u * 1.8, '#ffd43b');
+      text(this.tw.tip, W / 2, u * 12.2, u * 1.4, '#ffffff');
+    }
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
       const cy = (this.top + 20) * S;
       ctx.fillStyle = 'rgba(27,20,48,0.85)';

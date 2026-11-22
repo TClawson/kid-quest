@@ -523,3 +523,6 @@ function drawCastleWalls({ px, aw, ah, wall }) {
   side(0, w, w);
   side(aw - w, w, aw - w - 1);
 }
+
+/** The little sprites (letter grids, K = outline) and palettes, for the visitor games' fields (fieldlooks.js). */
+export const SPRITES = { TREE, TREE_PAL, BUSH, ROCK, ROCK_PAL, PALM, PALM_PAL, KELP, KELP_PAL, CORAL, BOULDER, CRATER, CRYSTAL, SPIRE, CANDY, SPRUCE, SPRUCE_PAL, JUNGLE_TREE, JUNGLE_PAL, FERN, FLOWER, OUT };

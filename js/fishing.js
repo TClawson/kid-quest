@@ -39,6 +39,7 @@ import { Player, rng, canvas, clamp, HAPPY } from './play.js';
 import { weightFor, sizeClass, fmtWeight, CLASSES } from './fishfacts.js';
 import { fishPic, baitArt, shade, mix } from './fishart.js';
 import { needle, drawMeter, addPop, ZONE_COLORS } from './meter.js';
+import { FISHING_EVENTS, EVENT, twistFor } from './mapplay.js';
 
 export { fishPic };
 
@@ -474,6 +475,132 @@ export class Fishing {
     this.phase = 'ready';
     this.catches = [];
     this.seedFish();
+    // the lake's event (mapplay.js): once or twice a game, said a few seconds ahead
+    this.ev = twistFor(FISHING_EVENTS, this.map);
+    this.resetEvent();
+  }
+
+  // ---------- the lake's event ----------
+  resetEvent() { this.event = null; this.evAt = EVENT.first[0] + this.r() * (EVENT.first[1] - EVENT.first[0]); }
+
+  /** Seconds of play so far. */
+  get played() { return GAME_SECONDS - this.left; }
+
+  /** The event is on (not just being said). */
+  get eventOn() { return Boolean(this.event) && this.t >= this.event.on && this.t < this.event.off; }
+
+  /** Starts, runs and ends the lake's event. */
+  stepEvent(dt) {
+    const ev = this.ev;
+    if (!this.event && this.played >= this.evAt && this.left > EVENT.warn + 6) {
+      const reach = this.W - this.homeX - 14;
+      const x = this.homeX + 14 + reach * (ev.kind === 'tide' ? 0.22 : ev.drift < 0 ? 0.8 : ev.drift > 0 ? 0.3 : 0.35 + this.r() * 0.45);
+      const y = ev.kind === 'rise' || ev.look === 'fruit' || ev.look === 'sprinkles' || ev.look === 'rings' || ev.look === 'bread' ? this.surface + 8 : this.surface + (this.H - this.surface) * 0.45;
+      this.event = { on: this.t + EVENT.warn, off: this.t + EVENT.warn + EVENT.last, x, y, r: ev.wide ? 70 : 34, spawned: false };
+      this.pop(ev.warn, this.camX + this.fieldW / 2, this.surface - 14, '#ffd43b', true);
+    }
+    const e = this.event; if (!e) return;
+    if (this.eventOn) {
+      if (ev.drift) e.x = clamp(e.x + ev.drift * dt, this.leftLimit + 10, this.W - 12);
+      if (!e.spawned) {
+        e.spawned = true;
+        this.pop(ev.tip, this.camX + this.fieldW / 2, this.surface - 14, '#ffffff', true);
+        if (ev.look === 'star' || ev.look === 'bread') this.splash(e.x);
+        // a salmon run: a few of the map's own fish swim through; the tide brings fish in close;
+        // a rumble or a shooting star brings out the map's rare fish
+        if (ev.kind === 'burst') for (let i = 0; i < 3; i += 1) this.arrivals.push([this.t + i * 0.8, i === 0 && this.spot.special ? 'special' : this.pickKind()]);
+        if (ev.kind === 'tide') for (let i = 0; i < 3; i += 1) this.arrivals.push([this.t + i * 0.6, this.pickKind()]);
+        if (ev.kind === 'special' && this.spot.special) this.arrivals.push([this.t + 0.5, 'special']);
+        this.arrivals.sort((a, b) => a[0] - b[0]);
+      }
+    }
+    if (this.t >= e.off) { this.event = null; this.evAt = this.played + EVENT.gap[0] + this.r() * (EVENT.gap[1] - EVENT.gap[0]); }
+  }
+
+  /** The hot spot fish swim to while the event is on, or null. */
+  hotSpot() { return this.eventOn && this.ev.kind !== 'burst' ? this.event : null; }
+
+  /** How much likelier fish take the bait at x, y (inside the hot spot). */
+  biteBoost(x, y) { const h = this.hotSpot(); return h && Math.hypot(x - h.x, (y - h.y) * 1.4) < h.r ? EVENT.bite : 1; }
+
+  /** The event on the lake: rings, bread, the turtle, goo bubbles, fruit, sprinkles, the star. */
+  drawEvent(ctx) {
+    const e = this.event; if (!e) return;
+    const Z = this.Z; const look = this.ev.look; const on = this.eventOn; const S = this.surface;
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a, b, w, h); };
+    const t = this.t;
+    if (!on) {
+      // the warning: a little sign of what is coming
+      if (look === 'shake' || this.ev.kind === 'burst' || this.ev.kind === 'tide') return;
+      if (Math.floor(t * 4) % 2) P('#ffd43b', e.x - 0.5, S - 8, 1, 3);
+      return;
+    }
+    const k = (t - e.on) / (e.off - e.on);
+    // the hot spot: a shimmer where the fish gather, and a bouncing arrow over it (cast here!)
+    if (this.hotSpot()) {
+      const n = 40; const pulse = 0.35 + 0.2 * Math.sin(t * 4);
+      for (let a = 0; a < n; a += 1) if (a % 2) P(`rgba(255,243,191,${pulse})`, e.x + Math.cos(a / n * 6.283) * e.r * 0.7, e.y + Math.sin(a / n * 6.283) * Math.min(e.r * 0.35, 12), 1, 1);
+      const ay = S - 14 - Math.round(Math.abs(Math.sin(t * 5)) * 4); const ax = Math.round(e.x);
+      P('#1b1430', ax - 4, ay - 1, 9, 5); P('#1b1430', ax - 2, ay - 6, 5, 6);
+      P('#ffd43b', ax - 1, ay - 5, 3, 5); P('#ffd43b', ax - 3, ay, 7, 1); P('#ffd43b', ax - 2, ay + 1, 5, 1); P('#ffd43b', ax - 1, ay + 2, 3, 1); P('#ffd43b', ax, ay + 3, 1, 1);
+    }
+    if (this.ev.kind === 'tide') {
+      // the tide: the water rises up the shore, with foam rolling in along the top
+      const up = Math.round(Math.min(1, (t - e.on) / 1.5, (e.off - t) / 1.5) * 8);
+      const x0 = this.leftLimit; const x1 = this.W;
+      P('rgba(21,170,191,0.8)', x0, S - up, x1 - x0, up);
+      for (let x = Math.floor(x0); x < x1; x += 1) if ((x + Math.floor(t * 12)) % 6 < 4) P('#ffffff', x, S - up - (Math.sin(x * 0.4 + t * 5) > 0.3 ? 1 : 0), 1, 1);
+    }
+    if (look === 'shake') {
+      // the rumble: the sky flashes red and glowing rocks splash into the lake
+      if (t - e.on < 2.5 && Math.floor(t * 6) % 2) P('rgba(255,107,26,0.18)', 0, 0, this.W, this.H);
+      for (let i = 0; i < 6; i += 1) {
+        const ph = (t * 0.6 + i * 0.17) % 1; const rx = this.homeX + 30 + ((i * 97) % Math.max(40, this.W - this.homeX - 50));
+        const ry = S - 40 + ph * 40;
+        if (ry < S) { P('#1b1430', rx - 1, ry - 1, 4, 4); P(i % 2 ? '#ff6b1a' : '#ffd43b', rx, ry, 2, 2); P('rgba(173,181,189,0.7)', rx + 1, ry - 4, 1, 2); }
+        else P('#ffffff', rx - 2, S, 6, 1 / Z);
+      }
+    }
+    if (look === 'rings' || look === 'sprinkles' || look === 'goo') {
+      for (let i = 0; i < (look === 'sprinkles' ? 24 : 6); i += 1) {
+        const ph = (t * 0.7 + i * 0.37) % 1; const ox = Math.sin(i * 12.9) * e.r * 0.8;
+        if (look === 'rings') {
+          const rad = 1 + ph * 8;
+          for (let a = 0; a < 24; a += 1) P(`rgba(255,255,255,${1 - ph * 0.6})`, e.x + ox + Math.cos(a / 24 * 6.283) * rad, S + 1 + Math.sin(a / 24 * 6.283) * rad * 0.3, 1, 1);
+          // a mayfly flutters above
+          const mx = e.x + ox + Math.sin(t * 3 + i) * 3; const my = S - 4 - ph * 8;
+          P('#1b1430', mx - 1, my, 2, 1); P('#fff3bf', mx - 1, my - 1, 1, 1); P('#fff3bf', mx + 1, my - 1, 1, 1);
+        } else if (look === 'sprinkles') { const sy = S - 12 + ph * 16; P(['#ff6b6b', '#ffd43b', '#4dabf7', '#69db7c', '#b197fc'][i % 5], e.x + ox, sy, 1, 2); if (sy > S) P('#ffffff', e.x + ox - 1, S, 3, 1 / Z); }
+        else {
+          // round goo bubbles rising, and a goo spout at the top
+          const by = S + 34 - ph * 34; const gx = e.x + ox * 0.5;
+          P('#1b1430', gx - 1, by - 2, 4, 6); P('#1b1430', gx - 2, by - 1, 6, 4); P('#8ce99a', gx - 1, by - 1, 4, 4); P('#ffffff', gx - 1, by - 1, 1, 1);
+          if (i === 0) { const sh = 4 + Math.round(Math.abs(Math.sin(t * 3)) * 6); P('#1b1430', e.x - 2, S - sh - 1, 5, sh + 1); P('#69db7c', e.x - 1, S - sh, 3, sh); P('#b2f2bb', e.x - 3, S - sh - 2, 2, 2); P('#b2f2bb', e.x + 2, S - sh - 1, 2, 2); }
+        }
+      }
+    } else if (look === 'bread') {
+      for (let i = 0; i < 9; i += 1) { const bx = e.x - 12 + i * 3 + Math.sin(t + i) * 1; const by = S + 1 + (i % 3) * 2 + k * 10; P('#1b1430', bx - 1, by - 1, 4, 3); P(i % 2 ? '#e9b96e' : '#c98a4b', bx, by, 2, 1); }
+    } else if (look === 'fruit') {
+      // a little raft of leaves piled with fruit
+      const bob = Math.sin(t * 3) > 0 ? 0 : 1; const fx = Math.round(e.x); const fy = S - 1 + bob;
+      P('#1b1430', fx - 11, fy - 1, 22, 4); P('#2f9e44', fx - 10, fy, 20, 2); P('#8ce99a', fx - 9, fy, 6, 1);
+      for (const [dx, c] of [[-8, '#ff6b6b'], [-3, '#ffd43b'], [2, '#ff922b'], [6, '#e64980']]) { P('#1b1430', fx + dx - 1, fy - 5, 5, 5); P(c, fx + dx, fy - 4, 3, 3); P('#ffffff', fx + dx, fy - 4, 1, 1); }
+    } else if (look === 'turtle') {
+      // a sea turtle seen from above: a big domed shell with plates, four flippers, a head
+      const tx = Math.round(e.x); const ty = Math.round(e.y); const fl = Math.sin(t * 4) > 0 ? 2 : 0;
+      for (const [dx, dy, w, h] of [[-8, -6 - fl, 5, 3], [4, -6 - fl, 5, 3], [-7, 5 + fl, 4, 2], [4, 5 + fl, 4, 2]]) { P('#1b1430', tx + dx - 1, ty + dy - 1, w + 2, h + 2); P('#d8c88a', tx + dx, ty + dy, w, h); }
+      P('#1b1430', tx - 16, ty - 3, 6, 6); P('#d8c88a', tx - 15, ty - 2, 4, 4); P('#1b1430', tx - 15, ty - 1, 1, 1);
+      P('#1b1430', tx - 11, ty - 6, 20, 12); P('#1b1430', tx - 9, ty - 7, 16, 14);
+      P('#8a6a2a', tx - 10, ty - 5, 18, 10); P('#8a6a2a', tx - 8, ty - 6, 14, 12);
+      for (const [dx, dy] of [[-7, -4], [-2, -5], [3, -4], [-7, 1], [-2, 2], [3, 1]]) P('#c9a24a', tx + dx, ty + dy, 4, 3);
+      P('#5c3a1e', tx - 3, ty - 1, 2, 2);
+    } else if (look === 'star') {
+      // the star streaks down the sky into the lake, then sparkles where it fell
+      const d = t - e.on;
+      if (d < 1) { const sx = e.x + (1 - d) * 60; const sy = S - (1 - d) * 50; for (let j = 0; j < 14; j += 1) P(j < 3 ? '#ffffff' : j < 8 ? '#ffd43b' : 'rgba(255,212,59,0.5)', sx + j * 1.2, sy - j, 2, 2); }
+      for (let i = 0; i < 8; i += 1) { const a = t * 1.5 + i * 0.785; const rr = 5 + (i % 2) * 3; P(i % 2 ? '#fff3bf' : '#ffd43b', e.x + Math.cos(a) * rr, S + 2 + Math.sin(a) * rr * 0.4, 2, 1); }
+      for (let i = 0; i < 5; i += 1) P(i % 2 ? '#fff3bf' : '#ffd43b', e.x + Math.cos(t * 2 + i * 1.26) * 4, e.y + Math.sin(t * 2 + i * 1.26) * 2.5, 1, 1);
+    }
   }
 
   /** The kid's points, like the other games' score. */
@@ -796,7 +923,7 @@ export class Fishing {
   // ---------- fish coming and going ----------
   pickKind() {
     const sp = this.spot; const odds = { ...sp.odds };
-    if (sp.special) odds.special = sp.special.odds * (1 + RODS_RARE * (this.rodTier - 1));
+    if (sp.special) odds.special = sp.special.odds * (1 + RODS_RARE * (this.rodTier - 1)) * (this.eventOn ? EVENT.specialOdds : 1);
     const total = Object.values(odds).reduce((a, b) => a + b, 0);
     let x = this.r() * total;
     for (const [k, v] of Object.entries(odds)) { x -= v; if (x <= 0) return k; }
@@ -842,6 +969,7 @@ export class Fishing {
       lb: weightFor(this.speciesKey(kind === 'special' ? sp.special.id : kind), size),
       pic: fishPic(look, len, this.Z), x, y, vx: 0, vy: 0, dir: x < this.W / 2 ? 1 : -1, speed: base.speed * (0.8 + this.r() * 0.4),
       move, state: 'swim', born: this.t, life: 10 + this.r() * 20, homeY: y, wob: this.r() * 10, mood: 0, checkAt: 0, pull: base.pull,
+      turnAt: this.t, // no turning round in its first moments either (so it never flickers)
     };
     f.pick = Math.min(1, size); // how picky it is and how it bites: as for its kind's biggest at most
     f.pw = f.pic.width / this.Z; f.ph = f.pic.height / this.Z; // size in game pixels
@@ -923,6 +1051,9 @@ export class Fishing {
       if (!leaving && sc.x < (sc.minX ?? this.leftLimit + 8)) sc.dir = 1;
       if (!leaving && sc.x > (sc.maxX ?? W - 18)) sc.dir = -1;
       if (leaving) sc.dir = 1;
+      // a school heads for the event's hot spot
+      const hot = this.hotSpot();
+      if (hot && !leaving && Math.abs(sc.x - hot.x) < 120) sc.dir = hot.x > sc.x + 4 ? 1 : hot.x < sc.x - 4 ? -1 : sc.dir;
       if (sc.x > W + 60) sc.gone = true;
     }
     for (const f of this.fish) {
@@ -962,6 +1093,12 @@ export class Fishing {
         else if (f.x > (f.maxX ?? W - 14) && f.dir > 0) f.dir = -1;
         tx = f.x + f.dir * 20; ty = f.homeY + Math.sin(this.t * 0.4 + f.wob) * 4;
       }
+      // fish near the event's hot spot swim to it and hang around it
+      const hot = this.hotSpot();
+      if (hot && f.state === 'swim' && !leaving && f.move !== 'school' && f.move !== 'shadow' && Math.abs(f.x - hot.x) < 110) {
+        tx = hot.x + Math.sin(this.t * 0.8 + f.wob) * hot.r * 0.6; ty = hot.y + Math.sin(this.t * 0.6 + f.wob * 2) * 6; spd = f.speed * 1.3;
+        if (Math.abs(tx - f.x) > 2) f.dir = tx > f.x ? 1 : -1;
+      }
       ty = clamp(ty, S + 4, this.bedAt(f.x) - 2);
       const dx = tx - f.x; const dy = ty - f.y; const d = Math.hypot(dx, dy);
       if (d > 0.3) { const k = Math.min(1, (spd * dt) / d); f.x += dx * k; f.y += dy * k; }
@@ -989,14 +1126,21 @@ export class Fishing {
   /** Red short, yellow medium, green far; a better rod widens green a little. */
   zoneOf(m, tier = this.rodTier) { const g = 0.82 - 0.04 * (tier - 1); return m < 0.45 ? 'red' : m < g ? 'yellow' : 'green'; }
 
-  cast(L, m = this.meter(L)) {
-    const tier = L === this.lines.vis ? this.visTier : this.rodTier;
+  /** Where (lake x) a cast with the needle at m comes down. */
+  landAt(m, tier = this.rodTier) {
     const zone = this.zoneOf(m, tier);
     const g = 0.82 - 0.04 * (tier - 1);
     const reach = this.W - this.homeX - 14;
     const span = { red: [0.12, 0.32], yellow: [0.38, 0.62], green: [0.7, 0.95] }[zone];
     const k = zone === 'red' ? m / 0.45 : zone === 'yellow' ? (m - 0.45) / (g - 0.45) : (m - g) / (1 - g);
-    const land = this.homeX + 14 + reach * (span[0] + (span[1] - span[0]) * clamp(k, 0, 1));
+    return this.homeX + 14 + reach * (span[0] + (span[1] - span[0]) * clamp(k, 0, 1));
+  }
+
+  cast(L, m = this.meter(L)) {
+    const tier = L === this.lines.vis ? this.visTier : this.rodTier;
+    const zone = this.zoneOf(m, tier);
+    const reach = this.W - this.homeX - 14;
+    const land = this.landAt(m, tier);
     const [rx, ry] = this.rodTip(L.who);
     L.state = 'air'; L.from = [rx, ry]; L.to = [Math.round(land), this.surface]; L.t0 = this.t; L.flight = 0.5 + 0.5 * (land - rx) / reach;
     L.zone = zone; L.tried = new Set(); L.snagged = null; L.fish = null; L.tension = 0;
@@ -1105,11 +1249,11 @@ export class Fishing {
       if (f.state === 'swim' && d < SPECIES[f.kind === 'special' ? this.spot.special.as : f.kind].reach && this.t >= f.checkAt && !(f.waryUntil > this.t)) {
         f.checkAt = this.t + 0.5;
         if (like < 0) { const sc = f.school; for (const o of this.fish) if (o.school === sc && o.move === 'school') this.spook(o); if (sc) sc.gone = true; this.pop('Eek! A spoon!', f.x, f.y - 6, '#ff8787'); continue; }
-        if (like >= pickiness(f.pick) && this.r() < like * 0.3 * (1 - 0.5 * f.pick)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
+        if (like >= pickiness(f.pick) && this.r() < like * 0.3 * (1 - 0.5 * f.pick) * this.biteBoost(L.x, L.y)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
       } else if (f.state === 'interest') {
         if (this.t - f.since > 8) { f.state = 'swim'; f.line = null; continue; }
         // sometimes they just take it
-        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.pick) * biteScale(f.pick) * dt) { this.hook(L, f); return; }
+        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.pick) * biteScale(f.pick) * this.biteBoost(L.x, L.y) * dt) { this.hook(L, f); return; }
       }
     }
   }
@@ -1242,6 +1386,7 @@ export class Fishing {
 
   restart() {
     this.phase = 'ready'; this.left = GAME_SECONDS; this.overtime = 0; this.points = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false; this.records = 0;
+    this.resetEvent();
     this.ai.next = this.t + 2;
   }
 
@@ -1255,6 +1400,7 @@ export class Fishing {
     const holding = L.held && this.t - L.downAt >= HOLD;
     this.stepLine(L, dt, holding);
     this.stepAI(dt);
+    this.stepEvent(dt);
     this.stepFish(dt);
     for (const p of [this.kid, this.vis]) p.move(dt);
     this.pops = this.pops.filter((p) => this.t - p.at < 1.4);
@@ -1266,8 +1412,10 @@ export class Fishing {
     const Z = this.Z;
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(this.field, -this.camX * Z, 0);
-    ctx.setTransform(Z, 0, 0, Z, -this.camX * Z, 0); // game pixels from here on (the view follows the boat)
+    // Lava Lake's rumble shakes the view a little
+    const shake = this.eventOn && this.ev.look === 'shake' && this.t - this.event.on < 2.5 ? Math.round(Math.sin(this.t * 60) * 2) : 0;
+    ctx.drawImage(this.field, -this.camX * Z + shake, 0);
+    ctx.setTransform(Z, 0, 0, Z, -this.camX * Z + shake, 0); // game pixels from here on (the view follows the boat)
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
     // fish
     for (const f of this.fish) {
@@ -1277,6 +1425,7 @@ export class Fishing {
       ctx.drawImage(f.pic, cx - f.pw / 2, y, f.pw, f.ph);
       ctx.restore();
     }
+    this.drawEvent(ctx);
     this.drawWeeds(ctx);
     this.drawTop(ctx);
     // splashes: drops thrown up on both sides
@@ -1363,6 +1512,8 @@ export class Fishing {
     // clock
     const secs = Math.ceil(this.left);
     text(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, (this.chips()[0].y + 16) * S, u * 1.3, secs <= 10 && this.phase === 'play' ? '#ff8787' : '#e9ecef');
+    // the lake's event, while it's on
+    if (this.eventOn && this.phase === 'play') text(`${this.ev.name}! ${Math.ceil(this.event.off - this.t)} s`, W / 2, Y(this.H) - u * 1.6, u * 1.5, '#ffd43b'); // along the bottom, off the water's surface
     // points
     const ch0 = this.chips()[0]; const ch2 = this.chips()[2];
     ctx.textAlign = 'right'; text(`${this.kid.name} ${this.points.kid}`, (ch0.x - 3) * S, (ch0.y + 6) * S, u * 1.5, '#ffd43b');
@@ -1385,6 +1536,12 @@ export class Fishing {
       const m = this.meter(L);
       const mx = X(this.homeX) + 4 * S; const my = SY - 22 * S; const mw = u * 18; const mh = u * 1.6;
       drawMeter(ctx, (k) => this.zoneOf(k), m, mx, my, mw, mh, S);
+      // the lake's hot spot: a gold bar over the part of the meter that lands in it
+      const hot = this.hotSpot();
+      if (hot) {
+        ctx.fillStyle = Math.floor(this.t * 4) % 2 ? '#ffd43b' : '#fff3bf';
+        for (let i = 0; i < 100; i += 1) if (Math.abs(this.landAt((i + 0.5) / 100) - hot.x) < hot.r * 0.8) ctx.fillRect(mx + (i * mw) / 100, my - u * 0.9, mw / 100 + 0.5, u * 0.6);
+      }
       ctx.textAlign = 'left'; text('short', mx + u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'right'; text('far', mx + mw - u * 0.3, my + mh + u * 0.8, u * 0.8); ctx.textAlign = 'center';
     }
     // line tension while a fish is on
