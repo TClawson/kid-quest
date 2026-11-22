@@ -35,6 +35,7 @@ import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
 import { leaderboard, weekOf } from './leaderboard.js';
 import { openSkiBook } from './skibook-ui.js';
 import { openFindsBook, openFindPage, bookTabs } from './findsbook-ui.js';
+import { openFansBook, openFanPage } from './fansbook-ui.js';
 import { releaseDay, releaseLabel } from './releases.js';
 import { openDigBook, openDinoPage, openTreasurePage, openDisplayPicker, digShow } from './digbook-ui.js';
 import { openTrickBook, openTrickPage } from './trickbook-ui.js';
@@ -3375,7 +3376,7 @@ actions['fish-page'] = (el) => {
 };
 actions['fish-book-back'] = () => openFishBook(kidById(ui.kidId), ui.fbScroll || 0);
 // the book in the house holds two books: fish and the treasure hill finds
-actions['book-tab'] = (el) => { sounds.tap(); ({ finds: openFindsBook, digs: (kid) => openDigBook(kid, ui.dgTab || 'skeletons') }[el.dataset.book] || openFishBook)(kidById(ui.kidId)); };
+actions['book-tab'] = (el) => { sounds.tap(); ({ finds: openFindsBook, fans: openFansBook, digs: (kid) => openDigBook(kid, ui.dgTab || 'skeletons') }[el.dataset.book] || openFishBook)(kidById(ui.kidId)); };
 actions['find-page'] = (el) => {
   const card = $modal.querySelector('.modal-card');
   ui.fdScroll = card ? card.scrollTop : 0;
@@ -3383,6 +3384,13 @@ actions['find-page'] = (el) => {
   openFindPage(kidById(ui.kidId), el.dataset.key);
 };
 actions['finds-book-back'] = () => openFindsBook(kidById(ui.kidId), ui.fdScroll || 0);
+actions['fan-page'] = (el) => {
+  const card = $modal.querySelector('.modal-card');
+  ui.fnScroll = card ? card.scrollTop : 0;
+  sounds.tap();
+  openFanPage(kidById(ui.kidId), el.dataset.id);
+};
+actions['fans-book-back'] = () => openFansBook(kidById(ui.kidId), ui.fnScroll || 0);
 actions['critter-page'] = (el) => {
   ui.caScroll = $modal.querySelector('.modal-card')?.scrollTop || 0;
   openCritterPage(kidById(ui.kidId), el.dataset.critter);

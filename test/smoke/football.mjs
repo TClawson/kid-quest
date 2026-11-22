@@ -155,7 +155,7 @@ try {
     assert.ok(tapped[1], 'the tap has a timing color');
     // end the session early and check the best score is kept
     await page.waitForFunction(() => document.querySelector('.playground').game.down.stage === 'result');
-    await page.evaluate(() => { const g = document.querySelector('.playground').game; g.score = 35; g.left = 0.05; });
+    await page.evaluate(() => { const g = document.querySelector('.playground').game; g.score = 35; g.left = 0.05; g.dog = null; g.tw = { ...g.tw, dog: 0 }; /* no last-second fetch by the village dog (mapplay.js) */ });
     await page.waitForFunction(() => document.querySelector('.playground')?.dataset.phase === 'over', null, { timeout: 8000 });
     await page.waitForTimeout(300);
     if (shots) await page.screenshot({ path: `${shots}/football-over-${name}.png` });

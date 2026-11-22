@@ -30,6 +30,9 @@ import { ballCells, SPRITE_Y } from './avatar.js';
 import { clamp } from './pixelkit.js';
 import { addPop } from './meter.js';
 import { TagFun, personalityFor, MAP_TRICKS, trickFor } from './tagfun.js';
+import { paintBackdrop, paintGround, fieldLook, mapBallCells, shadeFor } from './fieldlooks.js';
+import { SOCCER_TWISTS, twistFor } from './mapplay.js';
+import { FanWatch } from './fans.js';
 
 /**
  * Which game a visitor plays, from the gear they own ({ kind: best tier }): one of
@@ -272,10 +275,16 @@ export class Play {
       this.personality = opts.visitor.personality || personalityFor(opts.visitor.buddy?.species, opts.visitor.name);
       this.fun = new TagFun(this, this.map, this.personality);
     }
+    // keepy-uppy: the kid's map brings its own field and twist (mapplay.js)
+    if (this.kind === 'soccer') {
+      this.tw = twistFor(SOCCER_TWISTS, this.map);
+      // the map's critters come to watch (fans.js)
+      this.fans = new FanWatch({ map: this.map, r: this.r, dry: opts.fanDry || 0, onFan: opts.onFan, onSeen: opts.onFanSeen });
+    }
     this.field = this.paintField();
     if (this.kind === 'soccer') {
       this.tier = Math.max(this.kid.gear.soccer || 0, this.vis.gear.soccer || 0, 1);
-      this.ballPic = cellsCanvas(ballCells('soccer', this.tier));
+      this.ballPic = cellsCanvas((this.tw.ball && mapBallCells(this.tw.ball)) || ballCells('soccer', this.tier));
     }
     this.reset();
   }
@@ -286,6 +295,9 @@ export class Play {
     if (this.kind === 'soccer') {
       this.count = 0; this.wob = 0;
       this.want = null; this.holderKicks = 0; this.wrong = 0;
+      // the map's twist: streaks, acorns, the candy bounce, gravity waves, rain
+      this.streak = 0; this.acorn = null; this.acornAt = 4 + this.r() * 3; this.bounceAt = this.tw.bounce || 0;
+      this.grav = 1; this.gravNext = null; this.playT = 0; this.bubbles = [];
       this.ball = { state: 'held', owner: this.vis, x: this.vis.home[0], y: this.vis.home[1] + 1, h: FOOT };
     } else {
       this.it = null; this.tags = 0; this.free = 0; this.frozen = 0; this.wander = 0; this.itSince = 0;
@@ -347,7 +359,19 @@ export class Play {
   windows() { return kickWindows(this.count, this.tier); }
 
   /** Seconds the ball is in the air for a straight-up juggle: a little quicker as the count goes up. */
-  beat() { return Math.max(0.62, 1.0 - this.count * 0.01); }
+  beat() { return Math.max(0.62, 1.0 - this.count * 0.01) * this.beatTwist(); }
+
+  /** The map's twist on the air time: floaty water, a beach ball, rain, gravity waves. */
+  beatTwist() {
+    const tw = this.tw || {};
+    return (tw.beat || 1) * (this.raining() ? tw.rain.beat : 1) * (this.grav || 1);
+  }
+
+  /** Rainforest: a shower comes every so often and lasts a while (not in the first few seconds). */
+  raining() {
+    const rain = this.tw?.rain;
+    return Boolean(rain) && this.phase === 'play' && this.playT > 6 && (this.playT % rain.every) > rain.every - rain.last;
+  }
 
   /** When the ball next reaches a foot, and whose (for the preview script and tests). */
   next() { const b = this.ball; return b.state === 'air' ? { at: b.contact, to: b.to } : null; }
@@ -361,6 +385,7 @@ export class Play {
       this.kick(this.vis, who, 'start', 0);
       return;
     }
+    if (this.tapAcorn(x, y)) return;
     if (b.state !== 'air') return;
     const w = this.windows();
     const e = this.t - b.contact;
@@ -377,7 +402,7 @@ export class Play {
     const q = Math.abs(e) <= w.perfect ? 'perfect' : Math.abs(e) <= w.good ? 'good' : 'off';
     // the wrong buddy still keeps it going, but costs points
     const right = !this.want || who === this.want;
-    if (right) this.count += 1;
+    if (right) this.count += 1 + this.bonus(q, who, keeper);
     else { this.count = Math.max(0, this.count - WRONG_BUDDY); this.wrong += 1; this.pop(`Wrong buddy! −${WRONG_BUDDY}`, who.x, who.y - 38, '#ff8787', true); }
     this.kick(keeper, who, q, e);
   }
@@ -385,9 +410,11 @@ export class Play {
   kick(from, to, q, e) {
     const b = this.ball;
     const w = this.windows();
-    if (q === 'perfect') this.wob = Math.max(0, this.wob - 0.4);
+    const tw = this.tw || {};
+    if (q === 'perfect') this.wob = tw.clear ? 0 : Math.max(0, this.wob - 0.4);
     else if (q === 'good') this.wob = Math.max(0, this.wob - 0.15);
-    else if (q === 'off') this.wob += 0.35 + 0.35 * clamp((Math.abs(e) - w.good) / (w.early - w.good), 0, 1);
+    else if (q === 'off') this.wob += (0.35 + 0.35 * clamp((Math.abs(e) - w.good) / (w.early - w.good), 0, 1)) * (tw.wob || 1);
+    if (q === 'perfect' && tw.bubbles) for (let i = 0; i < 5; i += 1) this.bubbles.push({ x: from.x + (this.r() - 0.5) * 8, y: from.y - 6, at: this.t + i * 0.06 });
     const wild = this.wob >= 1;
     from.brain.impulse('kick', 1);
     from.face = to === from ? from.face : (to.x > from.x ? 1 : -1);
@@ -399,7 +426,7 @@ export class Play {
     const pass = to !== from;
     // whose turn it is next: the longer one buddy keeps it, the likelier a pass
     this.holderKicks = pass || q === 'start' ? 1 : this.holderKicks + 1;
-    const callPass = this.r() < Math.min(1, SWITCH_STEP * this.holderKicks);
+    const callPass = this.r() < Math.min(1, SWITCH_STEP * (tw.step || 1) * this.holderKicks);
     this.want = callPass ? this.other(to) : to;
     if (callPass) this.pop('Pass!', this.want.home[0], this.want.home[1] - 34, '#ffd43b');
     // each kick goes a little higher or lower than the last, so the timing changes
@@ -413,13 +440,18 @@ export class Play {
       if (tx < bd.x0 + 4 || tx > bd.x1 - 4) tx = to.home[0] - side;
       tx = clamp(tx, bd.x0 + 4, bd.x1 - 4); ty = clamp(ty, bd.y0 + 8, bd.y1 - 2);
     }
+    // Moon Base: every so many kicks a moon kick, way up and slow, in low gravity
+    const moon = tw.moon && q !== 'start' && q !== 'off' && this.count > 0 && this.count % tw.moon === 0;
+    const g = moon ? GRAV * 0.4 : GRAV;
+    if (moon) { T *= 1.7; this.pop('Moon kick!', from.x, from.y - 38, '#d0ebff', true); }
     // never higher than the top of the field, never so low it can't be read
-    T = clamp(T, 0.42, Math.sqrt((8 * Math.max(20, ty - this.top)) / GRAV));
+    T = clamp(T, 0.42, Math.sqrt((8 * Math.max(20, ty - this.top)) / g));
     if (wild) this.pop('Whoa!', from.x, from.y - 28, '#ffa8a8');
     Object.assign(b, {
       state: 'air', owner: from, to, fx: b.x, fy: b.y, fh: b.h, tx, ty,
-      t0: this.t, T, contact: this.t + T, apex: (GRAV * T * T) / 8,
+      t0: this.t, T, contact: this.t + T, apex: (g * T * T) / 8, moon,
     });
+    if (q !== 'start') this.maybeAcorn(T);
     // the ball comes down beside the receiving buddy, on the side facing the other buddy
     const face = this.other(to).home[0] > tx ? 1 : -1;
     to.goTo(clamp(tx - face * 8, bd.x0, bd.x1), clamp(ty - 1, bd.y0, bd.y1));
@@ -429,6 +461,10 @@ export class Play {
 
   stepSoccer(dt) {
     const b = this.ball;
+    if (this.phase === 'play') this.playT += dt;
+    this.fans?.step(dt, this.phase === 'play');
+    if (this.acorn && this.t - this.acorn.land > 0.6) this.acorn = null;
+    this.bubbles = this.bubbles.filter((u) => this.t - u.at < 1.4);
     if (b.state === 'held') {
       b.x = b.owner.x + b.owner.face * 4; b.y = b.owner.y + 1;
       b.h = FOOT + Math.round(Math.abs(Math.sin(this.t * 3)) * 2);
@@ -457,8 +493,70 @@ export class Play {
     for (const p of [this.kid, this.vis]) if (p.run < 0.2) p.face = this.other(p).x > p.x ? 1 : -1;
   }
 
+  /**
+   * Extra kicks the map gives for a kick (on top of the 1): a perfect in the rain counts double,
+   * a royal fanfare for Perfects in a row, a hot pass. Also moves gravity waves along.
+   */
+  bonus(q, who, keeper) {
+    const tw = this.tw || {};
+    let n = 0;
+    this.streak = q === 'perfect' ? this.streak + 1 : 0;
+    if (q === 'perfect') { const w = this.fans?.great(); if (w) this.pop(w, this.W * this.fans.seat, this.top + 10, '#ff8fa3', true); }
+    if (q === 'perfect' && this.raining()) { n += 1; this.pop('Double!', who.x, who.y - 40, '#74c0fc'); }
+    if (tw.fanfare && this.streak >= tw.fanfare) { n += 1; this.streak = 0; this.pop('Fanfare! +1', who.x, who.y - 46, '#ffd43b', true); this.sound = 'goal'; }
+    if (tw.hot && q !== 'off' && who !== keeper && this.holderKicks >= tw.hot) { n += 1; this.pop('Hot pass! +1', who.x, who.y - 46, '#ff922b', true); }
+    if (tw.waves) {
+      const c = this.count + 1 + n;
+      if (c % tw.waves >= tw.waves - 2 && this.gravNext == null) {
+        this.gravNext = this.grav > 1.05 ? 0.85 : this.grav < 0.95 ? 1.2 : (this.r() < 0.5 ? 0.85 : 1.2);
+        this.pop(this.gravNext > 1 ? 'Gravity getting lighter...' : 'Gravity getting heavier...', this.W / 2, this.top + 26, '#d0bfff');
+      } else if (c % tw.waves < tw.waves - 2 && this.gravNext != null) {
+        this.grav = this.gravNext; this.gravNext = null;
+        this.pop(this.grav > 1 ? 'Floaty!' : 'Quick!', this.W / 2, this.top + 26, '#ffd43b', true);
+      }
+    }
+    return n;
+  }
+
+  /** The glowing ball (Volcano Island): one buddy has kept it long enough to heat it up. */
+  get hot() { return Boolean(this.tw?.hot) && this.ball?.state === 'air' && this.holderKicks >= this.tw.hot; }
+
+  /** Forest Village: now and then an acorn falls halfway through a kick, away from both buddies. */
+  maybeAcorn(T) {
+    if (!this.tw?.acorn || this.phase !== 'play' || this.acorn || this.playT < this.acornAt || T < 0.7) return;
+    const bd = this.bounds;
+    for (let i = 0; i < 12; i += 1) {
+      const x = bd.x0 + 14 + this.r() * (bd.x1 - bd.x0 - 28); const y = bd.y0 + 10 + this.r() * (bd.y1 - bd.y0 - 14);
+      if ([this.kid, this.vis].some((p) => Math.hypot(p.x - x, p.y - y) < 26) || Math.hypot(this.ball.tx - x, this.ball.ty - y) < 22) continue;
+      const fall = Math.min(0.9, T * 0.6);
+      this.acorn = { x, y, t0: this.t, land: this.t + fall, fall };
+      this.acornAt = this.playT + 6 + this.r() * 4;
+      return;
+    }
+  }
+
+  /** A tap on a landing acorn: +2. Not a kick, so a miss costs nothing. */
+  tapAcorn(x, y) {
+    const a = this.acorn;
+    if (!a || a.got || Math.hypot(x - a.x, y - a.y) > 12 || Math.abs(this.t - a.land) > 0.22) return false;
+    a.got = true;
+    this.count += 2;
+    this.pop('Acorn! +2', a.x, a.y - 14, '#ffd43b', true);
+    this.sound = 'catch';
+    return true;
+  }
+
   drop() {
     const b = this.ball;
+    // Rainbow Land: once every so many kicks the candy grass bounces a dropped ball back up
+    if (this.tw?.bounce && this.phase === 'play' && this.count >= this.bounceAt) {
+      this.bounceAt = this.count + this.tw.bounce;
+      this.pop('Boing!', b.x, b.y - 18, '#f783ac', true);
+      this.sound = 'board';
+      b.x = b.tx; b.y = b.ty; b.h = FOOT;
+      this.kick(b.to, b.to, 'bounce', 0);
+      return;
+    }
     const dir = b.tx >= b.fx ? 1 : -1;
     Object.assign(b, { state: 'loose', vh: 40, vx: dir * 50, at: this.t });
     b.to.brain.impulse('surprise', 1);
@@ -642,6 +740,7 @@ export class Play {
 
   // ---------- drawing ----------
   paintField() {
+    if (this.kind === 'soccer') return this.paintPitch();
     const c = canvas(this.W, this.H); const x = c.getContext('2d');
     const r = rng(7);
     // tag is played on the kid's map's own ground (grass, sand, the moon, snow...)
@@ -668,6 +767,23 @@ export class Play {
     return c;
   }
 
+  /** Keepy-uppy's field: the kid's map's own ground, with its backdrop along the top. */
+  paintPitch() {
+    const c = canvas(this.W, this.H); const x = c.getContext('2d');
+    const look = fieldLook(this.map);
+    const back = this.top + 4;
+    paintGround(x, this.map, 0, back, this.W, this.H - back);
+    paintBackdrop(x, this.map, this.W, back);
+    x.fillStyle = look.line;
+    const b = { x0: 4, y0: this.top + 6, x1: this.W - 5, y1: this.H - 2 };
+    x.fillRect(b.x0, b.y0, b.x1 - b.x0, 1); x.fillRect(b.x0, b.y1, b.x1 - b.x0 + 1, 1);
+    x.fillRect(b.x0, b.y0, 1, b.y1 - b.y0); x.fillRect(b.x1, b.y0, 1, b.y1 - b.y0);
+    const cx = Math.round(this.W / 2); const cy = Math.round((b.y0 + b.y1) / 2);
+    x.fillRect(cx, b.y0, 1, b.y1 - b.y0);
+    for (let a = 0; a < 64; a += 1) x.fillRect(Math.round(cx + Math.cos((a / 64) * Math.PI * 2) * 16), Math.round(cy + Math.sin((a / 64) * Math.PI * 2) * 10), 1, 1);
+    return c;
+  }
+
   /** Draws the field, buddies and ball on a W x H canvas. */
   draw(ctx) {
     ctx.imageSmoothingEnabled = false;
@@ -691,19 +807,59 @@ export class Play {
         if (left < lead) {
           const rad = Math.max(2, 2 + 12 * Math.max(0, left) / lead);
           const near = Math.abs(left) <= this.windows().perfect;
-          ctx.fillStyle = near ? '#ffd43b' : 'rgba(255,255,255,0.85)';
+          ctx.fillStyle = near ? '#ffd43b' : this.map === 'bg-fjord' ? '#1c7ed6' : b.moon ? '#d0ebff' : 'rgba(255,255,255,0.85)';
           const n = Math.max(10, Math.round(rad * 5));
           for (let a = 0; a < n; a += 1) ctx.fillRect(Math.round(b.tx + Math.cos((a / n) * Math.PI * 2) * rad), Math.round(b.ty + Math.sin((a / n) * Math.PI * 2) * rad * 0.5), 1, 1);
         }
       }
-      ctx.fillStyle = 'rgba(20,40,20,0.3)';
+      ctx.fillStyle = shadeFor(this.map);
       const sw = Math.max(3, 6 - Math.round(b.h / 12));
       ctx.fillRect(Math.round(b.x - sw / 2), Math.round(b.y), sw, 1);
-      things.push({ y: b.y + 0.5, draw: () => ctx.drawImage(this.ballPic, Math.round(b.x - 3), Math.round(b.y - b.h - 6)) });
+      const hot = this.hot;
+      things.push({ y: b.y + 0.5, draw: () => {
+        const bx = Math.round(b.x - 3); const by = Math.round(b.y - b.h - 6);
+        // a hot ball glows and steams
+        if (hot) { ctx.fillStyle = Math.floor(this.t * 10) % 2 ? 'rgba(255,146,43,0.55)' : 'rgba(255,212,59,0.5)'; ctx.fillRect(bx - 1, by - 1, 8, 8); ctx.fillStyle = 'rgba(241,243,245,0.8)'; ctx.fillRect(bx + 2 + Math.round(Math.sin(this.t * 9)), by - 3 - Math.floor((this.t * 12) % 3), 1, 1); }
+        ctx.drawImage(this.ballPic, bx, by);
+      } });
+      this.drawTwist(ctx);
     }
+    // a fan watching from the sideline, on the backdrop
+    if (this.fans) { ctx.save(); ctx.translate(cam, 0); this.fans.draw(ctx, Math.round(this.W * this.fans.seat), this.top + 4, this.W); ctx.restore(); }
     for (const o of this.obstacles || []) if (o.x > cam - 20 && o.x < cam + this.W + 20) things.push({ y: o.y, draw: () => this.drawObstacle(ctx, o) });
     things.sort((a, b) => a.y - b.y).forEach((th) => th.draw());
     ctx.restore();
+  }
+
+  /** Keepy-uppy's map extras: an acorn falling, bubbles, rain. */
+  drawTwist(ctx) {
+    const a = this.acorn;
+    if (a && !a.got) {
+      const s = Math.min(1, (this.t - a.t0) / a.fall);
+      const left = a.land - this.t;
+      if (left > -0.6) {
+        // its own ring (brown), shrinking onto where it lands
+        const rad = Math.max(2, 2 + 9 * Math.max(0, left) / a.fall);
+        ctx.fillStyle = Math.abs(left) < 0.22 ? '#ffd43b' : '#a0612f';
+        for (let k = 0; k < 24; k += 1) ctx.fillRect(Math.round(a.x + Math.cos((k / 24) * Math.PI * 2) * rad), Math.round(a.y + Math.sin((k / 24) * Math.PI * 2) * rad * 0.5), 1, 1);
+        const ay = Math.round(a.y - (1 - s) * 40);
+        ctx.fillStyle = '#1b1430'; ctx.fillRect(Math.round(a.x) - 1, ay - 4, 3, 4);
+        ctx.fillStyle = '#a0612f'; ctx.fillRect(Math.round(a.x), ay - 3, 1, 2);
+        ctx.fillStyle = '#5c3a1e'; ctx.fillRect(Math.round(a.x) - 1, ay - 4, 3, 1);
+      }
+    }
+    for (const u of this.bubbles) {
+      const age = this.t - u.at; if (age < 0) continue;
+      ctx.fillStyle = 'rgba(208,235,255,0.85)';
+      ctx.fillRect(Math.round(u.x + Math.sin(age * 6 + u.x) * 2), Math.round(u.y - age * 30), 1, 1);
+    }
+    if (this.raining()) {
+      ctx.fillStyle = 'rgba(165,216,255,0.55)';
+      for (let i = 0; i < 40; i += 1) {
+        const rx = ((i * 37 + this.t * 30) % this.W); const ry = ((i * 53 + this.t * 140) % this.H);
+        ctx.fillRect(Math.round(rx), Math.round(ry), 1, 3);
+      }
+    }
   }
 
   drawObstacle(ctx, o) {
@@ -742,7 +898,9 @@ export class Play {
     const u = S * 4; // a text unit
     if (this.kind === 'soccer') {
       text(String(this.count), W / 2, u * 2.6, u * 4.2, '#ffd43b');
-      if (this.best) text(`Best ${this.best}`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
+      if (this.best) text(`Best here ${this.best}`, W / 2, u * 5.2, u * 1.6, '#e9ecef');
+      if (this.raining()) { ctx.textAlign = 'left'; text('Rain! Perfects x2', u * 1.2, u * 5.2, u * 1.4, '#74c0fc'); ctx.textAlign = 'center'; }
+      if (this.tw?.bounce && this.phase === 'play' && this.count >= this.bounceAt) { ctx.textAlign = 'left'; text('Bounce ready', u * 1.2, u * 5.2, u * 1.4, '#f783ac'); ctx.textAlign = 'center'; }
       // an arrow bobs over the buddy to tap next
       if (this.phase === 'play' && this.want && this.ball.state === 'air') {
         const p = this.want; const bob = Math.round(Math.sin(this.t * 8) * 1.5);
@@ -773,6 +931,11 @@ export class Play {
     if (this.phase === 'ready') {
       const msg = this.locked ? "That's all our games today!" : this.kind === 'soccer' ? 'Tap a buddy to kick off!' : `Tap ${this.vis.name} to start tag!`;
       if (Math.floor(this.t * 2) % 3) text(msg, W / 2, (this.H - 5) * S, u * 1.8);
+      // keepy-uppy: the map's twist
+      if (this.kind === 'soccer' && this.tw && !this.locked) {
+        text(this.tw.name, W / 2, u * 10, u * 1.8, '#ffd43b');
+        text(this.tw.tip, W / 2, u * 12.2, u * 1.4, '#ffffff');
+      }
       // tag: who you're playing and the map's twist
       if (this.fun && !this.locked) {
         const tips = this.fun.tips;

@@ -9,6 +9,7 @@ import { Sledding } from './sledding.js';
 import { SkiRace } from './skirace.js';
 import { PhotoTrain } from './phototrain.js';
 import { Dig } from './dig.js';
+import { fieldLook } from './fieldlooks.js';
 
 let open = null;
 
@@ -51,8 +52,10 @@ export function openPlay(opts) {
 
   const Game = opts.kind === 'hockey' ? Hockey : opts.kind === 'fishing' ? Fishing : opts.kind === 'football' ? Football : opts.kind === 'sledding' ? Sledding : opts.kind === 'race' ? SkiRace : opts.kind === 'train' ? PhotoTrain : opts.kind === 'tricks' ? Bike : opts.kind === 'dig' ? Dig : Play;
   // fishing: the lake for the kid's map, and today's bait odds
-  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, onFind: opts.kind === 'dig' ? opts.onDigFind : opts.onFind, onRun: opts.onRun, onBook: opts.onBook, snow: opts.snow, dry: opts.dry, season: opts.season, weather: opts.weather, clues: opts.clues, onPhoto: opts.onPhoto, onClue: opts.onClue, onTrick: opts.onTrick, book: opts.book, newBike: opts.newBike, onRound: opts.onRound, bones: opts.bones, treasures: opts.treasures, maps: opts.maps });
+  const game = new Game({ W, H, kind: opts.kind, kid: opts.kid, visitor: opts.visitor, best: opts.best, map: opts.map, day: opts.day, seed: Date.now() % 100000, onCatch: opts.onCatch, onFind: opts.kind === 'dig' ? opts.onDigFind : opts.onFind, onRun: opts.onRun, onBook: opts.onBook, snow: opts.snow, dry: opts.dry, season: opts.season, weather: opts.weather, clues: opts.clues, onPhoto: opts.onPhoto, onClue: opts.onClue, onTrick: opts.onTrick, book: opts.book, newBike: opts.newBike, onRound: opts.onRound, bones: opts.bones, treasures: opts.treasures, maps: opts.maps, fanDry: opts.fanDry, onFan: opts.onFan, onFanSeen: opts.onFanSeen });
   root.game = game; // for tests
+  // keepy-uppy, hockey and football play on the map's own ground: the edges match it
+  if (['soccer', 'hockey', 'football'].includes(opts.kind)) root.style.background = fieldLook(opts.map).edge;
   // fishing draws its lake and fish with finer pixels, and a better rod shows more of the
   // lake (fieldW x fieldH lake pixels, shrunk to fit the same screen)
   if (game.Z) { field.width = (game.fieldW || W) * game.Z; field.height = (game.fieldH || H) * game.Z; }

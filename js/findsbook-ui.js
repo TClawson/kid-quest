@@ -30,6 +30,7 @@ export const bookTabs = (on) => `
     <button class="btn ${on === 'fish' ? '' : 'ghost'}" role="tab" aria-selected="${on === 'fish'}" data-action="book-tab" data-book="fish">🎣 Fish</button>
     <button class="btn ${on === 'finds' ? '' : 'ghost'}" role="tab" aria-selected="${on === 'finds'}" data-action="book-tab" data-book="finds">🛷 Finds</button>
     <button class="btn ${on === 'digs' ? '' : 'ghost'}" role="tab" aria-selected="${on === 'digs'}" data-action="book-tab" data-book="digs">🦴 Digs</button>
+    <button class="btn ${on === 'fans' ? '' : 'ghost'}" role="tab" aria-selected="${on === 'fans'}" data-action="book-tab" data-book="fans">📣 Fans</button>
   </div>`;
 
 export function openFindsBook(kid, scrollTo = 0) {

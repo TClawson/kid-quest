@@ -39,6 +39,7 @@ import { Player, rng, canvas, clamp, HAPPY } from './play.js';
 import { weightFor, sizeClass, fmtWeight, CLASSES } from './fishfacts.js';
 import { fishPic, baitArt, shade, mix } from './fishart.js';
 import { needle, drawMeter, addPop, ZONE_COLORS } from './meter.js';
+import { FISHING_EVENTS, EVENT, twistFor } from './mapplay.js';
 
 export { fishPic };
 
@@ -474,6 +475,96 @@ export class Fishing {
     this.phase = 'ready';
     this.catches = [];
     this.seedFish();
+    // the lake's event (mapplay.js): once or twice a game, said a few seconds ahead
+    this.ev = twistFor(FISHING_EVENTS, this.map);
+    this.resetEvent();
+  }
+
+  // ---------- the lake's event ----------
+  resetEvent() { this.event = null; this.evAt = EVENT.first[0] + this.r() * (EVENT.first[1] - EVENT.first[0]); }
+
+  /** Seconds of play so far. */
+  get played() { return GAME_SECONDS - this.left; }
+
+  /** The event is on (not just being said). */
+  get eventOn() { return Boolean(this.event) && this.t >= this.event.on && this.t < this.event.off; }
+
+  /** Starts, runs and ends the lake's event. */
+  stepEvent(dt) {
+    const ev = this.ev;
+    if (!this.event && this.played >= this.evAt && this.left > EVENT.warn + 6) {
+      const reach = this.W - this.homeX - 14;
+      const x = this.homeX + 14 + reach * (ev.kind === 'tide' ? 0.22 : ev.drift < 0 ? 0.8 : ev.drift > 0 ? 0.3 : 0.35 + this.r() * 0.45);
+      const y = ev.kind === 'rise' || ev.look === 'fruit' || ev.look === 'sprinkles' || ev.look === 'rings' || ev.look === 'bread' ? this.surface + 8 : this.surface + (this.H - this.surface) * 0.45;
+      this.event = { on: this.t + EVENT.warn, off: this.t + EVENT.warn + EVENT.last, x, y, r: ev.wide ? 70 : 34, spawned: false };
+      this.pop(ev.warn, this.camX + this.fieldW / 2, this.surface - 14, '#ffd43b', true);
+    }
+    const e = this.event; if (!e) return;
+    if (this.eventOn) {
+      if (ev.drift) e.x = clamp(e.x + ev.drift * dt, this.leftLimit + 10, this.W - 12);
+      if (!e.spawned) {
+        e.spawned = true;
+        this.pop(ev.tip, this.camX + this.fieldW / 2, this.surface - 14, '#ffffff', true);
+        if (ev.look === 'star' || ev.look === 'bread') this.splash(e.x);
+        // a salmon run: a few of the map's own fish swim through; the tide brings fish in close;
+        // a rumble or a shooting star brings out the map's rare fish
+        if (ev.kind === 'burst') for (let i = 0; i < 3; i += 1) this.arrivals.push([this.t + i * 0.8, i === 0 && this.spot.special ? 'special' : this.pickKind()]);
+        if (ev.kind === 'tide') for (let i = 0; i < 3; i += 1) this.arrivals.push([this.t + i * 0.6, this.pickKind()]);
+        if (ev.kind === 'special' && this.spot.special) this.arrivals.push([this.t + 0.5, 'special']);
+        this.arrivals.sort((a, b) => a[0] - b[0]);
+      }
+    }
+    if (this.t >= e.off) { this.event = null; this.evAt = this.played + EVENT.gap[0] + this.r() * (EVENT.gap[1] - EVENT.gap[0]); }
+  }
+
+  /** The hot spot fish swim to while the event is on, or null. */
+  hotSpot() { return this.eventOn && this.ev.kind !== 'burst' ? this.event : null; }
+
+  /** How much likelier fish take the bait at x, y (inside the hot spot). */
+  biteBoost(x, y) { const h = this.hotSpot(); return h && Math.hypot(x - h.x, (y - h.y) * 1.4) < h.r ? EVENT.bite : 1; }
+
+  /** The event on the lake: rings, bread, the turtle, goo bubbles, fruit, sprinkles, the star. */
+  drawEvent(ctx) {
+    const e = this.event; if (!e) return;
+    const Z = this.Z; const look = this.ev.look; const on = this.eventOn; const S = this.surface;
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a, b, w, h); };
+    const t = this.t;
+    if (!on) {
+      // the warning: a little sign of what is coming
+      if (look === 'shake' || this.ev.kind === 'burst' || this.ev.kind === 'tide') return;
+      if (Math.floor(t * 4) % 2) P('#ffd43b', e.x - 0.5, S - 8, 1, 3);
+      return;
+    }
+    const k = (t - e.on) / (e.off - e.on);
+    // the hot spot: a soft shimmer where the fish gather (so it's clear where to cast)
+    if (this.hotSpot()) {
+      const n = 40; const pulse = 0.25 + 0.15 * Math.sin(t * 4);
+      for (let a = 0; a < n; a += 1) if (a % 2) P(`rgba(255,243,191,${pulse})`, e.x + Math.cos(a / n * 6.283) * e.r * 0.7, e.y + Math.sin(a / n * 6.283) * Math.min(e.r * 0.35, 12), 1, 1);
+    }
+    if (look === 'rings' || look === 'sprinkles' || look === 'goo') {
+      for (let i = 0; i < (look === 'sprinkles' ? 24 : 6); i += 1) {
+        const ph = (t * 0.7 + i * 0.37) % 1; const ox = Math.sin(i * 12.9) * e.r * 0.8;
+        if (look === 'rings') {
+          const rad = 1 + ph * 8;
+          for (let a = 0; a < 20; a += 1) P(`rgba(255,255,255,${0.9 - ph * 0.7})`, e.x + ox + Math.cos(a / 20 * 6.283) * rad, S + 1 + Math.sin(a / 20 * 6.283) * rad * 0.3, 1, 1 / Z);
+          // a mayfly flutters above
+          const mx = e.x + ox + Math.sin(t * 3 + i) * 3; const my = S - 4 - ph * 8;
+          P('#1b1430', mx - 1, my, 2, 1); P('#fff3bf', mx - 1, my - 1, 1, 1); P('#fff3bf', mx + 1, my - 1, 1, 1);
+        } else if (look === 'sprinkles') { const sy = S - 12 + ph * 16; P(['#ff6b6b', '#ffd43b', '#4dabf7', '#69db7c', '#b197fc'][i % 5], e.x + ox, sy, 1, 2); if (sy > S) P('#ffffff', e.x + ox - 1, S, 3, 1 / Z); }
+        else { const by = S + 34 - ph * 34; P('#1b1430', e.x + ox * 0.5 - 1, by - 1, 4, 4); P('rgba(178,242,187,0.95)', e.x + ox * 0.5, by, 2, 2); }
+      }
+    } else if (look === 'bread') {
+      for (let i = 0; i < 9; i += 1) { const bx = e.x - 12 + i * 3 + Math.sin(t + i) * 1; const by = S + 1 + (i % 3) * 2 + k * 10; P('#1b1430', bx - 1, by - 1, 4, 3); P(i % 2 ? '#e9b96e' : '#c98a4b', bx, by, 2, 1); }
+    } else if (look === 'fruit') {
+      P('#8b5a2b', e.x - 6, S - 1, 12, 2); P('#ff6b6b', e.x - 4, S - 3, 2, 2); P('#ffd43b', e.x - 1, S - 3, 3, 2); P('#ff922b', e.x + 3, S - 3, 2, 2);
+    } else if (look === 'turtle') {
+      const tx = e.x; const ty = e.y; const fl = Math.sin(t * 4) > 0 ? 1 : 0;
+      P('#1b1430', tx - 6, ty - 3, 12, 6); P('#2b8a3e', tx - 5, ty - 2, 10, 4); P('#69db7c', tx - 3, ty - 2, 2, 1); P('#5c940d', tx + 1, ty, 2, 1);
+      P('#94d82d', tx - 9, ty - 1, 3, 2); P('#1b1430', tx - 9, ty - 1, 1, 1);
+      P('#94d82d', tx - 4, ty + 3 - fl, 3, 1 + fl); P('#94d82d', tx + 2, ty + 3 - fl, 3, 1 + fl);
+    } else if (look === 'star') {
+      for (let i = 0; i < 5; i += 1) P(i % 2 ? '#fff3bf' : '#ffd43b', e.x + Math.cos(t * 2 + i * 1.26) * 4, e.y + Math.sin(t * 2 + i * 1.26) * 2.5, 1, 1);
+    }
   }
 
   /** The kid's points, like the other games' score. */
@@ -796,7 +887,7 @@ export class Fishing {
   // ---------- fish coming and going ----------
   pickKind() {
     const sp = this.spot; const odds = { ...sp.odds };
-    if (sp.special) odds.special = sp.special.odds * (1 + RODS_RARE * (this.rodTier - 1));
+    if (sp.special) odds.special = sp.special.odds * (1 + RODS_RARE * (this.rodTier - 1)) * (this.eventOn ? EVENT.specialOdds : 1);
     const total = Object.values(odds).reduce((a, b) => a + b, 0);
     let x = this.r() * total;
     for (const [k, v] of Object.entries(odds)) { x -= v; if (x <= 0) return k; }
@@ -842,6 +933,7 @@ export class Fishing {
       lb: weightFor(this.speciesKey(kind === 'special' ? sp.special.id : kind), size),
       pic: fishPic(look, len, this.Z), x, y, vx: 0, vy: 0, dir: x < this.W / 2 ? 1 : -1, speed: base.speed * (0.8 + this.r() * 0.4),
       move, state: 'swim', born: this.t, life: 10 + this.r() * 20, homeY: y, wob: this.r() * 10, mood: 0, checkAt: 0, pull: base.pull,
+      turnAt: this.t, // no turning round in its first moments either (so it never flickers)
     };
     f.pick = Math.min(1, size); // how picky it is and how it bites: as for its kind's biggest at most
     f.pw = f.pic.width / this.Z; f.ph = f.pic.height / this.Z; // size in game pixels
@@ -923,6 +1015,9 @@ export class Fishing {
       if (!leaving && sc.x < (sc.minX ?? this.leftLimit + 8)) sc.dir = 1;
       if (!leaving && sc.x > (sc.maxX ?? W - 18)) sc.dir = -1;
       if (leaving) sc.dir = 1;
+      // a school heads for the event's hot spot
+      const hot = this.hotSpot();
+      if (hot && !leaving && Math.abs(sc.x - hot.x) < 120) sc.dir = hot.x > sc.x + 4 ? 1 : hot.x < sc.x - 4 ? -1 : sc.dir;
       if (sc.x > W + 60) sc.gone = true;
     }
     for (const f of this.fish) {
@@ -961,6 +1056,12 @@ export class Fishing {
         else if (f.x < (f.minX ?? this.leftLimit) && f.dir < 0) f.dir = 1;
         else if (f.x > (f.maxX ?? W - 14) && f.dir > 0) f.dir = -1;
         tx = f.x + f.dir * 20; ty = f.homeY + Math.sin(this.t * 0.4 + f.wob) * 4;
+      }
+      // fish near the event's hot spot swim to it and hang around it
+      const hot = this.hotSpot();
+      if (hot && f.state === 'swim' && !leaving && f.move !== 'school' && f.move !== 'shadow' && Math.abs(f.x - hot.x) < 110) {
+        tx = hot.x + Math.sin(this.t * 0.8 + f.wob) * hot.r * 0.6; ty = hot.y + Math.sin(this.t * 0.6 + f.wob * 2) * 6; spd = f.speed * 1.3;
+        if (Math.abs(tx - f.x) > 2) f.dir = tx > f.x ? 1 : -1;
       }
       ty = clamp(ty, S + 4, this.bedAt(f.x) - 2);
       const dx = tx - f.x; const dy = ty - f.y; const d = Math.hypot(dx, dy);
@@ -1105,11 +1206,11 @@ export class Fishing {
       if (f.state === 'swim' && d < SPECIES[f.kind === 'special' ? this.spot.special.as : f.kind].reach && this.t >= f.checkAt && !(f.waryUntil > this.t)) {
         f.checkAt = this.t + 0.5;
         if (like < 0) { const sc = f.school; for (const o of this.fish) if (o.school === sc && o.move === 'school') this.spook(o); if (sc) sc.gone = true; this.pop('Eek! A spoon!', f.x, f.y - 6, '#ff8787'); continue; }
-        if (like >= pickiness(f.pick) && this.r() < like * 0.3 * (1 - 0.5 * f.pick)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
+        if (like >= pickiness(f.pick) && this.r() < like * 0.3 * (1 - 0.5 * f.pick) * this.biteBoost(L.x, L.y)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
       } else if (f.state === 'interest') {
         if (this.t - f.since > 8) { f.state = 'swim'; f.line = null; continue; }
         // sometimes they just take it
-        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.pick) * biteScale(f.pick) * dt) { this.hook(L, f); return; }
+        if (d < 8 + f.len / 2 && this.r() < like * 0.05 * (1 - 0.6 * f.pick) * biteScale(f.pick) * this.biteBoost(L.x, L.y) * dt) { this.hook(L, f); return; }
       }
     }
   }
@@ -1242,6 +1343,7 @@ export class Fishing {
 
   restart() {
     this.phase = 'ready'; this.left = GAME_SECONDS; this.overtime = 0; this.points = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false; this.records = 0;
+    this.resetEvent();
     this.ai.next = this.t + 2;
   }
 
@@ -1255,6 +1357,7 @@ export class Fishing {
     const holding = L.held && this.t - L.downAt >= HOLD;
     this.stepLine(L, dt, holding);
     this.stepAI(dt);
+    this.stepEvent(dt);
     this.stepFish(dt);
     for (const p of [this.kid, this.vis]) p.move(dt);
     this.pops = this.pops.filter((p) => this.t - p.at < 1.4);
@@ -1266,8 +1369,10 @@ export class Fishing {
     const Z = this.Z;
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(this.field, -this.camX * Z, 0);
-    ctx.setTransform(Z, 0, 0, Z, -this.camX * Z, 0); // game pixels from here on (the view follows the boat)
+    // Lava Lake's rumble shakes the view a little
+    const shake = this.eventOn && this.ev.look === 'shake' && this.t - this.event.on < 2.5 ? Math.round(Math.sin(this.t * 60) * 2) : 0;
+    ctx.drawImage(this.field, -this.camX * Z + shake, 0);
+    ctx.setTransform(Z, 0, 0, Z, -this.camX * Z + shake, 0); // game pixels from here on (the view follows the boat)
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
     // fish
     for (const f of this.fish) {
@@ -1277,6 +1382,7 @@ export class Fishing {
       ctx.drawImage(f.pic, cx - f.pw / 2, y, f.pw, f.ph);
       ctx.restore();
     }
+    this.drawEvent(ctx);
     this.drawWeeds(ctx);
     this.drawTop(ctx);
     // splashes: drops thrown up on both sides
@@ -1363,6 +1469,8 @@ export class Fishing {
     // clock
     const secs = Math.ceil(this.left);
     text(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, (this.chips()[0].y + 16) * S, u * 1.3, secs <= 10 && this.phase === 'play' ? '#ff8787' : '#e9ecef');
+    // the lake's event, while it's on
+    if (this.eventOn && this.phase === 'play') text(`${this.ev.name}! ${Math.ceil(this.event.off - this.t)} s`, W / 2, SY + u * 2.2, u * 1.6, '#ffd43b');
     // points
     const ch0 = this.chips()[0]; const ch2 = this.chips()[2];
     ctx.textAlign = 'right'; text(`${this.kid.name} ${this.points.kid}`, (ch0.x - 3) * S, (ch0.y + 6) * S, u * 1.5, '#ffd43b');
