@@ -31,8 +31,11 @@ export function hintFor(c) {
   const h = c.how;
   if (h.every((x) => x === 'far')) return 'Far up on the hills';
   if (h.includes('perch')) return 'Sits up high';
-  if (h.includes('fly')) return 'Flies past';
-  const from = { bush: 'Hides in the bushes', log: 'Hides behind logs', burrow: 'Lives in a burrow', rock: 'Hides behind rocks', reeds: 'Likes the reeds', tree: 'Hides behind trees' }[[].concat(c.from || [])[0]];
+  if (h.includes('fly')) return c.map === 'bg-ocean' ? 'Swims past' : 'Flies past';
+  if (c.camo) return 'Looks just like a rock';
+  if (c.dusk) return 'Comes out at sunset';
+  if (c.map === 'bg-rainbow' && c.rarity === 'legend') return 'Fill the rainbow';
+  const from = { bush: 'Hides in the bushes', log: 'Hides behind logs', burrow: 'Lives in a burrow', rock: 'Hides behind rocks', reeds: 'Likes the reeds', tree: 'Hides behind trees', tower: 'Lives in the towers', anemone: 'Lives in an anemone', coral: 'Hides in the coral' }[[].concat(c.from || [])[0]];
   if (from) return from;
   if (h.includes('rise') || h.includes('hop')) return 'Pops up from the ground';
   if (h.includes('track')) return 'Might stop the train';
