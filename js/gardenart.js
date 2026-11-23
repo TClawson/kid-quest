@@ -1041,6 +1041,122 @@ function daisies(b, stage, droopy) {
   });
 }
 
+// --- more one-week flowers (the weekly planner's free seed packets) ---
+// Each is a look: the flower's colours, how its heads are drawn, and whether it grows as tall
+// stems (lavender, poppies, lilies, bluebells) or as a low bush (roses, hibiscus, pansies).
+
+const LAV = ['#4a3a8a', '#7a5ec8', '#a88ee8', '#d8c8ff'];
+const RED = ['#7a1a2a', '#c02a3a', '#ec5050', '#ffa0a0'];
+const POP = ['#8a1e14', '#d8361e', '#ff6a3a', '#ffb08a'];
+const HIB = ['#9a2a6a', '#e0508a', '#ff8ab8', '#ffd0e4'];
+const BLU = ['#26408a', '#3e66c8', '#78a0f0', '#c4dcff'];
+const PAN = ['#3a1e6a', '#6a3aa8', '#9a6ad8', '#d4b8ff'];
+const LIL = ['#c8a8a0', '#f4e4dc', '#ffffff', '#ffffff'];
+const SAGE_L = ['#2e4a40', '#476e58', '#64906a', '#8ab486', '#b4d4a4', '#dcecc8'];
+
+/** Draw a head grid at (x, y) = its top left, from a palette [dark, mid, light, highlight] plus extras. */
+function headGrid(b, x, y, rows, P, extra = {}) {
+  grid((xx, yy, c) => b.set(xx, yy, c, 'head'), x, y, rows, { d: P[0], m: P[1], l: P[2], L: P[3], ...extra });
+}
+
+// each head: (b, x, y, droopy, i) with (x, y) the top of its stem
+const HEADS = {
+  lavender: (b, x, y, droopy) => headGrid(b, x - 1, y - (droopy ? 3 : 6), droopy ? ['.l', 'lm', 'md', 'd.'] : ['.L', 'lm', 'Lm', 'lm', 'md', 'lm', 'd.'], LAV),
+  rose: (b, x, y, droopy, i) => headGrid(b, x - 2, y - 3, droopy ? ['.mm.', 'mdmd', '.dd.'] : ['.lL.', 'lmLm', 'mdlm', '.dd.'], i % 3 === 2 ? FL.yellow.concat('#fff8d0') : i % 3 === 1 ? FL.pink.concat('#fff0f6') : RED),
+  poppy: (b, x, y, droopy) => headGrid(b, x - 2, y - 3, droopy ? ['..m.', '.mdd', '.dd.'] : ['l..m', 'lLmd', 'mkkd', '.dd.'], POP, { k: '#2a1420' }),
+  hibiscus: (b, x, y, droopy) => headGrid(b, x - 2, y - 4, droopy ? ['.mm..', 'mdmdd', '.dYd.'] : ['.L.m.', 'lLlmd', '.lYm.', 'mlmdd', '.d.d.'], HIB, { Y: '#ffd23f' }),
+  bluebell: (b, x, y, droopy) => {
+    // an arching stem with bells hanging along it
+    const n = droopy ? 2 : 3;
+    for (let k = 0; k < 4; k += 1) b.set(x + k, y - 1 + Math.floor(k * k / 5), LEAF[3], 'soft');
+    for (let k = 0; k < n; k += 1) headGrid(b, x + k + 1, y + Math.floor((k + 1) * (k + 1) / 5), ['lm', 'Lmd', 'd.d'], BLU);
+  },
+  pansy: (b, x, y, droopy, i) => {
+    const P = i % 3 === 1 ? FL.yellow.concat('#fff8d0') : i % 3 === 2 ? FL.blue.concat('#e8f2ff') : PAN;
+    headGrid(b, x - 2, y - 3, droopy ? ['.mm..', 'mdkmd', '.dd..'] : ['ll.mm', 'lLymd', '.mkm.', '..d..'], P, { y: '#ffd23f', k: '#2a1430' });
+  },
+  lily: (b, x, y, droopy, i) => headGrid(b, x - 2, y - 4, droopy ? ['.l.l.', '..lm.', '..o..'] : ['L...l', '.Llm.', 'l.o.m', '.lmd.', '..d..'], i % 2 ? [FL.orange[0], FL.orange[1], FL.orange[2], '#ffe8c8'] : LIL, { o: i % 2 ? '#7a2a14' : '#f0a020' }),
+};
+
+/** Bud colours: the flower showing through the green at stage 2. */
+const BUD = { lavender: LAV[1], rose: RED[1], poppy: POP[1], hibiscus: HIB[1], bluebell: BLU[1], pansy: PAN[1], lily: LIL[1] };
+
+const LOOKS = {
+  'seed-lavender': { head: 'lavender', form: 'stems', leaves: SAGE_L, sprout: 'blade', tag: LAV[2], plants: [[6, 10, 15], [10, 3, 13], [15, 11, 17], [20, 4, 14], [26, 10, 16], [31, 3, 15], [36, 11, 17], [41, 4, 13], [43, 10, 15]] },
+  'seed-poppy': { head: 'poppy', form: 'stems', leaves: LEAF, sprout: 'round', tag: POP[2], plants: [[7, 10, 17], [14, 4, 21], [21, 11, 15], [28, 3, 20], [35, 10, 18], [41, 4, 16]] },
+  'seed-lily': { head: 'lily', form: 'stems', leaves: LEAF, sprout: 'blade', tag: LIL[1], plants: [[9, 10, 22], [18, 4, 26], [27, 11, 21], [36, 4, 25], [42, 11, 19]] },
+  'seed-bluebell': { head: 'bluebell', form: 'stems', leaves: LEAF, sprout: 'blade', tag: BLU[2], plants: [[5, 10, 11], [11, 4, 12], [17, 11, 10], [23, 3, 13], [29, 10, 11], [35, 4, 12], [40, 11, 10]] },
+  'seed-rose': { head: 'rose', form: 'bush', leaves: ['#1e3e30', '#2a5a3a', '#3a7642', '#52924a', '#76b058', '#a8d07a', '#d4ec9c'], sprout: 'round', tag: RED[2], clumps: [[11, 6, 10, 14], [25, 9, 10, 16], [38, 5, 10, 14]] },
+  'seed-hibiscus': { head: 'hibiscus', form: 'bush', leaves: ['#183a32', '#22563a', '#2e7440', '#46924a', '#6cb256', '#9ed276', '#d0ec9c'], sprout: 'round', tag: HIB[2], clumps: [[13, 6, 12, 17], [34, 8, 12, 18]] },
+  'seed-pansy': { head: 'pansy', form: 'bush', leaves: ['#1e4038', '#2a5e42', '#3a7e48', '#54a04e', '#7cc05a', '#acdc78', '#dcf2a0'], sprout: 'tiny', tag: PAN[2], clumps: [[8, 8, 7, 6], [20, 4, 7, 6], [31, 9, 7, 6], [41, 5, 6, 6]] },
+};
+
+/** A bed of one of the newer flowers at a stage (0 seeds, 1 sprouts, 2 buds, 3 in bloom). */
+function lookBed(look) {
+  return (b, stage, droopy) => {
+    const head = HEADS[look.head];
+    const spots = look.form === 'stems' ? look.plants.map(([x, d]) => [x, d]) : look.clumps.map(([x, d]) => [x, d]);
+    if (stage === 0) return seedMounds(b, spots.slice(0, 5), look.tag);
+    if (stage === 1) { spots.forEach(([x, d]) => sprout(b, x, d, look.sprout, droopy)); label(b, look.tag); return; }
+    const grow = stage === 2 ? 0.65 : droopy ? 0.8 : 1;
+    if (look.form === 'stems') {
+      look.plants.forEach(([x, d, hgt], i) => {
+        const y0 = gy(d); const h = Math.round(hgt * grow);
+        const lean = droopy ? (i % 2 ? 3 : -3) : (i % 3) - 1;
+        // a few leaves at the foot
+        for (const sd of [-1, 1]) for (let k = 0; k < 3; k += 1) b.set(x + sd * (k + 1), y0 - k - (droopy ? 0 : 1), k === 2 ? look.leaves[4] : look.leaves[3]);
+        const top = stem(b, x, y0 - 1, y0 - h, lean, 1, look.leaves);
+        if (stage === 2) { b.set(top, y0 - h - 1, look.leaves[3], 'head'); b.set(top, y0 - h - 2, BUD[look.head], 'head'); return; }
+        head(b, top, y0 - h + (droopy ? 2 : 0), droopy, i);
+      });
+      return;
+    }
+    // bushes: a leafy clump with flowers dotted over its top
+    look.clumps.forEach(([cx, d, rx, hgt], ci) => {
+      const tall = hgt * grow;
+      crown(b, cx, gy(d) - tall * 0.5, rx, tall * 0.6, look.leaves, cx + ci, { floor: gy(d) + 1, sag: droopy ? 1 : 0 });
+      const n = Math.max(2, Math.round(rx / 2.5));
+      for (let k = 0; k < n; k += 1) {
+        const x = Math.round(cx - rx * 0.7 + (rx * 1.4 * k) / Math.max(1, n - 1));
+        const y = Math.round(gy(d) - tall * (0.75 + 0.2 * ((k + ci) % 2)));
+        if (stage === 2) { b.set(x, y, BUD[look.head], 'head'); b.set(x, y + 1, look.leaves[3], 'head'); continue; }
+        head(b, x, y + 2, droopy, k + ci);
+      }
+    });
+  };
+}
+
+/** The small picture on a newer flower's packet, drawn round its foot (cx, by). */
+function lookPacket(b, look, cx, by) {
+  const head = HEADS[look.head];
+  if (look.form === 'bush') {
+    crown(b, cx, by - 4, 7, 4, look.leaves, 3);
+    [[-4, -7], [0, -9], [4, -7]].forEach(([dx, dy], i) => head(b, cx + dx, by + dy + 2, false, i));
+    return;
+  }
+  [[-4, 9], [0, 12], [4, 10]].forEach(([dx, h], i) => {
+    for (let y = by; y > by - h; y -= 1) b.set(cx + dx, y, look.leaves[2]);
+    head(b, cx + dx, by - h, false, i);
+  });
+  grid((x, y, c) => b.set(x, y, c), cx - 5, by - 2, ['L.........L', '.lL.....Ll.'], { L: look.leaves[4], l: look.leaves[3] });
+}
+
+/** A jar of a newer flower for the buddy's table (14 x 20), like vaseArt's. */
+function lookVase(bb, look) {
+  const set = (x, y, c, t) => bb.set(x, y, c, t);
+  const head = HEADS[look.head];
+  const stems = [[3, 5], [7, 2], [11, 5], [5, 8], [9, 8]];
+  stems.forEach(([x, top]) => { for (let y = top + 1; y < 13; y += 1) set(x, y, look.leaves[2], 'soft'); });
+  grid((x, y, c) => set(x, y, c), 2, 10, ['L.......L.', '.l.....l..'], { L: look.leaves[4], l: look.leaves[3] });
+  stems.forEach(([x, top], i) => head(bb, x, top + 1, false, i));
+  // a little stoneware jar in the flower's colour
+  const J = ramp(look.tag, 2, 1);
+  for (let y = 12; y < 20; y += 1) for (let x = 3; x < 11; x += 1) {
+    if ((y === 12 || y === 19) && (x === 3 || x === 10)) continue;
+    set(x, y, y === 12 ? J[1] : x < 5 ? J[3] : x > 8 ? J[1] : J[2]);
+  }
+}
+
 // --- vegetables ---
 
 /** A carrot's feathery top: a tuft of fine fronds (no outline, so it stays airy). */
@@ -1209,6 +1325,7 @@ function pumpkins(b, stage, droopy) {
 const BED_DRAW = {
   'seed-sunflower': sunflowers, 'seed-tulip': tulips, 'seed-daisy': daisies,
   'seed-carrot': carrots, 'seed-tomato': tomatoes, 'seed-pumpkin': pumpkins,
+  ...Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [id, lookBed(look)])),
 };
 
 function bedPlant(seedId, stage, droopy) {
@@ -1755,11 +1872,15 @@ const PACKET = {
   'seed-sunflower': ['#fff0b8', '#e8a020'], 'seed-tulip': ['#ffe0ea', '#e0546a'], 'seed-daisy': ['#e4f6dc', '#4a9a50'],
   'seed-carrot': ['#ffe8cc', '#e8762a'], 'seed-tomato': ['#ffe0d8', '#c8303a'], 'seed-pumpkin': ['#ffe4c0', '#d0661e'],
   'seed-apple': ['#e8f4d0', '#3a8a48'], 'seed-cherry': ['#ffe0e8', '#b8284a'], 'seed-orange': ['#fff0d0', '#e88a1e'],
+  'seed-lavender': ['#efe6ff', '#7a5ec8'], 'seed-rose': ['#ffe4e4', '#c02a3a'], 'seed-poppy': ['#fff0e0', '#d8361e'],
+  'seed-hibiscus': ['#ffe6f0', '#e0508a'], 'seed-bluebell': ['#e4eeff', '#3e66c8'], 'seed-pansy': ['#f2e8ff', '#6a3aa8'],
+  'seed-lily': ['#fff8ec', '#e8a040'],
 };
 
 /** The picture on a seed packet: the grown plant, small. Drawn round (cx, by) = its foot. */
 function packetPicture(b, seedId, cx, by) {
   const set = (x, y, c) => b.set(x, y, c);
+  if (LOOKS[seedId]) { lookPacket(b, LOOKS[seedId], cx, by); return; }
   switch (seedId) {
     case 'seed-sunflower':
       for (let y = by; y > by - 7; y -= 1) b.set(cx, y, LEAF[2]);
@@ -1878,7 +1999,8 @@ export function vaseArt(seedId) {
   return keep(`vase|${seedId}`, () => {
     const b = sprite(14, 20, (bb) => {
       const set = (x, y, c, t) => bb.set(x, y, c, t);
-      if (seedId === 'seed-sunflower') {
+      if (LOOKS[seedId]) lookVase(bb, LOOKS[seedId]);
+      else if (seedId === 'seed-sunflower') {
         for (const [x, top] of [[4, 4], [9, 2], [7, 8]]) for (let y = top; y < 13; y += 1) set(x, y, LEAF[2], 'soft');
         leaf(bb, 3, 9, Math.PI + 0.6, 4, 2.6); leaf(bb, 10, 10, -0.5, 4, 2.6);
         sunHead(bb, 4, 3, 3.6); sunHead(bb, 10, 2, 3.6); sunHead(bb, 7.5, 7, 3.2);
