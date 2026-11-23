@@ -46,11 +46,12 @@ test('only one task per kid holds each house role', () => {
   assert.deepEqual(setHouseRole(tasks, 'zzz', 'bed'), []);
 });
 
-test('house presets make linked morning tasks; new kids start linked', () => {
+test('house presets make linked tasks in their routine; new kids start linked', () => {
   for (const c of HOUSE_CHORES) {
     const t = houseTask(c.id, `t-${c.id}`);
     assert.equal(t.house, c.id);
-    assert.equal(t.period, 'morning');
+    assert.equal(t.period, c.id === 'teeth-night' ? 'afternoon' : 'morning');
+    assert.equal(Boolean(t.evening), c.id === 'teeth-night');
     assert.equal(t.name, c.name);
   }
   const roles = defaultTasks().map((t) => t.house).filter(Boolean).sort();

@@ -114,6 +114,7 @@ const SHELL = [
   'js/houseart.js',
   'js/tankart.js',
   'js/houserules.js',
+  'js/choresets.js',
   'js/gardenrules.js',
   'js/gardenart.js',
   'js/garden.js',

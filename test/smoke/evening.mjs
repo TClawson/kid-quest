@@ -58,9 +58,17 @@ try {
   await page.click('[data-action="edit-kid"][data-id="kid_sam"]');
   const row = '.task-edit[data-task="task_shower"]';
   await page.click(`${row} .task-line`);
-  await page.check(`${row} input[data-field="evening"]`);
+  await page.selectOption(`${row} select[data-field="period"]`, 'evening');
   await page.waitForTimeout(200);
-  assert.match(await page.locator(row).innerText(), /don't keep the buddy shop shut/);
+  // it moves to the Evening chores, which say the shop rule
+  const eveningPart = await page.evaluate((sel) => {
+    const h = [...document.querySelectorAll('h2')].find((x) => /Evening chores/.test(x.textContent));
+    let el = h?.nextElementSibling; const out = [];
+    while (el && el.tagName !== 'H2') { out.push(el.matches(sel) ? 'SHOWER' : el.textContent); el = el.nextElementSibling; }
+    return out.join(' ');
+  }, row);
+  assert.match(eveningPart, /SHOWER/);
+  assert.match(eveningPart, /don't keep the buddy shop shut/);
   if (shots) await page.locator(row).screenshot({ path: `${shots}/1-task-editor.png` });
   const after = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
   assert.equal(after.kids[0].tasks.find((t) => t.id === 'task_shower').evening, true);

@@ -5,17 +5,21 @@
 import { tasksForDay, entryFor, addDays, isExercise } from './logic.js';
 
 // Which chores the house shows is set by the parents: a task linked to the house has
-// task.house = 'bed' | 'teeth' | 'floor' (set in the task editor, or by adding a task from a
+// task.house = 'bed' | 'teeth' | 'teeth-night' | 'floor' (set in the task editor, or by adding a task from a
 // preset). Nothing is guessed from a task's name: until a parent links a task, that part of
 // the house just looks tidy. Each kid has at most one task for each.
 export const HOUSE_CHORES = [
   { id: 'bed', label: 'Make bed', name: 'Make bed', icon: '🛏️', period: 'morning' },
   { id: 'teeth', label: 'Brush teeth (morning)', name: 'Brush teeth', icon: '🪥', period: 'morning' },
   { id: 'floor', label: 'Pick up bedroom floor', name: 'Pick up bedroom floor', icon: '🧸', period: 'morning' },
+  { id: 'teeth-night', label: 'Brush teeth (night)', name: 'Brush teeth', icon: '🪥', period: 'afternoon', evening: true },
 ];
+
+// From this hour the sink waits for the night brushing (once the morning one is done).
+export const NIGHT_HOUR = 17;
 export const houseChoreById = (id) => HOUSE_CHORES.find((c) => c.id === id) || null;
 
-/** The house chore a task is linked to ('bed', 'teeth', 'floor'), or null. */
+/** The house chore a task is linked to ('bed', 'teeth', 'teeth-night', 'floor'), or null. */
 export const houseRole = (task) => (houseChoreById(task?.house) ? task.house : null);
 
 /**
@@ -33,10 +37,10 @@ export function setHouseRole(tasks, taskId, role) {
   return cleared;
 }
 
-/** A new task made from a house chore preset (name, icon, morning), linked to the house. */
+/** A new task made from a house chore preset (name, icon, routine), linked to the house. */
 export function houseTask(role, id) {
   const c = houseChoreById(role);
-  return { id, name: c.name, icon: c.icon, period: c.period, days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0, house: role };
+  return { id, name: c.name, icon: c.icon, period: c.period, ...(c.evening ? { evening: true } : {}), days: [0, 1, 2, 3, 4, 5, 6], verify: 'self', minutes: 0, house: role };
 }
 
 /** The kid has said it's done (a parent may still need to check it). */
@@ -79,16 +83,20 @@ export const messLevel = (days) => (days <= 0 ? 0 : days === 1 ? 1 : days <= 3 ?
 /**
  * What the house shows for today's chores: { bed, teeth, floor }, each { id, name, icon, done }
  * or null when no task linked to it is on today's list (the house then looks tidy), and
- * mess (0-3) for the floor.
+ * mess (0-3) for the floor. The sink has two brushings: the morning one, then (once that is
+ * done, from NIGHT_HOUR) the night one. ids: every house chore on today's list, the
+ * waiting night brushing too, so villagers never give those out.
  */
-export function houseChores(state, kid, today) {
+export function houseChores(state, kid, today, hour = new Date().getHours()) {
   const tasks = tasksForDay(state, kid, today, today).filter((t) => !isExercise(t));
   const entry = entryFor(state, kid.id, today);
-  const out = { bed: null, teeth: null, floor: null, mess: 0 };
-  for (const kind of ['bed', 'teeth', 'floor']) {
-    const t = tasks.find((x) => x.house === kind);
-    if (t) out[kind] = { id: t.id, name: t.name, icon: t.icon, done: saidDone(entry, t) };
-  }
+  const out = { bed: null, teeth: null, floor: null, mess: 0, ids: [] };
+  const item = (t) => (t ? { id: t.id, name: t.name, icon: t.icon, done: saidDone(entry, t) } : null);
+  for (const kind of ['bed', 'floor']) out[kind] = item(tasks.find((x) => x.house === kind));
+  const am = item(tasks.find((x) => x.house === 'teeth'));
+  const pm = item(tasks.find((x) => x.house === 'teeth-night'));
+  out.teeth = pm && (!am || am.done) && hour >= NIGHT_HOUR ? pm : am || (hour >= NIGHT_HOUR ? pm : null);
+  out.ids = tasks.filter((x) => houseRole(x)).map((x) => x.id);
   out.mess = messLevel(floorDays(state, kid, today));
   return out;
 }
