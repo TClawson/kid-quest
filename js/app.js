@@ -2473,7 +2473,7 @@ function parentEditKid() {
     <h2>🌙 Evening chores</h2>
     ${taskRows('evening') || '<p class="muted small">None yet. Night teeth, pajamas or a shower after dinner go here.</p>'}
     <button class="btn ghost" data-action="add-task" data-period="evening">+ Add evening chore</button>
-    <small class="muted task-hint">Evening chores don't keep the buddy shop shut, so the shop can open after the day chores. If one is missed, the next day the shop waits for every chore, evening ones too.</small>
+    <small class="muted section-hint">Evening chores don't keep the buddy shop shut, so the shop can open after the day chores. If one is missed, the next day the shop waits for every chore, evening ones too.</small>
     <h2>💪 Bonus exercise</h2>
     ${taskRows('exercise') || '<p class="muted small">None yet. Add a run, a bike ride, soccer practice or anything active.</p>'}
     <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise</button>
