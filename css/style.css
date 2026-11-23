@@ -579,3 +579,42 @@ body:has(.approve-bar) .toast { bottom: calc(var(--pnav-h, 64px) + 86px + env(sa
 .sb-card b { display: block; }
 .sb-card small { opacity: 0.8; }
 .sb-card p { margin: 4px 0 0; font-size: 0.85rem; }
+
+/* Plan my week (planModal in app.js) */
+.planner .pl-step { margin-bottom: 2px; }
+.pl-routine { display: grid; gap: 6px; padding: 8px 0 10px; border-bottom: 1px solid var(--line); }
+.pl-routine h3 { margin: 4px 0 0; }
+.pl-routine select { width: 100%; }
+.pl-list { display: grid; gap: 6px; min-height: 44px; padding: 4px; border-radius: 6px; border: 2px dashed transparent; }
+.pl-list.pl-over-end { border-color: #7048e8; background: rgba(112, 72, 232, 0.08); }
+.pl-empty { margin: 8px; text-align: center; }
+.pl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: #fff; border: 2px solid var(--px-ink, #2a1838); border-radius: 6px; padding: 4px 6px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.pl-row.pl-over { box-shadow: 0 -4px 0 #7048e8; }
+.pl-row.pl-lifted { opacity: 0.35; }
+.pl-ghost { position: fixed; z-index: 1000; pointer-events: none; box-shadow: 0 8px 18px rgba(42, 24, 56, 0.35); transform: rotate(-1.5deg); }
+.pl-n { width: 24px; height: 24px; flex: none; display: grid; place-items: center; background: var(--px-ink, #2a1838); color: #fff; border-radius: 4px; font-weight: 700; }
+.pl-name { flex: 1; min-width: 0; font-weight: 700; }
+.pl-pin { font-size: 0.85em; }
+.pl-btns { display: flex; align-items: center; gap: 4px; flex: none; }
+.pl-btns .btn.round { min-height: 34px; width: 34px; padding: 0; }
+.pl-grab { cursor: grab; touch-action: none; padding: 6px 4px; color: #8a7fa0; letter-spacing: -3px; font-size: 1.1rem; }
+.pl-moveto { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.9rem; }
+.pl-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px 6px; align-items: center; margin: 8px 0; }
+.pl-dh { text-align: center; font-weight: 700; }
+.pl-dl { grid-column: 1 / -1; min-width: 0; font-weight: 700; margin-top: 6px; }
+.pl-dl small { font-weight: 400; color: #b0306a; }
+.pl-dl small.ok { color: #2b8a3e; }
+.pl-d { height: 38px; max-width: 56px; width: 100%; justify-self: center; border: 2px solid var(--px-ink, #2a1838); border-radius: 5px; background: #fff; font-weight: 700; padding: 0; }
+.pl-d.on { background: #7048e8; color: #fff; }
+.pl-grow, .pl-seeds { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin: 8px 0; }
+.pl-seeds { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.pl-pick, .pl-seed { background: #fff; border: 2px solid var(--px-ink, #2a1838); border-radius: 6px; padding: 6px; text-align: left; font: inherit; font-weight: 700; }
+.pl-pick small { display: block; font-weight: 400; color: #6b5f7a; }
+.pl-seed { text-align: center; }
+.pl-seed img { width: 48px; image-rendering: pixelated; display: block; margin: 0 auto; }
+.pl-pick.on, .pl-seed.on { outline: 3px solid #7048e8; outline-offset: 1px; background: #f1ecff; }
+.pl-seed-given { font-weight: 700; color: #2b8a3e; }
+.pl-sign p { margin: 8px 0; }
+.planner.pl-big .pl-name { font-size: 1.25rem; }
+.planner.pl-big .pl-n { width: 30px; height: 30px; }
+.modal-card:has(.planner) { width: min(640px, 100%); }

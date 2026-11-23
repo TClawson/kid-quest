@@ -70,7 +70,7 @@ export function todayListHtml(t) {
       <div class="t-foot">
         ${t.chest.ready ? `<button class="t-tag ready" data-action="today-chest">${t.chest.text}</button>` : `<span class="t-tag">${t.chest.text}</span>`}
         <button class="t-tag ${t.shop.open ? 'open' : ''}" data-action="today-shop">${esc(t.shop.text)}</button>
-        <button class="t-tag" data-action="plan" data-kid="${esc(t.kidId)}">📝 Plan my day</button>
+        <button class="t-tag" data-action="plan" data-kid="${esc(t.kidId)}">📝 Plan my week</button>
       </div>
     </div>`;
 }

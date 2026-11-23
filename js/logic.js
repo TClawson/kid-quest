@@ -189,7 +189,31 @@ export function parseAllowance(value) {
 /** The tasks on a kid's current setup for a day (ignoring what past days remember). */
 export function scheduledOn(kid, key) {
   const dow = dayOfWeek(key);
-  return kid.tasks.filter((t) => t.days.includes(dow) && onWeek(t, key));
+  return kid.tasks.map((t) => plannedTask(kid, t)).filter((t) => t.days.includes(dow) && onWeek(t, key));
+}
+
+// ---------- the kid's own weekly plan (Plan my week) ----------
+// Parents set the chores; the kid's plan (kid.plan) moves them between routines and picks the
+// days of the ones a parent left to them:
+// - plan.routines[taskId]: 'morning' | 'afternoon' | 'evening', unless the chore is pinned
+// - plan.days[taskId]: the weekdays the kid picked, for a chore with task.kidDays > 0
+
+/** A chore a parent pinned to its routine (both teeth are, unless a parent unpins them). */
+export const isPinned = (task) => (typeof task?.pinned === 'boolean' ? task.pinned : task?.house === 'teeth' || task?.house === 'teeth-night');
+
+/** A chore as the kid's plan has it: in the routine the kid put it in, on the days they picked. */
+export function plannedTask(kid, task) {
+  const p = kid?.plan;
+  if (!p || task.period === 'exercise' && !(task.kidDays > 0)) return task;
+  let out = task;
+  const r = p.routines?.[task.id];
+  if (task.period !== 'exercise' && !isPinned(task) && ['morning', 'afternoon', 'evening'].includes(r)) {
+    out = { ...task, period: r === 'morning' ? 'morning' : 'afternoon' };
+    if (r === 'evening') out.evening = true; else delete out.evening;
+  }
+  const d = p.days?.[task.id];
+  if (task.kidDays > 0 && Array.isArray(d) && d.length) out = { ...out, days: [...d] };
+  return out;
 }
 
 const splitCache = new Map();
@@ -202,7 +226,7 @@ const splitCache = new Map();
 export function weekSplit(kid, key, amount, half = null) {
   const monday = weekStart(key);
   const weight = (t) => taskSize(t) * (half?.has(t.id) ? MASTERED_PAY : 1);
-  const sig = `${kid.id}|${monday}|${amount}|${kid.tasks.map((t) => `${t.id}:${t.period}:${t.days.join('')}:${weight(t)}:${t.everyOtherWeek ?? ''}`).join(',')}`;
+  const sig = `${kid.id}|${monday}|${amount}|${JSON.stringify([kid.plan?.routines, kid.plan?.days])}|${kid.tasks.map((t) => `${t.id}:${t.period}:${t.days.join('')}:${weight(t)}:${t.everyOtherWeek ?? ''}`).join(',')}`;
   if (splitCache.has(sig)) return splitCache.get(sig);
   const slots = [];
   for (let i = 0; i < 7; i += 1) {
@@ -781,7 +805,7 @@ export function kidToday(state, kid, today, daysBack = 14) {
  * - next: the id of the next quest: the first chore not done or waiting, mornings first, in
  *   the kid's plan order (the village's next quest too), or null. Exercise is never next.
  * - secondsLeft: for a timer chore not done yet, the seconds still to go, else null.
- * - cue: the moment the kid picked for it in Plan my day, or ''; mastered: a habit star.
+ * - cue: the moment the kid picked for it in Plan my week, or ''; mastered: a habit star.
  */
 export function todayQuests(state, kid, today) {
   const day = kidToday(state, kid, today, 0);
@@ -1071,10 +1095,27 @@ export function logLend(kid, today, gear) {
 export const CUES = {
   morning: ['When I wake up', 'After I get dressed', 'After breakfast', 'Before I leave'],
   afternoon: ['When I get home', 'After snack', 'After homework', 'Before screens', 'After dinner', 'Before bed'],
+  evening: ['After dinner', 'After my bath', 'When I put on pajamas', 'Before bed', 'Before my story'],
 };
 
-/** The cue a kid picked for a task, if it is still one of the choices for its time of day. */
+/** 'morning', 'afternoon' or 'evening' (or 'exercise'): the routine a chore is in. */
+export function routineOf(task) {
+  if (task?.period === 'exercise') return 'exercise';
+  if (task?.evening) return 'evening';
+  return task?.period === 'morning' ? 'morning' : 'afternoon';
+}
+
+/** The moment that starts a routine in the kid's plan ("After snack"), or ''. */
+export function routineCue(kid, task) {
+  const r = routineOf(task);
+  const cue = kid.plan?.cues?.[r];
+  return cue && (CUES[r] || []).includes(cue) ? cue : '';
+}
+
+/** The cue for a task: its routine's (Plan my week), else one picked for the task itself (older plans). */
 export function cueFor(kid, task) {
+  const r = routineCue(kid, task);
+  if (r) return r;
   const cue = kid.plan?.cues?.[task.id];
   return cue && (CUES[task.period] || []).includes(cue) ? cue : '';
 }
@@ -1088,7 +1129,15 @@ export function planOrder(kid, tasks) {
 
 /** "After snack, I'll do piano practice." */
 export function planSentence(cue, task) {
-  return `${cue}, I'll ${/^(do|play|make|brush|clear|practice|feed|walk|read|take|put|empty|set|wash|fold|vacuum|dust|tidy|clean|pack|water|help|unload|load)\b/i.test(task.name) ? task.name.charAt(0).toLowerCase() + task.name.slice(1) : `do ${task.name.charAt(0).toLowerCase()}${task.name.slice(1)}`}.`;
+  return `${cue}${cue === 'Then' ? '' : ','} I'll ${choreWords(task)}.`;
+}
+
+/** A chore as words after "I'll": "make bed", "put toys away", "do chore of the week". */
+export function choreWords(task) {
+  const n = task.name.charAt(0).toLowerCase() + task.name.slice(1);
+  if (/^(do|play|make|brush|clear|practice|practise|feed|walk|read|take|put|empty|set|wash|fold|vacuum|dust|tidy|clean|pack|water|help|unload|load|get|go|ride|run|pick|change|shower|bathe|swim|bike)\b/i.test(task.name)) return n;
+  if (/ (away|on|off|up)$/i.test(task.name)) return `put ${n}`;
+  return `do ${n}`;
 }
 
 // ---------- the family's day ----------

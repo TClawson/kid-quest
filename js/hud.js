@@ -55,7 +55,7 @@ export const STATUS_TABS = [
 
 /**
  * The Status pop-up. s: { kidId, name, sub: 'Level 33 · 55 XP to level 34', tab, body: the tab's markup }.
- * Its foot links to Plan my day, the family's game scores and the fish book.
+ * Its foot links to Plan my week, the family's game scores and the fish book.
  */
 export function statusHtml(s) {
   return `
@@ -69,7 +69,7 @@ export function statusHtml(s) {
       <nav class="p-tabs" role="tablist">${STATUS_TABS.map((t) => `<button class="${t.id === s.tab ? 'on' : ''}" role="tab" aria-selected="${t.id === s.tab}" data-action="status-tab" data-tab="${t.id}">${esc(t.name)}</button>`).join('')}</nav>
       <div class="p-body p-${esc(s.tab)}">${s.body}</div>
       <div class="p-foot">
-        <button class="t-tag" data-action="plan" data-kid="${esc(s.kidId)}">📝 Plan my day</button>
+        <button class="t-tag" data-action="plan" data-kid="${esc(s.kidId)}">📝 Plan my week</button>
         <button class="t-tag" data-action="status-scores">📊 Family game scores</button>
         <button class="t-tag" data-action="status-fish">🐟 Fish book</button>
         ${s.tricks ? '<button class="t-tag" data-action="status-tricks">🚲 Trick book</button>' : ''}
@@ -96,7 +96,7 @@ export function menuHtml(m) {
       <div class="m-list">
         ${item('menu-music', m.music && m.sound ? '🎵' : '🔇', 'Music', !m.sound ? 'Off (sounds are off)' : m.music ? 'On' : 'Off', `aria-pressed="${Boolean(m.music && m.sound)}"`)}
         ${item('menu-sound', m.sound ? '🔊' : '🔈', 'Sounds', m.sound ? 'On' : 'Off', `aria-pressed="${Boolean(m.sound)}"`)}
-        ${item('plan', '📝', 'Plan my day', '', `data-kid="${esc(m.kidId)}"`)}
+        ${item('plan', '📝', 'Plan my week', '', `data-kid="${esc(m.kidId)}"`)}
         ${m.kids > 1 ? item('menu-switch', '🔁', 'Switch kid') : ''}
         ${item('menu-parents', m.parents.open ? '👪' : '🔒', 'Parents', [m.parents.open ? '' : 'PIN', m.parents.waiting ? `${m.parents.waiting} waiting` : ''].filter(Boolean).join(' · '))}
       </div>
