@@ -7,7 +7,7 @@ import {
   defaultAllowance, repairAllowanceStart, allowanceFor, parseAllowance, taskPay, taskSize, SIZES, weekEarnings, recentBonuses,
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
-  withMemo, monthDays, habitInfo, CUES, cueFor, planOrder, planSentence,
+  withMemo, monthDays, habitInfo, CUES, cueFor, routineCue, routineOf, isPinned, planOrder, planSentence, choreWords, weekLookback,
   todaySummary, familyDay, FAMILY_GOAL, milestoneFor, milestoneFresh,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
@@ -24,6 +24,9 @@ import { todayHud, todayListHtml } from './today.js';
 import { kidHudHtml, statusHtml, menuHtml } from './hud.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { CHORE_SETS, SET_CHORES, choreSetById, setChanges, applySet, routineOfTask } from './choresets.js';
+import { tokenPages, chartRoutines, stickers, defaultStyle, chartSignature, chartOutdated, DAY_ORDER } from './charts.js';
+import { chartArt } from './chartart.js';
+import { ROUTINES, FREE_SEEDS, planDraft, routineList, moveChore, nudgeChore, flexTasks, dayCheck, toggleDay, growable, signPlan, signedThisWeek, seedThisWeek } from './planrules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, deskOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse, tankOf, tankRoom } from './furniture.js';
@@ -419,35 +422,125 @@ let modalYes = null;
 
 // ---------- celebrations (see celebrate.js) ----------
 
-// ---------- the kid's plan: order and cues ----------
+// ---------- Plan my week (planrules.js): routines, days, one thing to grow, sign ----------
+
+const seedPics = new Map();
+const seedPic = (id) => {
+  if (!seedPics.has(id)) { let u = ''; try { u = seedThumb(document, id)?.toDataURL() || ''; } catch { u = ''; } seedPics.set(id, u); }
+  return seedPics.get(id);
+};
+
+/** The steps a kid's planner has: the days step only when a parent left some days to them. */
+const planSteps = (kid) => ['routines', ...(flexTasks(kid).length ? ['days'] : []), 'grow', 'sign'];
+
+/** "After snack, I'll practice piano, then do chore of the week." */
+function routineSentence(kid, d, routine) {
+  const list = routineList(kid, d, routine);
+  if (!list.length) return '';
+  const cue = d.cues[routine];
+  const parts = list.map((t) => choreWords(t));
+  const said = parts.length > 1 ? `${parts.slice(0, -1).join(', ')}, then ${parts[parts.length - 1]}` : parts[0];
+  return `${cue ? `${cue}, I'll` : "I'll"} ${said}.`;
+}
+
+function planRoutinesHtml(kid, d) {
+  return ROUTINES.map((r) => {
+    const list = routineList(kid, d, r.id);
+    const rows = list.map((t, i) => {
+      const pinned = isPinned(t);
+      const moving = ui.planMoving === t.id;
+      return `<div class="pl-row ${moving ? 'moving' : ''}" data-plrow="${t.id}">
+          <span class="pl-n">${i + 1}</span>
+          <span class="pl-name">${esc(t.icon)} ${esc(t.name)}${pinned ? ' <span class="pl-pin" title="Stays in this routine">📌</span>' : ''}</span>
+          <span class="pl-btns">
+            <button class="btn ghost round" data-action="plan-nudge" data-id="${t.id}" data-dir="-1" ${i ? '' : 'disabled'} aria-label="Earlier">▲</button>
+            <button class="btn ghost round" data-action="plan-nudge" data-id="${t.id}" data-dir="1" ${i < list.length - 1 ? '' : 'disabled'} aria-label="Later">▼</button>
+            ${pinned ? '' : `<button class="btn ghost small-btn" data-action="plan-moving" data-id="${t.id}" aria-expanded="${moving}">Move</button>`}
+            <span class="pl-grab" data-drag="${t.id}" aria-hidden="true">⋮⋮</span>
+          </span>
+          ${moving ? `<span class="pl-moveto">Move to: ${ROUTINES.filter((o) => o.id !== r.id).map((o) => `<button class="btn small-btn" data-action="plan-moveto" data-id="${t.id}" data-routine="${o.id}">${o.icon} ${esc(o.name)}</button>`).join('')}</span>` : ''}
+        </div>`;
+    }).join('');
+    const say = routineSentence(kid, d, r.id);
+    return `<section class="pl-routine" data-routine="${r.id}">
+        <h3>${r.icon} ${esc(r.name)}</h3>
+        <select data-planroutine="${r.id}" aria-label="When ${esc(r.name.toLowerCase())} starts">
+          <option value="">When does it start?</option>
+          ${CUES[r.id].map((c) => `<option ${c === d.cues[r.id] ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+        </select>
+        <div class="pl-list" data-droplist="${r.id}">${rows || '<p class="pl-empty muted small">Drag a chore here</p>'}</div>
+        ${say ? `<small class="plan-say">“${esc(say)}”</small>` : ''}
+      </section>`;
+  }).join('');
+}
+
+function planDaysHtml(kid, d) {
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  return `<div class="pl-days">
+      ${order.map((dow) => `<span class="pl-dh">${DAY_NAMES[dow].slice(0, 2)}</span>`).join('')}
+      ${flexTasks(kid).map((t) => {
+    const on = new Set(d.days[t.id] || []);
+    const c = dayCheck(d, t);
+    return `<span class="pl-dl">${esc(t.icon)} ${esc(t.name)} <small class="${c.ok ? 'ok' : ''}">${isExercise(t) ? `${c.picked} ${c.picked === 1 ? 'day' : 'days'} · ${c.need} makes a strong week 💪` : `${c.picked} of ${c.need} ${c.need === 1 ? 'day' : 'days'}`}</small></span>
+          ${order.map((dow) => `<button class="pl-d ${on.has(dow) ? 'on' : ''}" data-action="plan-day" data-id="${t.id}" data-dow="${dow}" aria-pressed="${on.has(dow)}" aria-label="${esc(t.name)} on ${DAY_NAMES[dow]}">${on.has(dow) ? '✓' : ''}</button>`).join('')}`;
+  }).join('')}
+    </div>
+    <p class="muted small">Pick ${flexTasks(kid).filter((t) => !isExercise(t)).map((t) => `${t.kidDays} ${t.kidDays === 1 ? 'day' : 'days'} for ${esc(t.name.toLowerCase())}`).join(', ') || 'your exercise days'}. Everything else is on the days Mom or Dad set.</p>`;
+}
+
+function planGrowHtml(kid, d) {
+  const lb = weekLookback(state, kid, today());
+  const rate = new Map(lb.tasks.map((r) => [r.task.id, r]));
+  const given = seedThisWeek(kid, today());
+  const choices = growable(kid);
+  // two chores with one name (morning and night teeth) say which is which
+  const twin = (t) => choices.some((o) => o !== t && o.name === t.name);
+  const when = { morning: 'morning', afternoon: 'after school', evening: 'night', exercise: 'exercise' };
+  return `<div class="pl-grow">${choices.map((t) => {
+    const r = rate.get(t.id);
+    const name = twin(t) ? `${t.name} (${when[d.routines[t.id] || routineOf(t)]})` : t.name;
+    return `<button class="pl-pick ${d.grow === t.id ? 'on' : ''}" data-action="plan-grow" data-id="${t.id}" aria-pressed="${d.grow === t.id}">${esc(t.icon)} ${esc(name)}${r ? `<small>last week ${r.done} of ${r.of}</small>` : ''}</button>`;
+  }).join('')}</div>
+    ${given ? `<p class="pl-seed-given">🌱 Your free seed this week: <b>${esc(given.name)}</b></p>` : `
+    <h3>🎁 Pick your free seed packet</h3>
+    <p class="muted small">It's planted for the chore you grow: it grows a step every day you do it, and blooms in 7 days.</p>
+    <div class="pl-seeds">${FREE_SEEDS.map((sd) => `<button class="pl-seed ${d.seed === sd.id ? 'on' : ''}" data-action="plan-seed" data-id="${sd.id}" aria-pressed="${d.seed === sd.id}"><img src="${seedPic(sd.id)}" alt=""><small>${esc(sd.name)}</small></button>`).join('')}</div>`}`;
+}
+
+function planSignHtml(kid, d) {
+  const grow = (kid.tasks || []).find((t) => t.id === d.grow);
+  const seed = seedById(d.seed) || seedThisWeek(kid, today());
+  return `<div class="pl-sign">
+      ${ROUTINES.map((r) => { const say = routineSentence(kid, d, r.id); return say ? `<p><b>${r.icon} ${esc(r.name)}</b><br>“${esc(say)}”</p>` : ''; }).join('')}
+      ${grow ? `<p><b>🌱 This week I'll grow</b><br>${esc(grow.icon)} ${esc(grow.name)}${seed ? ` and my ${esc(seed.name.toLowerCase())}` : ''}</p>` : ''}
+    </div>`;
+}
 
 function planModal(kid) {
   const d = ui.planDraft;
-  const block = (period, title) => {
-    const tasks = planOrder({ plan: d }, questTasks(kid.tasks).filter((x) => x.period === period));
-    if (!tasks.length) return '';
-    return `<h3>${title}</h3>${tasks.map((task, i) => {
-      const cue = d.cues[task.id] || '';
-      return `<div class="plan-row">
-          <div class="plan-top"><span class="plan-name">${esc(task.icon)} ${esc(task.name)}</span>
-            <span class="plan-move"><button class="btn ghost round" data-action="plan-move" data-id="${task.id}" data-dir="-1" ${i ? '' : 'disabled'} aria-label="Earlier">▲</button><button class="btn ghost round" data-action="plan-move" data-id="${task.id}" data-dir="1" ${i < tasks.length - 1 ? '' : 'disabled'} aria-label="Later">▼</button></span></div>
-          <select data-plancue="${task.id}" aria-label="When for ${esc(task.name)}">
-            <option value="">Pick a moment…</option>
-            ${CUES[period].map((c) => `<option ${c === cue ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-          </select>
-          ${cue ? `<small class="plan-say">${esc(planSentence(cue, task))}</small>` : ''}
-        </div>`;
-    }).join('')}`;
-  };
+  const steps = planSteps(kid);
+  const step = Math.min(ui.planStep || 0, steps.length - 1);
+  const at = steps[step];
+  const title = { routines: kid.planWithGrownUp ? '📝 My routines (with a grown-up)' : '📝 My routines', days: '📅 Pick your days', grow: '🌱 This week I\'ll grow…', sign: '✍️ My plan' }[at];
+  const help = {
+    routines: 'Put your chores in the order you\'ll do them. Drag one to another routine, or tap Move. 📌 ones stay put. Then pick the moment each routine starts.',
+    days: 'Some chores are yours to place. Tap the days you\'ll do them.',
+    grow: 'Pick one chore to get better at this week. Your buddy will cheer extra for it.',
+    sign: 'Read it out loud. Is this your plan?',
+  }[at];
+  const daysOk = flexTasks(kid).every((t) => dayCheck(d, t).ok);
+  const growOk = Boolean(d.grow) && (seedThisWeek(kid, today()) || d.seed);
+  const canNext = at === 'days' ? daysOk : at === 'grow' ? growOk : true;
+  const body = at === 'routines' ? planRoutinesHtml(kid, d) : at === 'days' ? planDaysHtml(kid, d) : at === 'grow' ? planGrowHtml(kid, d) : planSignHtml(kid, d);
   const html = `
-    <div class="plan">
-      <h1>📝 ${esc(kid.name)}'s plan</h1>
-      <p class="muted">Put your tasks in the order you'll do them, and pick the moment that reminds you. Doing it at the same moment every day is how it becomes a habit.</p>
-      ${block('morning', '🌅 Morning')}
-      ${block('afternoon', '☀️ After school')}
+    <div class="plan planner ${kid.planWithGrownUp ? 'pl-big' : ''}" data-step="${at}">
+      <div class="pl-step muted small">Step ${step + 1} of ${steps.length}</div>
+      <h1>${title}</h1>
+      <p class="muted">${help}</p>
+      ${body}
       <div class="row end">
-        <button class="btn ghost" data-action="modal-close">Cancel</button>
-        <button class="btn" data-action="plan-save" data-kid="${kid.id}">Save my plan</button>
+        ${step ? `<button class="btn ghost" data-action="plan-step" data-dir="-1">◂ Back</button>` : '<button class="btn ghost" data-action="modal-close">Later</button>'}
+        ${at === 'sign' ? `<button class="btn" data-action="plan-sign" data-kid="${kid.id}">I'm in!</button>` : `<button class="btn" data-action="plan-step" data-dir="1" ${canNext ? '' : 'disabled'}>Next ▸</button>`}
       </div>
     </div>`;
   // already open: change it in place, so it doesn't pop in again on every pick
@@ -459,9 +552,207 @@ function planModal(kid) {
 function openPlan(kid) {
   closeModal();
   ui.planKid = kid.id;
-  ui.planDraft = { order: planOrder(kid, questTasks(kid.tasks)).map((x) => x.id), cues: { ...(kid.plan?.cues || {}) } };
+  ui.planStep = 0;
+  ui.planMoving = null;
+  ui.planDraft = planDraft(kid, today());
   planModal(kid);
 }
+
+// Dragging a chore between routines: grab its ⋮⋮ (or press and hold the row), drop it on
+// another chore (it goes before that one) or on a routine's list (it goes last).
+let planDrag = null;
+function planDragStart(id, e) {
+  const row = $modal.querySelector(`[data-plrow="${id}"]`);
+  if (!row) return;
+  const r = row.getBoundingClientRect();
+  const ghost = row.cloneNode(true);
+  ghost.classList.add('pl-ghost');
+  Object.assign(ghost.style, { width: `${r.width}px`, left: `${r.left}px`, top: `${r.top}px` });
+  document.body.append(ghost);
+  row.classList.add('pl-lifted');
+  planDrag = { id, ghost, dy: e.clientY - r.top, target: null, at: { clientX: e.clientX, clientY: e.clientY } };
+  // near the top or bottom of the planner, it scrolls, so a chore can go to any routine
+  planDrag.scroll = setInterval(() => {
+    const card = $modal.querySelector('.modal-card');
+    if (!planDrag || !card) return;
+    const box = card.getBoundingClientRect();
+    const y = planDrag.at.clientY;
+    const step = y < box.top + 56 ? -10 : y > box.bottom - 56 ? 10 : 0;
+    if (step) { card.scrollTop += step; planDragMove(planDrag.at); }
+  }, 30);
+  try { navigator.vibrate?.(15); } catch { /* not on every device */ }
+}
+function planDragMove(e) {
+  if (!planDrag) return;
+  e.preventDefault?.();
+  planDrag.at = { clientX: e.clientX, clientY: e.clientY };
+  planDrag.ghost.style.top = `${e.clientY - planDrag.dy}px`;
+  $modal.querySelectorAll('.pl-over, .pl-over-end').forEach((x) => x.classList.remove('pl-over', 'pl-over-end'));
+  planDrag.ghost.hidden = true;
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  planDrag.ghost.hidden = false;
+  const row = under?.closest?.('[data-plrow]');
+  const list = under?.closest?.('.pl-routine')?.querySelector('[data-droplist]');
+  if (row && row.dataset.plrow !== planDrag.id) { row.classList.add('pl-over'); planDrag.target = { routine: row.closest('[data-droplist]').dataset.droplist, before: row.dataset.plrow }; } else if (list) { list.classList.add('pl-over-end'); planDrag.target = { routine: list.dataset.droplist, before: null }; } else planDrag.target = null;
+}
+function planDragEnd() {
+  if (!planDrag) return;
+  const { id, ghost, target, scroll } = planDrag;
+  clearInterval(scroll);
+  planDrag = null;
+  ghost.remove();
+  const kid = kidById(ui.planKid);
+  if (kid && ui.planDraft && target) {
+    const t = kid.tasks.find((x) => x.id === id);
+    if (!moveChore(kid, ui.planDraft, id, target.routine, target.before) && t) toast(`${t.name} stays in its routine 📌`);
+  }
+  if (kid) { const card = $modal.querySelector('.modal-card'); const top = card?.scrollTop || 0; planModal(kid); if (card) card.scrollTop = top; }
+}
+let planHold = null;
+document.addEventListener('pointerdown', (e) => {
+  if (!$modal.querySelector('.planner[data-step="routines"]')) return;
+  const grab = e.target.closest?.('[data-drag]');
+  if (grab) { e.preventDefault(); planDragStart(grab.dataset.drag, e); return; }
+  const row = e.target.closest?.('[data-plrow]');
+  if (!row || e.target.closest('button, select')) return;
+  const at = [e.clientX, e.clientY];
+  planHold = { at, timer: setTimeout(() => { planHold = null; planDragStart(row.dataset.plrow, e); }, 350) };
+});
+document.addEventListener('pointermove', (e) => {
+  if (planHold && Math.hypot(e.clientX - planHold.at[0], e.clientY - planHold.at[1]) > 8) { clearTimeout(planHold.timer); planHold = null; }
+  planDragMove(e);
+}, { passive: false });
+for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => { if (planHold) { clearTimeout(planHold.timer); planHold = null; } planDragEnd(); });
+
+// ---------- printed charts from the kid's plan (charts.js, chartart.js) ----------
+// A full-page view over the app with the kid's pages, scaled to the screen; Print sends just
+// the pages to the printer (or a PDF), at their real size: Letter, landscape.
+
+function chartPicture(art, c) {
+  const pic = { bed: art.bedPic, dressed: art.dressPic, teeth: art.teethPic, 'teeth-night': art.teethNightPic, clothes: art.clothesPic, toys: art.toysPic, books: art.booksPic }[c.kind];
+  if (pic) return `<img src="${pic}" alt="">`;
+  // a chore with no drawing yet: its icon, big, on its color, with the buddy cheering in the corner
+  return `<div class="cp-generic" style="--c:${c.color}"><span class="cp-emoji">${esc(c.icon)}</span><img class="cp-face" src="${art.facePic}" alt=""></div>`;
+}
+const chartIcon = (art, c) => {
+  const pic = { bed: art.bedIcon, dressed: art.shirtIcon, teeth: art.brushIcon, 'teeth-night': art.brushIcon, clothes: art.hamperIcon, toys: art.blocksIcon, books: art.booksIcon }[c.kind];
+  return pic ? `<img src="${pic}" alt="">` : `<span class="cp-ico">${esc(c.icon)}</span>`;
+};
+
+function tokenPageHtml(kid, art, p) {
+  const title = `${p.title}, ${kid.name}!`;
+  const titlePic = p.routine === 'morning' ? art.sleepPic : art.humPic;
+  const corner = p.routine === 'evening' ? art.moonIcon : p.routine === 'morning' ? art.sunIcon : art.noteIcon;
+  return `<section class="cp-page cp-tokens" style="--n:${p.chores.length}">
+    <div class="cp-top">
+      <img class="cp-tpic" src="${titlePic}" alt="">
+      <div class="cp-tt"><h1 style="font-size:${Math.min(0.78, 7.2 / ((title.length + 2) * 0.32)).toFixed(3)}in">${esc(title)}${p.parts > 1 ? ` <small>${p.part} of ${p.parts}</small>` : ''}</h1><div class="cp-sub"${p.sentence.length > 80 ? ' style="font-size:0.22in;line-height:0.25in"' : ''}>${esc(p.sentence)}</div></div>
+      <img class="cp-corner" src="${corner}" alt="">
+    </div>
+    <div class="cp-cols">
+      ${p.chores.map((c) => `<div class="cp-col" style="--c:${c.color}">
+        <div class="cp-frame">${chartPicture(art, c)}<span class="cp-num">${c.n}</span>${c.grow ? '<span class="cp-grow">🌱 Growing!</span>' : ''}</div>
+        <div class="cp-label">${chartIcon(art, c)}<span>${esc(c.name)}</span></div>
+        ${c.daysText ? `<div class="cp-days">${esc(c.daysText)}</div>` : ''}
+        <div class="cp-spot"><img src="${art.starIcon}" alt=""></div>
+      </div>`).join('')}
+      <div class="cp-col cp-fin">
+        <div class="cp-frame"><img src="${art.finPic}" alt=""><div class="cp-yay">All done!</div></div>
+        <div class="cp-feed">
+          <div class="cp-cap">With each token:</div>
+          <div class="cp-ln"><b>1</b>Tap to start</div>
+          <div class="cp-ln"><b>2</b>Do it together</div>
+          <div class="cp-ln"><b>3</b>Tap again!</div>
+        </div>
+      </div>
+    </div>
+    <div class="cp-night"><img src="${art.moonIcon}" alt=""><span>At bedtime, tokens go back on the stars.</span><span class="cp-sp"></span>${p.chores.map((c) => `<span class="cp-mini" style="--c:${c.color}">${chartIcon(art, c)}</span>`).join('')}<img src="${art.starIcon}" alt=""><span>Goodnight!</span></div>
+    <div class="cp-foot"><span>Kid Quest · made from ${esc(kid.name)}'s plan</span><span>Week of ${esc(shortDate(weekStart(today())))}</span></div>
+  </section>`;
+}
+
+/** Row height (inches) that fits every chore of the week grid on one page. */
+const rowHeight = (groups) => Math.min(0.42, 6.1 / (groups.reduce((n, g) => n + g.chores.length, 0) + groups.length * 1.3 + 1));
+function gridPageHtml(kid, art) {
+  const groups = chartRoutines(kid);
+  const name = { morning: '☀️ Morning', afternoon: '🎒 After school', evening: '🌙 Evening', exercise: '💪 Exercise' };
+  return `<section class="cp-page cp-grid">
+    <div class="cp-top">
+      <img class="cp-tpic" src="${art.finPic}" alt="">
+      <div class="cp-tt"><h1>${esc(kid.name)}'s week</h1><div class="cp-sub">My plan, my way. Tick each box when it's done.</div></div>
+    </div>
+    <table class="cp-table" style="--rh:${rowHeight(groups).toFixed(3)}in">
+      <thead><tr><th></th>${DAY_ORDER.map((d) => `<th>${DAY_NAMES[d]}</th>`).join('')}</tr></thead>
+      ${groups.map((g) => `<tbody>
+        <tr class="cp-gh"><th colspan="8"><div>${name[g.routine]}${g.sentence ? ` <small>“${esc(g.sentence)}”</small>` : ''}</div></th></tr>
+        ${g.chores.map((c, i) => `<tr><td class="cp-rn">${g.routine === 'exercise' ? '' : `${i + 1}. `}${esc(c.icon)} ${esc(c.name)}${c.grow ? ' 🌱' : ''}</td>${DAY_ORDER.map((d) => `<td>${c.days.includes(d) ? '<i class="cp-box"></i>' : '<span class="cp-off">·</span>'}</td>`).join('')}</tr>`).join('')}
+      </tbody>`).join('')}
+    </table>
+    <div class="cp-foot"><span>Kid Quest · made from ${esc(kid.name)}'s plan${kid.plan?.grow ? ' · 🌱 the chore I\'m growing this week' : ''}</span><span>Week of ${esc(shortDate(weekStart(today())))}</span></div>
+  </section>`;
+}
+
+function stickerPageHtml(kid, art) {
+  const list = stickers(kid);
+  if (!list.length) return '';
+  return `<section class="cp-page cp-stickers">
+    <h2>Token stickers for ${esc(kid.name)}</h2>
+    <p class="cp-cut">Print on full-sheet sticker paper, cut out each 2-inch circle and stick it on a token. Each token belongs to one page of the chart.</p>
+    <div class="cp-stk">${list.map((c) => `<div class="cp-sticker" style="--c:${c.color}">${chartIcon(art, c)}<small>${esc(c.name)}${c.kind === 'teeth-night' ? ' 🌙' : ''}</small></div>`).join('')}<div class="cp-sticker" style="--c:#3b2235"><img src="${art.facePic}" alt=""><small>${esc(kid.name)}</small></div></div>
+  </section>`;
+}
+
+function chartsHtml(kid) {
+  const art = chartArt(kid.buddy);
+  const style = ui.chartStyle || defaultStyle(kid);
+  const pages = style === 'grid' ? gridPageHtml(kid, art) : tokenPages(kid).map((p) => tokenPageHtml(kid, art, p)).join('') + (ui.chartStickers ? stickerPageHtml(kid, art) : '');
+  return `<div class="cp-bar">
+      <b>🖨️ ${esc(kid.name)}'s chart</b>
+      <span class="cp-seg"><button class="${style === 'tokens' ? 'on' : ''}" data-action="chart-style" data-style="tokens">Token pages</button><button class="${style === 'grid' ? 'on' : ''}" data-action="chart-style" data-style="grid">Week grid</button></span>
+      ${style === 'tokens' ? `<label><input type="checkbox" data-chartstickers ${ui.chartStickers ? 'checked' : ''}> Token stickers</label>` : ''}
+      <span class="cp-sp"></span>
+      <button class="btn" data-action="chart-print">Print</button>
+      <button class="btn ghost" data-action="chart-close">Close</button>
+    </div>
+    ${kid.plan?.signed ? '' : `<p class="cp-note">${esc(kid.name)} hasn't made a plan yet, so this is the chores as you set them. It changes once they plan their week.</p>`}
+    <div class="cp-pages">${pages}</div>`;
+}
+
+let chartView = null;
+function openCharts(kid) {
+  closeModal();
+  ui.chartKid = kid.id;
+  ui.chartStyle = null;
+  chartView ||= document.body.appendChild(Object.assign(document.createElement('div'), { className: 'chart-view' }));
+  chartView.hidden = false;
+  document.documentElement.classList.add('charts-open');
+  drawCharts();
+}
+function drawCharts() {
+  const kid = kidById(ui.chartKid);
+  if (!kid || !chartView) return;
+  chartView.innerHTML = chartsHtml(kid);
+  fitCharts();
+}
+/** Fits the 11-inch pages to the screen (printing uses their real size). Never redraws: printing resizes the window. */
+function fitCharts() {
+  if (!chartView) return;
+  const k = Math.min(1, (window.innerWidth - 24) / (11 * 96));
+  chartView.style.setProperty('--k', k.toFixed(3));
+}
+function closeCharts() {
+  ui.chartKid = null;
+  if (chartView) { chartView.hidden = true; chartView.innerHTML = ''; }
+  document.documentElement.classList.remove('charts-open');
+}
+window.addEventListener('afterprint', () => {
+  const kid = ui.chartKid && kidById(ui.chartKid);
+  if (!kid) return;
+  kid.chartPrinted = chartSignature(kid);
+  delete kid.chartWanted;
+  save();
+});
+window.addEventListener('resize', () => { if (ui.chartKid) fitCharts(); });
 
 // ---------- the treasure chest (see treasure.js) ----------
 
@@ -944,7 +1235,7 @@ const hasDig = (kid) => Boolean(bestGear(kid.owned || []).shovel || Object.keys(
 const SHOW_AGAIN_MS = 60000;
 
 /** A chore as a quest in the village (and its talk box): its state, its line and its plan step. */
-function questItem(kid, t, status, st, step = 0) {
+function questItem(kid, t, status, st, step = 0, first = true) {
   let sub = st === 'done' ? 'Done!' : st === 'pending' ? 'Waiting for a parent' : t.verify === 'parent' ? 'A parent checks this one' : 'Tap "I did it" when it\'s done';
   if (st !== 'done' && st !== 'pending' && t.minutes > 0) {
     const sec = status?.seconds || 0;
@@ -953,7 +1244,8 @@ function questItem(kid, t, status, st, step = 0) {
   }
   // bonus exercise says what it earns
   if (isExercise(t) && st !== 'done' && taskGems(t)) sub += ` · earns ${taskGems(t)} 💎`;
-  const cue = cueFor(kid, t);
+  // with a cue for the whole routine, its first chore says the cue and the rest say "Then"
+  const cue = !first && routineCue(kid, t) ? 'Then' : cueFor(kid, t);
   return { id: t.id, name: t.name, icon: t.icon, period: t.period, st, sub, verify: t.verify, timer: t.minutes > 0, step, plan: cue ? planSentence(cue, t) : '' };
 }
 
@@ -963,11 +1255,14 @@ function questList(kid, s, entry) {
   let current = false;
   // a kid who made their own plan sees its steps numbered, and the village follows them
   const planned = Boolean(kid.plan?.order?.length);
+  const seen = new Set();
   return tasks.map((t, i) => {
     const status = entry?.tasks?.[t.id];
     let st = status?.status === 'done' ? 'done' : status?.status === 'pending' ? 'pending' : 'todo';
     if (st === 'todo' && !current) { st = 'current'; current = true; }
-    return questItem(kid, t, status, st, planned ? i + 1 : 0);
+    const first = !seen.has(routineOf(t));
+    seen.add(routineOf(t));
+    return questItem(kid, t, status, st, planned ? i + 1 : 0, first);
   });
 }
 
@@ -1697,7 +1992,7 @@ function statusHabits(kid) {
   return habitsSection(kid) || `
       <section class="habits">
         <h2>⭐ Habits</h2>
-        <button class="btn ghost plan-btn" data-action="plan" data-kid="${kid.id}">📝 Plan my day</button>
+        <button class="btn ghost plan-btn" data-action="plan" data-kid="${kid.id}">📝 Plan my week</button>
         <p class="muted">A chore becomes a habit once it has come up for a while. Do it on most days for 60 days to earn a star!</p>
       </section>`;
 }
@@ -1844,7 +2139,7 @@ function habitsSection(kid) {
   return `
       <section class="habits">
         <h2>⭐ Habits <small class="muted">do it ${Math.round(0.85 * 100)}% of days for 60 days</small></h2>
-        <button class="btn ghost plan-btn" data-action="plan" data-kid="${kid.id}">📝 Plan my day</button>
+        <button class="btn ghost plan-btn" data-action="plan" data-kid="${kid.id}">📝 Plan my week</button>
         ${rows}
         <p class="muted small">Stars stay for good, and each 60 days you keep a habit up earns another. Your weekly coins stay the same: a mastered habit's share goes to the habits you're still building.</p>
       </section>`;
@@ -2297,6 +2592,7 @@ function parentKids() {
         <div class="list-row">
           ${buddyChip(kid)}
           <div class="grow"><b>${esc(kid.name)}</b><small class="muted">${week}${esc(reward)}</small></div>
+          <button class="btn ${kid.chartWanted || chartOutdated(kid) ? '' : 'ghost'}" data-action="charts" data-kid="${kid.id}" title="${chartOutdated(kid) ? 'The plan changed since the chart was printed' : 'Print chart'}">🖨️${kid.chartWanted || chartOutdated(kid) ? ' New chart' : ''}</button>
           <button class="btn ghost" data-action="bonus" data-kid="${kid.id}" ${w.bonusLeft ? '' : 'disabled'}>🎁 Bonus</button>
           <button class="btn ghost" data-action="edit-kid" data-id="${kid.id}">Edit</button>
         </div>`;
@@ -2421,6 +2717,14 @@ function parentEditKid() {
         <button class="btn ghost round danger-text" data-action="delete-task" data-task="${t.id}" aria-label="Delete">✕</button>
       </div>
       <div class="days">${dayChips(t)}</div>${repeatRow(kid, t)}
+      <div class="row wrap plan-edit">
+        <label>Days <select data-field="kidDays" aria-label="Who picks the days">
+          <option value="0" ${t.kidDays > 0 ? '' : 'selected'}>Set by you (above)</option>
+          ${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}" ${t.kidDays === n ? 'selected' : ''}>${esc(kid.name)} picks ${n} ${n === 1 ? 'day' : 'days'} a week</option>`).join('')}
+        </select></label>
+        ${isExercise(t) ? '' : `<label class="row"><input type="checkbox" data-field="pinned" ${isPinned(t) ? 'checked' : ''}> 📌 Stays in this routine</label>`}
+      </div>
+      ${t.kidDays > 0 ? `<small class="muted task-hint">${esc(kid.name)} picks the days in Plan my week. Until then it's on the days ticked above.</small>` : ''}
       <div class="row wrap">
         <label>When <select data-field="period"><option value="morning" ${routineOfTask(t) === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${routineOfTask(t) === 'afternoon' ? 'selected' : ''}>After school</option><option value="evening" ${routineOfTask(t) === 'evening' ? 'selected' : ''}>Evening</option><option value="exercise" ${t.period === 'exercise' ? 'selected' : ''}>Bonus exercise</option></select></label>
         <label>Checked by <select data-field="verify"><option value="self" ${t.verify === 'self' ? 'selected' : ''}>Kid taps done</option><option value="parent" ${t.verify === 'parent' ? 'selected' : ''}>Parent PIN</option></select></label>
@@ -2462,6 +2766,9 @@ function parentEditKid() {
       <div class="block">Chore set <div class="row wrap">${CHORE_SETS.map((cs) => `<button class="btn ${kid.choreSet === cs.id ? '' : 'ghost'} small-btn" data-action="kid-set" data-set="${cs.id}">${esc(cs.name)} (${esc(cs.ages)})</button>`).join('')}</div>
         <small class="muted">${esc(choreSetById(kid.choreSet)?.note || 'Pick a starter set for their age, then change anything below. Switching adds the set\'s chores and takes off the ones it replaces; piano and your own chores stay.')}</small></div>
       <label class="row"><input type="checkbox" data-kidflag="starsOnly" ${kid.starsOnly ? 'checked' : ''}> Stars only: chores earn XP and cheers, no coins (for the littlest)</label>
+      <label class="row"><input type="checkbox" data-kidflag="planWithGrownUp" ${kid.planWithGrownUp ? 'checked' : ''}> Plans with a grown-up: bigger pictures in Plan my week</label>
+      <button class="btn ghost small-btn" data-action="charts" data-kid="${kid.id}">🖨️ Print ${esc(kid.name)}'s chart${chartOutdated(kid) ? ' (plan changed)' : ''}</button>
+      ${kid.plan?.signed ? `<small class="muted">📝 ${esc(kid.name)} signed a plan for the week of ${esc(shortDate(kid.plan.signed))}. Change it together with them in Plan my week, so it stays theirs.</small>` : ''}
     </div>
     <h2>🌅 Morning chores</h2>
     ${taskRows('morning')}
@@ -3268,6 +3575,7 @@ document.addEventListener('change', (e) => {
     const isReward = el.dataset.field === 'coins' || el.dataset.field === 'xp' || el.dataset.field === 'gems';
     if (isReward) v = parseReward(v);
     if (el.dataset.field === 'size') v = Number(v);
+    if (el.dataset.field === 'kidDays') v = Number(v) > 0 ? Number(v) : null;
     // Evening is a routine of its own: an after-school-side chore marked evening
     if (el.dataset.field === 'period') {
       if (v === 'evening') { task.period = 'afternoon'; task.evening = true; } else { task.period = v; delete task.evening; }
@@ -3276,7 +3584,7 @@ document.addEventListener('change', (e) => {
     if (v === null) delete task[el.dataset.field];
     else task[el.dataset.field] = v;
     save();
-    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes' || el.dataset.field === 'listen' || el.dataset.field === 'evening' || isReward) render();
+    if (el.tagName === 'SELECT' || el.dataset.field === 'minutes' || el.dataset.field === 'listen' || el.dataset.field === 'evening' || el.dataset.field === 'pinned' || isReward) render();
     return;
   }
   if (el.dataset.kidallow) {
@@ -3687,32 +3995,85 @@ if (cloudCfg) startCloud();
 
 Object.assign(actions, {
   plan: (el) => { const kid = kidById(el.dataset.kid); if (kid) openPlan(kid); },
-  'plan-move': (el) => {
+  charts: (el) => { const kid = kidById(el.dataset.kid); if (kid) openCharts(kid); },
+  'chart-style': (el) => { ui.chartStyle = el.dataset.style; drawCharts(); },
+  'chart-print': () => { window.print(); },
+  'chart-close': () => { closeCharts(); render(); },
+  'plan-print-ask': (el) => {
+    const kid = kidById(el.dataset.kid);
+    if (!kid) return;
+    kid.chartWanted = true;
+    save();
+    toast('A grown-up will see it under Kids 🖨️');
+  },
+  'plan-nudge': (el) => {
     const kid = kidById(ui.planKid);
-    const d = ui.planDraft;
-    if (!kid || !d) return;
-    // move it past the next task of the same time of day
-    const task = kid.tasks.find((x) => x.id === el.dataset.id);
-    const same = planOrder({ plan: d }, questTasks(kid.tasks).filter((x) => x.period === task.period)).map((x) => x.id);
-    const i = same.indexOf(task.id);
-    const j = i + Number(el.dataset.dir);
-    if (j < 0 || j >= same.length) return;
-    [same[i], same[j]] = [same[j], same[i]];
-    const others = d.order.filter((id) => !same.includes(id));
-    d.order = [...same, ...others];
+    if (!kid || !ui.planDraft) return;
+    nudgeChore(kid, ui.planDraft, el.dataset.id, Number(el.dataset.dir));
     planModal(kid);
   },
-  'plan-save': (el) => {
+  'plan-moving': (el) => {
+    const kid = kidById(ui.planKid);
+    if (!kid) return;
+    ui.planMoving = ui.planMoving === el.dataset.id ? null : el.dataset.id;
+    planModal(kid);
+  },
+  'plan-moveto': (el) => {
+    const kid = kidById(ui.planKid);
+    if (!kid || !ui.planDraft) return;
+    moveChore(kid, ui.planDraft, el.dataset.id, el.dataset.routine);
+    ui.planMoving = null;
+    planModal(kid);
+  },
+  'plan-step': (el) => {
+    const kid = kidById(ui.planKid);
+    if (!kid) return;
+    ui.planStep = Math.max(0, Math.min(planSteps(kid).length - 1, (ui.planStep || 0) + Number(el.dataset.dir)));
+    ui.planMoving = null;
+    planModal(kid);
+    $modal.querySelector('.modal-card')?.scrollTo?.(0, 0);
+  },
+  'plan-day': (el) => {
+    const kid = kidById(ui.planKid);
+    const t = kid?.tasks.find((x) => x.id === el.dataset.id);
+    if (!t || !ui.planDraft) return;
+    toggleDay(ui.planDraft, t, Number(el.dataset.dow));
+    planModal(kid);
+  },
+  'plan-grow': (el) => {
+    const kid = kidById(ui.planKid);
+    if (!kid || !ui.planDraft) return;
+    ui.planDraft.grow = el.dataset.id;
+    planModal(kid);
+  },
+  'plan-seed': (el) => {
+    const kid = kidById(ui.planKid);
+    if (!kid || !ui.planDraft) return;
+    ui.planDraft.seed = el.dataset.id;
+    sounds.tap();
+    planModal(kid);
+  },
+  'plan-sign': (el) => {
     const kid = kidById(el.dataset.kid);
     const d = ui.planDraft;
     if (!kid || !d) return;
-    const cues = Object.fromEntries(Object.entries(d.cues).filter(([, c]) => c));
-    kid.plan = { order: planOrder({ plan: d }, questTasks(kid.tasks)).map((x) => x.id), cues, week: weekStart(today()) };
+    const gift = signPlan(kid, d, today());
     save();
     ui.planDraft = null;
     closeModal();
     render();
-    toast('Plan saved! 📝');
+    sounds.week();
+    confetti(120, 2200);
+    openModal(`
+      <div class="celebrate">
+        ${buddyHtml(kid, 'excited', 'xl')}
+        <h1>That's my plan!</h1>
+        ${gift ? `<p>🎁 A free packet of <b>${esc(gift.seed.name.toLowerCase())}</b>${gift.planted ? ' is planted in your garden. Each day you do your chore, it grows!' : ' is in your seed bag. Plant it in your garden!'}</p>` : ''}
+        <div class="stack">
+          <button class="btn huge" data-action="modal-close">Let's go!</button>
+          <button class="btn ghost" data-action="plan-print-ask" data-kid="${kid.id}">🖨️ Ask a grown-up to print my chart</button>
+        </div>
+      </div>`);
   },
   // the HUD's family pill: the party once it's earned, otherwise how the family is doing
   'family-pill': () => {
@@ -3762,9 +4123,13 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', (e) => {
-  const id = e.target.dataset?.plancue;
-  if (!id || !ui.planDraft) return;
-  ui.planDraft.cues[id] = e.target.value;
+  if (e.target.matches?.('[data-chartstickers]')) { ui.chartStickers = e.target.checked; drawCharts(); }
+});
+
+document.addEventListener('change', (e) => {
+  const r = e.target.dataset?.planroutine;
+  if (!r || !ui.planDraft) return;
+  if (e.target.value) ui.planDraft.cues[r] = e.target.value; else delete ui.planDraft.cues[r];
   const kid = kidById(ui.planKid);
   if (kid) planModal(kid);
 });

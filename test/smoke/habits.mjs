@@ -100,25 +100,34 @@ try {
     assert.match(look, /4 weeks ago: [0-6] of 7/);
     await shot(page, `lookback-${tag}.png`);
 
-    // 3. plan the week from there: move piano first and give it a cue
+    // 3. plan the week from there: a cue for each routine, one chore to grow, a free seed, sign
     await page.click('.modal-card [data-action="plan"]');
     await page.waitForSelector('.modal-card .plan');
     const s0 = await stored(page);
     const ava = s0.kids.find((k) => k.id === 'kid_ava');
-    const piano = ava.tasks.find((t) => t.name === 'Piano practice');
-    const chore = ava.tasks.find((t) => t.name === 'Chore of the week');
     const teeth = ava.tasks.find((t) => t.name === 'Brush teeth');
-    await page.selectOption(`select[data-plancue="${piano.id}"]`, 'After snack');
-    await page.selectOption(`select[data-plancue="${chore.id}"]`, 'Before screens');
-    await page.selectOption(`select[data-plancue="${teeth.id}"]`, 'After breakfast');
-    assert.match(await page.textContent('.modal-card .plan'), /After snack, I'll do piano practice\./);
+    await page.selectOption('select[data-planroutine="afternoon"]', 'After snack');
+    await page.selectOption('select[data-planroutine="morning"]', 'After breakfast');
+    assert.match(await page.textContent('.modal-card .plan'), /After snack, I'll do piano practice/);
     await page.waitForTimeout(400);
     await shot(page, `plan-${tag}.png`);
-    await page.click('.modal-card [data-action="plan-save"]');
+    await page.click('.modal-card [data-action="plan-step"][data-dir="1"]');
+    await page.click(`.modal-card [data-action="plan-grow"][data-id="${teeth.id}"]`);
+    await page.click('.modal-card [data-action="plan-seed"][data-id="seed-lavender"]');
+    await shot(page, `plan-grow-${tag}.png`);
+    await page.click('.modal-card [data-action="plan-step"][data-dir="1"]');
+    assert.match(await page.textContent('.modal-card .plan'), /This week I'll grow/);
+    await page.click('.modal-card [data-action="plan-sign"]');
+    await page.waitForSelector('.modal-card .celebrate');
+    assert.match(await page.textContent('.modal-card .celebrate'), /lavender is planted/);
+    await page.click('.modal-card [data-action="modal-close"]');
     const s1 = await stored(page);
-    const plan = s1.kids.find((k) => k.id === 'kid_ava').plan;
-    assert.equal(plan.cues[piano.id], 'After snack');
-    assert.equal(s1.kids.find((k) => k.id === 'kid_ava').lookbackSeen > '', true);
+    const avaAfter = s1.kids.find((k) => k.id === 'kid_ava');
+    const plan = avaAfter.plan;
+    assert.equal(plan.cues.afternoon, 'After snack');
+    assert.equal(plan.grow, teeth.id);
+    assert.ok(avaAfter.garden.beds.some((b) => b && b.seed === 'seed-lavender' && b.task === teeth.id), 'the free seed is planted for the chore');
+    assert.equal(avaAfter.lookbackSeen > '', true);
 
     // Today's list shows the cues and the star, and the HUD the family's progress
     await page.waitForTimeout(400);

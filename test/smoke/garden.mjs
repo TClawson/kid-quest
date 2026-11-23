@@ -190,7 +190,7 @@ for (const [label, viewport] of [['tablet', { width: 1280, height: 800 }], ['pho
   await click(sp, '.v-dialog [data-g="shop"]');
   assert.ok(await until(sp, () => document.querySelector('.garden-seed')), 'the shop opens on the Garden tab');
   await run(sp, 500);
-  assert.equal(await sp.locator('.garden-seed').count(), 9);
+  assert.equal(await sp.locator('.garden-seed').count(), 16);
   await sp.evaluate(() => document.querySelector('.garden-h').scrollIntoView());
   await sshot('7-shop-garden');
   await click(sp, '.garden-seed[data-id="seed-daisy"]');

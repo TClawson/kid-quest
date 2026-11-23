@@ -114,10 +114,10 @@ try {
     assert.equal(await page.locator('.today-pop [data-action="today-tick"], .today-pop [data-action="done"]').count(), 0, 'no ticking from the list');
     await shot(page, 'list');
 
-    // Plan my day, from the list
+    // Plan my week, from the list
     await page.click('.t-foot [data-action="plan"]');
     await page.clock.runFor(400);
-    assert.ok(await page.locator('#modal [data-action="plan-move"]').count(), 'the plan opens');
+    assert.ok(await page.locator('#modal [data-action="plan-nudge"]').count(), 'the plan opens');
     await closeModals(page);
 
     // Go: the list closes, the buddy walks to the villager and the talk box opens on the homework
