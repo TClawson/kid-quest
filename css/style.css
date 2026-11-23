@@ -367,7 +367,7 @@ span.dot.other { background: #f76707; }
 /* on the timer page, when the task listens to the piano: a line only when the buddy is bored, asleep or can't hear */
 .timer-ears { margin: 0 auto; max-width: 460px; min-height: 1.4em; }
 .timer-ears b { font-size: 1.05rem; line-height: 1.3; }
-.task-hint { display: block; margin-top: 6px; }
+.task-hint, .section-hint { display: block; margin-top: 6px; }
 /* the follow-along metronome: its arm swings to one side on each beat the buddy dances to */
 .listen-beat { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
 .listen-beat b { font-size: 1rem; display: block; }

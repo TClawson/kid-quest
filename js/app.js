@@ -23,6 +23,7 @@ import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
 import { todayHud, todayListHtml } from './today.js';
 import { kidHudHtml, statusHtml, menuHtml } from './hud.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
+import { CHORE_SETS, SET_CHORES, choreSetById, setChanges, applySet, routineOfTask } from './choresets.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, deskOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse, tankOf, tankRoom } from './furniture.js';
@@ -979,8 +980,13 @@ function coachQuests(kid, entry) {
   });
 }
 
-/** The ids of today's chores done in the kid's house (bed, teeth, floor), which villagers don't give out. */
+/** The ids of today's chores done in the kid's house (bed, both teeth, floor), which villagers don't give out. */
 function houseQuestIds(kid) {
+  return new Set(houseChores(state, kid, today()).ids);
+}
+
+/** The house chores the house is showing right now (the night teeth only once it's their turn). */
+function houseNowIds(kid) {
   const hc = houseChores(state, kid, today());
   return new Set(['bed', 'teeth', 'floor'].map((k) => hc[k]?.id).filter(Boolean));
 }
@@ -999,7 +1005,7 @@ function villageView(kid, s, entry, mood) {
   if (place === 'music' && tier) return musicView(kid, list, mood, tier);
   // chores linked to the house (bed, teeth, floor) are done in the house, not given out by
   // villagers; the house door shows what's still waiting in there
-  const inHouse = houseQuestIds(kid);
+  const inHouse = houseNowIds(kid);
   const homeOpen = list.filter((q) => inHouse.has(q.id) && (q.st === 'todo' || q.st === 'current'));
   const homeNext = homeOpen.find((q) => q.st === 'current') || homeOpen[0];
   const home = homeOpen.length ? { left: homeOpen.length, icon: homeNext.icon, task: homeNext.name, step: homeNext.step, now: homeOpen.some((q) => q.st === 'current') } : null;
@@ -1740,7 +1746,8 @@ function goQuest(kid, id) {
   const t = today();
   if (!kid || !taskById(kid, t, id)) return;
   const hc = houseChores(state, kid, t);
-  const kind = ['bed', 'teeth', 'floor'].find((k) => hc[k]?.id === id);
+  // the night teeth wait at the sink too, even before it's their turn
+  const kind = ['bed', 'teeth', 'floor'].find((k) => hc[k]?.id === id) || (hc.ids.includes(id) ? 'teeth' : null);
   const place = placeOf(kid.id, t);
   const where = place === 'house' || place === 'garden' ? place : place === 'music' && musicTier(progressFor(kid)) ? 'music' : 'out';
   if (kind) {
@@ -2345,6 +2352,7 @@ function daysLabel(days) {
 /** What a chore earns, in a few characters: "6 🪙", "about 6 🪙" with the allowance, "10 💎" for exercise. */
 function payShort(kid, task, allowance) {
   if (isExercise(task)) return `${taskGems(task)} 💎`;
+  if (kid.starsOnly) return '⭐';
   if (!allowance) return `${taskCoins(task)} 🪙`;
   const p = payAverage(kid, task);
   return p ? `~${p.coins} 🪙` : 'off';
@@ -2401,7 +2409,7 @@ function parentEditKid() {
         <span class="tl-pay">${esc(payShort(kid, t, allowance))}</span>
         <span class="chev" aria-hidden="true">${open ? '▲' : '▼'}</span>
       </button>`;
-  const taskRows = (period) => kid.tasks.filter((t) => t.period === period).map((t) => (ui.openTask !== t.id ? `
+  const taskRows = (period) => kid.tasks.filter((t) => routineOfTask(t) === period).map((t) => (ui.openTask !== t.id ? `
     <div class="task-edit closed" data-task="${t.id}">${taskLine(t, false)}</div>` : `
     <div class="task-edit open" data-task="${t.id}">
       ${taskLine(t, true)}
@@ -2414,18 +2422,16 @@ function parentEditKid() {
       </div>
       <div class="days">${dayChips(t)}</div>${repeatRow(kid, t)}
       <div class="row wrap">
-        <label>When <select data-field="period"><option value="morning" ${t.period === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${t.period === 'afternoon' ? 'selected' : ''}>After school</option><option value="exercise" ${t.period === 'exercise' ? 'selected' : ''}>Bonus exercise</option></select></label>
+        <label>When <select data-field="period"><option value="morning" ${routineOfTask(t) === 'morning' ? 'selected' : ''}>Morning</option><option value="afternoon" ${routineOfTask(t) === 'afternoon' ? 'selected' : ''}>After school</option><option value="evening" ${routineOfTask(t) === 'evening' ? 'selected' : ''}>Evening</option><option value="exercise" ${t.period === 'exercise' ? 'selected' : ''}>Bonus exercise</option></select></label>
         <label>Checked by <select data-field="verify"><option value="self" ${t.verify === 'self' ? 'selected' : ''}>Kid taps done</option><option value="parent" ${t.verify === 'parent' ? 'selected' : ''}>Parent PIN</option></select></label>
         <label>Timer <input type="number" min="0" max="180" step="5" data-field="minutes" value="${t.minutes}" class="num"> min</label>
         ${isExercise(t) ? '' : `<label>House chore <select data-action-change="task-house" data-task="${t.id}" aria-label="House chore">
           <option value="" ${t.house ? '' : 'selected'}>None</option>
           ${HOUSE_CHORES.map((c) => `<option value="${c.id}" ${t.house === c.id ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('')}
         </select></label>`}
-        ${isExercise(t) ? '' : `<label class="row"><input type="checkbox" data-field="evening" ${t.evening ? 'checked' : ''}> Evening chore</label>`}
         ${t.minutes > 0 ? `<label class="row"><input type="checkbox" data-field="background" ${t.background ? 'checked' : ''}> Keep counting in other apps</label>
         <label class="row"><input type="checkbox" data-field="listen" ${t.listen ? 'checked' : ''}> Listen to the piano</label>` : ''}
       </div>
-      ${t.evening && !isExercise(t) ? '<small class="muted task-hint">Evening chores don\'t keep the buddy shop shut, so the shop can open after the day chores. If one is missed, the next day the shop waits for every chore, evening ones too.</small>' : ''}
       ${t.minutes > 0 && t.listen ? '<small class="muted task-hint">While the timer runs, the buddy listens and dances to the playing. With no piano for 30 seconds it gets bored; after a minute it falls asleep and the timer pauses until the piano starts again. It uses the microphone only on the timer screen, and nothing is recorded. Try it in Settings › Test tools › Piano listening test.</small>' : ''}
       ${isExercise(t) ? `<div class="row wrap reward-edit">
         <label>Earns 💎 <input type="number" min="0" max="${MAX_REWARD}" step="1" data-field="gems" value="${Number.isFinite(t.gems) ? t.gems : ''}" placeholder="${DEFAULT_GEMS}" class="num" aria-label="Gems earned"> gems</label>
@@ -2452,6 +2458,11 @@ function parentEditKid() {
         <small class="muted allow-help">Leave empty to use the family's amount (Settings). A perfect week earns exactly this, split across ${esc(kid.name)}'s chores by size.</small>
       </div>` : ''}
     </div>
+    <div class="card chore-set">
+      <div class="block">Chore set <div class="row wrap">${CHORE_SETS.map((cs) => `<button class="btn ${kid.choreSet === cs.id ? '' : 'ghost'} small-btn" data-action="kid-set" data-set="${cs.id}">${esc(cs.name)} (${esc(cs.ages)})</button>`).join('')}</div>
+        <small class="muted">${esc(choreSetById(kid.choreSet)?.note || 'Pick a starter set for their age, then change anything below. Switching adds the set\'s chores and takes off the ones it replaces; piano and your own chores stay.')}</small></div>
+      <label class="row"><input type="checkbox" data-kidflag="starsOnly" ${kid.starsOnly ? 'checked' : ''}> Stars only: chores earn XP and cheers, no coins (for the littlest)</label>
+    </div>
     <h2>🌅 Morning chores</h2>
     ${taskRows('morning')}
     <button class="btn ghost" data-action="add-task" data-period="morning">+ Add morning chore</button>
@@ -2459,11 +2470,15 @@ function parentEditKid() {
     <h2>☀️ After-school chores</h2>
     ${taskRows('afternoon')}
     <button class="btn ghost" data-action="add-task" data-period="afternoon">+ Add after-school chore</button>
+    <h2>🌙 Evening chores</h2>
+    ${taskRows('evening') || '<p class="muted small">None yet. Night teeth, pajamas or a shower after dinner go here.</p>'}
+    <button class="btn ghost" data-action="add-task" data-period="evening">+ Add evening chore</button>
+    <small class="muted section-hint">Evening chores don't keep the buddy shop shut, so the shop can open after the day chores. If one is missed, the next day the shop waits for every chore, evening ones too.</small>
     <h2>💪 Bonus exercise</h2>
     ${taskRows('exercise') || '<p class="muted small">None yet. Add a run, a bike ride, soccer practice or anything active.</p>'}
     <button class="btn ghost" data-action="add-task" data-period="exercise">+ Add exercise</button>
     <p class="muted small">Exercise is optional: they never count toward the streak or the day's treasure. Each one earns ${DEFAULT_GEMS} 💎 gems unless you type another amount. Gems only buy sports gear. Exercising on ${EXERCISE_DAYS} days in a week (Monday to Sunday) makes a "strong week", and strong weeks unlock moves for the kid's buddy at 1, 3 and 6. A week with exactly ${EXERCISE_KEEP_DAYS} exercise days keeps the count without adding to it, and a week with fewer takes one strong week away. Moves already unlocked are never taken away. A day you excuse in Past days (sick, travel) counts neither for nor against it: that week just needs one fewer exercise day for each mark, and a week with ${EXERCISE_DAYS} or more excused days is skipped. You can excuse days afterwards too, and streaks update right away.</p>
-    <p class="muted small">🏠 House chores show in ${esc(kid.name)}'s buddy house in the village: an unmade bed until “Make bed” is done, the toothbrush out until the morning “Brush teeth” is done, and a messy floor until “Pick up bedroom floor” is done (messier after 2 days, very messy after 4). Pick which chore is which with “House chore”, or add one ready-made. Each can be linked to one chore at a time. Chores that aren't linked don't change the house.</p>
+    <p class="muted small">🏠 House chores show in ${esc(kid.name)}'s buddy house in the village: an unmade bed until “Make bed” is done, the toothbrush out until the morning “Brush teeth” is done (and again in the evening until the night one is), and a messy floor until “Pick up bedroom floor” is done (messier after 2 days, very messy after 4). Pick which chore is which with “House chore”, or add one ready-made. Each can be linked to one chore at a time. Chores that aren't linked don't change the house.</p>
     <p class="muted small">A chore can repeat every other week (weeks run Monday to Sunday). To have two kids take turns, like cleaning the bathroom, set the chore to every other week for one kid, then tap the other kid's name next to “Take turns with”: they get the same chore on the opposite weeks. On a kid's off week the chore isn't on their list at all, so it never counts against their streak or the day's treasure.</p>
     <p class="muted small">Changes apply from today. Past days keep the chores they had. A timer chore (like piano) counts minutes only while the app is open, unless you tick “Keep counting in other apps” (for an app like Note Rush). Time spent in other apps shows when you approve it. ${allowance ? `${esc(kid.name)} earns up to ${allowance.coins} coins and ${allowance.xp} XP a week. It is split across the week's chores by size: a big chore is worth 3 small ones, a medium one 2. A kid with more chores doesn't earn more, each chore is just worth a little less, and a missed chore loses its share. Exercise is extra: it earns gems and its own XP.` : 'Each chore earns 10 coins and 10 XP (30 for a timer chore) unless you type other amounts; leave a box empty to use the default.'} Changes count from today, so coins already earned stay earned. Every 100 XP is a level.</p>
     <hr>
@@ -3107,11 +3122,25 @@ const actions = {
   },
   'add-task': (el) => {
     const ex = el.dataset.period === 'exercise';
-    const task = { id: newId('task'), name: ex ? 'Exercise' : 'New chore', icon: ex ? '🏃' : '⭐', period: el.dataset.period, days: [0, 1, 2, 3, 4, 5, 6], verify: ex ? 'parent' : 'self', minutes: 0 };
+    const eve = el.dataset.period === 'evening';
+    const task = { id: newId('task'), name: ex ? 'Exercise' : 'New chore', icon: ex ? '🏃' : eve ? '🌙' : '⭐', period: eve ? 'afternoon' : el.dataset.period, ...(eve ? { evening: true } : {}), days: [0, 1, 2, 3, 4, 5, 6], verify: ex ? 'parent' : 'self', minutes: 0 };
     kidById(ui.editKidId).tasks.push(task);
     ui.openTask = task.id; // a new chore opens straight away
     save(); render();
     document.querySelector(`.task-edit[data-task="${task.id}"]`)?.scrollIntoView({ block: 'center' });
+  },
+  'kid-set': (el) => {
+    const kid = kidById(ui.editKidId);
+    const set = choreSetById(el.dataset.set);
+    if (!kid || !set) return;
+    const { add, remove } = setChanges(kid, set.id);
+    const list = (xs) => xs.join(', ');
+    const what = [
+      add.length ? `Adds: ${list(add.map((k) => `${SET_CHORES[k].name}${k === 'teeth-night' ? ' (night)' : ''}`))}.` : '',
+      remove.length ? `Takes off: ${list(remove.map((t) => t.name))}.` : '',
+    ].filter(Boolean).join(' ');
+    if (!what) { kid.choreSet = set.id; save(); render(); toast(`${kid.name} already has every ${set.name} chore`); return; }
+    confirmModal({ title: `Use the ${set.name} set for ${kid.name}?`, text: `${what} Past days keep the chores they had.`, yes: 'Use it', onYes: () => { applySet(kid, set.id, newId); save(); render(); } });
   },
   'add-house-task': (el) => {
     const kid = kidById(ui.editKidId);
@@ -3239,6 +3268,11 @@ document.addEventListener('change', (e) => {
     const isReward = el.dataset.field === 'coins' || el.dataset.field === 'xp' || el.dataset.field === 'gems';
     if (isReward) v = parseReward(v);
     if (el.dataset.field === 'size') v = Number(v);
+    // Evening is a routine of its own: an after-school-side chore marked evening
+    if (el.dataset.field === 'period') {
+      if (v === 'evening') { task.period = 'afternoon'; task.evening = true; } else { task.period = v; delete task.evening; }
+      save(); render(); return;
+    }
     if (v === null) delete task[el.dataset.field];
     else task[el.dataset.field] = v;
     save();
@@ -3263,6 +3297,11 @@ document.addEventListener('change', (e) => {
     const a = state.settings.allowance || defaultAllowance(today());
     // switching back on counts from today, so days earned while it was off stay as they were
     state.settings.allowance = el.checked ? { ...a, on: true, since: a.on ? a.since : today() } : { ...a, on: false };
+    save(); render(); return;
+  }
+  if (el.dataset.kidflag) {
+    const kid = kidById(ui.editKidId);
+    if (el.checked) kid[el.dataset.kidflag] = true; else delete kid[el.dataset.kidflag];
     save(); render(); return;
   }
   if (el.dataset.kidfield) { kidById(ui.editKidId)[el.dataset.kidfield] = el.value.trim() || 'Kid'; save(); render(); return; }

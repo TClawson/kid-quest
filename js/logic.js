@@ -231,6 +231,12 @@ export function weekSplit(kid, key, amount, half = null) {
  */
 export function taskPay(state, kid, key, task, today) {
   if (key !== today && task.pay) return task.pay;
+  // a kid on "stars only" (the littlest) earns XP and cheers, no coins
+  if (kid?.starsOnly && !isExercise(task)) return { ...payFor(state, kid, key, task, today), coins: 0 };
+  return payFor(state, kid, key, task, today);
+}
+
+function payFor(state, kid, key, task, today) {
   if (isExercise(task)) return { coins: 0, xp: taskXp(task), gems: taskGems(task) };
   const a = allowanceFor(state, kid);
   const since = state.settings?.allowance?.since;
