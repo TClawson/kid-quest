@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, addDays } from '../js/logic.js';
+import { emptyState, addDays, snapshotToday } from '../js/logic.js';
 import {
   SEEDS, KINDS, DECOR, GARDEN_SPOTS, seedById, gardenOf, plant, digUp, relink, harvest, plantInfo, sellPrice,
   houseHarvest, gardenView, buySeed, seedCount, gardenLayout, placeDecor, watered, setWatered, thirsty, BEDS, TREES,
@@ -146,13 +146,63 @@ test('dig up and relink', () => {
   const { s, kid } = setup();
   plant(kid, 'beds', 3, 'seed-tomato', 'bed', day);
   kid.tasks.push({ id: 'teeth', name: 'Teeth', period: 'morning', days: every });
-  assert.ok(relink(kid, 'beds', 3, 'teeth', day));
+  assert.ok(relink(s, kid, 'beds', 3, 'teeth', day));
   assert.equal(gardenOf(kid).beds[3].task, 'teeth');
   kid.tasks = kid.tasks.filter((t) => t.id !== 'teeth');
   assert.equal(plantInfo(s, kid, gardenOf(kid).beds[3], day).task, null, 'its chore is gone');
   assert.ok(digUp(kid, 'beds', 3));
   assert.equal(gardenOf(kid).beds[3], null);
   assert.ok(!digUp(kid, 'beds', 3));
+});
+
+test('moving a plant to a new chore keeps the growth it already earned', () => {
+  const { s, kid } = setup();
+  const start = addDays(day, -6);
+  plant(kid, 'beds', 0, 'seed-tomato', 'bed', start);
+  // the bed chore was done 4 of the 6 days before today (one missed, one excused)
+  for (const k of [-6, -5, -4, -2]) mark(s, addDays(day, k));
+  s.log[addDays(day, -1)] = { k1: { tasks: {}, excused: true } };
+  for (let k = -6; k < 0; k += 1) snapshotToday(s, kid, addDays(day, k)); // each day remembers its list
+  const before = plantInfo(s, kid, gardenOf(kid).beds[0], day);
+  assert.equal(before.done, 4);
+  assert.equal(before.scheduled, 5);
+  // a grown-up removes the chore; the kid moves the plant to teeth
+  kid.tasks = [{ id: 'teeth', name: 'Teeth', period: 'morning', days: every }];
+  assert.ok(relink(s, kid, 'beds', 0, 'teeth', day));
+  const p = gardenOf(kid).beds[0];
+  assert.deepEqual(p.banked, { done: 4, scheduled: 5 });
+  assert.equal(p.planted, day);
+  let info = plantInfo(s, kid, p, day);
+  assert.equal(info.done, 4, 'keeps its 4 days');
+  assert.equal(info.grown, 4);
+  assert.equal(info.banked, 4);
+  assert.equal(info.droopy, false);
+  assert.equal(info.stage, before.stage);
+  // doing the new chore today and tomorrow carries on from 4
+  mark(s, day, 'teeth');
+  snapshotToday(s, kid, day);
+  mark(s, addDays(day, 1), 'teeth');
+  info = plantInfo(s, kid, p, addDays(day, 1));
+  assert.equal(info.done, 6);
+  assert.equal(info.scheduled, 7);
+  // a second move keeps it all, and today's teeth isn't counted twice
+  kid.tasks.push({ id: 'read', name: 'Read', period: 'morning', days: every });
+  assert.ok(relink(s, kid, 'beds', 0, 'read', addDays(day, 1)));
+  const p2 = gardenOf(kid).beds[0];
+  assert.deepEqual(p2.banked, { done: 5, scheduled: 6 }, 'banks the days before today');
+  assert.equal(plantInfo(s, kid, p2, addDays(day, 1)).done, 5, "today's teeth was with the old chore");
+  mark(s, addDays(day, 1), 'read');
+  assert.equal(plantInfo(s, kid, p2, addDays(day, 1)).done, 6);
+});
+
+test('moving a plant planted today banks nothing', () => {
+  const { s, kid } = setup();
+  plant(kid, 'beds', 0, 'seed-tulip', 'bed', day);
+  mark(s, day);
+  kid.tasks.push({ id: 'teeth', name: 'Teeth', period: 'morning', days: every });
+  assert.ok(relink(s, kid, 'beds', 0, 'teeth', day));
+  assert.equal(gardenOf(kid).beds[0].banked, undefined);
+  assert.equal(plantInfo(s, kid, gardenOf(kid).beds[0], day).banked, 0);
 });
 
 test('decorations: basic fence and can are free; bought ones go in their spot', () => {

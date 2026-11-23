@@ -1487,7 +1487,7 @@ const gardenHandlers = {
   },
   onRelink: (where, index, taskId) => {
     const kid = kidById(ui.kidId);
-    if (kid && relink(kid, where, index, taskId, today())) save();
+    if (kid && relink(state, kid, where, index, taskId, today())) save();
   },
   onHarvest: (index, how) => {
     const kid = kidById(ui.kidId);

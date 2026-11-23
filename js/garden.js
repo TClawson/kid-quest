@@ -132,7 +132,7 @@ function growingLine(info, name) {
     `You did “${name}” ${info.done} ${info.done === 1 ? 'time' : 'times'}, and look how it's growing!`,
     `Every “${name}” gives it a little more. Look how tall it's getting!`,
     `${info.done} ${info.done === 1 ? 'day' : 'days'} of “${name}”! You take good care of it.`,
-  ][info.done % 3];
+  ][info.banked ? 1 : info.done % 3]; // after a chore change, the count isn't all this chore
   return `${info.seed.name}: ${days}. ${praise}${info.kind === 'tree' ? '' : left > 0 ? ` Just ${left} more to go.` : ''}`;
 }
 
@@ -346,7 +346,7 @@ function mount(section, handlers) {
     const seed = seedById(seedId);
     if (!data.tasks.length) { say('Ask a grown-up to add some chores first. Plants grow when you do a chore.'); return; }
     const body = `<div class="g-picks tasks">${data.tasks.map((t) => `<button class="g-pick" data-g="${relinkMode ? 'relink' : 'task'}" data-id="${esc(t.id)}" data-seed="${seedId || ''}" data-where="${where}" data-i="${i}"><span class="g-pick-icon">${esc(t.icon)}</span><b>${esc(t.name)}</b></button>`).join('')}</div>`;
-    say(relinkMode ? 'Which chore should this plant grow with now?' : `Which chore will your ${seed.name.toLowerCase()} grow with? It grows a bit every day you do it.`, body, bye('Not now'));
+    say(relinkMode ? 'Which chore should this plant grow with now? It keeps all the growing it has done.' : `Which chore will your ${seed.name.toLowerCase()} grow with? It grows a bit every day you do it.`, body, bye('Not now'));
   };
 
   const plantTalk = (where, i) => {
@@ -354,7 +354,7 @@ function mount(section, handlers) {
     if (!info) { seedPicker(where, i); return; }
     const name = info.task?.name || '';
     if (!info.task) {
-      say(`Oh, the chore this ${info.seed.name.toLowerCase()} was growing with is gone. Pick another chore for it, or dig it up.`, '',
+      say(`Oh, the chore this ${info.seed.name.toLowerCase()} was growing with is gone. Pick another chore for it and it keeps growing from where it is, or dig it up.`, '',
         `${btn('relinkpick', '🔗 Pick a chore', `data-where="${where}" data-i="${i}"`)}${btn('dig', '⛏ Dig it up', `data-where="${where}" data-i="${i}"`, 'ghost')}${bye('Not now')}`);
       return;
     }
@@ -366,7 +366,7 @@ function mount(section, handlers) {
     } else if (info.ripe) {
       const price = sellPrice(info);
       const keep = info.kind === 'flower' ? 'brighten your table for a week' : 'stay in your kitchen for two weeks';
-      say(`Your ${info.seed.name.toLowerCase()} ${/s$/.test(info.seed.name) ? 'are' : 'is'} all grown! That's “${name}” ${info.done} ${info.done === 1 ? 'time' : 'times'}. You can keep ${/s$/.test(info.seed.name) ? 'them' : 'it'}, or sell ${/s$/.test(info.seed.name) ? 'them' : 'it'}.`,
+      say(`Your ${info.seed.name.toLowerCase()} ${/s$/.test(info.seed.name) ? 'are' : 'is'} all grown! That's ${info.banked ? `${info.done} days of chores` : `“${name}” ${info.done} ${info.done === 1 ? 'time' : 'times'}`}. You can keep ${/s$/.test(info.seed.name) ? 'them' : 'it'}, or sell ${/s$/.test(info.seed.name) ? 'them' : 'it'}.`,
         `<p class="g-hint">Ones you keep ${keep}.</p>`,
         `${btn('keep', info.kind === 'flower' ? '🏺 Keep' : '🧺 Keep', `data-i="${i}"`)}${btn('sell', `🪙 Sell for ${price} ${price === 1 ? 'coin' : 'coins'}`, `data-i="${i}"`)}${bye('Not yet')}`);
       return;
@@ -392,7 +392,7 @@ function mount(section, handlers) {
       if (err) say(err);
       else refreshWith(`Planted! Your ${seed.name.toLowerCase()} will grow a bit every day you do “${task.name}”.`);
     } else if (act === 'relinkpick') chorePicker(where, i, '', true);
-    else if (act === 'relink') { handlers.onRelink(where, i, b.dataset.id); refreshWith('All set! It will grow with that chore now.'); } else if (act === 'dig') {
+    else if (act === 'relink') { handlers.onRelink(where, i, b.dataset.id); refreshWith('All set! It keeps its growth and carries on with that chore now.'); } else if (act === 'dig') {
       const info = infoAt(where, i);
       say(`Dig up the ${info ? info.seed.name.toLowerCase() : 'plant'}? You won't get your coins back.`, '',
         `${btn('dig2', 'Yes, dig it up', `data-where="${where}" data-i="${i}"`)}${btn('bye', 'No, keep it', '', 'ghost')}`);

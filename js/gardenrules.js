@@ -15,7 +15,8 @@
 //   kept: [{ seed, kind, at, until }],  // harvests kept in the house
 //   seeds: { seedId: count },            // seed packets bought in the shop, not planted yet
 //   n: a counter for plot ids,
-// }, plot = { id, seed, task, planted }. Decorations are shop items in kid.owned, and
+// }, plot = { id, seed, task, planted, banked? }. banked = { done, scheduled }: growth a
+// plant earned with an earlier chore, kept when it was moved to a new one (see relink()). Decorations are shop items in kid.owned, and
 // kid.gardenDecor says which owned one stands in each spot (like kid.home for furniture).
 // Watering is only for show and lives on this device (see watered()).
 
@@ -139,23 +140,22 @@ export const plantableTasks = (kid) => (kid?.tasks || []).filter((t) => !isExerc
 const saidDone = (entry, id) => ['done', 'pending'].includes(entry?.tasks?.[id]?.status);
 const onList = (state, kid, key, today, id) => tasksForDay(state, kid, key, today).some((t) => t.id === id && !isExercise(t));
 
+const bankOf = (plot) => ({
+  done: Math.max(0, Math.floor(plot?.banked?.done) || 0),
+  scheduled: Math.max(0, Math.floor(plot?.banked?.scheduled) || 0),
+});
+
 /**
- * How a plant is doing today: {
- *   seed, kind, task (the kid's task, or null if it was deleted), grown (done-days so far,
- *   capped at the kind's days for flowers and vegetables), days, stage (0..stages-1),
- *   ripe (ready to harvest, or a fully grown tree), droopy, doneToday, scheduled (the chore's
- *   days since planting), done (of those, the ones done), fruit (a grown tree's fruit so far),
- * }. Days the chore wasn't on the list, and excused days, neither grow nor droop it.
+ * Count the plant's chore days since it was planted (or last moved to a chore): scheduled,
+ * done, and whether the last finished day was missed. withToday: count today when it's done
+ * already (today isn't over, so a not-yet-done today never counts).
  */
-export function plantInfo(state, kid, plot, today) {
-  const seed = seedById(plot?.seed);
-  if (!seed) return null;
-  const K = KINDS[seed.kind];
-  const task = (kid.tasks || []).find((t) => t.id === plot.task && !isExercise(t)) || null;
+function walk(state, kid, plot, today, withToday) {
   let done = 0; let scheduled = 0; let lastMissed = false; let lastSeen = false;
   const planted = plot.planted && plot.planted <= today ? plot.planted : today;
   // walk from today back to the day it was planted
   for (let key = today, i = 0; key >= planted && i < 400; key = addDays(key, -1), i += 1) {
+    if (key === today && !withToday) continue;
     if (!onList(state, kid, key, today, plot.task)) continue;
     const entry = entryFor(state, kid.id, key);
     const did = saidDone(entry, plot.task);
@@ -165,6 +165,27 @@ export function plantInfo(state, kid, plot, today) {
     if (did) done += 1;
     if (key !== today && !lastSeen) { lastSeen = true; lastMissed = !did; }
   }
+  return { done, scheduled, lastMissed };
+}
+
+/**
+ * How a plant is doing today: {
+ *   seed, kind, task (the kid's task, or null if it was deleted), grown (done-days so far,
+ *   capped at the kind's days for flowers and vegetables), days, stage (0..stages-1),
+ *   ripe (ready to harvest, or a fully grown tree), droopy, doneToday, scheduled (the chore's
+ *   days since planting), done (of those, the ones done), fruit (a grown tree's fruit so far),
+ *   banked (done-days earned with an earlier chore, already in done and grown),
+ * }. Days the chore wasn't on the list, and excused days, neither grow nor droop it.
+ */
+export function plantInfo(state, kid, plot, today) {
+  const seed = seedById(plot?.seed);
+  if (!seed) return null;
+  const K = KINDS[seed.kind];
+  const task = (kid.tasks || []).find((t) => t.id === plot.task && !isExercise(t)) || null;
+  const walked = walk(state, kid, plot, today, true);
+  const done = walked.done + bankOf(plot).done;
+  const scheduled = walked.scheduled + bankOf(plot).scheduled;
+  const { lastMissed } = walked;
   const doneToday = saidDone(entryFor(state, kid.id, today), plot.task);
   let mastered = false;
   if (seed.kind === 'tree' && task) mastered = !!habitInfo(state, kid, today).get(task.id)?.mastered;
@@ -175,6 +196,7 @@ export function plantInfo(state, kid, plot, today) {
   return {
     seed, kind: seed.kind, task, grown, days: K.days, stage, ripe,
     droopy: !!task && lastMissed && !doneToday, doneToday, scheduled, done, fruit,
+    banked: bankOf(plot).done,
   };
 }
 
@@ -219,12 +241,21 @@ export function digUp(kid, where, index) {
   return true;
 }
 
-/** Point a plant at a different chore (when its chore was removed). Growth so far restarts counting from that chore. */
-export function relink(kid, where, index, taskId, today) {
+/**
+ * Point a plant at a different chore (when its chore was removed). The growth it already
+ * earned is kept (banked), and it carries on growing from there with the new chore, which
+ * counts from today. The days before today are banked; today counts with the new chore.
+ */
+export function relink(state, kid, where, index, taskId, today) {
   const g = gardenOf(kid);
   const p = slotList(g, where)[index];
   if (!p || !plantableTasks(kid).some((t) => t.id === taskId)) return false;
-  slotList(g, where)[index] = { ...p, task: taskId, planted: today };
+  const was = bankOf(p);
+  const before = p.planted && p.planted < today ? walk(state, kid, p, today, false) : { done: 0, scheduled: 0 };
+  const banked = { done: was.done + before.done, scheduled: was.scheduled + before.scheduled };
+  const next = { ...p, task: taskId, planted: today };
+  if (banked.done || banked.scheduled) next.banked = banked; else delete next.banked;
+  slotList(g, where)[index] = next;
   kid.garden = g;
   return true;
 }
