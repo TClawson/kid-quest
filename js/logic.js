@@ -1134,7 +1134,11 @@ export function planSentence(cue, task) {
 
 /** A chore as words after "I'll": "make bed", "put toys away", "do chore of the week". */
 export function choreWords(task) {
+  // "Chore of the week: deep clean" says just the job after the colon
+  const part = task.name.includes(': ') ? task.name.slice(task.name.indexOf(': ') + 2) : '';
+  if (part) { const w = choreWords({ name: part }); return w.startsWith('do ') ? `do the ${w.slice(3)}` : w; }
   const n = task.name.charAt(0).toLowerCase() + task.name.slice(1);
+  if (/^chore\b/i.test(task.name)) return `do my ${n}`;
   if (/^(do|play|make|brush|clear|practice|practise|feed|walk|read|take|put|empty|set|wash|fold|vacuum|dust|tidy|clean|pack|water|help|unload|load|get|go|ride|run|pick|change|shower|bathe|swim|bike)\b/i.test(task.name)) return n;
   if (/ (away|on|off|up)$/i.test(task.name)) return `put ${n}`;
   return `do ${n}`;

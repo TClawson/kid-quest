@@ -24,6 +24,8 @@ import { todayHud, todayListHtml } from './today.js';
 import { kidHudHtml, statusHtml, menuHtml } from './hud.js';
 import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
 import { CHORE_SETS, SET_CHORES, choreSetById, setChanges, applySet, routineOfTask } from './choresets.js';
+import { tokenPages, chartRoutines, stickers, defaultStyle, chartSignature, chartOutdated, DAY_ORDER } from './charts.js';
+import { chartArt } from './chartart.js';
 import { ROUTINES, FREE_SEEDS, planDraft, routineList, moveChore, nudgeChore, flexTasks, dayCheck, toggleDay, growable, signPlan, signedThisWeek, seedThisWeek } from './planrules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, deskOpen, tierInfo } from './musicrules.js';
@@ -621,6 +623,136 @@ document.addEventListener('pointermove', (e) => {
   planDragMove(e);
 }, { passive: false });
 for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => { if (planHold) { clearTimeout(planHold.timer); planHold = null; } planDragEnd(); });
+
+// ---------- printed charts from the kid's plan (charts.js, chartart.js) ----------
+// A full-page view over the app with the kid's pages, scaled to the screen; Print sends just
+// the pages to the printer (or a PDF), at their real size: Letter, landscape.
+
+function chartPicture(art, c) {
+  const pic = { bed: art.bedPic, dressed: art.dressPic, teeth: art.teethPic, 'teeth-night': art.teethNightPic, clothes: art.clothesPic, toys: art.toysPic, books: art.booksPic }[c.kind];
+  if (pic) return `<img src="${pic}" alt="">`;
+  // a chore with no drawing yet: its icon, big, on its color, with the buddy cheering in the corner
+  return `<div class="cp-generic" style="--c:${c.color}"><span class="cp-emoji">${esc(c.icon)}</span><img class="cp-face" src="${art.facePic}" alt=""></div>`;
+}
+const chartIcon = (art, c) => {
+  const pic = { bed: art.bedIcon, dressed: art.shirtIcon, teeth: art.brushIcon, 'teeth-night': art.brushIcon, clothes: art.hamperIcon, toys: art.blocksIcon, books: art.booksIcon }[c.kind];
+  return pic ? `<img src="${pic}" alt="">` : `<span class="cp-ico">${esc(c.icon)}</span>`;
+};
+
+function tokenPageHtml(kid, art, p) {
+  const title = `${p.title}, ${kid.name}!`;
+  const titlePic = p.routine === 'morning' ? art.sleepPic : art.humPic;
+  const corner = p.routine === 'evening' ? art.moonIcon : p.routine === 'morning' ? art.sunIcon : art.noteIcon;
+  return `<section class="cp-page cp-tokens" style="--n:${p.chores.length}">
+    <div class="cp-top">
+      <img class="cp-tpic" src="${titlePic}" alt="">
+      <div class="cp-tt"><h1 style="font-size:${Math.min(0.78, 7.2 / ((title.length + 2) * 0.32)).toFixed(3)}in">${esc(title)}${p.parts > 1 ? ` <small>${p.part} of ${p.parts}</small>` : ''}</h1><div class="cp-sub"${p.sentence.length > 80 ? ' style="font-size:0.22in;line-height:0.25in"' : ''}>${esc(p.sentence)}</div></div>
+      <img class="cp-corner" src="${corner}" alt="">
+    </div>
+    <div class="cp-cols">
+      ${p.chores.map((c) => `<div class="cp-col" style="--c:${c.color}">
+        <div class="cp-frame">${chartPicture(art, c)}<span class="cp-num">${c.n}</span>${c.grow ? '<span class="cp-grow">🌱 Growing!</span>' : ''}</div>
+        <div class="cp-label">${chartIcon(art, c)}<span>${esc(c.name)}</span></div>
+        ${c.daysText ? `<div class="cp-days">${esc(c.daysText)}</div>` : ''}
+        <div class="cp-spot"><img src="${art.starIcon}" alt=""></div>
+      </div>`).join('')}
+      <div class="cp-col cp-fin">
+        <div class="cp-frame"><img src="${art.finPic}" alt=""><div class="cp-yay">All done!</div></div>
+        <div class="cp-feed">
+          <div class="cp-cap">With each token:</div>
+          <div class="cp-ln"><b>1</b>Tap to start</div>
+          <div class="cp-ln"><b>2</b>Do it together</div>
+          <div class="cp-ln"><b>3</b>Tap again!</div>
+        </div>
+      </div>
+    </div>
+    <div class="cp-night"><img src="${art.moonIcon}" alt=""><span>At bedtime, tokens go back on the stars.</span><span class="cp-sp"></span>${p.chores.map((c) => `<span class="cp-mini" style="--c:${c.color}">${chartIcon(art, c)}</span>`).join('')}<img src="${art.starIcon}" alt=""><span>Goodnight!</span></div>
+    <div class="cp-foot"><span>Kid Quest · made from ${esc(kid.name)}'s plan</span><span>Week of ${esc(shortDate(weekStart(today())))}</span></div>
+  </section>`;
+}
+
+/** Row height (inches) that fits every chore of the week grid on one page. */
+const rowHeight = (groups) => Math.min(0.42, 6.1 / (groups.reduce((n, g) => n + g.chores.length, 0) + groups.length * 1.3 + 1));
+function gridPageHtml(kid, art) {
+  const groups = chartRoutines(kid);
+  const name = { morning: '☀️ Morning', afternoon: '🎒 After school', evening: '🌙 Evening', exercise: '💪 Exercise' };
+  return `<section class="cp-page cp-grid">
+    <div class="cp-top">
+      <img class="cp-tpic" src="${art.finPic}" alt="">
+      <div class="cp-tt"><h1>${esc(kid.name)}'s week</h1><div class="cp-sub">My plan, my way. Tick each box when it's done.</div></div>
+    </div>
+    <table class="cp-table" style="--rh:${rowHeight(groups).toFixed(3)}in">
+      <thead><tr><th></th>${DAY_ORDER.map((d) => `<th>${DAY_NAMES[d]}</th>`).join('')}</tr></thead>
+      ${groups.map((g) => `<tbody>
+        <tr class="cp-gh"><th colspan="8"><div>${name[g.routine]}${g.sentence ? ` <small>“${esc(g.sentence)}”</small>` : ''}</div></th></tr>
+        ${g.chores.map((c, i) => `<tr><td class="cp-rn">${g.routine === 'exercise' ? '' : `${i + 1}. `}${esc(c.icon)} ${esc(c.name)}${c.grow ? ' 🌱' : ''}</td>${DAY_ORDER.map((d) => `<td>${c.days.includes(d) ? '<i class="cp-box"></i>' : '<span class="cp-off">·</span>'}</td>`).join('')}</tr>`).join('')}
+      </tbody>`).join('')}
+    </table>
+    <div class="cp-foot"><span>Kid Quest · made from ${esc(kid.name)}'s plan${kid.plan?.grow ? ' · 🌱 the chore I\'m growing this week' : ''}</span><span>Week of ${esc(shortDate(weekStart(today())))}</span></div>
+  </section>`;
+}
+
+function stickerPageHtml(kid, art) {
+  const list = stickers(kid);
+  if (!list.length) return '';
+  return `<section class="cp-page cp-stickers">
+    <h2>Token stickers for ${esc(kid.name)}</h2>
+    <p class="cp-cut">Print on full-sheet sticker paper, cut out each 2-inch circle and stick it on a token. Each token belongs to one page of the chart.</p>
+    <div class="cp-stk">${list.map((c) => `<div class="cp-sticker" style="--c:${c.color}">${chartIcon(art, c)}<small>${esc(c.name)}${c.kind === 'teeth-night' ? ' 🌙' : ''}</small></div>`).join('')}<div class="cp-sticker" style="--c:#3b2235"><img src="${art.facePic}" alt=""><small>${esc(kid.name)}</small></div></div>
+  </section>`;
+}
+
+function chartsHtml(kid) {
+  const art = chartArt(kid.buddy);
+  const style = ui.chartStyle || defaultStyle(kid);
+  const pages = style === 'grid' ? gridPageHtml(kid, art) : tokenPages(kid).map((p) => tokenPageHtml(kid, art, p)).join('') + (ui.chartStickers ? stickerPageHtml(kid, art) : '');
+  return `<div class="cp-bar">
+      <b>🖨️ ${esc(kid.name)}'s chart</b>
+      <span class="cp-seg"><button class="${style === 'tokens' ? 'on' : ''}" data-action="chart-style" data-style="tokens">Token pages</button><button class="${style === 'grid' ? 'on' : ''}" data-action="chart-style" data-style="grid">Week grid</button></span>
+      ${style === 'tokens' ? `<label><input type="checkbox" data-chartstickers ${ui.chartStickers ? 'checked' : ''}> Token stickers</label>` : ''}
+      <span class="cp-sp"></span>
+      <button class="btn" data-action="chart-print">Print</button>
+      <button class="btn ghost" data-action="chart-close">Close</button>
+    </div>
+    ${kid.plan?.signed ? '' : `<p class="cp-note">${esc(kid.name)} hasn't made a plan yet, so this is the chores as you set them. It changes once they plan their week.</p>`}
+    <div class="cp-pages">${pages}</div>`;
+}
+
+let chartView = null;
+function openCharts(kid) {
+  closeModal();
+  ui.chartKid = kid.id;
+  ui.chartStyle = null;
+  chartView ||= document.body.appendChild(Object.assign(document.createElement('div'), { className: 'chart-view' }));
+  chartView.hidden = false;
+  document.documentElement.classList.add('charts-open');
+  drawCharts();
+}
+function drawCharts() {
+  const kid = kidById(ui.chartKid);
+  if (!kid || !chartView) return;
+  chartView.innerHTML = chartsHtml(kid);
+  fitCharts();
+}
+/** Fits the 11-inch pages to the screen (printing uses their real size). Never redraws: printing resizes the window. */
+function fitCharts() {
+  if (!chartView) return;
+  const k = Math.min(1, (window.innerWidth - 24) / (11 * 96));
+  chartView.style.setProperty('--k', k.toFixed(3));
+}
+function closeCharts() {
+  ui.chartKid = null;
+  if (chartView) { chartView.hidden = true; chartView.innerHTML = ''; }
+  document.documentElement.classList.remove('charts-open');
+}
+window.addEventListener('afterprint', () => {
+  const kid = ui.chartKid && kidById(ui.chartKid);
+  if (!kid) return;
+  kid.chartPrinted = chartSignature(kid);
+  delete kid.chartWanted;
+  save();
+});
+window.addEventListener('resize', () => { if (ui.chartKid) fitCharts(); });
 
 // ---------- the treasure chest (see treasure.js) ----------
 
@@ -2460,6 +2592,7 @@ function parentKids() {
         <div class="list-row">
           ${buddyChip(kid)}
           <div class="grow"><b>${esc(kid.name)}</b><small class="muted">${week}${esc(reward)}</small></div>
+          <button class="btn ${kid.chartWanted || chartOutdated(kid) ? '' : 'ghost'}" data-action="charts" data-kid="${kid.id}" title="${chartOutdated(kid) ? 'The plan changed since the chart was printed' : 'Print chart'}">🖨️${kid.chartWanted || chartOutdated(kid) ? ' New chart' : ''}</button>
           <button class="btn ghost" data-action="bonus" data-kid="${kid.id}" ${w.bonusLeft ? '' : 'disabled'}>🎁 Bonus</button>
           <button class="btn ghost" data-action="edit-kid" data-id="${kid.id}">Edit</button>
         </div>`;
@@ -2634,6 +2767,7 @@ function parentEditKid() {
         <small class="muted">${esc(choreSetById(kid.choreSet)?.note || 'Pick a starter set for their age, then change anything below. Switching adds the set\'s chores and takes off the ones it replaces; piano and your own chores stay.')}</small></div>
       <label class="row"><input type="checkbox" data-kidflag="starsOnly" ${kid.starsOnly ? 'checked' : ''}> Stars only: chores earn XP and cheers, no coins (for the littlest)</label>
       <label class="row"><input type="checkbox" data-kidflag="planWithGrownUp" ${kid.planWithGrownUp ? 'checked' : ''}> Plans with a grown-up: bigger pictures in Plan my week</label>
+      <button class="btn ghost small-btn" data-action="charts" data-kid="${kid.id}">🖨️ Print ${esc(kid.name)}'s chart${chartOutdated(kid) ? ' (plan changed)' : ''}</button>
       ${kid.plan?.signed ? `<small class="muted">📝 ${esc(kid.name)} signed a plan for the week of ${esc(shortDate(kid.plan.signed))}. Change it together with them in Plan my week, so it stays theirs.</small>` : ''}
     </div>
     <h2>🌅 Morning chores</h2>
@@ -3861,6 +3995,17 @@ if (cloudCfg) startCloud();
 
 Object.assign(actions, {
   plan: (el) => { const kid = kidById(el.dataset.kid); if (kid) openPlan(kid); },
+  charts: (el) => { const kid = kidById(el.dataset.kid); if (kid) openCharts(kid); },
+  'chart-style': (el) => { ui.chartStyle = el.dataset.style; drawCharts(); },
+  'chart-print': () => { window.print(); },
+  'chart-close': () => { closeCharts(); render(); },
+  'plan-print-ask': (el) => {
+    const kid = kidById(el.dataset.kid);
+    if (!kid) return;
+    kid.chartWanted = true;
+    save();
+    toast('A grown-up will see it under Kids 🖨️');
+  },
   'plan-nudge': (el) => {
     const kid = kidById(ui.planKid);
     if (!kid || !ui.planDraft) return;
@@ -3924,7 +4069,10 @@ Object.assign(actions, {
         ${buddyHtml(kid, 'excited', 'xl')}
         <h1>That's my plan!</h1>
         ${gift ? `<p>🎁 A free packet of <b>${esc(gift.seed.name.toLowerCase())}</b>${gift.planted ? ' is planted in your garden. Each day you do your chore, it grows!' : ' is in your seed bag. Plant it in your garden!'}</p>` : ''}
-        <button class="btn huge" data-action="modal-close">Let's go!</button>
+        <div class="stack">
+          <button class="btn huge" data-action="modal-close">Let's go!</button>
+          <button class="btn ghost" data-action="plan-print-ask" data-kid="${kid.id}">🖨️ Ask a grown-up to print my chart</button>
+        </div>
       </div>`);
   },
   // the HUD's family pill: the party once it's earned, otherwise how the family is doing
@@ -3972,6 +4120,10 @@ document.addEventListener('input', (e) => {
   ui.danceLead = Math.min(DANCE_LEAD.max, Math.max(DANCE_LEAD.min, Number(e.target.value) || 0));
   try { localStorage.setItem(DANCE_LEAD_KEY, String(ui.danceLead)); } catch { /* lasts while the app is open */ }
   document.querySelectorAll('[data-dance-lead-out]').forEach(($o) => { $o.textContent = `${ui.danceLead} ms`; });
+});
+
+document.addEventListener('change', (e) => {
+  if (e.target.matches?.('[data-chartstickers]')) { ui.chartStickers = e.target.checked; drawCharts(); }
 });
 
 document.addEventListener('change', (e) => {
