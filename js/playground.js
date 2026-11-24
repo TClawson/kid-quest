@@ -66,7 +66,8 @@ export function openPlay(opts) {
   const showLeft = () => {
     const n = left();
     game.locked = n <= 0;
-    if ($left) $left.textContent = Number.isFinite(n) ? `${n} ${n === 1 ? 'game' : 'games'} left today` : '';
+    // opts.leftText(n): its own words (a borrowed ball runs out before the day's games do)
+    if ($left) $left.textContent = opts.leftText?.(n) ?? (Number.isFinite(n) ? `${n} ${n === 1 ? 'game' : 'games'} left today` : '');
   };
   showLeft();
   const fctx = field.getContext('2d');

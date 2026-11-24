@@ -127,6 +127,55 @@ try {
     await ctx.close();
   }
 
+  // "play again" from inside a game keeps to the limits too (Taylor, 2026-11-24: kids kept starting
+  // new games from the game's end screen after the count reached 0). End the game early, tap the end
+  // screen to get back to the start, then tap again to start another.
+  const endAndTryAgain = async (page) => {
+    await page.evaluate(() => { const g = document.querySelector('.playground').game; g.phase = 'over'; g.overAt = g.t - 2; });
+    const box = await page.locator('.play-field').boundingBox();
+    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5); // the end screen: back to the start
+    await page.waitForFunction(() => document.querySelector('.playground')?.dataset.phase === 'ready');
+    await page.mouse.click(box.x + box.width * 0.66, box.y + box.height * 0.5); // try to start another
+    await page.waitForTimeout(2600); // hockey drops the puck after a moment
+  };
+  // the day's last game: tag with Max, then no more from the end screen
+  {
+    const { page, ctx, errors } = await open(devices['Galaxy Tab S4'], true, 3);
+    await visit(page, 'kid_max');
+    await page.waitForSelector('.playground');
+    const box = await page.locator('.play-field').boundingBox();
+    await page.mouse.click(box.x + box.width * 0.66, box.y + box.height * 0.5);
+    await page.waitForFunction(() => document.querySelector('.playground')?.dataset.phase === 'play');
+    assert.match(await page.locator('.play-left').innerText(), /0 games left today/);
+    await endAndTryAgain(page);
+    assert.equal(await page.locator('.playground').getAttribute('data-phase'), 'ready', 'no new game from the end screen once the day\'s games are used');
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud.cache')));
+    assert.equal(saved.kids[0].playLog.n, 4 + freeGamesOn(TEST_DAY));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+  // Lu's hockey stick, borrowed: two games, then no third from the end screen (with day games to spare)
+  {
+    const { page, ctx, errors } = await open(devices['Galaxy Tab S4'], true, 0);
+    await visit(page, 'kid_lu', 'hockey');
+    await page.waitForSelector('.playground');
+    assert.match(await page.locator('.play-left').innerText(), /2 more games with Lu's stick/);
+    const box = await page.locator('.play-field').boundingBox();
+    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.waitForFunction(() => document.querySelector('.playground')?.dataset.phase === 'play', null, { timeout: 5000 });
+    assert.match(await page.locator('.play-left').innerText(), /1 more game with Lu's stick/);
+    await endAndTryAgain(page);
+    assert.equal(await page.locator('.playground').getAttribute('data-phase'), 'play', 'the second borrowed game starts');
+    assert.match(await page.locator('.play-left').innerText(), /That's all with Lu's stick today/);
+    await endAndTryAgain(page);
+    assert.equal(await page.locator('.playground').getAttribute('data-phase'), 'ready', 'no third game with the borrowed stick');
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.cloud.cache')));
+    assert.equal(saved.kids[0].lendLog.counts.hockey, 2);
+    assert.equal(saved.kids[0].playLog.n, 2 + freeGamesOn(TEST_DAY));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+
   for (const [name, device] of [['tablet', { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, hasTouch: true }], ['phone', devices['Pixel 7']]]) {
     const { page, ctx, errors } = await open(device, true);
 
