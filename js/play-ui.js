@@ -130,7 +130,18 @@ export function playWith(kid, v, kind) {
     sounds,
     // the photo train: clues the kid has found toward each map's legend
     clues: (map) => kid.critterClues?.[map] || 0,
-    gamesLeft: () => playableFor(currentKid(kid0)),
+    // the daily limit, and a borrowed ball, stick or rod only for a couple of games: "play again"
+    // inside the game checks both, the same as tapping a visitor in the village does
+    gamesLeft: () => {
+      const kid = currentKid(kid0);
+      const n = playableFor(kid);
+      return borrows(kid, kind) ? Math.min(n, lendLeft(kid, today(), GEAR_KEY[kind])) : n;
+    },
+    leftText: (n) => {
+      const kid = currentKid(kid0);
+      if (!borrows(kid, kind) || lendLeft(kid, today(), GEAR_KEY[kind]) >= playableFor(kid)) return null;
+      return n > 0 ? `${n} more ${n === 1 ? 'game' : 'games'} with ${v.name}'s ${GEAR_WORD[kind]}` : `That's all with ${v.name}'s ${GEAR_WORD[kind]} today`;
+    },
     onStart: () => {
       const kid = currentKid(kid0);
       if (borrows(kid, kind)) kid.lendLog = logLend(kid, today(), GEAR_KEY[kind]);
