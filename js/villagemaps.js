@@ -662,6 +662,9 @@ export function villageLayout(theme) {
   // the music hall: where the piano quest is given, and the door into the music house
   const hall = houses.find((h) => h.music) || null;
   const music = hall && { ...hall, door: { x: hall.x + hall.w / 2, y: hall.y + hall.h + 8 } };
+  // the bakery (the little games, little.js): the first other house, shown only to kids who play them
+  const bh = houses.find((h) => !h.music) || null;
+  const bakery = bh && { ...bh, door: { x: bh.x + bh.w / 2, y: bh.y + bh.h + 8 } };
   // the landmark is drawn at twice its art size, its box from the art (see app.js), unless the
   // spec gives its own size (the meadow's Great Oak, drawn for the village in oakart.js)
   const lm = spec.landmark;
@@ -691,6 +694,7 @@ export function villageLayout(theme) {
     home,
     houses,
     music,
+    bakery,
     water,
     crossings,
     paths: spec.paths,
