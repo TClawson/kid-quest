@@ -30,6 +30,11 @@ export const TUNING = {
   rise: 0.3,                // dB a sound must get louder as it starts (a fading echo is not a new note)
   grow: 0.6,                // dB a sound may grow after it starts (piano notes only fade; singing holds)
   googlePiano: 0.1,         // Google's piano score that counts as piano
+  // ...or its music score, with next to no voice: busy playing (fast runs, rolled chords with
+  // the pedal) is often "Music" 0.9 and "Piano" under 0.1. On Taylor's tablet clips a quarter of
+  // the verdicts during playing were like that, and the buddy stopped dancing when three came in a row.
+  // TV and radio are off during practice; singing and talking score high on voice.
+  googleMusic: 0.3, googleMusicVoice: 0.2,
   boredAfter: 30,           // seconds without a piano note
   asleepAfter: 60,
   onset: ONSET,             // the note finder's settings (onsets.js)
@@ -228,7 +233,8 @@ export function createListener({ sampleRate, fftSize, tune = TUNING, start = 0, 
    * also keeps the buddy awake, even when no new note started (a long held chord).
    */
   function heard(score, now) {
-    const piano = score.piano >= tune.googlePiano;
+    const piano = score.piano >= tune.googlePiano
+      || (score.music >= tune.googleMusic && (score.voice ?? 1) < tune.googleMusicVoice);
     s.google = { ...score, piano: score.piano, isPiano: piano, at: now };
     if (piano && mode === 'google') s.lastPiano = Math.max(s.lastPiano ?? -Infinity, now);
     const out = [];

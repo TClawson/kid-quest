@@ -124,6 +124,21 @@ test('with Google deciding, a sound counts once Google gives its verdict', () =>
   assert.equal(fooled.state.lastPiano, null);
 });
 
+test('busy playing that Google calls "Music" counts as piano, unless someone is talking or singing', () => {
+  const notes = pianoNotes(SCALE.slice(0, 4).map((hz, i) => ({ at: 0.3 + i * 0.5, hz })), { length: 2.5 });
+  // fast runs and rolled chords with the pedal: Music 0.99, Piano 0.08 (as on Taylor's tablet clips)
+  const busy = createListener({ sampleRate: RATE, fftSize: 2048, mode: 'google' });
+  runListener(busy, addNoise(notes));
+  const out = busy.heard({ piano: 0.08, voice: 0.01, music: 0.99, top: [{ name: 'Music', score: 0.99 }] }, 2600);
+  assert.ok(out.length && out.every((e) => e.type === 'piano'));
+  assert.ok(busy.hearingPiano(3000), 'the buddy keeps dancing');
+  // singing along is music too, but with a voice in it
+  const sung = createListener({ sampleRate: RATE, fftSize: 2048, mode: 'google' });
+  runListener(sung, addNoise(notes));
+  assert.ok(sung.heard({ piano: 0.02, voice: 0.6, music: 0.9, top: [] }, 2600).every((e) => e.type === 'other'));
+  assert.ok(!sung.hearingPiano(3000));
+});
+
 test('with both deciding, a note needs both to say piano', () => {
   const both = createListener({ sampleRate: RATE, fftSize: 2048, mode: 'both' });
   runListener(both, addNoise(talking(3)));
@@ -141,5 +156,6 @@ test('Google piano score picks the piano labels and the top three', async () => 
   ]);
   assert.equal(s.piano, 0.41);
   assert.equal(s.voice, 0.2);
+  assert.equal(s.music, 0.97);
   assert.deepEqual(s.top.map((c) => c.name), ['Music', 'Keyboard (musical)', 'Piano']);
 });
