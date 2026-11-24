@@ -14,16 +14,21 @@ const VOICE = new Set([
   'Cough', 'Sneeze', 'Throat clearing', 'Burping, eructation', 'Hiccup', 'Breathing', 'Sigh',
 ]);
 
-/** From the recognizer's categories: the piano score, the voice score, and the top three names. */
+/**
+ * From the recognizer's categories: the piano score, the voice score, the music score and the
+ * top three names. Busy playing (fast runs, rolled chords with the pedal down) often comes out
+ * as "Music" 0.9 with "Piano" under 0.1, so the music score is passed on too.
+ */
 export function pianoScore(categories) {
-  let piano = 0, voice = 0;
+  let piano = 0, voice = 0, music = 0;
   for (const c of categories) {
     if (PIANO.has(c.categoryName)) piano = Math.max(piano, c.score);
     if (VOICE.has(c.categoryName)) voice = Math.max(voice, c.score);
+    if (c.categoryName === 'Music') music = c.score;
   }
   const top = [...categories].sort((a, b) => b.score - a.score).slice(0, 3)
     .map((c) => ({ name: c.categoryName, score: c.score }));
-  return { piano, voice, top };
+  return { piano, voice, music, top };
 }
 
 let loading = null;
