@@ -17,6 +17,8 @@ import { mapTheme } from './maparts.js';
 import { mapParty } from './maplife.js';
 import { dailySummaries } from './familygarden.js';
 import { bloomData, gardenLine } from './villagebloom.js';
+import { openLittle } from './little.js';
+import { playsLittle, jarStars, spendStar, earnSticker, newLittle } from './littlerules.js';
 import { villageHtml, mountVillages, cameOut, cameOutOfMusic, placeVillagers, villagerName, villageGoal } from './village.js';
 import { villageLayout } from './villagemaps.js';
 import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
@@ -1325,6 +1327,7 @@ function villageView(kid, s, entry, mood) {
     planned,
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
     music: { tier, left: tier ? 0 : daysToMusicHouse(prog) },
+    little: playsLittle(kid) ? { stars: jarStars(state, kid, today()) } : null,
     garden: { thirsty: gardenThirsty(kid) },
     bloom: bloomData(gardenKids(), today()),
     today: today(),
@@ -1412,6 +1415,7 @@ function houseView(kid, list, mood) {
     garden: { thirsty: gardenThirsty(kid) },
     harvest: houseHarvest(state, kid, t),
     hud: kidHud(kid),
+    little: playsLittle(kid),
     dig: hasDig(kid) ? digShow(kid) : null,
   });
 }
@@ -1425,6 +1429,7 @@ const houseHandlers = {
   onTurntable: () => openTurntable(ui.kidId),
   onStand: () => openDisplayPicker(kidById(ui.kidId), 'stand'),
   onPedestal: () => openDisplayPicker(kidById(ui.kidId), 'pedestal'),
+  onPuzzle: () => openLittleGames('puzzle'),
   spinning: (kidId) => spinning(kidId),
   onGarden: () => goGarden('house'),
   onExit: () => {
@@ -1811,9 +1816,62 @@ const villageHandlers = {
     cameInMusic(kid.id);
     render();
   },
+  onBakery: () => openLittleGames('bakery'),
   onBuddy: (el) => actions['buddy-move'](el),
   sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
 };
+
+// ---------- the little games (little.js, rules in littlerules.js) ----------
+// Little Bakery (its door in the village) and Animal Puzzles (the puzzle box in the buddy's room),
+// for a kid a parent turned "Little games" on for. Each chore they finish drops a star in their
+// jar (on top of its coins); one star is one visit of three rounds.
+
+// How many stars each kid's jar showed last time, on this device, so new ones fly in.
+const LITTLE_SEEN_KEY = 'kidquest.littleSeen';
+function littleSeen(kidId, n) {
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem(LITTLE_SEEN_KEY) || '{}') || {}; } catch { seen = {}; }
+  if (n === undefined) return seen[kidId];
+  seen[kidId] = n;
+  try { localStorage.setItem(LITTLE_SEEN_KEY, JSON.stringify(seen)); } catch { /* the stars just fly in again */ }
+  return n;
+}
+
+function openLittleGames(start) {
+  const id = ui.kidId;
+  const kid = kidById(id);
+  if (!kid || !playsLittle(kid)) return;
+  const stars = () => { const k = kidById(id); return k ? jarStars(state, k, today()) : 0; };
+  const now = stars();
+  const seen = littleSeen(id);
+  littleSeen(id, now);
+  openLittle({
+    kid,
+    theme: kidTheme(kid),
+    start,
+    buddy: buddySvg(dressed(kid), 'happy', { background: false }),
+    sound: state.settings.sound !== false,
+    newStars: seen === undefined ? 0 : Math.max(0, now - seen),
+    stars,
+    spend: () => {
+      const k = kidById(id);
+      if (!k || !spendStar(state, k, today())) return false;
+      save();
+      littleSeen(id, stars());
+      return true;
+    },
+    stickers: () => kidById(id)?.little?.stickers || {},
+    puzzles: () => kidById(id)?.little?.puzzles || 0,
+    onRound: ({ kind, animal, gold }) => {
+      const k = kidById(id);
+      if (!k?.little) return;
+      earnSticker(k, animal, gold);
+      if (kind === 'puzzle') k.little.puzzles = (k.little.puzzles || 0) + 1;
+      save();
+    },
+    onClose: () => { littleSeen(id, stars()); render(); },
+  });
+}
 
 // ---------- the kid's Today button and Today's quests (markup in today.js) ----------
 // In the corner of the village (and the house, the garden and the music house): how many of
@@ -2766,6 +2824,7 @@ function parentEditKid() {
       <div class="block">Chore set <div class="row wrap">${CHORE_SETS.map((cs) => `<button class="btn ${kid.choreSet === cs.id ? '' : 'ghost'} small-btn" data-action="kid-set" data-set="${cs.id}">${esc(cs.name)} (${esc(cs.ages)})</button>`).join('')}</div>
         <small class="muted">${esc(choreSetById(kid.choreSet)?.note || 'Pick a starter set for their age, then change anything below. Switching adds the set\'s chores and takes off the ones it replaces; piano and your own chores stay.')}</small></div>
       <label class="row"><input type="checkbox" data-kidflag="starsOnly" ${kid.starsOnly ? 'checked' : ''}> Stars only: chores earn XP and cheers, no coins (for the littlest)</label>
+      <label class="row"><input type="checkbox" data-kidflag="littleGames" ${kid.littleGames ? 'checked' : ''}> Little games: a bakery and animal puzzles with pictures only. Each chore they finish also drops a star in their jar (coins stay the same); a star opens a game.</label>
       <label class="row"><input type="checkbox" data-kidflag="planWithGrownUp" ${kid.planWithGrownUp ? 'checked' : ''}> Plans with a grown-up: bigger pictures in Plan my week</label>
       <button class="btn ghost small-btn" data-action="charts" data-kid="${kid.id}">🖨️ Print ${esc(kid.name)}'s chart${chartOutdated(kid) ? ' (plan changed)' : ''}</button>
       ${kid.plan?.signed ? `<small class="muted">📝 ${esc(kid.name)} signed a plan for the week of ${esc(shortDate(kid.plan.signed))}. Change it together with them in Plan my week, so it stays theirs.</small>` : ''}
@@ -3610,6 +3669,8 @@ document.addEventListener('change', (e) => {
   if (el.dataset.kidflag) {
     const kid = kidById(ui.editKidId);
     if (el.checked) kid[el.dataset.kidflag] = true; else delete kid[el.dataset.kidflag];
+    // the little games' stars count from the day they're turned on (turning them off and on keeps the stickers)
+    if (el.dataset.kidflag === 'littleGames' && el.checked && !kid.little?.since) kid.little = { ...newLittle(today()), ...(kid.little || {}), since: today() };
     save(); render(); return;
   }
   if (el.dataset.kidfield) { kidById(ui.editKidId)[el.dataset.kidfield] = el.value.trim() || 'Kid'; save(); render(); return; }

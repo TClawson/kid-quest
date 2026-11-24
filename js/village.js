@@ -28,6 +28,7 @@ import { GOLDPOT, startGoldpot } from './goldpotart.js';
 import { STARWHALE, startStarwhale } from './starwhaleart.js';
 import { LIGHTHOUSE, startLighthouse } from './lighthouseart.js';
 import { musicSign } from './musicart.js';
+import { cookieIcon } from './little.js';
 import { seasonNow, tintLand, mountWeather } from './seasonlife.js';
 import { isNewSeason, seasonLine } from './seasonhints.js';
 
@@ -291,6 +292,19 @@ function musicDoor(L, music) {
   return `<button class="v-music ${tier ? 'open' : 'locked'}" style="left:${h.x}px;top:${h.y - 12}px;width:${h.w}px;height:${h.h + 12}px;z-index:${h.y + h.h - 1}" aria-label="${label}">${art}</button>`;
 }
 
+// The bakery's door (the little games, little.js), only for a kid who plays them: a cookie sign
+// over the door, and how many stars are waiting in the kid's jar.
+let cookieUrl = '';
+function bakeryDoor(L, little) {
+  const h = L.bakery;
+  if (!h || !little) return '';
+  if (!cookieUrl && typeof document !== 'undefined') cookieUrl = cookieIcon().toDataURL();
+  const n = little.stars || 0;
+  return `<button class="v-bakery" style="left:${h.x}px;top:${h.y - 12}px;width:${h.w}px;height:${h.h + 12}px;z-index:${h.y + h.h - 1}" aria-label="The little bakery${n ? ` (${n} ${n === 1 ? 'star' : 'stars'})` : ''}">
+      <span class="v-bakery-sign" style="left:${h.w / 2}px;top:${h.h - 24}px">${cookieUrl ? `<img src="${cookieUrl}" alt="" style="width:18px;height:18px;image-rendering:pixelated">` : '🍪'}${n ? `<span class="v-bakery-stars">${n}</span>` : ''}</span>
+    </button>`;
+}
+
 // The sign beside the kid's house that points round the back to the garden (garden.js). A 💧
 // count shows when plants there are waiting for water.
 function gardenSign(L, garden, people = []) {
@@ -365,6 +379,8 @@ export function labelSpot(label, avoid, L, { w: width = 0, win = null } = {}) {
  *     teeth, floor), which villagers don't give out; now: the plan's next step is one of them,
  *   music: { tier, left }: the music house's look (0 while it is locked) and piano days still
  *     to go before it opens,
+ *   little: { stars } or null: the bakery's door for a kid who plays the little games (little.js),
+ *     and the stars in their jar,
  *   garden: { thirsty }: how many plants in the garden are waiting for water (the sign by the house),
  *   bloom: the family's trees and flowers (bloomData in villagebloom.js) or null,
  *   coach: { tasks: [quests, as in tasks], line } or null: the bonus exercise, given by the coach
@@ -390,6 +406,7 @@ export function villageHtml(v) {
     home: v.home || null,
     coach: v.coach ? { line: v.coach.line || '' } : null,
     music: { tier: v.music?.tier || 0, left: v.music?.left || 0 },
+    little: v.little || null,
     bloom: v.bloom || null, // the family's trees and flowers (villagebloom.js)
     today: v.today || v.bloom?.today || '', // the season follows this day (seasons.js)
   };
@@ -425,6 +442,7 @@ export function villageHtml(v) {
           <div class="v-label home-label" style="left:${L.home.x + L.home.w / 2}px;top:${L.home.y + 10}px">${esc(v.kidName)}'s house</div>
           <button class="v-home${home ? ' has-quests' : ''}${home?.now ? ' now' : ''}" style="left:${L.home.x}px;top:${L.home.y - 12}px;width:${L.home.w}px;height:${L.home.h + 12}px;z-index:${L.home.y + L.home.h - 2}" aria-label="Go into ${esc(v.kidName)}'s house${home ? ` (${home.left} to do inside)` : ''}"><span class="v-home-door" style="left:${L.home.w / 2}px">🚪</span>${homeBubble}</button>
           ${musicDoor(L, data.music)}
+          ${bakeryDoor(L, data.little)}
           ${gardenSign(L, v.garden, people)}
           ${am ? `<div class="v-label period" data-sign="morning" style="left:${mx}px;top:${my}px">${esc(mt)}</div>` : ''}
           ${pm ? `<div class="v-label period" data-sign="afternoon" style="left:${ax}px;top:${ay}px">${esc(at)}</div>` : ''}
@@ -823,6 +841,7 @@ function land(L, color, areas = [], se = null) {
  *   onShop(): the kid wants to go into the buddy shop,
  *   onHome(): the buddy went in the door of the kid's house,
  *   onMusic(): the buddy went in the door of the music house,
+ *   onBakery(): the buddy went in the bakery's door (the little games),
  *   onGarden(): the buddy went through to the garden behind the kid's house,
  *   onVisitor(el), onLandmark(el, layer), fishCatch(rod),
  *   sound(name): a little sound ('tap', 'talk'),
@@ -1199,6 +1218,11 @@ function mount(section, handlers) {
         buddyEl.classList.add('going-in');
         setTimeout(() => handlers.onMusic?.(), 380);
       } else sayMusic();
+    } else if (goal.bakery) {
+      // in through the bakery's door (little.js takes it from here)
+      me.face = 1;
+      buddyEl.classList.add('going-in');
+      setTimeout(() => { buddyEl.classList.remove('going-in'); handlers.onBakery?.(); }, 380);
     } else if (goal.visitor) {
       me.face = goal.x >= me.x ? 1 : -1;
       visitorTap(goal.visitor);
@@ -1400,6 +1424,7 @@ function mount(section, handlers) {
     if (e.target.closest('.v-chest')) { goChest(); return; }
     if (e.target.closest('.v-home')) { handlers.sound?.('tap'); walkTo(L.start.x, L.start.y, { home: true }); return; }
     if (e.target.closest('.v-garden')) { handlers.sound?.('tap'); walkTo(L.start.x, L.start.y, { garden: true }); return; }
+    if (e.target.closest('.v-bakery') && L.bakery) { handlers.sound?.('tap'); walkTo(L.bakery.door.x, L.bakery.door.y, { bakery: true }); return; }
     if (e.target.closest('.v-music') && L.music) { handlers.sound?.('tap'); walkTo(L.music.door.x, L.music.door.y, { music: true }); return; }
     if (!dialog.hidden) { closeDialog(); return; }
     const r = view.getBoundingClientRect();

@@ -31,6 +31,7 @@ export const HOUSE_SPOTS = {
   music: { x: 66, y: 66 }, // in front of the turntable
   stand: { x: 172, y: 98 }, // in front of the dino dig's skeleton stand
   pedestal: { x: 66, y: 122 }, // in front of the treasure pedestal
+  puzzle: { x: 219, y: 90 }, // in front of the puzzle box (the little games)
 };
 const M = ROOM.at.music;
 // the tappable things: [x, y, w, h] boxes over the art
@@ -43,6 +44,7 @@ const HOT = {
   music: [M.x, M.y, TURNTABLE.w, TURNTABLE.h],
   stand: [ROOM.at.stand.x + 2, ROOM.at.stand.y + 2, 56, 44],
   pedestal: [ROOM.at.pedestal.x + 2, ROOM.at.pedestal.y + 4, 20, 36],
+  puzzle: [208, 68, 22, 18], // the puzzle box on the floor (little.js), for a kid who plays the little games
 };
 /**
  * Where the buddy stands to look in the tank and read the fish book, and their tap boxes, for
@@ -86,6 +88,7 @@ const DONE_SAY = {
  *   of fish the kid has caught, garden: { thirsty } (plants waiting for water, for the Garden tag),
  *   harvest: gardenrules.js houseHarvest (the vases, baskets and fruit bowl the garden puts out),
  *   hud: markup laid over a corner of the room (the Today button), or '',
+ *   little: true for a kid who plays the little games (the puzzle box on the floor opens Animal Puzzles),
  *   dig: the dino dig's displays, { skeleton, pedestal } (dino id and treasure key, or null), or
  *   null before the kid has a shovel (digbook-ui.js digShow),
  * }
@@ -135,6 +138,7 @@ export function houseHtml(h) {
           <span class="h-notes" style="left:${M.x + TURNTABLE.record.x}px;top:${M.y + 2}px" aria-hidden="true"><i>♪</i><i>♫</i><i>♪</i></span>` : ''}
           ${h.dig ? `${spot('stand', 'Skeleton stand', `<span class="h-tag">🦴 ${h.dig.skeleton ? 'Skeleton' : 'Stand'}</span>`)}
           ${spot('pedestal', 'Treasure pedestal', '<span class="h-tag">💎 Pedestal</span>')}` : ''}
+          ${h.little ? spot('puzzle', 'Animal puzzles', '<span class="h-puzzle" style="left:1px;top:2px"></span><span class="h-tag">🧩 Puzzles</span>') : ''}
           ${spot('bed', 'Bed')}
           ${spot('sink', 'Sink')}
           ${spot('door', 'Go outside', `<span class="h-tag out">⬇ Outside${h.quests ? ` · ${h.quests} ${h.quests === 1 ? 'quest' : 'quests'}` : ''}</span>`)}
@@ -307,6 +311,7 @@ function mount(section, handlers) {
     else if (goal.use === 'music') handlers.onTurntable?.();
     else if (goal.use === 'stand') handlers.onStand?.();
     else if (goal.use === 'pedestal') handlers.onPedestal?.();
+    else if (goal.use === 'puzzle') handlers.onPuzzle?.();
     else if (goal.use) choreTalk(goal.use);
   };
   const walkTo = (x, y, goal = null) => {
@@ -351,7 +356,7 @@ function mount(section, handlers) {
   });
 
   // the trophy, chart, tank and book tags show when the buddy is close
-  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"], .h-spot[data-spot="stand"], .h-spot[data-spot="pedestal"]')].map((el) => ({ el, at: SPOTS[el.dataset.spot] }));
+  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"], .h-spot[data-spot="stand"], .h-spot[data-spot="pedestal"], .h-spot[data-spot="puzzle"]')].map((el) => ({ el, at: SPOTS[el.dataset.spot] }));
   const tankSpecNow = tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art);
   const swim = tankSwimmer(section, data.tank, tankSpecNow);
   const plaque = section.querySelector('.h-plaque');
