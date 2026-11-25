@@ -6,7 +6,7 @@
 // book, the turntable (once bought) its records (turntable.js), and the door leads back out
 // to the village. houseart.js draws it all.
 
-import { ROOM, TURNTABLE, paintRoom } from './houseart.js';
+import { ROOM, TURNTABLE, DRESSER, paintRoom } from './houseart.js';
 import { tankSpec } from './tankart.js';
 import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
 import { furnitureById } from './furniture.js';
@@ -32,6 +32,12 @@ export const HOUSE_SPOTS = {
   stand: { x: 172, y: 98 }, // in front of the dino dig's skeleton stand
   pedestal: { x: 66, y: 122 }, // in front of the treasure pedestal
   puzzle: { x: 219, y: 90 }, // in front of the puzzle box (the little games)
+  dresser: { x: 227, y: 60 }, // in front of the dresser (getting dressed, pajamas)
+  basket: { x: 282, y: 152 }, // beside the laundry basket (clothes away)
+  books: { x: 40, y: 118 }, // by the books left on the floor (books away)
+  shower: { x: 298, y: 92 }, // in front of the shower
+  vacuum: { x: 80, y: 142 }, // on the floor (vacuuming)
+  dust: { x: 101, y: 64 }, // in front of the shelf (dusting)
 };
 const M = ROOM.at.music;
 // the tappable things: [x, y, w, h] boxes over the art
@@ -45,6 +51,9 @@ const HOT = {
   stand: [ROOM.at.stand.x + 2, ROOM.at.stand.y + 2, 56, 44],
   pedestal: [ROOM.at.pedestal.x + 2, ROOM.at.pedestal.y + 4, 20, 36],
   puzzle: [208, 68, 22, 18], // the puzzle box on the floor (little.js), for a kid who plays the little games
+  dresser: [ROOM.at.dresser.x, ROOM.at.dresser.y, DRESSER.w, DRESSER.h],
+  shower: [287, 6, 26, 76],
+  basket: [ROOM.at.basket.x, ROOM.at.basket.y, 16, 18],
 };
 /**
  * Where the buddy stands to look in the tank and read the fish book, and their tap boxes, for
@@ -61,7 +70,11 @@ function tankPlaces(spec) {
 const spotsFor = (spec) => ({ ...HOUSE_SPOTS, ...tankPlaces(spec).spots });
 
 // the floating bubbles over a chore that's still to do
-const BUBBLE = { bed: { x: 26, y: 30 }, teeth: { x: 262, y: 22 }, floor: { x: 120, y: 84 } };
+const BUBBLE = {
+  bed: { x: 26, y: 30 }, teeth: { x: 262, y: 22 }, floor: { x: 120, y: 84 },
+  dresser: { x: 227, y: 22 }, basket: { x: 300, y: 144 }, books: { x: 30, y: 104 },
+  shower: { x: 300, y: 40 }, vacuum: { x: 80, y: 124 }, dust: { x: 101, y: 26 },
+};
 
 const SAY = {
   bed: (n) => `Good morning, ${n}! The bed is all rumpled. Time to make it?`,
@@ -72,10 +85,20 @@ const SAY = {
     (n) => `Oh no, ${n}, it's getting messy in here! Pick up the floor?`,
     (n) => `Whoa! ${n}, this room is a disaster! Time to pick it all up?`,
   ],
+  dresser: (n, t) => (t.icon === '🌙' || /pajama|pyjama/i.test(t.name) ? `Nearly bedtime, ${n}. Pajamas are in the dresser. Put them on?` : `Rise and shine, ${n}! Your clothes are in the dresser. Get dressed?`),
+  basket: (n) => `Clothes are waiting to go in the basket, ${n}. Put them away?`,
+  books: (n) => `Some books are lying on the floor, ${n}. Put them back?`,
+  shower: (n) => `The shower is ready, ${n}. Time to get squeaky clean?`,
+  vacuum: (n) => `The floor could use a vacuum, ${n}. Ready to zoom?`,
+  dust: (n) => `The shelf is a little dusty, ${n}. Dust it off?`,
 };
 const DONE_SAY = {
   bed: (n) => `The bed is nice and tidy. Good job, ${n}!`,
   teeth: () => 'Sparkly clean teeth! The toothbrush is put away.',
+  dresser: (n) => `All dressed and ready, ${n}!`,
+  basket: () => 'The clothes are all in the basket.',
+  books: () => 'The books are all back where they go.',
+  shower: (n) => `Squeaky clean, ${n}!`,
 };
 
 /**
@@ -141,6 +164,9 @@ export function houseHtml(h) {
           ${h.little ? spot('puzzle', 'Animal puzzles', '<span class="h-puzzle" style="left:1px;top:2px"></span><span class="h-tag">🧩 Puzzles</span>') : ''}
           ${spot('bed', 'Bed')}
           ${spot('sink', 'Sink')}
+          ${spot('dresser', 'Dresser')}
+          ${spot('shower', 'Shower')}
+          ${spot('basket', 'Laundry basket')}
           ${spot('door', 'Go outside', `<span class="h-tag out">⬇ Outside${h.quests ? ` · ${h.quests} ${h.quests === 1 ? 'quest' : 'quests'}` : ''}</span>`)}
           ${bubbles}
           <div class="v-buddy" style="z-index:100"><div class="v-flip">${h.buddy}</div></div>
@@ -184,7 +210,7 @@ function room(doc, data) {
     const canvas = doc.createElement('canvas');
     const done = (k) => !data.chores?.[k] || data.chores[k].st === 'done' || data.chores[k].st === 'pending';
     const layout = Object.fromEntries(Object.entries(data.layout).map(([k, id]) => [k, id ? furnitureById(id) : null]));
-    const res = paintRoom(canvas, { layout, made: done('bed'), teeth: done('teeth'), mess: data.mess, shelf: data.shelf, gear: data.gear, color: data.color, dig: data.dig });
+    const res = paintRoom(canvas, { layout, made: done('bed'), teeth: done('teeth'), dresser: done('dresser'), books: done('books'), mess: data.mess, shelf: data.shelf, gear: data.gear, color: data.color, dig: data.dig });
     roomCache = { key, canvas, res };
   }
   return roomCache;
@@ -272,7 +298,7 @@ function mount(section, handlers) {
     const t = data.chores?.[kind];
     if (!t) return false;
     if (t.st === 'done') { if (DONE_SAY[kind]) { say(DONE_SAY[kind](data.name), '', '<button class="btn" data-h="bye">OK!</button>'); return true; } return false; }
-    const text = t.st === 'pending' ? 'Great job! Now a grown-up needs to check it.' : kind === 'floor' ? SAY.floor[Math.max(1, data.mess)](data.name) : SAY[kind](data.name);
+    const text = t.st === 'pending' ? 'Great job! Now a grown-up needs to check it.' : kind === 'floor' ? SAY.floor[Math.max(1, data.mess)](data.name) : SAY[kind](data.name, t);
     const quest = `<div class="v-quest"><span class="v-quest-icon">${esc(t.icon)}</span><span><b>${esc(t.name)}</b><small>${esc(t.sub || '')}</small></span></div>`;
     const btn = t.st === 'pending' ? '🙋 Ask a parent now' : doLabel(t);
     say(text, quest, `<button class="btn" data-h="do" data-q="${esc(t.id)}">${btn}</button><button class="btn ghost" data-h="bye">Not yet</button>`);

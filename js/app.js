@@ -24,7 +24,7 @@ import { villageLayout } from './villagemaps.js';
 import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
 import { todayHud, todayListHtml } from './today.js';
 import { kidHudHtml, statusHtml, menuHtml } from './hud.js';
-import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, houseChoreById, setHouseRole, houseTask } from './houserules.js';
+import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, HOUSE_SLOTS, houseChoreById, setHouseRole, houseTask, linkRoomChores } from './houserules.js';
 import { CHORE_SETS, SET_CHORES, choreSetById, setChanges, applySet, routineOfTask } from './choresets.js';
 import { tokenPages, chartRoutines, stickers, defaultStyle, chartSignature, chartOutdated, DAY_ORDER } from './charts.js';
 import { chartArt } from './chartart.js';
@@ -1277,7 +1277,7 @@ function coachQuests(kid, entry) {
   });
 }
 
-/** The ids of today's chores done in the kid's house (bed, both teeth, floor), which villagers don't give out. */
+/** The ids of today's chores done in the kid's house (every bedroom and bathroom chore), which villagers don't give out. */
 function houseQuestIds(kid) {
   return new Set(houseChores(state, kid, today()).ids);
 }
@@ -1285,7 +1285,7 @@ function houseQuestIds(kid) {
 /** The house chores the house is showing right now (the night teeth only once it's their turn). */
 function houseNowIds(kid) {
   const hc = houseChores(state, kid, today());
-  return new Set(['bed', 'teeth', 'floor'].map((k) => hc[k]?.id).filter(Boolean));
+  return new Set(HOUSE_SLOTS.map((k) => hc[k]?.id).filter(Boolean));
 }
 
 // The village: the kid's chores, as quests from villagers (see village.js).
@@ -1300,10 +1300,12 @@ function villageView(kid, s, entry, mood) {
   const prog = progressFor(kid);
   const tier = musicTier(prog);
   if (place === 'music' && tier) return musicView(kid, list, mood, tier);
-  // chores linked to the house (bed, teeth, floor) are done in the house, not given out by
+  // chores linked to the house (the kid's bedroom and bathroom) are done in the house, not given out by
   // villagers; the house door shows what's still waiting in there
-  const inHouse = houseNowIds(kid);
-  const homeOpen = list.filter((q) => inHouse.has(q.id) && (q.st === 'todo' || q.st === 'current'));
+  // (the evening ones too, before it's their turn: pajamas and the night teeth wait in there)
+  const inHouse = houseQuestIds(kid);
+  const houseNow = houseNowIds(kid);
+  const homeOpen = list.filter((q) => houseNow.has(q.id) && (q.st === 'todo' || q.st === 'current'));
   const homeNext = homeOpen.find((q) => q.st === 'current') || homeOpen[0];
   const home = homeOpen.length ? { left: homeOpen.length, icon: homeNext.icon, task: homeNext.name, step: homeNext.step, now: homeOpen.some((q) => q.st === 'current') } : null;
   const c = chestFor(kid, today());
@@ -1389,12 +1391,13 @@ const musicHandlers = {
   },
   sound: () => sounds.tap(),
 };
-/** Inside the buddy's house (house.js): today's bed, teeth and floor chores, the trophy shelf, the furniture. */
+/** Inside the buddy's house (house.js): today's bedroom and bathroom chores, the trophy shelf, the furniture. */
 function houseView(kid, list, mood) {
   const t = today();
   const hc = houseChores(state, kid, t);
+  const inHouse = new Set(hc.ids);
   const chores = {};
-  for (const k of ['bed', 'teeth', 'floor']) {
+  for (const k of HOUSE_SLOTS) {
     const q = hc[k] && list.find((x) => x.id === hc[k].id);
     // the house looks done once the kid says it's done (a parent may still check it)
     chores[k] = q ? { id: q.id, name: q.name, icon: q.icon, st: q.st === 'current' ? 'todo' : q.st, verify: q.verify, timer: q.timer, sub: q.sub } : null;
@@ -1409,7 +1412,8 @@ function houseView(kid, list, mood) {
     mess: hc.mess,
     shelf: shelfLevel(treasureFound(state.log, kid.id).trophies.size, TROPHIES.length),
     gear: bestGear(kid.owned || []),
-    quests: list.filter((q) => q.st === 'todo' || q.st === 'current').length,
+    // the door sign counts what's waiting outside (the house's own chores are in here)
+    quests: list.filter((q) => (q.st === 'todo' || q.st === 'current') && !inHouse.has(q.id)).length,
     tank: tankFishes(kid, tankRoom(kid)),
     fish: bookCount(kid.fishRecords).caught,
     garden: { thirsty: gardenThirsty(kid) },
@@ -2099,8 +2103,9 @@ function goQuest(kid, id) {
   const t = today();
   if (!kid || !taskById(kid, t, id)) return;
   const hc = houseChores(state, kid, t);
-  // the night teeth wait at the sink too, even before it's their turn
-  const kind = ['bed', 'teeth', 'floor'].find((k) => hc[k]?.id === id) || (hc.ids.includes(id) ? 'teeth' : null);
+  // an evening chore waits at its place too (the night teeth at the sink), even before it's its turn
+  const task = taskById(kid, t, id);
+  const kind = HOUSE_SLOTS.find((k) => hc[k]?.id === id) || (hc.ids.includes(id) ? houseChoreById(task.house)?.slot || null : null);
   const place = placeOf(kid.id, t);
   const where = place === 'house' || place === 'garden' ? place : place === 'music' && musicTier(progressFor(kid)) ? 'music' : 'out';
   if (kind) {
@@ -2745,7 +2750,7 @@ function repeatRow(kid, t) {
 
 /** Buttons to add a ready-made house chore (name, morning, linked to the house) that the kid doesn't have yet. */
 function houseAdds(kid) {
-  const missing = HOUSE_CHORES.filter((c) => !kid.tasks.some((t) => t.house === c.id));
+  const missing = HOUSE_CHORES.filter((c) => c.preset && !kid.tasks.some((t) => t.house === c.id));
   if (!missing.length) return '';
   return `<div class="row wrap house-adds"><small class="muted">🏠 Add a house chore:</small>${missing.map((c) => `<button class="btn ghost small-btn" data-action="add-house-task" data-house="${c.id}">+ ${c.icon} ${esc(c.label)}</button>`).join('')}</div>`;
 }
@@ -3116,6 +3121,7 @@ function stampAllowance() {
     changed = true;
   }
   if (applyGrants(state)) changed = true;
+  for (const k of state.kids) if (linkRoomChores(k)) changed = true;
   for (const k of state.kids) if (restoreBackup(k, undefined, totalCoins(state, k, today()))) changed = true;
   for (const k of state.kids) if (restoreTasks(k)) changed = true;
   for (const k of state.kids) if (restoreFromRecord(k)) changed = true;

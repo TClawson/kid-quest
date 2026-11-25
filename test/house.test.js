@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, defaultTasks, addDays, snapshotToday } from '../js/logic.js';
-import { HOUSE_CHORES, houseRole, setHouseRole, houseTask, houseChores, floorDays, messLevel, shelfLevel, isInside, setInside, placeOf, setPlace } from '../js/houserules.js';
+import { HOUSE_CHORES, HOUSE_SLOTS, linkRoomChores, ROOM_LINKS_ID, houseRole, setHouseRole, houseTask, houseChores, floorDays, messLevel, shelfLevel, isInside, setInside, placeOf, setPlace } from '../js/houserules.js';
 import { FURNITURE, HOME_SPOTS, homeLayout, placeFurniture, isPlaced, furnitureById } from '../js/furniture.js';
 import { ITEMS, SLOTS, isUnlocked, LEGACY_LEVEL, addOwned } from '../js/items.js';
 import { weekOf, recordWeekBest, weekBest, leaderboard, BOARD_GAMES } from '../js/leaderboard.js';
@@ -50,8 +50,8 @@ test('house presets make linked tasks in their routine; new kids start linked', 
   for (const c of HOUSE_CHORES) {
     const t = houseTask(c.id, `t-${c.id}`);
     assert.equal(t.house, c.id);
-    assert.equal(t.period, c.id === 'teeth-night' ? 'afternoon' : 'morning');
-    assert.equal(Boolean(t.evening), c.id === 'teeth-night');
+    assert.equal(t.period, c.period);
+    assert.equal(Boolean(t.evening), Boolean(c.evening));
     assert.equal(t.name, c.name);
   }
   const roles = defaultTasks().map((t) => t.house).filter(Boolean).sort();
@@ -221,4 +221,44 @@ test('the leaderboard lists every kid, best first, sharing places on ties', () =
   assert.deepEqual(week.map((r) => [r.name, r.score, r.place]), [['Cy', 15, 1], ['Ava', 10, 2], ['Ben', 0, 0]], "last week's scores don't count");
   const hockey = all.find((g) => g.game.id === 'hockey').rows;
   assert.ok(hockey.every((r) => r.place === 0 && r.score === 0), 'nobody has played: everyone listed with no score');
+});
+
+// ---------- every bedroom and bathroom chore is done in the house (2026-11-25) ----------
+
+test('every house chore has a place in the house, and the dresser takes getting dressed then pajamas', () => {
+  for (const c of HOUSE_CHORES) assert.ok(HOUSE_SLOTS.includes(c.slot), c.id);
+  const all = [0, 1, 2, 3, 4, 5, 6];
+  const tasks = [
+    { id: 'd', name: 'Get dressed', period: 'morning', days: all, house: 'dressed' },
+    { id: 'p', name: 'Pajamas on', period: 'afternoon', evening: true, days: all, house: 'pajamas' },
+    { id: 's', name: 'Shower', period: 'afternoon', evening: true, days: all, house: 'shower' },
+    { id: 'c', name: 'Clothes away', period: 'afternoon', days: all, house: 'clothes' },
+  ];
+  const { s, kid } = kidWith(tasks);
+  let h = houseChores(s, kid, day, 8);
+  assert.equal(h.dresser.id, 'd');
+  assert.equal(h.shower.id, 's', 'a lone evening chore waits at its place all day');
+  assert.equal(h.basket.id, 'c');
+  assert.deepEqual(h.ids.sort(), ['c', 'd', 'p', 's'], 'villagers give none of them out');
+  mark(s, day, tasks[0]);
+  h = houseChores(s, kid, day, 18);
+  assert.equal(h.dresser.id, 'p');
+});
+
+test('the one-time repair links the chore sets\' room chores and an old shower, once', () => {
+  const tasks = [
+    { id: 'a', name: 'Get dressed', setKey: 'dressed' },
+    { id: 'b', name: 'Books away', setKey: 'books' },
+    { id: 'c', name: 'Shower after dinner', evening: true },
+    { id: 'd', name: 'Piano practice' },
+    { id: 'e', name: 'Take a bath' },
+    { id: 'f', name: 'Dust your room', setKey: 'dust', house: 'bed' },
+  ];
+  const kid = { id: 'k1', tasks };
+  assert.equal(linkRoomChores(kid), true);
+  assert.deepEqual(tasks.map((t) => t.house), ['dressed', 'books', 'shower', undefined, undefined, 'bed'], 'one shower; a parent\'s link stays');
+  assert.ok(kid.grants.includes(ROOM_LINKS_ID));
+  delete tasks[0].house; // a parent picks "None" later
+  assert.equal(linkRoomChores(kid), false);
+  assert.equal(tasks[0].house, undefined);
 });

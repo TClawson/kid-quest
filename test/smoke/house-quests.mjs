@@ -7,18 +7,20 @@ import fs from 'node:fs';
 import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
+import { applySet } from '../../js/choresets.js';
 import { openKid } from '../helpers/open-kid.mjs';
 
 const out = process.argv[2]?.replace(/\/$/, '');
 if (out) fs.mkdirSync(out, { recursive: true });
 const day = '2026-11-11'; // a Wednesday
 
-function family({ done = [] } = {}) {
+function family({ done = [], set = null } = {}) {
   const s = emptyState();
   s.settings.pinHash = fallbackHash('kidquest:1234');
   s.settings.sound = false;
   s.settings.questView = 'village';
   const tasks = defaultTasks();
+  if (set) { const k = { tasks }; let n = 0; applySet(k, set, () => `set_${n += 1}`); tasks.splice(0, tasks.length, ...k.tasks); }
   s.kids.push({ id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks, startDate: addDays(day, -10), seenUnlocks: [], seenMoves: [], owned: [], spent: 0, buddy: { species: 'fox', outfit: { background: 'bg-meadow' } } });
   for (let i = 1; i <= 9; i += 1) s.log[addDays(day, -i)] = { kid_ava: { tasks: Object.fromEntries(tasks.map((t) => [t.id, { status: 'done', by: 'parent' }])) } };
   s.log[day] = { kid_ava: { tasks: Object.fromEntries(tasks.filter((t) => done.includes(t.house)).map((t) => [t.id, { status: 'done', by: 'self' }])) } };
@@ -87,6 +89,21 @@ try {
     const { ctx, page } = await open({ width: 1280, height: 800 }, family({ done: ['bed', 'teeth', 'floor'] }));
     assert.equal(await page.locator('.v-home-bubble').count(), 0, 'all done: no bubble');
     assert.equal(await page.locator('.v-home.has-quests').count(), 0);
+    await ctx.close();
+  }
+  // the Little set: getting dressed, clothes, toys, books, both teeth, pajamas are all bedroom and
+  // bathroom chores, so they wait in the house (morning: bed, teeth, dressed, plus the
+  // after-school clothes, toys, books; the dresser and sink hold pajamas and night teeth till evening)
+  {
+    const { ctx, page } = await open({ width: 1280, height: 800 }, family({ set: 'little' }));
+    const asks = await villagerQuests(page);
+    for (const name of ['Get dressed', 'Clothes away', 'Toys away', 'Books away', 'Pajamas on', 'Brush teeth', 'Make bed']) assert.ok(!asks.includes(name), `no villager gives ${name}: ${asks}`);
+    await page.evaluate(() => document.querySelector('.v-home').click());
+    await page.clock.runFor(6000);
+    assert.equal(await page.locator('.house').count(), 1, 'walked into the house');
+    const kinds = await page.$$eval('.h-chore', (els) => els.map((e) => e.dataset.chore).sort());
+    for (const k of ['bed', 'teeth', 'dresser', 'basket', 'books', 'floor']) assert.ok(kinds.includes(k), `${k} waits in the house: ${kinds}`);
+    if (out) await page.screenshot({ path: `${out}/3-little-set-house.png`, clip: await page.locator('.house .village-view').boundingBox() });
     await ctx.close();
   }
   assert.deepEqual(errors, [], 'no page errors');

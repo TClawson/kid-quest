@@ -61,6 +61,8 @@ export const ROOM = {
     music: { x: 48, y: 34 }, // the turntable and its speakers, against the back wall under the window
     stand: { x: 152, y: 47 }, // the dino dig's skeleton stand, in front of the couch
     pedestal: { x: 54, y: 78 }, // the dino dig's treasure pedestal, between the bed and the table
+    dresser: { x: 219, y: 22 }, // a narrow dresser against the back wall, by the bathroom (getting dressed, pajamas)
+    books: { x: 20, y: 106 }, // where books get left on the floor, at the foot of the bed (books away)
   },
 };
 const R = ROOM;
@@ -895,6 +897,48 @@ function showerArt() {
   });
 }
 
+/** The dresser's size (house.js taps it). */
+export const DRESSER = { w: 15, h: 34 };
+
+/** A narrow chest of drawers. open: the top drawer is pulled out, clothes hanging over its edge. */
+function dresserArt(open) {
+  return sprite(DRESSER.w, DRESSER.h, (b) => {
+    for (let y = 0; y < DRESSER.h; y += 1) for (let x = 0; x < DRESSER.w; x += 1) {
+      const top = y < 3;
+      const side = x === 0 || x === DRESSER.w - 1;
+      const foot = y >= DRESSER.h - 2 && x > 1 && x < DRESSER.w - 2;
+      if (y >= DRESSER.h - 2 && !foot && !(x === 1 || x === DRESSER.w - 2)) continue;
+      b.set(x, y, top ? (y === 0 ? WD[5] : WD[4]) : side ? WD[1] : foot ? WD[0] : WD[3]);
+    }
+    // four drawers, each with a gap under it and a brass knob
+    for (let d = 0; d < 4; d += 1) {
+      const y0 = 4 + d * 7;
+      for (let x = 2; x < DRESSER.w - 2; x += 1) { b.set(x, y0 + 6, WD[1]); b.set(x, y0, WD[4]); }
+      b.set(7, y0 + 3, GOLD[3]); b.set(7, y0 + 4, GOLD[1]);
+    }
+    if (open) {
+      // the top drawer out, a shirt and a sock spilling over the front
+      for (let x = 1; x < DRESSER.w - 1; x += 1) { b.set(x, 4, WD[0]); b.set(x, 10, WD[2]); b.set(x, 11, WD[1]); }
+      grid((x, y, c) => b.set(x, y, c), 2, 2, ['rr...bb..', 'rRr.bBbb.', '.rr..bb..', '.rr......', '.rr......', '.r.......'], { r: '#e0546a', R: '#ff9a9a', b: '#6ea0f0', B: '#c0dcff' });
+    }
+  });
+}
+
+/** Books left on the floor: a little stack and one lying open. */
+function booksOnFloor(px) {
+  const at = R.at.books;
+  const put = (x, y, c) => px(at.x + x, at.y + y, c);
+  grid(put, 0, 0, [
+    '..........oooooo',
+    '.rrrrrrr..owwwwo',
+    '.rRRRRRr..owkwko',
+    'bbbbbbbbb.owwwwo',
+    'bBBBBBBBb.oooooo',
+    '.gggggggg.......',
+    '.gGGGGGGg.......',
+  ], { r: '#e03131', R: '#ff8787', b: '#1c7ed6', B: '#74c0fc', g: '#2f9e44', G: '#8ce99a', o: '#7a4436', w: '#fff8e7', k: '#868e96' });
+}
+
 function basketArt() {
   return sprite(16, 18, (b) => {
     for (let y = 4; y < 18; y += 1) for (let x = 0; x < 16; x += 1) {
@@ -1084,6 +1128,7 @@ export function paintRoom(canvas, o) {
   for (let y = 0; y < 9; y += 1) for (let x = 0; x < 22; x += 1) if (inEll(x, y, 11, 4.5, 11, 4.5)) px(bm.x + x, bm.y + y, (x + y) % 3 === 0 ? '#c0dcff' : '#8ab8e8');
 
   mess(px, o.mess || 0);
+  if (o.books === false) booksOnFloor(px);
 
   // things against the back wall
   const at = R.at;
@@ -1121,6 +1166,11 @@ export function paintRoom(canvas, o) {
     l.blit(px, p.x, p.y);
     blocks.push([p.x + 2, p.y + l.h - 6, l.w - 4, 7]);
   }
+
+  // the dresser by the bathroom doorway: its top drawer open until the kid gets dressed (or into pajamas)
+  shadow(px, at.dresser.x + DRESSER.w / 2, at.dresser.y + DRESSER.h, DRESSER.w / 2, 1.5, 0.22);
+  dresserArt(o.dresser === false).blit(px, at.dresser.x, at.dresser.y);
+  blocks.push([at.dresser.x, R.floorTop - 2, DRESSER.w, at.dresser.y + DRESSER.h - R.floorTop + 2]);
 
   // the bathroom
   mirrorArt().blit(px, at.sink.x + 2, at.sink.y + 1);
