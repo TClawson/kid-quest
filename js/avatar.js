@@ -395,6 +395,96 @@ const ITEM_ART = {
     '...KBBK...',
     '....KK....',
   ], { Y: '#fcc419', B: '#4dabf7' }],
+  // ----- December (the Holiday tab, xmas.js): the Santa hat flops over to the right, its bobble at the tip -----
+  'hat-santa': [4, 0, [
+    '..............KKK.',
+    '.............KPPPK',
+    '...........KKKPPPK',
+    '.........KKRRKPPwK',
+    '.......KKRRRRKKKK.',
+    '.....KKRRRrRRK....',
+    '...KKRRRRrRRRK....',
+    '..KRRRRRrRRRRK....',
+    '.KRRRRRRRRRRRK....',
+    'KWWwWWWWWWwWWWK...',
+    'KWWWWwWWWWWWwWK...',
+  ], { R: SH('#d63031', '#f05a4a', '#9c1f2e'), r: '#b02838', W: SH('#fbf6ee', '#ffffff', '#d9cfd6'), w: '#e4d8e2', P: SH('#fbf6ee', '#ffffff', '#d9cfd6') }],
+  // a tall elf hat curling over to the left, a jingle bell at its tip, a red cuff with points
+  'hat-elf': [3, 0, [
+    '.....KK..........',
+    '..KKKGGK.........',
+    '.KYYKGGGK........',
+    'KYYYKKGGGK.......',
+    'KYkYK.KGGGK......',
+    '.KKK..KGGGGK.....',
+    '.....KGGGGGGK....',
+    '....KGgGGGGGGK...',
+    '..KKGGGgGGGGGGKK.',
+    '.KBBBBBBBBBBBBBBK',
+    '.KBSBBSBBSBBSBBSK',
+    '..KBBKKKBBKKKBBK.',
+  ], { G: SH('#2f9e44', '#69db7c', '#1b6e2e'), g: '#51b85e', Y: SH('#fcc419', '#ffe066', '#e67700'), k: '#8a5200', B: SH('#e03131', '#ff6b6b', '#a51d1d'), S: '#fff4e6' }],
+  // reindeer antlers on a red headband, with a sprig of holly
+  'hat-antlers': [3, 0, [
+    '.K...K......K...K.',
+    'KAK.KAK....KAK.KAK',
+    'KAK.KAK....KAK.KAK',
+    'KAAKAAKK..KKAAKAAK',
+    '.KAAAKKAKKAKKAAAK.',
+    '..KAAKAAKKAAKAAK..',
+    '...KAAAK..KAAAK...',
+    '....KAAK..KAAKKK..',
+    '....KAAKKKKAAKLLK.',
+    '...KbbbbbbbbbbLrLK',
+    '....KKKKKKKKKKKLK.',
+    '...............K..',
+  ], { A: SH('#c8925a', '#e8b880', '#8a5a34'), b: SH('#e03131', '#ff6b6b', '#a51d1d'), L: SH('#2f9e44', '#69db7c', '#1b6e2e'), r: '#ff4b4b' }],
+  // big fluffy snow-white earmuffs on a red band over the head
+  'hat-earmuffs': [0, 5, [
+    '........KKKKKKKK........',
+    '......KKBBBBBBBBKK......',
+    '.....KBBKKKKKKKKBBK.....',
+    '...KKBKK........KKBKK...',
+    '..KFBK............KBFK..',
+    '.KFFFFK..........KFFFFK.',
+    'KFFFfFFK........KFFfFFFK',
+    'KFFFFFfK........KfFFFFFK',
+    'KFfFFFFK........KFFFFfFK',
+    '.KFFfFK..........KFfFFK.',
+    '..KFFK............KFFK..',
+    '...KK..............KK...',
+  ], { F: SH('#fffaf4', '#ffffff', '#d8c8e0'), f: '#e6dcef', B: SH('#e03131', '#ff6b6b', '#a51d1d') }],
+  // a chunky knit scarf (ribbed), one striped end hanging down in front with a fringe; color versions
+  'neck-knitscarf': [5, 18, [
+    '.KMMSMMSMMSMMK.',
+    'KMMmSMMSMMSMmMK',
+    '.KSSSKKKKKKKKK.',
+    '.KMMMK.........',
+    '.F.F...........',
+  ], { M: SH('#d63031', '#f05a4a', '#9c1f2e'), m: '#a82434', S: SH('#fbf6ee', '#ffffff', '#d9cfd6'), F: '#fbf6ee' }],
+  // mittens on both paws (the hand slot: drawn at the paws, and on the arms when they move)
+  'hand-mittens': [3, 18, [
+    '..KK..........KK..',
+    '.KccK........KccK.',
+    'KMMMK........KMMMK',
+    '.KMMK........KMMK.',
+    '..KK..........KK..',
+  ], { M: SH('#e03131', '#ff6b6b', '#a51d1d'), c: '#fff4e6' }],
+  // the light-up sweater: a red knit with a cream collar, a string of lights across the chest and a
+  // green hem; its bulbs blink, a and b taking turns (~blink-a, ~blink-b, over the dim bulbs)
+  'neck-xmas-sweater': [7, 19, [
+    '.SccccccS.',
+    'SASSBSSCSS',
+    'GGwGGwGGwG',
+  ], { S: '#d63031', c: '#fff4e6', A: '#a8782a', B: '#2a6a9a', C: '#a83a6e', G: '#2b8a3e', w: '#fff4e6' }],
+  'neck-xmas-sweater~blink-a': [7, 19, [
+    '..........',
+    '.A.....C..',
+  ], { A: '#ffe066', C: '#ff9ad0' }],
+  'neck-xmas-sweater~blink-b': [7, 19, [
+    '..........',
+    '....B.....',
+  ], { B: '#9ae4ff' }],
   // ----- the wizard set (the wand is drawn by wandCells, below) -----
   // a midnight-blue hat with a floppy tip, stars, a moon and a gold band
   'hat-wizard-star': [4, 0, [
@@ -1247,6 +1337,7 @@ const RECOLOR = {
   'neck-bowtie': ([c, l, d]) => ({ R: SH(c, l, d) }),
   'hat-beanie': ([c, l, d]) => ({ B: SH(c, l, d), b: SH(d, c, mix(d, '#000000', 0.3)) }),
   'neck-scarf': ([c, l, d]) => ({ O: SH(c, l, d), W: mix(l, '#ffffff', 0.45) }),
+  'neck-knitscarf': ([c, l, d]) => ({ M: SH(c, l, d), m: mix(c, d, 0.6) }), // cream stripes and fringe stay cream
   // glasses frames are drawn in outline color; color versions paint the frame instead
   'face-round': ([c], rows) => ({ rows: rows.map((r) => r.replaceAll('K', 'F')), F: c }),
 };
@@ -1344,6 +1435,10 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
   // the wand glows with today's chores (buddy.wand, 0 to 1), on the side away from held gear
   const hand = worn(o.hand);
   const wand = hand === 'hand-wand' ? wandSvg(buddy.wand, wandSide(gear?.kind || gearOf(o.sport)?.kind)) : '';
+  // anything else in the hand slot is worn on the paws (the mittens)
+  const paws = hand && hand !== 'hand-wand' ? itemLayer(hand) : '';
+  // the light-up sweater's bulbs: two sets taking turns (css .blink)
+  const blink = ITEM_ART[`${neck}~blink-a`] ? `<g class="blink blink-a">${itemLayer(`${neck}~blink-a`)}</g><g class="blink blink-b">${itemLayer(`${neck}~blink-b`)}</g>` : '';
 
   // a piano and sports don't mix: the piano steps aside while the buddy holds gear or shows off
   const music = trick || gearOf(o.sport) ? undefined : o.music;
@@ -1358,6 +1453,8 @@ export function buddySvg(buddy, mood = 'happy', opts = {}) {
       ${capeBehind}
       ${body.svg()}
       ${neckFront}
+      ${blink}
+      ${paws}
       ${itemLayer(face)}
       ${itemLayer(hat)}
       ${wand}
@@ -1416,6 +1513,8 @@ export function liveLook(buddy) {
     neck,
     neckFront: neck && ITEM_ART[`${neck}~front`] ? `${neck}~front` : undefined,
     wand: worn(o.hand) === 'hand-wand' ? { side: wandSide(gear?.kind) } : null,
+    paws: worn(o.hand) !== 'hand-wand' && ITEM_ART[worn(o.hand)] ? worn(o.hand) : undefined,
+    blink: neck && ITEM_ART[`${neck}~blink-a`] ? [`${neck}~blink-a`, `${neck}~blink-b`] : null,
     music: music && MUSIC_ART[music] ? {
       behind: toCells(musicPx(music, 'behind')),
       front: toCells(musicPx(music, 'front')),

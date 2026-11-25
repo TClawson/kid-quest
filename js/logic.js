@@ -1,6 +1,8 @@
 // Pure game rules: schedules, day status, streaks, freezes, XP and coins.
 // No DOM access here so it can be unit tested with `node --test`.
 
+import { xmasPay } from './advent.js';
+
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 export const WEEKDAYS = [1, 2, 3, 4, 5];
@@ -715,6 +717,8 @@ function totalEarned(state, kid, today, field) {
     if (field !== 'xp') sum += entry.chest?.[field] || 0;
   }
   if (field !== 'gems') sum += COMEBACK_BONUS * streakInfo(state, kid, today).comebacks.length;
+  // December: Santa's presents and the advent doors (advent.js), kept on the kid
+  if (field !== 'xp') sum += xmasPay(kid)[field] || 0;
   return sum;
 }
 

@@ -24,7 +24,7 @@
 //   flamingos), 'swim' (seals, otters, whales: a back out of the water), 'frog', 'lizard',
 //   'bug' (butterflies, dragonflies), 'crab', 'snail'
 import { canvas } from './play.js';
-import { Buf, inEll, line, ramp } from './pixelkit.js';
+import { Buf, inEll, line, ramp, mix } from './pixelkit.js';
 
 const INK = '#1b1430';
 const mixPale = (c) => (c.toLowerCase() === '#ffffff' ? '#eef1f7' : c);
@@ -34,11 +34,16 @@ const cache = new Map();
 export function critterPic(look, frame = 'stand') {
   const key = `${JSON.stringify(look)}|${frame}`;
   if (cache.has(key)) return cache.get(key);
-  const b = new Buf(Math.ceil(look.len * 2.4), Math.ceil(look.len * 2.4), 4);
+  // room all round: a moose's palms and the December trimmings (a lantern, stardust) reach out past
+  // the box. (Other animals keep the old 4 for now: a few of them get clipped at the edge, see NOTES.)
+  const pad = look.xmas || look.horns === 'palm' ? 16 : 4;
+  const b = new Buf(Math.ceil(look.len * 2.4), Math.ceil(look.len * 2.4), pad);
   const draw = PLANS[look.plan] || PLANS.quad;
-  const box = draw(b, look, frame);
+  b.hd = null; b.neck = null; b.palms = [];
+  const box = draw(b, look, frame) || {};
+  if (look.xmas) dress(b, look, frame, box);
   finish(b, look);
-  for (const [x, y, col] of box?.after || []) if (!b.get(x, y)) b.set(x, y, col, 'after');
+  for (const [x, y, col] of box.after || []) if (!b.get(x, y)) b.set(x, y, col, 'after');
   // crop to what was drawn
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
   b.each((x, y) => { if (b.get(x, y)) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } });
@@ -71,11 +76,12 @@ function finish(b, look) {
     if (t === 'dark') return dark;
     if (t === 'shell') return top(x, y) ? shell[4] : bottom(x, y) ? shell[2] : shell[3];
     if (t === 'accent') return look.accent || '#e03131';
-    if (t === 'horn') return top(x, y) ? '#e9d8b4' : '#b08d57';
+    if (t === 'horn') return look.hornCol ? (top(x, y) ? '#fff3bf' : bottom(x, y) ? '#e8a200' : look.hornCol) : top(x, y) ? '#e9d8b4' : '#b08d57';
     if (t === 'beak') return look.beak || '#f59f00';
     return c;
   });
-  b.outline(() => INK);
+  // December trimmings that stick out get an outline in their own darker color, not ink
+  b.outline((t) => (t === 'palm' ? PALM.edge : look.xmas && t in XOUT ? XOUT[t] : INK));
 }
 
 // ---------- shared parts ----------
@@ -121,17 +127,13 @@ function horns(b, look, hx, hy, r, frame) {
     const x = Math.round(bx); const y = Math.round(hy - r);
     const dir = pose ? (bx < hx ? -1 : 1) : 1;
     if (k === 'antler') { // branching, deer and elk
+      thick(b, x, Math.round(hy - r * 0.72), x, y, 1, 'horn'); // the base, rooted in the skull (no gap above the head)
       thick(b, x, y, x + dir * Math.round(r * 0.6), y - r * 1.6, 1, 'horn');
       thick(b, x + dir * Math.round(r * 0.3), y - r * 0.8, x - dir * Math.round(r * 0.3), y - r * 1.4, 1, 'horn');
       thick(b, x + dir * Math.round(r * 0.5), y - r * 1.3, x + dir * Math.round(r * 1.1), y - r * 1.8, 1, 'horn');
-    } else if (k === 'palm') { // moose: broad flat paddles
-      const sides = pose ? [dir] : [-1, 1]; // side on, both palms show: one forward, one back
-      for (const d of sides) {
-        const pcx = x + d * r * 1.25; const pcy = y - r * 0.75; const rx = Math.max(4.5, r * 0.95); const ry = Math.max(2.8, r * 0.5);
-        thick(b, x, y, Math.round(x + d * r * 0.6), Math.round(y - r * 0.45), 2, 'horn');
-        b.fill(Math.round(pcx - rx - 1), Math.round(pcy - ry - 1), Math.ceil(rx * 2 + 3), Math.ceil(ry * 2 + 3), (xx, yy) => (inEll(xx, yy, pcx, pcy, rx, ry) ? 'horn' : null), 'horn');
-        for (let t = 0; t < 4; t += 1) { const tx = Math.round(pcx - rx * 0.75 + (t * rx * 1.5) / 3); px(b, tx, Math.round(pcy - ry - 1), 'horn'); px(b, tx, Math.round(pcy - ry - 2), 'horn'); }
-      }
+    } else if (k === 'palm') { // moose: a broad flat paddle each side, on a short thick beam out of the skull
+      if (pose) palm(b, Math.round(hx + dir * r * 0.42), Math.round(hy - r * 0.7), dir, r);
+      else { palm(b, Math.round(hx + r * 0.02), Math.round(hy - r * 0.8), -1, r); palm(b, Math.round(hx + r * 0.42), Math.round(hy - r * 0.78), 1, r); }
     } else if (k === 'curl') { // bighorn / ram
       for (let a = 0; a < 6; a += 0.4) { const rr = r * 0.25 + a * r * 0.11; px(b, Math.round(x + dir * (Math.cos(a) * rr + r * 0.3)), Math.round(y + Math.sin(a) * rr - r * 0.2), 'horn'); px(b, Math.round(x + dir * (Math.cos(a) * rr + r * 0.3)) + 1, Math.round(y + Math.sin(a) * rr - r * 0.2), 'horn'); }
     } else if (k === 'spike') { // mountain goat: short black daggers
@@ -143,6 +145,49 @@ function horns(b, look, hx, hy, r, frame) {
       if (pose) break;
     }
   }
+  if (k === 'palm') shadePalms(b);
+}
+
+// a moose's antler palms: bone, lit from the top, with their own dark brown outline (not ink)
+const PALM = { lt: '#f2e2b8', md: '#d4b077', sh: '#b48a52', dk: '#94683a', edge: '#5e3f1c' };
+
+/**
+ * One antler palm: a 3-wide beam out of the skull at (x0, y0), then a broad scoop reaching out
+ * (d: -1 forward/left, 1 back/right), rising at its far end, with tines along its top edge and
+ * round its tip. Its top edge goes in b.palms (inner end first), for the lights.
+ */
+function palm(b, x0, y0, d, r) {
+  const ex = Math.round(x0 + d * r * 0.4); const ey = Math.round(y0 - r * 0.28);
+  thick(b, x0, y0 + 1, ex, ey, 3, 'palm');
+  const W = Math.max(9, Math.round(r * 1.6));
+  const edge = [];
+  let tipTop = 0; let tipBot = 0;
+  for (let u = 0; u <= W; u += 1) {
+    const t = u / W;
+    const bot = ey + 1 - t * t * r * 0.32; // nearly flat underneath, scooping up a little at the far end
+    const top = bot - r * (0.36 + 0.42 * Math.sin(Math.min(1, t * 1.45) * Math.PI / 2)) - t ** 1.5 * r * 0.18;
+    const x = ex + d * (u - 1);
+    for (let y = Math.round(top); y <= Math.round(bot); y += 1) b.set(x, y, PALM.md, 'palm');
+    // tines along the top edge
+    if (t > 0.22 && u % 3 === 2 && u < W) { const n = t > 0.6 ? 3 : 2; for (let k = 1; k <= n; k += 1) b.set(x + (k === n && t > 0.6 ? d : 0), Math.round(top) - k, PALM.md, 'palm'); }
+    edge.push([x, Math.round(top)]);
+    tipTop = Math.round(top); tipBot = Math.round(bot);
+  }
+  // tines round the tip, pointing out
+  const tx = ex + d * (W - 1);
+  for (let y = tipTop + 1; y <= tipBot - 1; y += 2) { b.set(tx + d, y, PALM.md, 'palm'); b.set(tx + 2 * d, y - 1, PALM.md, 'palm'); }
+  b.palms?.push({ d, edge, tip: [tx, tipTop, tipBot] });
+}
+
+function shadePalms(b) {
+  const is = (x, y) => b.tag(x, y) === 'palm' && b.get(x, y);
+  const marks = [];
+  b.each((x, y) => {
+    if (!is(x, y)) return;
+    const up = is(x, y - 1); const dn = is(x, y + 1); const dn2 = is(x, y + 2);
+    marks.push([x, y, !up ? PALM.lt : !dn ? PALM.dk : !dn2 ? ((x + y) & 1 ? PALM.sh : PALM.dk) : (x + y) % 4 === 0 && !is(x, y + 3) ? PALM.sh : PALM.md]);
+  });
+  for (const [x, y, c] of marks) b.set(x, y, c);
 }
 
 /** A side-on (or turned) head. Returns the eye position. */
@@ -171,6 +216,7 @@ function head(b, look, hx, hy, r, frame) {
   if (look.mark === 'blaze') for (let y = -r; y < r * 0.4; y += 1) px(b, Math.round(pose ? hx : hx - r * 0.3), Math.round(hy + y), 'belly');
   if (look.extra === 'beard') thick(b, Math.round(hx - (pose ? 0 : r * 0.5)), Math.round(hy + r * 0.8), Math.round(hx - (pose ? 0 : r * 0.6)), Math.round(hy + r * 1.6), 2, 'fur');
   horns(b, look, hx, hy, r, frame);
+  b.hd = { x: hx, y: hy, r, ry: r * 0.92, pose };
   return eyes(b, look, hx, hy - (pose ? 0 : 0.3), r, frame);
 }
 
@@ -205,7 +251,21 @@ const PLANS = {
     const legW = Math.max(2, Math.round(L * (look.legW ?? 0.08)));
     const top = Math.round(by + bodyH * 0.2);
     const legAt = [bx - L * 0.32, bx + L * 0.3];
-    for (const [i, lx] of legAt.entries()) {
+    if (look.flies && (frame === 'fly' || frame === 'walk')) {
+      // up in the air: front legs folded up under the chest, back legs kicked out behind
+      const ext = frame === 'fly' ? 1 : 0.75;
+      const kx = legAt[0] - L * 0.1 * ext; const ky = top + legs * 0.45;
+      for (const [o, tag] of [[2, 'dark'], [0, 'fur']]) {
+        thick(b, Math.round(legAt[0] + o), top, Math.round(kx + o), Math.round(ky), legW, tag);
+        thick(b, Math.round(kx + o), Math.round(ky), Math.round(kx + o + L * 0.09), Math.round(ky + legs * 0.3), legW, tag);
+        if (look.hooves) b.rect(Math.round(kx + o + L * 0.09) - Math.floor(legW / 2), Math.round(ky + legs * 0.3) + 1, legW, 1, 'dark', 'dark');
+      }
+      for (const [o, tag] of [[-2, 'dark'], [0, 'fur']]) {
+        const ex = legAt[1] + o + L * 0.3 * ext; const ey = top + legs * (0.62 - ext * 0.12);
+        thick(b, Math.round(legAt[1] + o), top, Math.round(ex), Math.round(ey), legW, tag);
+        if (look.hooves) b.rect(Math.round(ex) + 1, Math.round(ey) - 1, 1, legW, 'dark', 'dark');
+      }
+    } else for (const [i, lx] of legAt.entries()) {
       const s = i === 0 ? sw : -sw;
       thick(b, Math.round(lx + 1), top, Math.round(lx + 1 - s), feet, legW, 'dark');
       thick(b, Math.round(lx - 1), top, Math.round(lx - 1 + s), feet, legW, 'fur');
@@ -226,6 +286,8 @@ const PLANS = {
     const neck = look.neck ?? 0.35;
     const hx = bx - L * 0.5 - r * 0.2 + (look.headIn ?? 0) * L; const hy = by - bodyH * 0.35 - neck * L * 0.6;
     thick(b, Math.round(bx - L * 0.36), Math.round(by - bodyH * 0.1), Math.round(hx + r * 0.3), Math.round(hy + r * 0.3), Math.max(2, Math.round(r * 1.2)), 'fur');
+    b.neck = { x0: bx - L * 0.36, y0: by - bodyH * 0.1, x1: hx + r * 0.3, y1: hy + r * 0.3, w: Math.max(2, Math.round(r * 1.2)) };
+    b.body = { x: bx, y: by, rx: L * 0.48, ry: bodyH * 0.5 };
     if (look.mark === 'chest') ell(b, bx - L * 0.4, by, r * 0.6, bodyH * 0.35, 'belly');
     if (look.dewlap) thick(b, Math.round(hx + r * 0.1), Math.round(hy + r * 0.8), Math.round(hx + r * 0.2), Math.round(hy + r * 1.7), 2, 'fur');
     if (look.lion) { ell(b, hx + r * 0.1, hy + r * 0.1, r * 1.7, r * 1.6, 'accent'); for (let k = 0; k < 10; k += 1) { const a = (k / 10) * Math.PI * 2; px(b, Math.round(hx + Math.cos(a) * r * 1.9), Math.round(hy + Math.sin(a) * r * 1.8), 'accent'); } }
@@ -276,12 +338,15 @@ const PLANS = {
     const L = look.len;
     const by = L * 0.95; const bx = L * 0.75; const feet = Math.round(by + L * 0.32);
     if (frame === 'peek') {
+      if (look.quills) { b.body = { x: bx - L * 0.21, y: by - L * 0.15, rx: L * 0.34, ry: L * 0.3, peek: true }; quillCoat(b, look, b.body, frame); }
       ell(b, bx - L * 0.2, by + L * 0.15, L * 0.22, L * 0.22, 'fur');
       const eye = head(b, look, bx - L * 0.22, by - L * 0.12, L * 0.2, 'pose');
       return { feet: Math.round(by + L * 0.3), eye };
     }
     const upright = frame === 'pose' && look.sits;
     if (upright) {
+      b.body = { x: bx - L * 0.1, y: by, rx: L * 0.2, ry: L * 0.34, upright: true };
+      if (look.quills) quillCoat(b, look, b.body, frame);
       ell(b, bx - L * 0.1, by, L * 0.2, L * 0.34, 'fur');
       if (look.belly) ell(b, bx - L * 0.15, by + L * 0.05, L * 0.12, L * 0.24, 'belly');
       tail(b, look, bx + L * 0.05, by + L * 0.15, L * 0.22, frame);
@@ -291,6 +356,8 @@ const PLANS = {
     }
     const sw = frame === 'walk' ? L * 0.08 : 0;
     for (const [i, lx] of (look.manyLegs ? [bx - L * 0.3, bx - L * 0.1, bx + L * 0.1, bx + L * 0.28] : [bx - L * 0.28, bx + L * 0.22]).entries()) thick(b, Math.round(lx), Math.round(by + L * 0.1), Math.round(lx + (i % 2 ? sw : -sw)), feet, 2, 'dark');
+    b.body = { x: bx, y: by, rx: L * 0.4, ry: L * (look.bodyH ?? 0.2) };
+    if (look.quills) quillCoat(b, look, b.body, frame);
     ell(b, bx, by, L * 0.4, L * (look.bodyH ?? 0.2), 'fur');
     if (look.spines) { // a hedgehog: a spiky coat over the back
       const bh = L * (look.bodyH ?? 0.2);
@@ -338,6 +405,7 @@ const PLANS = {
     }
     const r = L * 0.2;
     const hx = bx - L * 0.28; const hy = by - L * 0.3;
+    b.hd = { x: hx, y: hy, r, ry: r, pose: frame === 'pose' };
     if (look.extra === 'crest') { thick(b, Math.round(hx), Math.round(hy - r), Math.round(hx + r * 0.8), Math.round(hy - r * 2), 2, 'fur'); }
     ell(b, hx, hy, r, r, 'fur');
     if (look.mark === 'cap') ell(b, hx, hy - r * 0.5, r * 0.9, r * 0.45, 'dark');
@@ -569,11 +637,13 @@ const PLANS = {
     for (const [i, lx] of [bx - L * 0.2, bx + L * 0.15].entries()) thick(b, Math.round(lx), Math.round(by), Math.round(lx + (i ? sw : -sw) - 1), feet, 1, 'fur');
     ell(b, bx, by, L * 0.28, L * 0.08, 'fur');
     thick(b, Math.round(bx + L * 0.25), Math.round(by), Math.round(bx + L * 0.75), Math.round(by + (frame === 'walk' ? -2 : 2)), Math.max(1, Math.round(L * 0.06)), 'fur');
+    b.body = { x: bx, y: by, rx: L * 0.28, ry: L * 0.08 };
     if (look.extra === 'crest') for (let k = 0; k < L * 0.5; k += 2) px(b, Math.round(bx - L * 0.2 + k), Math.round(by - L * 0.1), 'accent');
     if (look.mark === 'spots') for (let k = 0; k < 4; k += 1) px(b, Math.round(bx - L * 0.15 + k * 3), Math.round(by - 1), 'accent');
     if (look.mark === 'stripes') for (let k = 0; k < 4; k += 1) px(b, Math.round(bx - L * 0.15 + k * 3), Math.round(by), 'dark');
     const hx = bx - L * 0.33; const hy = by - (frame === 'pose' ? L * 0.08 : L * 0.02);
     ell(b, hx, hy, L * 0.1, L * 0.065, look.face ? 'face' : 'fur', look.face || 'fur');
+    b.hd = { x: hx, y: hy, r: L * 0.1, ry: L * 0.065, pose: frame === 'pose' };
     if (look.throat) ell(b, hx + L * 0.02, hy + L * 0.06, L * 0.07, L * 0.04, 'throat', look.throat);
     if (frame === 'pose') { b.set(Math.round(hx - L * 0.05), Math.round(hy - 1), INK, 'eye'); b.set(Math.round(hx + L * 0.03), Math.round(hy - 1), INK, 'eye'); }
     else b.set(Math.round(hx - L * 0.03), Math.round(hy - 1), INK, 'eye');
@@ -638,12 +708,18 @@ const PLANS = {
       const sc = look.shellCol || '#e9d8b4'; const sx = bx + L * 0.12; const sy = by - L * 0.22;
       ell(b, sx, sy, L * 0.3, L * 0.26, 'shell', sc);
       for (let a = 0; a < 9; a += 0.5) b.set(Math.round(sx + Math.cos(a) * a * 0.55), Math.round(sy + Math.sin(a) * a * 0.55), '#8d6e63', 'shellLine');
-    }
+    } else if (look.mark === 'bauble') bauble(b, look, bx + L * 0.14, by - L * 0.26, L * 0.29, frame); // a Christmas bauble for a shell
     const up = frame === 'pose' || frame === 'walk';
     for (const s of [-1, 1]) {
       const cx = bx + s * L * 0.35; const cy = by - (up ? L * 0.3 : L * 0.05);
       thick(b, Math.round(bx + s * L * 0.2), Math.round(by - 1), Math.round(cx), Math.round(cy), 1, 'fur');
-      ell(b, cx, cy, L * 0.09, L * 0.08, 'fur');
+      const big = look.bigClaw && s < 0 ? 1.45 : 1; // a hermit crab's one big claw (it shuts the door with it)
+      ell(b, cx, cy, L * 0.09 * big, L * 0.08 * big, look.claw ? 'claw' : 'fur', look.claw || 'fur');
+    }
+    if (look.mark === 'bauble') { // eyes on stalks, poking out in front of the bauble
+      const ex = Math.round(bx - L * 0.2); const ey = Math.round(by - L * 0.12);
+      for (const d of frame === 'pose' ? [-2, 1] : [-1, 1]) { b.rect(ex + d, ey, 1, 3, 'fur', 'fur'); b.rect(ex + d - (d < 0 ? 0 : 0), ey - 2, 2, 2, INK, 'eye'); b.set(ex + d, ey - 2, '#ffffff', 'shine'); }
+      return { feet, eye: [ex, ey - 2] };
     }
     for (const s of [-1, 1]) { b.set(Math.round(bx + s * 2), Math.round(by - L * 0.2), 'fur', 'fur'); b.set(Math.round(bx + s * 2), Math.round(by - L * 0.2) - 1, INK, 'eye'); }
     return { feet, eye: [Math.round(bx), Math.round(by - L * 0.2)] };
@@ -836,6 +912,553 @@ const PLANS = {
     else { b.rect(Math.round(hx - L * 0.15) - 2, Math.round(hy + 1), 3, 2, 'beak', 'beak'); b.set(Math.round(hx - L * 0.06), Math.round(hy - 1), INK, 'eye'); }
     return { feet, eye: [Math.round(hx), Math.round(hy - 1)] };
   },
+};
+
+// ---------- December animals (js/critters.js, december: true) ----------
+// look.xmas lists the trimmings drawn over the body plan, before the shading and the outline.
+// Each trimming is shaded by hand in its own hue-shifted ramp, and where it sticks out of the
+// body it is outlined in its own darker color (cloth, glass, gold), not in ink: the soft
+// storybook selective outline. Glows are 'after' pixels: dithered, outside the outline.
+const XOUT = {
+  hat: '#8f1d2c', fluff: '#8d96b4', pom: '#8d96b4', gold: '#8a5200', bell: '#8a5200', star: '#8a5200',
+  scarf: '#1f5e33', lantern: '#2b2118', holly: '#1f5e33', berry: '#7a1424', glass: '#6b1222',
+  pop: '#24170f', cran: '#24170f', string: '#24170f', collar: '#6b1020', wire: null, bulb: null,
+};
+const RED = ramp('#e03131'); // dark..light, the base at [3]
+const GREEN = ramp('#2f9e44');
+const GOLD = ['#7a4a00', '#a86400', '#e8a200', '#fcc419', '#ffe066', '#fff3bf'];
+const SNOW = ['#9aa3bf', '#b9c1d6', '#d5dbe7', '#eef1f6', '#ffffff', '#ffffff'];
+const BULBS = ['#ff6b6b', '#ffd43b', '#69db7c', '#4dabf7', '#f783ac'];
+const hash = (x, y, s = 0) => { let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+/** A letter-grid sprite; pal maps a letter to a color, tags to a tag (or one tag for all). */
+const spr = (b, X, Y, rows, pal, tags) => rows.forEach((row, j) => { for (let i = 0; i < row.length; i += 1) { const c = pal[row[i]]; if (c) b.set(X + i, Y + j, c, typeof tags === 'string' ? tags : tags[row[i]]); } });
+
+/** Light from the top left over one tag's pixels: light on top, dark along the bottom and right. */
+function shadeTag(b, tag, dk, md, lt) {
+  const same = (x, y) => b.tag(x, y) === tag && b.get(x, y);
+  const marks = [];
+  b.each((x, y) => { if (same(x, y)) marks.push([x, y, !same(x, y - 1) ? lt : !same(x, y + 1) || !same(x + 1, y) ? dk : md]); });
+  for (const [x, y, c] of marks) b.set(x, y, c);
+}
+
+function dress(b, look, frame, box) {
+  const after = box.after || (box.after = []);
+  const hd = b.hd;
+  for (const t of [].concat(look.xmas)) {
+    if (t === 'santa' && hd) santaHat(b, hd);
+    if (t === 'bobble' && hd) bobbleHat(b, hd);
+    if (t === 'scarf' && b.neck) scarf(b, look, frame);
+    if (t === 'lantern' && hd) lantern(b, look, hd, frame, after);
+    if (t === 'lights') antlerLights(b, frame, after);
+    if (t === 'holly' && hd) holly(b, hd);
+    if (t === 'candy') candyBill(b);
+    if (t === 'ginger') ginger(b, look, frame, box);
+    if (t === 'garland' && b.body) garland(b, look, frame);
+    if (t === 'sneeze' && frame === 'pose' && hd) sneeze(hd, after);
+    if (t === 'bells' && b.neck) bellCollar(b, look);
+    if (t === 'stardust' && (frame === 'fly' || frame === 'walk') && b.body) stardust(b, look, frame, after);
+    else if (t === 'stardust') stardustSettling(b, look, frame, box, after);
+    if (t === 'twinkle' && box.eye) twinkleTips(b, look, frame, after);
+    if (t === 'patches' && b.body) patches(b, look);
+  }
+  shadeTag(b, 'pom', SNOW[1], SNOW[3], SNOW[4]);
+  if (look.claw) { const c = ramp(look.claw); shadeTag(b, 'claw', c[2], c[3], c[4]); }
+}
+
+/** A Santa hat: a red cone leaning back with a floppy tip and a pompom, on a white fur brim. */
+function santaHat(b, hd) {
+  const w = Math.max(7, Math.round(hd.r * 1.6));
+  const cx = hd.x + (hd.pose ? 0 : hd.r * 0.35);
+  const base = Math.round(hd.y - hd.ry * 0.8);
+  const bh = w >= 10 ? 3 : 2; const H = Math.round(w * 0.85);
+  let tx = cx; let ty = base - bh;
+  for (let k = 0; k < H; k += 1) {
+    const t = k / Math.max(1, H - 1);
+    const half = Math.max(0.5, (w / 2 - 0.7) * (1 - t * 0.9));
+    const xc = cx + t * t * w * 0.42; const y = base - bh - k;
+    const a = Math.round(xc - half); const z = Math.max(a, Math.round(xc + half) - 1);
+    for (let x = a; x <= z; x += 1) b.set(x, y, z > a && x === a ? RED[4] : z - a > 1 && x === z ? RED[2] : RED[3], 'hat');
+    tx = Math.round(xc); ty = y;
+  }
+  // the tip flops over the back, with a pompom on the end
+  b.set(tx + 1, ty, RED[3], 'hat'); b.set(tx + 1, ty + 1, RED[2], 'hat'); b.set(tx + 2, ty + 1, RED[2], 'hat'); b.set(tx + 2, ty + 2, RED[1], 'hat');
+  ell(b, tx + 3, ty + 3.4, 1.6, 1.6, 'pom', '#ffffff');
+  // the brim: soft white fur, a little bumpy
+  const x0 = Math.round(cx - w / 2);
+  for (let j = 0; j < bh; j += 1) for (let x = x0; x < x0 + w; x += 1) b.set(x, base - j, j === bh - 1 ? SNOW[4] : j === 0 ? ((x & 1) ? SNOW[2] : SNOW[3]) : SNOW[3], 'fluff');
+  b.set(x0 - 1, base - 1, SNOW[3], 'fluff'); b.set(x0 + w, base - 1, SNOW[2], 'fluff');
+}
+
+/** A knitted bobble hat: red and white stripes, a ribbed cuff, a big pompom. */
+function bobbleHat(b, hd) {
+  const w = Math.round(hd.r * 2.15); const cx = hd.x + (hd.pose ? 0 : hd.r * 0.15);
+  const base = Math.round(hd.y - hd.ry * 0.38); const h = Math.round(w * 0.42);
+  const x0 = Math.round(cx - w / 2);
+  for (let k = 0; k < h; k += 1) {
+    const t = (k + 0.5) / h; const half = (w / 2 - 0.3) * Math.sqrt(Math.max(0, 1 - t * t));
+    const a = Math.round(cx - half); const z = Math.round(cx + half) - 1; const y = base - 2 - k;
+    const rp = Math.floor(k / 2) % 2 ? SNOW : RED;
+    for (let x = a; x <= z; x += 1) b.set(x, y, x <= a + 1 && k > 0 ? rp[4] : x >= z - 1 ? rp[2] : (x + k) % 4 === 0 ? rp[2] : rp[3], 'hat');
+  }
+  for (let j = 0; j < 2; j += 1) for (let x = x0 - 1; x <= x0 + w; x += 1) b.set(x, base - j, j ? (x & 1 ? RED[4] : RED[3]) : (x & 1 ? RED[2] : RED[1]), 'hat');
+  ell(b, cx + 0.5, base - 2 - h - 1.2, Math.max(2, hd.r * 0.36), Math.max(2, hd.r * 0.34), 'pom', '#ffffff');
+}
+
+/** A knitted scarf round the neck, a stripe knitted in, one end flying out behind (or hanging down the front). */
+function scarf(b, look, frame) {
+  const n = b.neck; const tm = n.tm ?? 0.68;
+  const G = look.scarf ? ramp(look.scarf) : GREEN; const S = look.scarfStripe ? ramp(look.scarfStripe) : RED;
+  const xm = n.x0 + (n.x1 - n.x0) * tm; const ym = n.y0 + (n.y1 - n.y0) * tm;
+  const slope = (n.x1 - n.x0) / ((n.y1 - n.y0) || 1);
+  const rows = n.rows ?? 3; const w = n.w + 2;
+  let left = null; let right = null;
+  for (let j = 0; j < rows; j += 1) {
+    const y = Math.round(ym) - 1 + j; const a = Math.round(xm + slope * (y - ym) - w / 2);
+    for (let i = 0; i < w; i += 1) {
+      const stripe = j === 1 && i % 4 === 1;
+      const col = stripe ? S[3] : j === 0 ? (i >= w - 2 ? G[3] : G[4]) : i >= w - 2 || j === rows - 1 ? G[2] : G[3];
+      b.set(a + i, y, col, 'scarf');
+    }
+    if (j === rows - 1) { left = [a, y]; right = [a + w - 1, y]; }
+  }
+  // the loose end, knitted in stripes, with a fringe
+  const len = n.endLen ?? Math.max(5, Math.round(n.w * 1.1)) + (n.hang ? 1 : 0);
+  for (let k = 0; k < len; k += 1) {
+    const cols = Math.floor(k / 2) % 2 ? S : G;
+    let x; let y;
+    if (n.hang) { x = left[0] + Math.round(w * 0.18) + (k > len - 3 ? 1 : 0); y = left[1] + 1 + k; } // hanging down the front
+    else { x = right[0] - 1 + Math.round(k * 0.75); y = right[1] - 1 + Math.round(k * 0.5) + (frame === 'walk' && k > 2 ? 1 : 0); } // flying out behind
+    b.set(x, y, cols[4], 'scarf'); b.set(x + 1, y, cols[3], 'scarf'); b.set(x + 2, y, cols[2], 'scarf');
+    if (k === len - 1) { b.set(x, y + 1, cols[3], 'scarf'); b.set(x + 2, y + 1, cols[2], 'scarf'); }
+  }
+}
+
+/** A lantern held by its handle in the mouth, glowing. */
+function lantern(b, look, hd, frame, after) {
+  const pose = hd.pose;
+  const mx = Math.round(pose ? hd.x : hd.x - hd.r * 0.85 - hd.r * 0.6 * (look.snout ?? 0.9) + 1);
+  const my = Math.round(hd.y + hd.r * (pose ? 0.62 : 0.42));
+  const big = hd.r >= 8;
+  const rows = big ? ['...k...', '..k.k..', '..kkk..', '.kKKKk.', 'kyyWyyk', 'kyWWWyk', 'kyyWyyk', 'kyyYyyk', 'koooook', '.kkkkk.', '.k...k.'] : ['..k..', '.k.k.', '.kKk.', 'kyWyk', 'kWWWk', 'kyYyk', '.kkk.'];
+  const pal = { k: '#3b3a4a', K: '#6b6a80', y: '#ffd43b', Y: '#fcc419', W: '#fff9db', o: '#f59f00' };
+  const w = rows[0].length; const X = mx - Math.floor(w / 2) - (pose ? 0 : 1); const Y = my;
+  spr(b, X, Y, rows, pal, 'lantern');
+  // the glow: warm light round the glass, dithered, fading out
+  const gx = X + w / 2 - 0.5; const gy = Y + rows.length * 0.6;
+  const R = big ? 9 : 7;
+  for (let y = Math.floor(gy - R); y <= gy + R; y += 1) for (let x = Math.floor(gx - R); x <= gx + R; x += 1) {
+    const d = Math.hypot(x - gx, (y - gy) * 1.1);
+    if (d > R) continue;
+    const near = d < R * 0.55;
+    const band = d < R * 0.4 ? 0 : d < R * 0.7 ? 1 : 2;
+    if (band === 0 ? (x + y) % 2 === 0 : band === 1 ? x % 2 === 0 && y % 2 === 0 : (x + 2 * y) % 6 === 0) after.push([x, y, band === 0 ? '#ffe066' : band === 1 ? '#ffec99' : '#fff3bf']);
+  }
+}
+
+/**
+ * A string of Christmas lights wound along a moose's antlers: along the top edge of each palm,
+ * draped over the skull between them, and down round the tip of the back palm. Every bulb sits
+ * on the palm, so nothing hangs in the air.
+ */
+function antlerLights(b, frame, after) {
+  const P = [...b.palms].sort((p, q) => p.edge[0][0] - q.edge[0][0]); if (!P.length) return;
+  const along = (p) => p.edge.map(([x, y]) => [x, y + 1]); // just inside the top edge, inner end first
+  let pts = [];
+  if (P.length === 2 && P[0].d < 0 && P[1].d > 0) {
+    // forward palm from its tip in to the skull, over the head, then out along the back palm
+    const a = along(P[0]).reverse(); const c = along(P[1]);
+    pts = [...a, ...c];
+  } else for (const p of P) pts.push(...along(p));
+  const last = P[P.length - 1];
+  const [tx, t0, t1] = last.tip;
+  for (let y = t0 + 2; y <= t1 - 1; y += 1) pts.push([tx - last.d, y]); // down round the tip
+  const off = { walk: 2, fly: 1, peek: 3, pose: 4 }[frame] || 0; // the colors move along from frame to frame: they twinkle
+  let d = 0; let n = 0; let prev = '';
+  const bulbs = [];
+  for (let i = 1; i < pts.length; i += 1) {
+    const [a, c] = [pts[i - 1], pts[i]];
+    line(a[0], a[1], c[0], c[1], (x, y) => {
+      if (prev === `${x},${y}`) return; prev = `${x},${y}`;
+      if (b.tag(x, y) !== 'bulb') b.set(x, y, '#2b5d2b', 'wire');
+      d += 1;
+      if (d % 4 === 2) { bulbs.push([x, y, BULBS[(n + off) % BULBS.length]]); n += 1; }
+    });
+  }
+  for (const [x, y, col] of bulbs) {
+    // a 2 x 2 bulb hanging from the wire onto the palm, lit at its top left
+    b.set(x, y + 1, mix(col, '#ffffff', 0.6), 'bulb'); b.set(x + 1, y + 1, col, 'bulb'); b.set(x, y + 2, col, 'bulb'); b.set(x + 1, y + 2, mix(col, '#7a3060', 0.2), 'bulb');
+    const glow = mix(col, '#ffffff', 0.5);
+    for (const [gx, gy] of [[x - 1, y + 1], [x + 2, y + 2], [x, y + 3], [x + 1, y], [x - 1, y + 3], [x + 2, y]]) after.push([gx, gy, glow]);
+  }
+}
+
+/** A sprig of holly on the head: two leaves and red berries. */
+function holly(b, hd) {
+  const rows = ['l.....l', 'Gl...lG', '.GGbGG.', '..bBb..'];
+  const X = Math.round(hd.x + (hd.pose ? -3 : hd.r * 0.15 - 2)); const Y = Math.round(hd.y - hd.ry - 3);
+  spr(b, X, Y, rows, { l: '#69db7c', G: '#2f9e44', b: '#c92a2a', B: '#ff8787' }, { l: 'holly', G: 'holly', b: 'berry', B: 'berry' });
+}
+
+/** A candy-cane bill: red and white stripes, slanting. */
+function candyBill(b) {
+  const marks = [];
+  b.each((x, y) => { if (b.tag(x, y) === 'beak') marks.push([x, y]); });
+  for (const [x, y] of marks) {
+    const red = ((x + y) >> 1) & 1; const top = b.tag(x, y - 1) !== 'beak' && b.tag(x, y - 1) !== 'cane';
+    b.set(x, y, red ? (top ? '#ff6b6b' : '#e03131') : (top ? '#ffffff' : '#eef1f6'), 'cane');
+  }
+}
+
+/** Gingerbread: white icing piped along the back, icing cuffs, gumdrop buttons and an icing smile. */
+function ginger(b, look, frame, box) {
+  const B = b.body; const hd = b.hd;
+  const ICE = '#ffffff';
+  if (B && !B.upright) {
+    const gums = [['#ff6b6b', '#ffc9c9'], ['#51cf66', '#d3f9d8'], ['#fcc419', '#fff3bf']];
+    gums.forEach(([c, l], k) => { const gx = Math.round(B.x - B.rx * 0.45 + k * B.rx * 0.42); const gy = Math.round(B.y + B.ry * 0.05); spr(b, gx, gy, ['.l.', 'ccc'], { l, c }, 'gum'); });
+  } else if (B) {
+    // standing up to face you, arms out, like a gingerbread man: icing cuffs, buttons down the front
+    for (const s of [-1, 1]) {
+      const ax = B.x + s * B.rx * 1.75; const ay = B.y - B.ry * 0.5;
+      thick(b, Math.round(B.x + s * B.rx * 0.6), Math.round(B.y - B.ry * 0.28), Math.round(ax), Math.round(ay), 3, 'fur');
+      for (let k = -1; k <= 1; k += 1) b.set(Math.round(ax - s * 2) + (k === 0 ? s : 0), Math.round(ay) + k, ICE, 'icing');
+      const lx = B.x + s * B.rx * 0.5;
+      thick(b, Math.round(lx), Math.round(B.y + B.ry * 0.6), Math.round(lx + s * B.rx * 0.25), box.feet - 1, 3, 'fur');
+    }
+    const gums = [['#ff6b6b', '#ffc9c9'], ['#51cf66', '#d3f9d8'], ['#fcc419', '#fff3bf']];
+    gums.forEach(([c, l], k) => spr(b, Math.round(B.x - 2), Math.round(B.y - B.ry * 0.42 + k * B.ry * 0.36), ['.l.', 'ccc'], { l, c }, 'gum'));
+    // icing scallops round the tummy's edge
+    for (let a = 0.25; a < Math.PI - 0.25; a += 0.22) b.set(Math.round(B.x + Math.cos(a) * B.rx * 0.78), Math.round(B.y + Math.sin(a) * B.ry * 0.82), ICE, 'icing');
+  }
+  // piped icing all the way round, one pixel in from the edge, like on a gingerbread cookie (it
+  // reads even small and fast on the train): every fur pixel that is not on the edge but touches one
+  const filled = (x, y) => Boolean(b.get(x, y));
+  const fur = (x, y) => b.tag(x, y) === 'fur' && filled(x, y);
+  const onEdge = (x, y) => filled(x, y) && (!filled(x - 1, y) || !filled(x + 1, y) || !filled(x, y - 1) || !filled(x, y + 1));
+  const [eyeX, eyeY] = box.eye || [-99, -99];
+  const pipe = [];
+  b.each((x, y) => {
+    if (!fur(x, y) || onEdge(x, y)) return;
+    if (Math.abs(x - eyeX) <= 2 && Math.abs(y - eyeY) <= 1) return; // not across the eye
+    let near = false;
+    for (let dy = -1; dy <= 1 && !near; dy += 1) for (let dx = -1; dx <= 1; dx += 1) if ((dx || dy) && fur(x + dx, y + dy) && onEdge(x + dx, y + dy)) { near = true; break; }
+    if (near) pipe.push([x, y]);
+  });
+  for (const [x, y] of pipe) b.set(x, y, ICE, 'icing');
+  // icing cuffs round the feet
+  const fy = box.feet - 2; const cuffs = [];
+  b.each((x, y) => { if (y === fy && b.tag(x, y) === 'dark') cuffs.push(x); });
+  for (const x of cuffs) b.set(x, fy, ICE, 'icing');
+  if (!hd) return;
+  // an icing smile (and an icing eyebrow) on the face
+  if (hd.pose) {
+    const y = Math.round(hd.y + hd.r * 0.68);
+    for (const [dx, dy] of [[-2, 0], [-1, 1], [0, 1], [1, 1], [2, 0]]) b.set(Math.round(hd.x) + dx, y + dy, ICE, 'icing');
+    for (const s of [-1, 1]) b.set(Math.round(hd.x + s * hd.r * 0.62), Math.round(hd.y + hd.r * 0.35), '#ffa8c5', 'icing');
+  } else {
+    const y = Math.round(hd.y + hd.r * 0.6);
+    for (const [dx, dy] of [[-1, 0], [0, 1], [1, 1]]) b.set(Math.round(hd.x - hd.r * 0.7) + dx, y + dy, ICE, 'icing');
+    b.set(Math.round(hd.x + hd.r * 0.05), Math.round(hd.y + hd.r * 0.3), '#ffa8c5', 'icing');
+  }
+}
+
+/** A porcupine's coat of quills: a dark cape over the back, spiky round the edge with pale tips, flowing back. */
+function quillCoat(b, look, B, frame) {
+  const tip = look.quillTip || '#f1e3c8'; const mid = look.quillMid || '#8a7462';
+  const cx = B.x + (B.upright ? B.rx * 0.4 : B.peek ? 0 : B.rx * 0.1); const cy = B.y - (B.upright ? B.ry * 0.05 : B.peek ? 0 : B.ry * 0.32);
+  const rx = B.rx * (B.upright || B.peek ? 0.9 : 1.0); const ry = B.ry * (B.upright || B.peek ? 1.0 : 1.08);
+  ell(b, cx, cy, rx, ry, 'dark');
+  const [a0, a1, sw] = B.peek ? [Math.PI * 0.9, Math.PI * 2.1, 0] : B.upright ? [Math.PI * 1.45, Math.PI * 2.45, 0.5] : [Math.PI * 1.05, Math.PI * 2.2, 0.62];
+  const n = Math.round(((a1 - a0) * (rx + ry)) / 2 / 1.6);
+  for (let i = 0; i <= n; i += 1) {
+    const phi = a0 + ((a1 - a0) * i) / n + (frame === 'walk' ? 0.04 : 0);
+    const c = Math.cos(phi); const s = Math.sin(phi);
+    let nx = c / rx; let ny = s / ry; const m = Math.hypot(nx, ny); nx /= m; ny /= m;
+    const dx = nx * Math.cos(sw) - ny * Math.sin(sw); const dy = nx * Math.sin(sw) + ny * Math.cos(sw);
+    const f = i / n; const len = (i % 2 ? 2.5 : 4) * (B.peek ? 0.55 + 0.6 * Math.sin(Math.PI * f) : 0.6 + 0.6 * Math.sin(Math.PI * Math.min(1, 0.15 + f)));
+    const x0 = cx + c * (rx - 1.5); const y0 = cy + s * (ry - 1.5);
+    line(x0, y0, x0 + dx * (len + 1.5), y0 + dy * (len + 1.5), (x, y, t) => b.set(x, y, t > 0.7 ? tip : 'dark', t > 0.7 ? 'quill' : 'dark'));
+  }
+  // streaks of lighter quills on the cape, flowing back
+  for (let k = 0; k < 9; k += 1) {
+    const u = -0.7 + (k % 5) * 0.34 + (k > 4 ? 0.17 : 0); const v = k > 4 ? -0.15 : -0.55;
+    const x0 = cx + u * rx; const y0 = cy + v * ry * Math.sqrt(Math.max(0, 1 - u * u));
+    if (b.tag(Math.round(x0), Math.round(y0)) !== 'dark') continue;
+    line(x0, y0, x0 + 3.2, y0 + 1.4 + u, (x, y) => { if (b.tag(x, y) === 'dark') b.set(x, y, mid, 'quill2'); });
+  }
+}
+
+/**
+ * A garland of popcorn and cranberries draped over the quills in swags: 2 x 2 beads, white
+ * popcorn and red cranberries (every third), each ringed in dark so they read as beads even small.
+ */
+function garland(b, look, frame) {
+  const B = b.body; const L = look.len;
+  const POP = ['#ffffff', '#ffffff', '#fff4d6', '#e9d6a8']; const CRAN = ['#ff8787', '#e03131', '#e03131', '#a61e1e']; // top left, top right, bottom left, bottom right
+  const RING = '#24170f';
+  const swags = B.upright ? 1 : 2;
+  const xa = B.upright ? B.x - B.rx * 0.2 : B.peek ? B.x - B.rx * 0.82 : B.x - B.rx * 0.6;
+  const xb = B.upright ? B.x + B.rx * 1.3 : B.peek ? B.x + B.rx * 0.82 : B.x + B.rx * 0.85;
+  const beads = [];
+  let i = 0;
+  if (B.peek) { // peeking out: the garland wound round its crown of quills, over the head
+    const rx = B.rx * 0.72; const ry = B.ry * 0.8; const n = Math.max(3, Math.round((Math.PI * 0.8 * (rx + ry)) / 2 / 3));
+    for (let k = 0; k <= n; k += 1) { const a = Math.PI * (1.1 + (0.8 * k) / n); beads.push([Math.round(B.x + Math.cos(a) * rx - 0.5), Math.round(B.y + Math.sin(a) * ry - 0.5), k % 3 === 1]); }
+  } else for (let x = Math.round(xa); x <= xb - 1; x += 3) {
+    const u = (x - xa) / (xb - xa);
+    const k = (u * swags) % 1;
+    const top = B.upright ? B.y - B.ry * 0.55 + u * B.ry * 0.5
+      : B.peek ? B.y - B.ry * 0.62 * Math.sqrt(Math.max(0, 1 - ((x - B.x) / (B.rx * 0.95)) ** 2))
+        : B.y - B.ry * Math.sqrt(Math.max(0, 1 - ((x - B.x) / (B.rx * 1.05)) ** 2)) - L * 0.07;
+    const y = Math.round(top + Math.sin(k * Math.PI) * L * 0.11 + (frame === 'walk' && k > 0.5 ? 1 : 0));
+    beads.push([x, y, i % 3 === 2]);
+    i += 1;
+  }
+  const mine = new Set(beads.flatMap(([x, y]) => [`${x},${y}`, `${x + 1},${y}`, `${x},${y + 1}`, `${x + 1},${y + 1}`]));
+  // the dark ring round each bead, over the coat (where a bead sticks out, the outline does it)
+  for (const [x, y] of beads) for (let dy = -1; dy <= 2; dy += 1) for (let dx = -1; dx <= 2; dx += 1) {
+    if (mine.has(`${x + dx},${y + dy}`) || !b.get(x + dx, y + dy)) continue;
+    b.set(x + dx, y + dy, RING, 'string');
+  }
+  for (const [x, y, cran] of beads) {
+    const c = cran ? CRAN : POP; const t = cran ? 'cran' : 'pop';
+    b.set(x, y, c[0], t); b.set(x + 1, y, c[1], t); b.set(x, y + 1, c[2], t); b.set(x + 1, y + 1, c[3], t);
+  }
+}
+
+/** Patches of a second color over the shoulder and hip (the Christmas iguana's green on red). */
+function patches(b, look) {
+  const B = b.body; const c = ramp(look.accent);
+  for (const [fx, fy, w, h] of [[-0.55, -0.2, 4, 2], [-0.4, 0.4, 3, 2], [0.35, -0.1, 4, 2], [0.62, 0.5, 2, 1]]) {
+    const x0 = Math.round(B.x + fx * B.rx); const y0 = Math.round(B.y + fy * B.ry);
+    for (let j = 0; j < h; j += 1) for (let i = 0; i < w - (j && i === 0 ? 1 : 0); i += 1) if (b.tag(x0 + i + j, y0 + j) === 'fur') b.set(x0 + i + j, y0 + j, j ? c[2] : c[3], 'patch');
+  }
+}
+
+/** A salty sneeze (marine iguanas sneeze out the salt from the sea water). */
+function sneeze(hd, after) {
+  const rows = ['.w..w..', 'w.wwb.w', '.wwbw..', 'w.bw.w.', '..w....'];
+  const X = Math.round(hd.x - hd.r * 1.15) - rows[0].length; const Y = Math.round(hd.y - 3);
+  rows.forEach((r, j) => { for (let i = 0; i < r.length; i += 1) if (r[i] !== '.') after.push([X + i, Y + j, r[i] === 'w' ? '#ffffff' : '#d0ebff']); });
+}
+
+/** A red collar with a golden jingle bell. */
+function bellCollar(b, look) {
+  const n = b.neck; let low = null; let last = null;
+  line(n.x0, n.y0, n.x1, n.y1, (x, y, t) => {
+    if (t < 0.5 || t > 0.66 || last === y) return; last = y;
+    const a = x - Math.floor(n.w / 2);
+    for (let i = 0; i < n.w; i += 1) b.set(a + i, y, i === 0 ? RED[4] : i === n.w - 1 ? RED[2] : RED[3], 'collar');
+    if (!low || y >= low[1]) low = [a + Math.floor(n.w / 2) - 1, y];
+  });
+  if (!low) return;
+  const big = n.w >= 7;
+  spr(b, low[0] - (big ? 1 : 0), low[1] + 1, big ? ['.lm.', 'lmmd', 'mmdd', '.kk.'] : ['lm.', 'mmd', '.k.'], { l: GOLD[5], m: GOLD[3], d: GOLD[2], k: GOLD[0] }, 'bell');
+}
+
+/** Stardust streaming out behind a flying reindeer. */
+function stardust(b, look, frame, after) {
+  const B = b.body; const L = look.len;
+  const x0 = B.x + B.rx * 0.7; const y0 = B.y - B.ry * 0.1; const span = L * 1.15; const ph = frame === 'walk' ? 1 : 0;
+  for (let x = Math.round(x0); x < x0 + span; x += 1) {
+    const u = (x - x0) / span;
+    const yc = y0 - u * L * 0.18 + Math.sin(u * 6 + ph) * 1.2;
+    const spread = 1 + u * L * 0.1;
+    for (let y = Math.floor(yc - spread); y <= yc + spread; y += 1) {
+      const h = hash(x, y, ph + 7);
+      const core = Math.abs(y - yc) < 0.8 + u;
+      if (h < (core ? 0.75 : 0.32) * (1 - u * 0.85)) after.push([x, y, core && h < 0.3 ? '#ffd43b' : h < 0.12 ? '#ffffff' : '#ffe8a3']);
+    }
+  }
+  // a few twinkles in the trail
+  for (let k = 0; k < 3; k += 1) {
+    const sx = Math.round(x0 + span * (0.25 + k * 0.27)); const sy = Math.round(y0 - (0.25 + k * 0.27) * L * 0.18 + (k % 2 ? -4 : 4) + ph);
+    for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) after.push([sx + dx, sy + dy, dx || dy ? '#fff3bf' : '#ffffff']);
+  }
+}
+
+/** Standing still, the stardust it brought settles round it: a glittering drift at its hooves and a few twinkles. */
+function stardustSettling(b, look, frame, box, after) {
+  const L = look.len; const feet = box.feet ?? 0;
+  let x0 = Infinity; let x1 = -Infinity;
+  b.each((x, y) => { if (b.get(x, y) && y >= feet - 1) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); } });
+  if (!Number.isFinite(x0)) return;
+  // glitter on the ground round the hooves
+  for (let x = x0 - 4; x <= x1 + 6; x += 1) for (let y = feet - 1; y <= feet + 1; y += 1) {
+    const h = hash(x, y, 31);
+    if (h < (y === feet + 1 ? 0.3 : 0.18)) after.push([x, y, h < 0.07 ? '#ffffff' : h < 0.17 ? '#ffd43b' : '#ffe8a3']);
+  }
+  // specks still drifting down, and twinkles
+  const top = box.eye ? box.eye[1] : feet - L * 0.8;
+  for (let k = 0; k < 14; k += 1) {
+    const x = Math.round(x0 - 3 + hash(k, 1, 33) * (x1 - x0 + 8)); const y = Math.round(top + hash(k, 2, 33) * (feet - top));
+    if (!b.get(x, y)) after.push([x, y, k % 3 ? '#ffe8a3' : '#ffffff']);
+  }
+  const ph = frame === 'pose' ? 1 : 0;
+  for (let k = 0; k < 2; k += 1) {
+    const sx = Math.round(k ? x1 + 3 : x0 - 2); const sy = Math.round(feet - L * (0.25 + 0.2 * ((k + ph) % 2)));
+    for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) if (!b.get(sx + dx, sy + dy)) after.push([sx + dx, sy + dy, dx || dy ? '#fff3bf' : '#ffffff']);
+  }
+}
+
+/** Little star glints at the tips of golden antlers. */
+function twinkleTips(b, look, frame, after) {
+  const tips = [];
+  b.each((x, y) => { if (b.tag(x, y) === 'horn' && !b.get(x, y - 1) && !b.get(x - 1, y) && !b.get(x + 1, y)) tips.push([x, y]); });
+  tips.sort((p, q) => p[1] - q[1]);
+  tips.slice(0, frame === 'pose' ? 3 : 2).forEach(([x, y], i) => {
+    if ((i + ({ walk: 1, fly: 1 }[frame] || 0)) % 2 && frame !== 'pose') return;
+    for (const [dx, dy] of [[0, -1], [-1, -2], [1, -2], [0, -3]]) after.push([x + dx, y + dy, dy === -2 && dx === 0 ? '#ffffff' : '#fff3bf']);
+    after.push([x, y - 2, '#ffffff']);
+  });
+}
+
+/** A Christmas bauble the hermit crab wears for a shell: shiny glass, a gold band, a gold cap. */
+function bauble(b, look, cx, cy, R, frame) {
+  const rp = ramp(look.bauble || '#e03131', 3, 2);
+  b.fill(Math.floor(cx - R - 1), Math.floor(cy - R - 1), Math.ceil(R * 2 + 3), Math.ceil(R * 2 + 3), (x, y) => {
+    if (!inEll(x, y, cx, cy, R, R)) return null;
+    const dx = (x + 0.5 - cx) / R; const dy = (y + 0.5 - cy) / R; const dz = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
+    const lit = -dx * 0.4 - dy * 0.55 + dz * 0.7; // light from the top left
+    if (dz < 0.45 && dx > 0.05 && dy > 0.2) return rp[2]; // the rim in shadow, then a little light bounced up from the sand
+    return lit > 0.92 ? rp[4] : lit > 0.45 ? rp[3] : lit > 0.05 ? rp[2] : rp[1];
+  }, 'glass');
+  // a soft reflected light along the lower right rim
+  for (let a = 0.35; a < 1.1; a += 0.1) b.set(Math.round(cx + Math.cos(a) * (R - 1.6)), Math.round(cy + Math.sin(a) * (R - 1.6)), rp[3], 'glass');
+  // the gold band round the middle, curving with the glass
+  for (let x = Math.ceil(cx - R); x <= cx + R; x += 1) {
+    const u = (x + 0.5 - cx) / R; if (Math.abs(u) > 0.96) continue;
+    const y = Math.round(cy + 0.3 + (1 - u * u) * R * 0.14);
+    if (b.tag(x, y) !== 'glass') continue;
+    b.set(x, y, u < -0.2 ? GOLD[4] : u > 0.55 ? GOLD[2] : GOLD[3], 'gold');
+    if (b.tag(x, y + 1) === 'glass') b.set(x, y + 1, u > 0.4 ? GOLD[1] : GOLD[2], 'gold');
+  }
+  // a window glint
+  const gx = Math.round(cx - R * 0.45); const gy = Math.round(cy - R * 0.5);
+  b.set(gx, gy, '#ffffff', 'glass'); b.set(gx + 1, gy, '#ffffff', 'glass'); b.set(gx, gy + 1, '#ffffff', 'glass'); b.set(gx + 2, gy - 1, rp[5], 'glass'); b.set(gx - 1, gy + 2, rp[5], 'glass');
+  // the gold cap and its hanging loop, tipped back
+  const capX = Math.round(cx + R * 0.25); const capY = Math.round(cy - R - 1);
+  spr(b, capX - 2, capY - 3, ['.kk..', 'k..k.', 'lmmmd', 'lmmdd'], { k: GOLD[2], l: GOLD[4], m: GOLD[3], d: GOLD[1] }, 'gold');
+}
+
+/** Christmas tree worms: two spiral crowns, like little Christmas trees, out of a tube in the coral. */
+PLANS.treeworm = function treeworm(b, look, frame) {
+  const L = look.len;
+  const bx = L * 0.6; const base = Math.round(L * 1.0);
+  const out = frame === 'peek' ? 0.45 : 1;
+  const twist = { walk: 1, fly: 2 }[frame] || 0;
+  // the lump of brain coral it lives in
+  const R = L * 0.4; const ch = L * 0.2;
+  for (let x = -Math.ceil(R); x <= Math.ceil(R); x += 1) {
+    const f = Math.sqrt(Math.max(0, 1 - ((x + 0.5) / R) ** 2)); const h = Math.round(ch * f);
+    for (let y = -h; y <= 1; y += 1) b.set(Math.round(bx + x), base + 2 + y, 'shell', 'shell');
+  }
+  for (const [gy, ph] of [[0.4, 0], [0.75, 2]]) for (let x = -Math.round(R) + 2; x < R - 2; x += 1) {
+    const X = Math.round(bx + x); const Y = base + 2 - Math.round(ch * (1 - gy)) + Math.round(Math.sin(x * 0.85 + ph) * 1.1);
+    if (b.tag(X, Y) === 'shell' && b.tag(X, Y - 1) === 'shell') px(b, X, Y, 'dark');
+  }
+  // the tube, and the worm's face peeking out of it
+  b.rect(Math.round(bx - L * 0.14), base - 3, Math.round(L * 0.28) + 1, 4, 'belly', 'belly');
+  // the two crowns: spiral cones in tiers
+  const H = Math.round(L * 0.6 * out); const W = L * 0.32;
+  const cols = [look.fur, look.accent || look.fur];
+  const tips = [];
+  for (const [i, s] of [-1, 1].entries()) {
+    const cx = bx + s * L * 0.15; const top = base - 4 - H; const rp = ramp(cols[i], 3, 2);
+    for (let k = 0; k <= H; k += 1) {
+      const t = k / H; const tier = k % 3;
+      const half = 0.5 + t * (W / 2 - 0.5) + (tier === 2 && k > 2 ? 0.9 : 0);
+      const a = Math.round(cx - half); const z = Math.round(cx + half);
+      for (let x = a; x <= z; x += 1) {
+        // tiers like a little fir tree (light on top, dark under each), and a pale stripe winding up round them: the spiral
+        const wind = ((x - a) + k + twist * 2 + i * 2) % 6 === 0;
+        const col = wind ? rp[5] : tier === 2 ? (x >= z - 1 ? rp[1] : rp[2]) : tier === 0 ? (x <= a + 1 ? rp[5] : rp[4]) : x >= z ? rp[2] : rp[3];
+        b.set(x, top + k, col, 'plume');
+      }
+    }
+    tips.push([Math.round(cx), top - 1]);
+  }
+  // little gold stars on top of the crowns
+  for (const [tx, ty] of tips) spr(b, tx - 1, ty - 2, ['.l.', 'lmd', '.d.'], { l: GOLD[5], m: GOLD[3], d: GOLD[2] }, 'star');
+  // the worm itself, peeking out of the tube under its crowns
+  const pose = frame === 'pose';
+  const ex = Math.round(bx); const ey = base - 1;
+  const look2 = frame === 'walk' ? 1 : frame === 'fly' ? -1 : 0; // it looks about
+  for (const d of [-2, 1]) { b.set(ex + d + look2, ey, INK, 'eye'); b.set(ex + d + look2, ey - 1, INK, 'eye'); if (pose) b.set(ex + d, ey - 1, '#ffffff', 'shine'); }
+  if (pose) { b.set(ex - 1, ey + 1, '#e8590c', 'mouth'); b.set(ex, ey + 1, '#e8590c', 'mouth'); }
+  return { feet: base + 3, eye: [ex, ey] };
+};
+
+/** A yeti: upright and shaggy, long arms, big flat feet, a blue face. Waves when it poses. */
+PLANS.yeti = function yeti(b, look, frame) {
+  const L = look.len;
+  const bx = L * 0.8; const by = L * 1.05;
+  const bw = L * 0.27; const bh = L * 0.31;
+  const feet = Math.round(by + bh + L * 0.13);
+  const hr = L * 0.21;
+  const pose = frame === 'pose'; const peek = frame === 'peek'; const front = pose || peek;
+  const hx = bx - (front ? 0 : L * 0.06); const hy = by - bh - hr * 0.45;
+  const face = look.face || '#8fa2e6'; const fr = ramp(face, 3, 2);
+  const aw = Math.max(3, Math.round(L * 0.1));
+  const mitt = (x, y) => ell(b, x, y, L * 0.065, L * 0.06, 'mitt', fr[2]);
+  if (!peek) {
+    const sw = frame === 'walk' ? 2 : 0;
+    for (const [i, s] of [[0, -1], [1, 1]]) {
+      const lx = bx + s * bw * 0.45 + (i ? -sw : sw);
+      thick(b, Math.round(lx), Math.round(by + bh * 0.4), Math.round(lx), feet - 1, Math.max(3, Math.round(L * 0.13)), i && !front ? 'dark' : 'fur');
+      ell(b, lx - (front ? 0 : L * 0.05), feet - 1, L * 0.11, L * 0.05, 'sole', fr[3]);
+    }
+    // arms behind the body (side on, the far arm; posing, the waving arm goes up)
+    const arm = (sx, sy, ex, ey, tag) => {
+      if (tag === 'fur') thick(b, Math.round(sx) + 1, Math.round(sy) + 1, Math.round(ex) + 1, Math.round(ey) + 1, aw, 'dark'); // a shadow down its back edge, so a white arm shows on a white body
+      thick(b, Math.round(sx), Math.round(sy), Math.round(ex), Math.round(ey), aw, tag); mitt(ex, ey + 1);
+    };
+    const up = frame === 'fly';
+    if (front) {
+      arm(bx - bw * 0.75, by - bh * 0.45, bx - bw * 1.3, by - bh * (pose ? 1.45 : 0.2), 'fur');
+      arm(bx + bw * 0.75, by - bh * 0.45, bx + bw * 1.15, by + bh * 0.45, 'fur');
+    } else if (up) {
+      arm(bx + bw * 0.2, by - bh * 0.5, bx + bw * 0.7, by - bh * 1.6, 'dark');
+    } else arm(bx + bw * 0.25, by - bh * 0.5, bx + bw * 0.6 - sw, by + bh * 0.45, 'dark');
+    ell(b, bx, by, bw, bh, 'fur');
+    // shaggy: tufts hanging off the bottom edge and the sides
+    for (let a = 0.2; a < Math.PI - 0.2; a += 0.3) { const x = Math.round(bx + Math.cos(a) * bw * 0.95); const y = Math.round(by + Math.sin(a) * bh); px(b, x, y + 1, 'fur'); if (Math.round(a * 10) % 2) px(b, x, y + 2, 'fur'); }
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k += 1) px(b, Math.round(bx + s * (bw + 1)), Math.round(by - bh * 0.2 + k * 3), 'fur');
+    if (!front) {
+      if (up) arm(bx - bw * 0.3, by - bh * 0.5, bx - bw * 0.75, by - bh * 1.65, 'fur');
+      else arm(bx - bw * 0.3, by - bh * 0.45, bx - bw * 0.8 + sw, by + bh * 0.4, 'fur');
+    }
+    if (look.belly) ell(b, bx - (front ? 0 : bw * 0.2), by + bh * 0.15, bw * 0.55, bh * 0.55, 'belly');
+  } else {
+    ell(b, bx, hy + hr * 1.7, bw * 0.95, hr * 1.0, 'fur'); // shoulders
+  }
+  // the head, with a shaggy fringe
+  ell(b, hx, hy, hr * 1.05, hr * 0.95, 'fur');
+  for (const s of [-1, 1]) { px(b, Math.round(hx + s * hr * 1.1), Math.round(hy + hr * 0.3), 'fur'); px(b, Math.round(hx + s * hr * 1.05), Math.round(hy + hr * 0.6), 'fur'); }
+  let eye;
+  if (front) {
+    ell(b, hx, hy + hr * 0.18, hr * 0.72, hr * 0.58, 'face', fr[3]);
+    for (let x = -1; x <= 1; x += 1) b.set(Math.round(hx + x), Math.round(hy - hr * 0.42), 'fur', 'fur'); // a fringe of fur over the face
+    for (const s of [-1, 1]) { const ex = Math.round(hx + s * hr * 0.36) - (s < 0 ? 1 : 0); b.set(ex, Math.round(hy), INK, 'eye'); b.set(ex, Math.round(hy) - 1, INK, 'eye'); b.set(ex, Math.round(hy) - 1, '#ffffff', 'shine'); }
+    b.set(Math.round(hx) - 1, Math.round(hy + hr * 0.2), fr[0], 'nose'); b.set(Math.round(hx), Math.round(hy + hr * 0.2), fr[0], 'nose');
+    const my = Math.round(hy + hr * 0.5);
+    for (const [dx, dy] of [[-2, 0], [-1, 1], [0, 1], [1, 1], [2, 0]]) b.set(Math.round(hx) + dx - 1 + 1, my + dy, INK, 'mouth');
+    b.set(Math.round(hx) - 1, my + 2, '#ffffff', 'tooth'); b.set(Math.round(hx) + 1, my + 2, '#ffffff', 'tooth');
+    eye = [Math.round(hx), Math.round(hy)];
+  } else {
+    ell(b, hx - hr * 0.5, hy + hr * 0.2, hr * 0.62, hr * 0.55, 'face', fr[3]);
+    const ex = Math.round(hx - hr * 0.62); const ey = Math.round(hy);
+    b.set(ex, ey, INK, 'eye'); b.set(ex, ey - 1, INK, 'eye'); b.set(ex, ey - 1, '#ffffff', 'shine');
+    b.set(ex - 1, ey - 2, 'fur', 'fur'); b.set(ex, ey - 2, 'fur', 'fur'); b.set(ex + 1, ey - 2, 'fur', 'fur'); // shaggy brow
+    b.set(Math.round(hx - hr * 1.08), Math.round(hy + hr * 0.15), fr[0], 'nose');
+    b.set(Math.round(hx - hr * 0.95), Math.round(hy + hr * 0.55), INK, 'mouth'); b.set(Math.round(hx - hr * 0.75), Math.round(hy + hr * 0.6), INK, 'mouth');
+    eye = [ex, ey];
+  }
+  b.hd = { x: hx, y: hy, r: hr, ry: hr * 0.95, pose: front };
+  b.neck = { x0: hx + (front ? 0 : hr * 0.15), y0: hy + hr * 1.35, x1: hx, y1: hy + hr * 0.55, w: Math.round(hr * 1.8), tm: 0.55, hang: front, endLen: peek ? 2 : null };
+  b.body = peek ? null : { x: bx, y: by, rx: bw, ry: bh };
+  return { feet: peek ? Math.round(hy + hr * 2.6) : feet, eye };
 };
 
 /** Every body plan, for tests and the art preview. */

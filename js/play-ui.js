@@ -6,6 +6,7 @@ import {
   logGame, lendLeft, logLend, gamesPerDay, GAMES_PER_DAY, OLD_GAMES_PER_DAY,
 } from './logic.js';
 import { sounds } from './fx.js';
+import { xmasGames } from './advent.js';
 import { itemById, unlockedMoves, bestGear } from './items.js';
 import { planVisits } from './visits.js';
 import { gameFor, GAME_NAMES } from './play.js';
@@ -19,6 +20,7 @@ import { shownSeason } from './seasons.js';
 import { recordPhoto, keepPhoto, addClue, spendClues } from './album.js';
 import { critterById } from './critters.js';
 import { recordFan } from './fans.js';
+import { playXmas, photoXmas } from './xmas-ui.js';
 import {
   state, today, esc, save, render, openModal, currentKid, mover, exerciseInfo, kidTheme,
 } from './ctx.js';
@@ -43,7 +45,8 @@ export const moveIds = (who) => unlockedMoves(who.owned || [], who.exBest || 0).
 const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
 // Chest games keep until the end of the next day (carriedGames).
 // Saturday also brings free games, which are not tied to the chest.
-const chestGames = (kid, day) => (entryFor(state, kid.id, day)?.chest?.games || 0) + freeGamesOn(day);
+// December's extra games (Santa's present, an advent door: advent.js) count like chest games.
+const chestGames = (kid, day) => (entryFor(state, kid.id, day)?.chest?.games || 0) + freeGamesOn(day) + xmasGames(kid, day);
 // A log with no cap is from before the limit dropped from 8 to 4, so yesterday's daily games were 8 (plus exercise).
 const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks) + OLD_GAMES_PER_DAY - GAMES_PER_DAY);
 export const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));
@@ -198,6 +201,7 @@ export function playWith(kid, v, kind) {
     },
     onCatch: (c) => {
       const kid = currentKid(kid0);
+      playXmas(kid.id, 'fish', c.map); // December: 1 catch in 8 has an ornament snagged on it
       const sp = catchSpecies(c.map, c.kind);
       const got = sp && recordCatch(kid.fishRecords, { species: sp.id, size: c.size, lb: c.lb, points: c.points, date: today() });
       if (!got?.isNew) return null;
@@ -220,6 +224,7 @@ export function playWith(kid, v, kind) {
       const map = kidTheme(kid);
       kid.digDry = { ...(kid.digDry || {}), [map]: nextDry(kid.digDry?.[map] || 0, Boolean(r.key)) };
       save();
+      playXmas(kid.id, 'dig', map); // December: 1 dig in 6 turns up an ornament
     },
     // the treasure hill: every find goes in the finds book (in the house)
     onFind: (f) => {
@@ -239,6 +244,7 @@ export function playWith(kid, v, kind) {
     // stays on this device; the game fills in shot.pic when it draws next)
     onPhoto: (shot) => {
       const kid = currentKid(kid0);
+      photoXmas(kid.id, critterById(shot.critter), shot.quality); // December: a map's first perfect holiday critter photo
       const got = recordPhoto(kid.critterAlbum, shot, today());
       if (!got.isNew) return null;
       kid.critterAlbum = got.album;

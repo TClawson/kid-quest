@@ -40,6 +40,7 @@ import { weightFor, sizeClass, fmtWeight, CLASSES } from './fishfacts.js';
 import { fishPic, baitArt, shade, mix } from './fishart.js';
 import { needle, drawMeter, addPop, ZONE_COLORS } from './meter.js';
 import { FISHING_EVENTS, EVENT, twistFor } from './mapplay.js';
+import { inDecember } from './seasons.js';
 
 export { fishPic };
 
@@ -115,7 +116,7 @@ const biteScale = (size) => 0.8 - 0.3 * size;
 /** Seconds a fish that saw another one spooked stays away from the bait. */
 export const WARY = 4;
 /** Points for a catch: each kind's base, up to 2.5x for the biggest; the map's special fish is worth the most. */
-export const POINTS = { bluegill: 10, smallmouth: 20, largemouth: 25, pike: 35, catfish: 35, special: 60 };
+export const POINTS = { bluegill: 10, smallmouth: 20, largemouth: 25, pike: 35, catfish: 35, special: 60, holiday: 60 };
 export const pointsFor = (kind, size) => Math.round((POINTS[kind] || 10) * (1 + 1.5 * size));
 /** Bigger fish are pickier: a bait has to be at least this good for them to look at it (size 0-1). */
 export const pickiness = (size) => 0.1 + 0.35 * size;
@@ -321,11 +322,37 @@ const SKINS = {
 };
 for (const [bg, skin] of Object.entries(SKINS)) Object.assign(SPOTS[bg], skin);
 
+// ---------- December fish ----------
+// One more fish in every lake, only in December (seasons.js inDecember): it swims like `as`,
+// likes the baits as `like` says and turns up about as often as the map's rare fish. The fish
+// book keeps it all year, marked December. Each is a pretend fish with a real cousin
+// (fishfacts.js), drawn with its own mark (fishart.js December fish).
+export const HOLIDAY_FISH = {
+  'bg-meadow': { id: 'globe', name: 'Snow-globe fish', as: 'largemouth', look: { back: '#8ccaf5', side: '#d6ecfc', belly: '#c92a2a', fin: '#a5d8ff', mark: 'globe', depth: 0.56, tail: 'fan' }, like: { worm: 0.8, jig: 0.5, spoon: 0.4 }, odds: 6 },
+  'bg-sunset': { id: 'cane', name: 'Candy-cane eel', as: 'catfish', look: { back: '#ffffff', side: '#f1f3f5', belly: '#dee2e6', fin: '#63e6be', mark: 'cane', shape: 'eel', depth: 0.16, lenK: 0.7 }, like: { worm: 0.9, jig: 0.4, spoon: 0.2 }, odds: 6 },
+  'bg-ocean': { id: 'present', name: 'Present boxfish', as: 'largemouth', look: { back: '#e03131', side: '#e03131', belly: '#c92a2a', fin: '#40c057', mark: 'present', shape: 'box', depth: 0.6 }, like: { worm: 0.8, jig: 0.6, spoon: 0.3 }, odds: 6 },
+  'bg-space': { id: 'lights', name: 'Fairy-light fish', as: 'pike', look: { back: '#303c8c', side: '#4659b0', belly: '#a3b4f0', fin: '#3f4fa6', mark: 'lights', depth: 0.22, snout: false, eye: '#fff3bf' }, like: { worm: 0.4, jig: 0.6, spoon: 0.9 }, odds: 6 },
+  'bg-castle': { id: 'jester', name: 'Jester pike', as: 'pike', look: { back: '#2f9e44', side: '#e03131', belly: '#fcc419', fin: '#e03131', mark: 'jester', depth: 0.18, snout: true }, like: { worm: 0.2, jig: 0.8, spoon: 0.9 }, odds: 6 },
+  'bg-volcano': { id: 'cocoa', name: 'Hot-cocoa carp', as: 'catfish', look: { back: '#4a2c17', side: '#7a4a28', belly: '#e9c8a0', fin: '#a0612f', mark: 'cocoa', depth: 0.36 }, like: { worm: 0.9, jig: 0.4, spoon: 0.2 }, odds: 6 },
+  'bg-rainforest': { id: 'poinsettia', name: 'Poinsettia piranha', as: 'largemouth', look: { back: '#1e6b30', side: '#40c057', belly: '#e03131', fin: '#e03131', mark: 'poinsettia', depth: 0.52, fangs: true, eye: '#ffe3e3' }, like: { worm: 0.7, jig: 0.8, spoon: 0.5 }, odds: 6 },
+  'bg-fjord': { id: 'aurora', name: 'Northern-lights char', as: 'largemouth', look: { back: '#1b2a4a', side: '#69db7c', belly: '#ff8787', fin: '#24365e', mark: 'aurora', depth: 0.3 }, like: { worm: 0.5, jig: 0.8, spoon: 0.8 }, odds: 6 },
+  'bg-rainbow': { id: 'mint', name: 'Peppermint puffer', as: 'largemouth', look: { back: '#f8f9fa', side: '#ffffff', belly: '#f1f3f5', fin: '#e03131', mark: 'mint', shape: 'puffer', depth: 0.7 }, like: { worm: 0.7, jig: 0.7, spoon: 0.7 }, odds: 6 },
+  'bg-galaxy': { id: 'tree', name: 'Christmas-tree angelfish', as: 'largemouth', look: { back: '#2f9e44', side: '#2f9e44', belly: '#2b8a3e', fin: '#2f9e44', mark: 'tree', shape: 'angel', depth: 0.6 }, like: { worm: 0.5, jig: 0.8, spoon: 0.7 }, odds: 6 },
+};
+for (const [bg, fish] of Object.entries(HOLIDAY_FISH)) SPOTS[bg].holiday = fish;
+// The cold lakes get a December look: snow on the banks and along the far shore, an ice rim at
+// the shore's edge, ice floes for lily pads, and snow falling (the warm, sea and pretend lakes don't).
+for (const bg of ['bg-meadow', 'bg-castle', 'bg-fjord']) SPOTS[bg].cold = true;
+
 export const spotFor = (bg) => SPOTS[bg] || SPOTS['bg-meadow'];
 
-/** A kind's name and look on this map (kind: a SPECIES id or 'special'). */
+/** A kind's name and look on this map (kind: a SPECIES id, 'special' or 'holiday'). */
 export function lookFor(map, kind) {
   const sp = spotFor(map);
+  if (kind === 'holiday') {
+    const hol = sp.holiday;
+    return { name: hol.name, look: { ...SPECIES[hol.as], mark: undefined, bar: undefined, eye: undefined, flap: false, spiny: false, mouth: undefined, snout: false, flat: false, ...hol.look } };
+  }
   if (kind === 'special') {
     const base = SPECIES[sp.special.as];
     return { name: sp.special.name, look: { ...base, mark: undefined, bar: undefined, flap: false, spiny: false, ...sp.special.look, snout: sp.special.look.snout ?? base.snout, flat: false } };
@@ -423,6 +450,10 @@ export class Fishing {
     this.spot = spotFor(opts.map);
     this.today = baitToday(opts.day || 'today');
     if (this.spot.special) for (const b of BAITS) this.today[b][this.spot.special.id] = this.spot.special.like[b];
+    // December: the lake's December fish swims here too
+    this.december = Boolean(this.spot.holiday) && inDecember(opts.day);
+    this.snowy = this.december && Boolean(this.spot.cold);
+    if (this.spot.holiday) for (const b of BAITS) this.today[b][this.spot.holiday.id] = this.spot.holiday.like[b];
     this.t = 0; this.pops = []; this.best = opts.best || 0;
     this.points = { kid: 0, vis: 0 }; this.newBest = false;
     this.holdAnywhere = true; this.locked = false;
@@ -659,6 +690,16 @@ export class Fishing {
     x.save(); x.scale(Z, Z); this.paintFar(x, sp.far, r); x.restore();
     const after = x.getImageData(0, 0, FW, FS); const a = after.data; const b0 = before.data;
     const isSky = (i, j) => i < 0 || i >= FW || j < 0 || j >= FS || (a[(j * FW + i) * 4] === b0[(j * FW + i) * 4] && a[(j * FW + i) * 4 + 1] === b0[(j * FW + i) * 4 + 1] && a[(j * FW + i) * 4 + 2] === b0[(j * FW + i) * 4 + 2]);
+    if (this.snowy) {
+      // December: snow lying on top of every tree, wall and roof along the far shore (in game pixels)
+      const snow = [];
+      for (let gx = 0; gx < W; gx += 1) for (let gy = 1; gy < S; gy += 1) {
+        if (isSky(gx * Z, gy * Z) || !isSky(gx * Z, (gy - 1) * Z)) continue;
+        snow.push([gx, gy, [255, 255, 255]]);
+        if (hashXY(gx, gy + 5) < 0.55 && gy + 1 < S && !isSky(gx * Z, (gy + 1) * Z)) snow.push([gx, gy + 1, [222, 233, 246]]);
+      }
+      for (const [gx, gy, col] of snow) for (let dj = 0; dj < Z; dj += 1) for (let di = 0; di < Z; di += 1) { const o = ((gy * Z + dj) * FW + gx * Z + di) * 4; a[o] = col[0]; a[o + 1] = col[1]; a[o + 2] = col[2]; }
+    }
     const out = new Uint8ClampedArray(a);
     for (let j = 0; j < FS; j += 1) for (let i = 0; i < FW; i += 1) {
       if (isSky(i, j)) continue;
@@ -704,13 +745,16 @@ export class Fishing {
         const k = j - top; const th = (BAYER[j % 4][i % 4] + 0.5) / 16;
         let col = k < 3 + th * 2 ? L[0] : k < 7 + th * 3 ? L[1] : L[2];
         if (k === 0) col = shade(L[0], 0.2);
+        if (this.snowy && k < 8 + th * 2) col = k < 2 ? '#ffffff' : k < 5 + th * 2 ? '#eef3fa' : '#d3deee'; // a blanket of snow
         if (k > 8) { const hsh = hashXY(i, j); if (hsh < 0.05) col = shade(L[2], -0.2); else if (hsh > 0.97) col = shade(L[2], 0.18); }
         P(col, i, j);
       }
-      // blades of grass along the top
+      // blades of grass along the top (in December, soft drifts of snow)
       const bh = Math.floor(hashXY(i, 7) * 4);
-      if (bh > 1) P(i % 3 ? L[0] : shade(L[0], 0.25), i, top - bh + 1, 1, bh - 1);
+      if (this.snowy) { const dh = Math.round(1.5 + 1.5 * Math.sin(i / (6 * Z) + 1)); if (dh > 0) P('#ffffff', i, top - dh, 1, dh); }
+      else if (bh > 1) P(i % 3 ? L[0] : shade(L[0], 0.25), i, top - bh + 1, 1, bh - 1);
     }
+    if (this.snowy) this.paintIce(x, r);
     for (let i = 0; i < 6 + W / 40; i += 1) {
       const sx = Math.floor(r() * (BX - 10)); const sy = top + 14 + Math.floor(r() * (FH - top - 24)); const sw = 4 + Math.floor(r() * 5); const sh = 3 + Math.floor(r() * 2);
       const stone = mix(L[2], '#adb5bd', 0.4);
@@ -719,6 +763,22 @@ export class Fishing {
     // logs on the bottom
     for (const g of this.logs) this.paintLog(x, g, sp);
     return c;
+  }
+
+  /** December on a cold lake: a rim of ice along the shore's edge, and a few floes out on the water. */
+  paintIce(x, r) {
+    const Z = this.Z; const FS = this.surface * Z; const BX = this.bankX * Z;
+    const P = (col, a, b, w = 1, h = 1) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+    const slab = (x0, len, thick, rough) => {
+      for (let i = 0; i < len; i += 1) {
+        const end = len - i; // ragged near its far end
+        const th = Math.max(Z, thick - (end < rough ? Math.round(hashXY(x0 + i, 3) * Z * 1.5) + (rough - end) : 0));
+        for (let j = 0; j < th; j += 1) P(j === 0 ? '#ffffff' : j === 1 ? '#e7f5ff' : j === th - 1 ? '#74b4e0' : (i + j) % 2 ? '#c5e3f8' : '#d6ecfb', x0 + i, FS - Z + j);
+      }
+      P('#ffffff', x0 + 2, FS - Z - 1, Math.max(2, Math.round(len * 0.4)), 1); // a bright lip of snow on top
+    };
+    slab(BX - Z, Math.round((20 + r() * 5) * Z), 4 * Z, 4 * Z); // the rim, frozen onto the bank
+    for (const f of [0.5, 0.74]) slab(Math.round((this.bankX + (this.W - this.bankX) * f + r() * 10) * Z), Math.round((5 + r() * 4) * Z), 2 * Z, 2 * Z);
   }
 
   paintFar(x, kind, r) {
@@ -891,7 +951,22 @@ export class Fishing {
     const sp = this.spot; const S = this.surface; const t = this.t; const Z = this.Z;
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
     const FS = S * Z;
-    if (sp.top === 'lily') {
+    if (this.snowy) {
+      // snow falling, drifting a little from side to side
+      for (let i = 0; i < 26; i += 1) {
+        const sp0 = 6 + (i % 5) * 2; const fall = ((t * sp0 + i * 37) % (S + 6)) - 4;
+        const fx = Math.round(((i * 53.7) % this.W + Math.sin(t * 0.8 + i) * 3) * Z); const fy = Math.round(fall * Z);
+        if (fy < 0 || fy >= FS - Z) continue;
+        if (i % 3) P('#ffffff', fx, fy, Z, Z); else P('#ffffff', fx, fy, 1, 1);
+      }
+    }
+    if (sp.top === 'lily' && this.snowy) {
+      // the lily pads are under the ice till spring: little ice floes bob instead
+      for (const lx of [0.42, 0.88]) {
+        const x = Math.round((this.W * lx + Math.sin(t * 0.4 + lx * 9)) * Z);
+        P('#74b4e0', x, FS, 11, 2); P('#d6ecfb', x, FS - 1, 11, 1); P('#ffffff', x + 1, FS - 2, 8, 1);
+      }
+    } else if (sp.top === 'lily') {
       for (const lx of [0.42, 0.63, 0.88]) {
         const x = Math.round((this.W * lx + Math.sin(t * 0.4 + lx * 9)) * Z);
         P(INK, x, FS - 2, 15, 4); P(INK, x - 1, FS - 1, 17, 2);
@@ -924,6 +999,7 @@ export class Fishing {
   pickKind() {
     const sp = this.spot; const odds = { ...sp.odds };
     if (sp.special) odds.special = sp.special.odds * (1 + RODS_RARE * (this.rodTier - 1)) * (this.eventOn ? EVENT.specialOdds : 1);
+    if (this.december) odds.holiday = sp.holiday.odds * (1 + RODS_RARE * (this.rodTier - 1));
     const total = Object.values(odds).reduce((a, b) => a + b, 0);
     let x = this.r() * total;
     for (const [k, v] of Object.entries(odds)) { x -= v; if (x <= 0) return k; }
@@ -954,19 +1030,24 @@ export class Fishing {
   /** The fish book's id for a kind on this lake (as fishbook.js speciesId; a map with no lake fishes at Forest Lake). */
   speciesKey(likeKey) { return `${(SPOTS[this.map] ? this.map : 'bg-meadow').replace(/^bg-/, '')}-${likeKey}`; }
 
+  /** The kind a fish swims, bites and fights like (the map's rare and December fish have their own `as`). */
+  asOf(kind) { return kind === 'special' ? this.spot.special.as : kind === 'holiday' ? this.spot.holiday.as : kind; }
+
+  /** The id its bait odds and fish book page go by: the kind, or the rare or December fish's own id. */
+  likeOf(kind) { return kind === 'special' ? this.spot.special.id : kind === 'holiday' ? this.spot.holiday.id : kind; }
+
   /** home: where it lives; farther out, bigger fish (sizePower). */
   makeFish(kind, x, y, move, home = x) {
-    const sp = this.spot;
-    const base = kind === 'special' ? SPECIES[sp.special.as] : SPECIES[kind];
+    const base = SPECIES[this.asOf(kind)];
     const { look, name } = lookFor(this.map, kind);
     const out = this.outAt(home);
     const size = this.r() ** sizePower(out) * maxSizeAt(out); // big ones are rarer, more so near the shore; trophies out deep
-    const len = base.len[0] + (base.len[1] - base.len[0]) * size;
+    const len = (base.len[0] + (base.len[1] - base.len[0]) * size) * (look.lenK || 1); // lenK: drawn shorter (the candy-cane eel)
     const f = {
-      kind, likeKey: kind === 'special' ? sp.special.id : kind, name,
+      kind, likeKey: this.likeOf(kind), name,
       size, len, inches: Math.round(base.inches[0] + (base.inches[1] - base.inches[0]) * size),
       // what it weighs: its real kind's weight for its size (fishfacts.js)
-      lb: weightFor(this.speciesKey(kind === 'special' ? sp.special.id : kind), size),
+      lb: weightFor(this.speciesKey(this.likeOf(kind)), size),
       pic: fishPic(look, len, this.Z), x, y, vx: 0, vy: 0, dir: x < this.W / 2 ? 1 : -1, speed: base.speed * (0.8 + this.r() * 0.4),
       move, state: 'swim', born: this.t, life: 10 + this.r() * 20, homeY: y, wob: this.r() * 10, mood: 0, checkAt: 0, pull: base.pull,
       turnAt: this.t, // no turning round in its first moments either (so it never flickers)
@@ -982,7 +1063,7 @@ export class Fishing {
     const W = this.W; const S = this.surface; const deep = this.H - S;
     const side = this.r() < 0.5 ? -1 : 1;
     const edgeX = W + 50; // the left side is the shore, so new fish swim in from the right
-    const move = kind === 'special' ? MOVES[this.spot.special.as] : MOVES[kind];
+    const move = MOVES[this.asOf(kind)];
     const startX = edgeX;
     const home = this.pickHome();
     if (move === 'school') {
@@ -1246,7 +1327,7 @@ export class Fishing {
       if (f.line && f.line !== L) continue;
       const d = Math.hypot(f.x - L.x, f.y - L.y);
       const like = this.today[L.bait][f.likeKey] ?? 0;
-      if (f.state === 'swim' && d < SPECIES[f.kind === 'special' ? this.spot.special.as : f.kind].reach && this.t >= f.checkAt && !(f.waryUntil > this.t)) {
+      if (f.state === 'swim' && d < SPECIES[this.asOf(f.kind)].reach && this.t >= f.checkAt && !(f.waryUntil > this.t)) {
         f.checkAt = this.t + 0.5;
         if (like < 0) { const sc = f.school; for (const o of this.fish) if (o.school === sc && o.move === 'school') this.spook(o); if (sc) sc.gone = true; this.pop('Eek! A spoon!', f.x, f.y - 6, '#ff8787'); continue; }
         if (like >= pickiness(f.pick) && this.r() < like * 0.3 * (1 - 0.5 * f.pick) * this.biteBoost(L.x, L.y)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
@@ -1299,7 +1380,7 @@ export class Fishing {
 
   land(L, f) {
     L.state = 'idle'; L.fish = null; f.gone = true;
-    const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, lb: f.lb, cls: sizeClass(this.speciesKey(f.likeKey), f.lb), kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special' };
+    const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, lb: f.lb, cls: sizeClass(this.speciesKey(f.likeKey), f.lb), kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special', holiday: f.kind === 'holiday' };
     this.points[c.who] += c.points;
     this.catches.push(c);
     if (c.who === 'kid') {
@@ -1567,11 +1648,17 @@ export class Fishing {
       const cw = u * 26; const ch = u * 13; const cx = W / 2 - cw / 2; const cy = SY + 6 * S;
       ctx.fillStyle = 'rgba(27,20,48,0.88)'; ctx.fillRect(cx, cy, cw, ch);
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(cx, cy, cw, ch);
+      if (c.holiday) { // a December fish: a candy-cane frame
+        ctx.lineWidth = S * 1.5; ctx.setLineDash([u * 0.8, u * 0.8]);
+        ctx.strokeStyle = '#ffffff'; ctx.strokeRect(cx, cy, cw, ch);
+        ctx.lineDashOffset = u * 0.8; ctx.strokeStyle = '#e03131'; ctx.strokeRect(cx, cy, cw, ch);
+        ctx.setLineDash([]); ctx.lineDashOffset = 0;
+      }
       const z = Math.min((cw * 0.6) / c.pic.width, (ch * 0.5) / c.pic.height);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(c.pic, W / 2 - (c.pic.width * z) / 2, cy + u * 1.2, c.pic.width * z, c.pic.height * z);
       text(`${c.who === 'kid' ? this.kid.name : this.vis.name} caught a ${c.name}!`, W / 2, cy + ch - u * 3.2, u * 1.6, '#ffd43b');
-      text(`${fmtWeight(c.lb)}${c.cls ? ` · ${CLASSES[c.cls].name}${c.cls === 'trophy' ? '!' : ''}` : ''} · +${c.points} points${c.rare ? ' · RARE!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare ? '#ffd43b' : '#ffffff');
+      text(`${fmtWeight(c.lb)}${c.cls ? ` · ${CLASSES[c.cls].name}${c.cls === 'trophy' ? '!' : ''}` : ''} · +${c.points} points${c.rare ? ' · RARE!' : c.holiday ? ' · DECEMBER FISH!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare || c.holiday ? '#ffd43b' : '#ffffff');
       // a new record for the fish book in the house: a ribbon across the card's corner
       if (c.record) {
         const label = c.record === 'first' ? 'NEW FISH!' : 'NEW RECORD!';

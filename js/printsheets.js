@@ -1,5 +1,5 @@
-// Printable sheet music: every piece in the songbook (map songs, show tunes and concert pieces)
-// at every level written so far, as a PDF in sheets/ that a kid prints from the piece's page
+// Printable sheet music: every piece in the songbook (map songs, show tunes, concert pieces and
+// the December carols) at every level written so far, as a PDF in sheets/ that a kid prints from the piece's page
 // and a parent from the parent area. The PDFs are made ahead of time by
 // scripts/build-sheets.mjs (the same ABC the songbook engraves, plus a title, the level, the
 // composer and the speed, laid out for a Letter page) and kept in the repo with
@@ -7,7 +7,7 @@
 // test fails when the music or the composer changes and the PDFs weren't made again.
 // Pure logic, no DOM.
 
-import { SONGBOOK, songAbc, songById, keyLabel, SWING_MARK } from './sheetmusic.js';
+import { SONGBOOK, CAROLBOOK, songAbc, songById, keyLabel, SWING_MARK, isCarol, carolHeader, carolTempo } from './sheetmusic.js';
 import { LEVELS, hasLevel, arrangementAbc } from './arrange.js';
 import { CONCERT, longLevels, longAbc, longFacts } from './concert.js';
 import { itemById } from './items.js';
@@ -33,7 +33,7 @@ const mapName = (map) => itemById(map)?.name || 'map';
 
 let sheets = null;
 /**
- * Every printable sheet: [{ id, level, name, kind ('map'|'show'|'long'), file, print, from }].
+ * Every printable sheet: [{ id, level, name, kind ('map'|'show'|'long'|'carol'), file, print, from }].
  * The file name ends with the start of the sheet's fingerprint (print), so a PDF made again
  * from changed music or a new layout has a new name: a phone or tablet that downloaded the
  * old one (Android keeps it in Downloads and may open that copy again) can't show it in its place.
@@ -53,6 +53,11 @@ function sheetList() {
       out.push({ id: p.id, level, name: p.name, kind: p.kind, file: `${SHEETS_DIR}/${slug(p.name)}-${level}`, from: p.kind === 'show' ? `The secret show on the ${mapName(p.map)} map` : `The ${mapName(p.map)} map song` });
     }
   }
+  for (const p of CAROLBOOK) {
+    for (const level of LEVELS.filter((l) => hasLevel(p.id, l))) {
+      out.push({ id: p.id, level, name: p.name, kind: 'carol', file: `${SHEETS_DIR}/${slug(p.name)}-${level}`, from: 'A Christmas carol' });
+    }
+  }
   for (const p of CONCERT) {
     for (const level of longLevels(p.id)) {
       out.push({ id: p.id, level, name: p.name, kind: 'long', file: `${SHEETS_DIR}/${slug(p.name)}-${level}`, from: `A concert piece from the ${mapName(p.map)} map song` });
@@ -70,7 +75,8 @@ const field = (s) => String(s).replace(/[\n%]/g, ' ');
 /**
  * A sheet as ABC for printing: the songbook's own score (an easy song with the left hand's
  * notes, every other level both hands written out), with the title, a subtitle (the level and
- * where the piece comes from), the composer and the speed added to its header.
+ * where the piece comes from), the composer and the speed added to its header. A carol's
+ * header has its own title, subtitle, composer and arranger (carolHeader) and printed speed.
  */
 export function printAbc(sheet) {
   const { id, level } = sheet;
@@ -89,7 +95,9 @@ export function printAbc(sheet) {
     tempo = song.swing ? `Q:"Swing" ${unit}=${bpm}` : `Q:${unit}=${bpm}`;
     abc = abc.replace(`${SWING_MARK}\n`, '');
   }
-  const head = [
+  // a carol: its title and subtitle, the level, then the composer and the arranger, at its printed speed
+  if (isCarol(id)) tempo = `Q:1/4=${carolTempo(id)}`;
+  const head = isCarol(id) ? [...carolHeader(id, `${LEVEL_NAMES[level]} · ${facts}`), tempo] : [
     `T:${field(sheet.name)}`,
     `T:${field(`${LEVEL_NAMES[level]} · ${facts}`)}`,
     `C:${field(`Music by ${COMPOSER}`)}`,

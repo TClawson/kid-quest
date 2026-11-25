@@ -11,8 +11,9 @@ import { loadRecognizer } from './hear.js';
 import { watchSplit, WATCH_FILLS_CHORE, WATCH_MAX_RUN_MS } from './musicrules.js';
 import {
   state, ui, today, esc, kidById, taskById, liveKey, dressed,
-  save, render, viewKid, markDone, askParentNowOrLater,
+  save, render, viewKid, markDone, askParentNowOrLater, todaysVisitors, dressedVisitor,
 } from './ctx.js';
+import { isXmas } from './xmas.js';
 
 // ---------- practice timer ----------
 
@@ -472,10 +473,14 @@ export function viewWatch() {
             <small class="watch-goal ${n.over && !n.unchecked ? 'done' : ''}" id="watch-goal">${esc(watchGoalText(n))}</small>
           </div>
         </div>
-        <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
-          <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
-        </button>
+        <div class="timer-crowd">
+          ${timerVisitors(kid, listens, 0)}
+          <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
+            <span class="timer-bubble" aria-live="polite"></span>
+            <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
+          </button>
+          ${timerVisitors(kid, listens, 1)}
+        </div>
       </div>
       <p class="watch-session" id="watch-session">This time: ${mmss(n.session)}</p>
       ${ui.watchNote && !running ? `<p class="watch-note">${esc(ui.watchNote)}</p>` : ''}
@@ -569,6 +574,7 @@ function onEarsFrame(listener, events, now) {
       if (ears.run?.listener !== listener) return;
       danceBeat(ears, document.querySelector('.timer .timer-buddy'), null, beat.period);
       earsBuddy()?.beat(beat.period);
+      visitorsDance(ears.side, beat.period);
     });
   }
 
@@ -639,7 +645,7 @@ function updateEarsUi(now = performance.now()) {
   $text.hidden = !text;
   const listener = ears.run?.listener;
   const $b = document.querySelector('.timer .timer-buddy');
-  if (!(listener && pianoNow(listener, now) && ears.beat.following(now))) danceRest($b);
+  if (!(listener && pianoNow(listener, now) && ears.beat.following(now))) { danceRest($b); visitorsRest(); }
   const kid = earsTask()?.kid;
   const $sprite = $b?.querySelector('.timer-sprite');
   if (!$sprite || !kid) return;
@@ -682,15 +688,49 @@ export function viewTimer() {
             <small>${timer.running ? 'Keep playing! 🎶' : ears.asleep ? 'Asleep 💤' : done ? 'Paused' : 'Ready?'}</small>
           </div>
         </div>
-        <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
-          <span class="timer-bubble" aria-live="polite"></span>
-          <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
-        </button>
+        <div class="timer-crowd">
+          ${timerVisitors(kid, task.listen, 0)}
+          <button class="timer-buddy live" data-action="timer-buddy" aria-label="Tap ${esc(kid.name)}'s buddy for a cheer">
+            <span class="timer-bubble" aria-live="polite"></span>
+            <span class="timer-sprite" data-mood="${mood}">${liveHtml(liveKey(kid), dressed(kid), { background: false, feel: timerFeel(mood), idle: false, label: `${kid.name}'s buddy` })}</span>
+          </button>
+          ${timerVisitors(kid, task.listen, 1)}
+        </div>
       </div>
       ${task.listen ? `<p class="timer-ears" id="ears"><b id="ears-text" aria-live="polite"${earsText() ? '' : ' hidden'}>${esc(earsText())}</b></p>` : ''}
       <button class="btn huge" data-action="${timer.running ? 'timer-pause' : 'timer-start'}">${timer.running ? 'Pause' : done ? 'Keep going' : 'Start practice'}</button>
       <p class="muted small">${tip}</p>
     </div>`;
+}
+
+// ---------- December: the day's visitors dance along ----------
+// In December the day's visiting buddies come to a piano timer or stopwatch that listens and
+// stand beside the buddy, half on each side. When the buddy dances to the kid's beat, they
+// dance too (to carols, mostly, in December: the timer can't tell which song is played).
+
+/** One side (0 left, 1 right) of the day's visitors beside the timer's buddy, or ''. */
+function timerVisitors(kid, listens, side) {
+  if (!listens || !isXmas(today())) return '';
+  const all = todaysVisitors(kid);
+  const half = Math.ceil(all.length / 2);
+  const list = side ? all.slice(half) : all.slice(0, half);
+  if (!list.length) return '';
+  return `<div class="timer-visitors side-${side}" aria-hidden="true">${list.map((v) => `<span class="carol-dancer" title="${esc(v.name)}">${buddySvg(dressedVisitor(v), 'happy', { background: false })}</span>`).join('')}</div>`;
+}
+
+/** A beat the buddy dances: the visitors step too, each to the other side from its neighbour. */
+function visitorsDance(side, p) {
+  document.querySelectorAll('.timer .timer-visitors .carol-dancer').forEach(($v, i) => {
+    $v.classList.remove('dance-l', 'dance-r');
+    void $v.offsetWidth;
+    $v.style.setProperty('--move', `${Math.round(Math.min(450, p * 0.85))}ms`);
+    $v.classList.add((side < 0) === (i % 2 === 0) ? 'dance-r' : 'dance-l');
+  });
+}
+
+/** No beat: the visitors stand still. */
+function visitorsRest() {
+  document.querySelectorAll('.timer .timer-visitors .carol-dancer').forEach(($v) => $v.classList.remove('dance-l', 'dance-r'));
 }
 
 // ---------- piano listening test (parents) ----------

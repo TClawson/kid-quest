@@ -40,7 +40,7 @@
 import { Player, rng, canvas, clamp, HAPPY } from './play.js';
 import { critterPic } from './critterart.js';
 import {
-  oddsFor, pickWeighted, critterById, mapCritters, inSeason, weatherOf, wantedOf, RARITIES, QUALITY, qualityOf,
+  oddsFor, pickWeighted, critterById, mapCritters, isOut, weatherOf, wantedOf, RARITIES, QUALITY, qualityOf, DECEMBER_SHARE,
   slotsOf, photoPoints, NEW_BONUS, WEATHERS,
 } from './critters.js';
 import { addPop } from './meter.js';
@@ -244,7 +244,7 @@ export class PhotoTrain {
 
   /** The next animal to come, and how it comes. */
   pickCritter({ legend = false } = {}) {
-    let pairs = oddsFor(this.map, this.season, this.weather, { tier: this.cam.tier, clue: 0 });
+    let pairs = oddsFor(this.map, this.season, this.weather, { tier: this.cam.tier, clue: 0, day: this.day });
     if (legend) pairs = pairs.filter(([c]) => c.rarity === 'legend');
     else pairs = pairs.filter(([c]) => c.rarity !== 'legend' || this.act() === 3);
     if (this.act() === 3) pairs = pairs.map(([c, w]) => [c, c.rarity === 'rare' || c.rarity === 'legend' ? w * 3 : w]);
@@ -259,6 +259,12 @@ export class PhotoTrain {
     // nothing twice at once
     const out = new Set(this.critters.filter((k) => !k.gone).map((k) => k.c.id));
     pairs = pairs.filter(([c]) => !out.has(c.id));
+    // December animals: a small fixed share of whatever else could come (critters.js DECEMBER_SHARE)
+    if (pairs.some(([c]) => c.december)) {
+      const rest = pairs.reduce((s, [c, w]) => s + (c.december ? 0 : w), 0);
+      const share = DECEMBER_SHARE * (this.cam.tier >= 3 ? 1.75 : 1);
+      pairs = pairs.map(([c, w]) => [c, c.december ? rest * share : w]);
+    }
     return pickWeighted(pairs, this.r());
   }
 
@@ -393,7 +399,7 @@ export class PhotoTrain {
     const e = GAME_SECONDS - this.left;
     // set pieces
     if (!this.setPieces.track && e > this.plan.trackAt && !this.tunnel) {
-      const c = mapCritters(this.map).filter((x) => x.how.includes('track') && inSeason(x, this.season) && !(x.land && this.landBusy));
+      const c = mapCritters(this.map).filter((x) => x.how.includes('track') && isOut(x, this.season, this.day) && !(x.land && this.landBusy));
       this.setPieces.track = true;
       if (c.length) {
         const pick = c.find((x) => x.rarity === 'legend' && this.clues >= 3 && false) || pickWeighted(c.map((x) => [x, RARITIES[x.rarity].weight]), this.r());
@@ -409,7 +415,7 @@ export class PhotoTrain {
       this.bridge = { x: this.dist + this.carX + 100, until };
       this.brake = { at: this.t, bridge: true, until };
       addPop(this, 'The drawbridge is up! Wait...', this.W / 2, this.H * 0.2, '#ffd43b', true);
-      const sea = mapCritters(this.map).filter((x) => x.sea && inSeason(x, this.season));
+      const sea = mapCritters(this.map).filter((x) => x.sea && isOut(x, this.season, this.day));
       const mid = this.dist * LAYER.mid;
       for (let i = 0; i < 3 && sea.length; i += 1) {
         const k = this.spawn(pickWeighted(sea.map((x) => [x, RARITIES[x.rarity].weight]), this.r()), 'surface');

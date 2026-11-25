@@ -1,0 +1,112 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../css/style.css">
+<style>
+@font-face { font-family: 'Jersey 10'; src: url('../../fonts/jersey-10-latin-400-normal.woff2') format('woff2'); }
+body { background: #2a1e2a; margin: 0; padding: 14px; font: 15px 'Nunito', sans-serif; color: #fff8e7; }
+canvas { image-rendering: pixelated; display: block; }
+h1 { font: 400 40px/1 'Jersey 10', sans-serif; margin: 2px 0 10px; color: #ffe27a; letter-spacing: 1px; }
+h1 small { font-size: 22px; color: #e8d6b8; margin-left: 10px; }
+.maps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.map { background: #fff8e7; color: #3b2235; border: 3px solid #2a1838; border-radius: 8px; padding: 8px 10px 10px; }
+.map h3 { margin: 0 0 6px; font: 400 26px/1 'Jersey 10', sans-serif; display: flex; justify-content: space-between; }
+.map h3 small { font-size: 18px; color: #8a6a72; }
+.orns { display: flex; gap: 8px; align-items: flex-end; }
+.orn { flex: 1; display: grid; justify-items: center; align-content: end; gap: 3px; padding: 6px 4px 5px; border-radius: 6px; background: #fff; border: 2px solid #ecdcc0; min-height: 150px; position: relative; }
+.orn.rare { border-color: #f0c040; background: #fffaf0; }
+.orn.super { border-color: #b197fc; background: linear-gradient(#fbf6ff, #fff); }
+.orn.star { border-color: #ffd23f; background: linear-gradient(#fff9e0, #fff); }
+.orn b { font: 400 19px/1 'Jersey 10', sans-serif; text-align: center; }
+.orn i { font: 400 15px/1 'Jersey 10', sans-serif; font-style: normal; color: #8a6a72; }
+.orn.rare i { color: #a8701e; } .orn.super i { color: #7048e8; } .orn.star i { color: #c98a00; }
+.frames { display: flex; gap: 6px; align-items: flex-end; }
+.tag { position: absolute; top: 3px; left: 5px; font: 400 14px/1 'Jersey 10'; color: #b0a0a8; }
+.row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+.cell { text-align: center; font: 400 18px/1.1 'Jersey 10'; color: #fff8e7; }
+</style></head>
+<body><div id="out"></div>
+<script type="module">
+
+// Sheets of the December event's art (xmasart.js), for previews: ?mode=ornaments&scale=5
+import { ornamentArt, artCanvas, treeArt, giftArt, giftShake, unwrapArt } from '../../js/xmasart.js';
+import { ORNAMENTS, STARS, XMAS_MAPS, RARITY, GIFT_SHAPES, GIFT_PAPERS } from '../../js/xmas.js';
+import { buddySvg } from '../../js/avatar.js';
+import { SPECIES, itemById } from '../../js/items.js';
+const q = new URLSearchParams(location.search);
+const S = Number(q.get('scale') || 5);
+const out = document.getElementById('out');
+const mode = q.get('mode') || 'ornaments';
+const big = (b, s = S) => { const c = artCanvas(b); c.style.width = `${c.width * s}px`; c.style.height = `${c.height * s}px`; return c; };
+
+if (mode === 'ornaments') {
+  out.innerHTML = `<h1>Tree ornaments <small>4 per map: 2 common (${RARITY.common.chance * 100}% of drops each), 1 rare (${RARITY.rare.chance * 100}%), 1 super-rare (${RARITY.super.chance * 100}%) · all 4 win the map's Star topper · super-rare and stars sparkle (2 frames)</small></h1><div class="maps"></div>`;
+  const maps = out.querySelector('.maps');
+  const only = q.get('maps') ? q.get('maps').split(',') : null;
+  for (const m of XMAS_MAPS) {
+    if (only && !only.includes(m.id)) continue;
+    const box = document.createElement('div'); box.className = 'map';
+    box.innerHTML = `<h3>${m.name} <small>${m.id}</small></h3><div class="orns"></div>`;
+    const row = box.querySelector('.orns');
+    const list = [...ORNAMENTS.filter((o) => o.map === m.id), ...STARS.filter((s) => s.map === m.id)];
+    for (const o of list) {
+      const cell = document.createElement('div'); cell.className = `orn ${o.rarity}`;
+      const fr = document.createElement('div'); fr.className = 'frames';
+      const a = ornamentArt(o.id, 0);
+      if (!a) { cell.innerHTML = `<b>${o.name}</b><i>(not drawn)</i>`; row.append(cell); continue; }
+      fr.append(big(a));
+      if (o.rarity === 'super' || o.rarity === 'star') fr.append(big(ornamentArt(o.id, 1)));
+      cell.append(fr);
+      cell.insertAdjacentHTML('beforeend', `<b>${o.name}</b><i>${o.rarity === 'star' ? 'Star topper · all 4' : `${RARITY[o.rarity].name} · ${RARITY[o.rarity].chance * 100}%`}${o.rarity === 'super' || o.rarity === 'star' ? ' · 2 frames' : ''}</i>`);
+      row.append(cell);
+    }
+    maps.append(box);
+  }
+}
+// the tree at its three fill levels: few, half, full (ornaments picked from every map)
+const pickOrns = (n) => { const all = ORNAMENTS.map((o) => o.id); const out = []; for (let i = 0; out.length < n && i < 400; i += 1) { const id = all[(i * 17 + 3) % all.length]; if (!out.includes(id)) out.push(id); } return out; };
+const LEVELS = [{ name: 'A few', o: { ornaments: pickOrns(6), garland: 0 } }, { name: 'About half', o: { ornaments: pickOrns(20), garland: 1 } }, { name: 'Full, with its star', o: { ornaments: pickOrns(40), garland: 1, star: 'star-fjord' } }];
+const layered = (t, f, s) => { const c = artCanvas(t.body); const l = artCanvas(t.lights[f]); c.getContext('2d').drawImage(l, 0, 0); c.style.width = `${c.width * s}px`; return c; };
+if (mode === 'tree') {
+  const row = document.createElement('div'); row.className = 'row'; row.style.background = q.get('bg') || '#bc8654'; row.style.padding = '10px'; out.append(row);
+  for (const L of LEVELS) { const t = treeArt(L.o); for (const f of (q.get('frames') ? [0, 1, 2] : [0])) { const cell = document.createElement('div'); cell.className = 'cell'; cell.append(layered(t, f, S), `${L.name}${q.get('frames') ? ` · lights ${f + 1}` : ''}`); row.append(cell); } }
+}
+if (mode === 'gifts') {
+  out.innerHTML = `<h1>Presents <small>for a sibling's buddy: 3 shapes, 5 papers, a tag, the shake, and Christmas-morning unwrapping</small></h1>`;
+  const sec = (title, note) => { const d = document.createElement('div'); d.className = 'map'; d.style.marginBottom = '12px'; d.innerHTML = `<h3>${title} <small>${note || ''}</small></h3><div class="orns" style="flex-wrap:wrap"></div>`; out.append(d); return d.querySelector('.orns'); };
+  const card = (row, canvases, label, sub, cls = '') => { const c = document.createElement('div'); c.className = `orn ${cls}`; c.style.minHeight = '0'; const fr = document.createElement('div'); fr.className = 'frames'; canvases.forEach((x) => fr.append(x)); c.append(fr); c.insertAdjacentHTML('beforeend', `<b>${label}</b>${sub ? `<i>${sub}</i>` : ''}`); row.append(c); return c; };
+  const g = sec('Shapes and papers', 'small box · tall box · squashy round one');
+  for (const p of GIFT_PAPERS) card(g, GIFT_SHAPES.map((sh) => big(giftArt(sh, p.id), S)), p.name, p.ribbon === 'twine' ? 'red baker\'s twine' : `${p.ribbon} ribbon`);
+  const t = sec('Gift tag and shake', 'under the tree a present has no tag; tap it: it wiggles (3 frames), rattles, and shows its tag; it stays shut until Christmas morning');
+  const tagged = card(t, [big(giftArt('small', 'stars', { tag: true }), S + 2)], 'Tapped: its tag', '');
+  tagged.insertAdjacentHTML('beforeend', `<div style="margin-top:4px;display:inline-flex;align-items:center;gap:6px;background:#fff6e2;border:2px solid #b8988e;border-radius:4px 10px 10px 4px;padding:3px 10px 3px 6px;font:400 20px/1 'Jersey 10';color:#3b2235"><span style="width:7px;height:7px;border-radius:50%;background:#d8503e;display:inline-block"></span>To Ava's fox · From Bramble</div>`);
+  for (const sh of GIFT_SHAPES) card(t, [0, 1, 2].map((f) => big(giftShake(sh, sh === 'tall' ? 'candy' : sh === 'round' ? 'plaid' : 'stars', f), S)), `Shake: ${sh}`, 'lean · hop · lean');
+  const u = sec('Unwrapping on Christmas morning', '25 Dec, Denver time · 4 frames · tap once and the paper flies');
+  for (const [sh, pp, gift] of [['small', 'candy', 'orn-unicorn'], ['round', 'dots', 'orn-moose']]) card(u, [0, 1, 2, 3].map((f) => big(unwrapArt(sh, pp, f, gift), S)), `${sh === 'small' ? 'Small box' : 'Round one'}: rip · burst · pop · on show`, `inside: ${ornamentArt(gift) ? (ORNAMENTS.find((o) => o.id === gift) || {}).name : gift}`);
+}
+if (mode === 'zoom') {
+  // a few pieces big, for checking pixels: ?mode=zoom&ids=a,b&scale=12
+  const row = document.createElement('div'); row.className = 'row'; row.style.background = q.get('bg') || '#fff8e7'; row.style.padding = '8px'; out.append(row);
+  for (const id of q.get('ids').split(',')) for (const f of [0, 1]) { const a = ornamentArt(id, f); if (!a) continue; const c = big(a); c.style.background = 'repeating-conic-gradient(#0000 0 25%, #0000000a 0 50%) 0 0/' + (S * 2) + 'px ' + (S * 2) + 'px'; row.append(c); }
+}
+if (mode === 'outfits') {
+  // every buddy kind in every holiday outfit: the hats, the knit scarf in its colors, the sweater's
+  // two blink frames, the mittens, and the whole look together
+  const cols = [
+    ['Santa hat', { hat: 'hat-santa' }], ['Elf hat', { hat: 'hat-elf' }], ['Reindeer antlers', { hat: 'hat-antlers' }], ['Earmuffs', { hat: 'hat-earmuffs' }],
+    ['Knit scarf', { neck: 'neck-knitscarf' }], ['· green', { neck: 'neck-knitscarf-green' }], ['· blue', { neck: 'neck-knitscarf-blue' }], ['· purple', { neck: 'neck-knitscarf-purple' }],
+    ['Light-up sweater', { neck: 'neck-xmas-sweater' }, 'a'], ['· blink', { neck: 'neck-xmas-sweater' }, 'b'], ['Mittens', { hand: 'hand-mittens' }],
+    ['All together', { hat: 'hat-santa', neck: 'neck-knitscarf-green', hand: 'hand-mittens' }], ['', { hat: 'hat-elf', neck: 'neck-xmas-sweater', hand: 'hand-mittens' }, 'a'], ['', { hat: 'hat-antlers', neck: 'neck-knitscarf-blue' }],
+  ];
+  const px = 24 * S;
+  out.innerHTML = `<h1>Holiday outfits <small>the shop's Holiday tab, 1 to 31 December only (hidden the rest of the year; owned ones stay) · on all 7 buddies</small></h1>
+    <style>.og{display:grid;grid-template-columns:90px repeat(${cols.length},${px + 8}px);gap:6px;align-items:end}.og .hd{font:400 19px/1 'Jersey 10';color:#ffe27a;text-align:center;align-self:end;padding-bottom:4px}.og .hd small{display:block;color:#e8d6b8;font-size:15px;margin-top:2px}.og .sp{font:400 24px/1 'Jersey 10';color:#fff8e7;align-self:center}.og .cl{background:#f4e4cc;border:2px solid #2a1838;border-radius:6px;padding:2px;line-height:0}.og .cl.alt{background:#e4eef8}.og svg{width:${px}px;height:${px}px;image-rendering:pixelated}.og .fa .blink-b,.og .fb .blink-a{display:none}.og .fa .blink,.og .fb .blink{animation:none}</style>
+    <div class="og"></div>`;
+  const g = out.querySelector('.og');
+  g.insertAdjacentHTML('beforeend', '<div></div>' + cols.map(([n, o]) => { const it = itemById(o.hat || o.neck || o.hand); return `<div class="hd">${n}${n && !n.startsWith('·') && n !== 'All together' && it ? `<small>${it.price} coins</small>` : ''}</div>`; }).join(''));
+  for (const sp of SPECIES) {
+    g.insertAdjacentHTML('beforeend', `<div class="sp">${sp.name}</div>`);
+    for (const [n, o, f] of cols) g.insertAdjacentHTML('beforeend', `<div class="cl ${f ? `f${f}` : ''} ${n === 'All together' || n === '' ? 'alt' : ''}">${buddySvg({ species: sp.id, outfit: o }, 'happy', { background: false })}</div>`);
+  }
+}
+document.body.dataset.ready = '1';
+</script></body></html>
