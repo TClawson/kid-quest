@@ -9,7 +9,9 @@
 // giggly. The eyes follow a finger. The app decides what a tap on the body does
 // (a sports move or a giggle): the canvas's data-zone says where the tap landed.
 // Left alone (when the app asks for it), a buddy gets bored, then dozes off; a tap
-// wakes it with a jump.
+// wakes it with a jump. A buddy that is walking (its canvas inside a .walking walker,
+// in the village, the house or the garden) is never left alone: it wakes up with a jump
+// when the walk starts and stays awake until it stops.
 import { buildRig, render, Brain, CALM } from './rig.js';
 
 const FPS = 12;
@@ -171,6 +173,9 @@ function tick() {
     const key = canvas.dataset.live;
     const st = buddies.get(key);
     if (!st || !looks.has(key)) continue;
+    // walking counts as being busy: a dozing buddy never sleepwalks (the tap that walked it
+    // landed on the ground, not on its canvas, so it isn't woken by the finger)
+    if (canvas.closest('.walking')) wake(st, ms);
     if (!seen.has(key)) {
       seen.add(key);
       applyFeel(st, ms);
@@ -179,6 +184,8 @@ function tick() {
       // style A: the pose only changes 12 times a second
       if (step !== st.frame || !st.pose) { st.frame = step; st.pose = pose; st.drawn = new WeakSet(); }
     }
+    const dozing = st.dozing ? '1' : '0';
+    if (canvas.dataset.dozing !== dozing) canvas.dataset.dozing = dozing;
     if (st.pose && !st.drawn.has(canvas)) {
       st.drawn.add(canvas);
       paint(canvas, render(rigFor(key, canvas.dataset.bg !== '0'), st.pose, step, { wand: looks.get(key)?.wand }));
