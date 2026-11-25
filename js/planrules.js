@@ -4,7 +4,8 @@
 // - the moment that starts each routine ("After snack")
 // - the days of the chores a parent marked "kid picks the days" (task.kidDays a week)
 // - one chore to grow this week, which comes with a free one-week flower seed packet
-// Saved on kid.plan = { order, routines, cues, days, grow, signed, seedWeek, seed, week }.
+// Saved on kid.plan = { order, routines, cues, days, grow, signed, seedWeek, seed, seedTask, week }.
+// kid.grown = the chores that have had their grow week this round (growTurns).
 // Pure logic, no DOM (the screens are planModal in app.js). logic.js applies the plan to
 // the schedule (plannedTask).
 
@@ -120,6 +121,24 @@ export function toggleDay(draft, task, dow) {
 export const growable = (kid) => (kid.tasks || []);
 
 /**
+ * Chores take turns growing: kid.grown lists the chores that have had a seed week in this
+ * round. A chore can't be picked again until every other chore has had its week, then a new
+ * round starts. Returns the ids still waiting for their turn this round (all of them when the
+ * round is over).
+ */
+export function growTurns(kid) {
+  const ids = growable(kid).map((t) => t.id);
+  const left = ids.filter((id) => !(kid.grown || []).includes(id));
+  return new Set(left.length ? left : ids);
+}
+
+/** Whether the kid may pick a chore to grow: its turn hasn't come yet this round. Once this week's seed is given, only its chore. */
+export function canGrow(kid, id, today) {
+  if (kid.plan?.seedWeek === weekStart(today)) return (kid.plan.seedTask || kid.plan.grow) === id;
+  return growTurns(kid).has(id);
+}
+
+/**
  * Save the draft as the kid's plan and sign it for this week. The first time a week is
  * signed with a seed picked, the kid gets that free packet; it's planted straight away for the
  * grow chore in the first free bed (else it waits in their seed bag). Returns
@@ -136,9 +155,13 @@ export function signPlan(kid, draft, today) {
     grow: draft.grow || null,
     signed: monday,
     week: monday,
-    ...(old.seedWeek ? { seedWeek: old.seedWeek, seed: old.seed } : {}),
+    ...(old.seedWeek ? { seedWeek: old.seedWeek, seed: old.seed, ...(old.seedTask ? { seedTask: old.seedTask } : {}) } : {}),
   };
-  if (!draft.grow || !draft.seed || old.seedWeek === monday) return null;
+  // this week's seed is already planted for its chore, so that stays the grow chore
+  if (old.seedWeek === monday) kid.plan.grow = old.seedTask || old.grow || null;
+  // a chore that already had its turn this round can't be the grow chore again yet
+  else if (kid.plan.grow && !canGrow(kid, kid.plan.grow, today)) kid.plan.grow = null;
+  if (!kid.plan.grow || !draft.seed || old.seedWeek === monday) return null;
   const seed = seedById(draft.seed);
   if (!seed || seed.kind !== 'flower') return null;
   const g = gardenOf(kid);
@@ -146,6 +169,11 @@ export function signPlan(kid, draft, today) {
   kid.garden = g;
   kid.plan.seedWeek = monday;
   kid.plan.seed = seed.id;
+  kid.plan.seedTask = draft.grow;
+  // its turn is taken; once every chore has had one, a new round starts with this one
+  const turns = growTurns(kid);
+  kid.grown = turns.size === growable(kid).length ? [] : (kid.grown || []).filter((id) => growable(kid).some((t) => t.id === id));
+  kid.grown.push(draft.grow);
   let planted = false;
   if (plantableTasks(kid).some((t) => t.id === draft.grow)) {
     const free = g.beds.findIndex((b) => !b);

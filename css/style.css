@@ -610,6 +610,7 @@ body:has(.approve-bar) .toast { bottom: calc(var(--pnav-h, 64px) + 86px + env(sa
 .pl-seeds { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 .pl-pick, .pl-seed { background: #fff; border: 2px solid var(--px-ink, #2a1838); border-radius: 6px; padding: 6px; text-align: left; font: inherit; font-weight: 700; }
 .pl-pick small { display: block; font-weight: 400; color: #6b5f7a; }
+.pl-pick.pl-grown { opacity: 0.55; border-style: dashed; cursor: default; }
 .pl-seed { text-align: center; }
 .pl-seed img { width: 48px; image-rendering: pixelated; display: block; margin: 0 auto; }
 .pl-pick.on, .pl-seed.on { outline: 3px solid #7048e8; outline-offset: 1px; background: #f1ecff; }

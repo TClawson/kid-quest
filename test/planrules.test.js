@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, defaultTasks, addDays, tasksForDay, isPinned, routineOf, cueFor, weekStart, dayOfWeek } from '../js/logic.js';
 import { applySet } from '../js/choresets.js';
-import { planDraft, routineList, moveChore, nudgeChore, flexTasks, dayCheck, toggleDay, signPlan, signedThisWeek, seedThisWeek } from '../js/planrules.js';
+import { planDraft, routineList, moveChore, nudgeChore, flexTasks, dayCheck, toggleDay, signPlan, signedThisWeek, seedThisWeek, growable, growTurns, canGrow } from '../js/planrules.js';
 
 let n = 0;
 const newId = (p) => `${p}_${(n += 1)}`;
@@ -101,7 +101,7 @@ test('the grow chore brings one free seed a week, planted for that chore', () =>
   // next week, another packet
   const d3 = planDraft(kid, addDays(day, 7));
   assert.equal(d3.grow, null, 'a new week starts with no grow chore');
-  d3.grow = bed.id; d3.seed = 'seed-lily';
+  d3.grow = named(kid, 'Toys away').id; d3.seed = 'seed-lily';
   assert.ok(signPlan(kid, d3, addDays(day, 7)));
   assert.equal(kid.plan.seedWeek, weekStart(addDays(day, 7)));
   // exercise as the grow chore: the packet waits in the seed bag
@@ -117,4 +117,45 @@ test('an older per-chore plan turns into routine cues', () => {
   const piano = named(kid, 'Piano practice');
   kid.plan = { order: [piano.id], cues: { [piano.id]: 'After snack' }, week: '2026-11-02' };
   assert.equal(planDraft(kid, day).cues.afternoon, 'After snack');
+});
+
+test('one free packet a week, however many times the kid signs', () => {
+  const { kid } = littleKid();
+  const bed = named(kid, 'Make bed');
+  let given = 0;
+  for (let i = 0; i < 5; i += 1) {
+    const d = planDraft(kid, addDays(day, i % 3));
+    d.grow = i % 2 ? named(kid, 'Toys away').id : bed.id; d.seed = 'seed-rose';
+    if (signPlan(kid, d, addDays(day, i % 3))) given += 1;
+  }
+  assert.equal(given, 1);
+  assert.equal(kid.garden.seeds['seed-rose'] || 0, 0, 'planted, not in the bag');
+  assert.equal(kid.garden.beds.filter(Boolean).length, 1);
+  assert.equal(kid.plan.grow, bed.id, 'the seeded chore stays the grow chore all week');
+  assert.ok(canGrow(kid, bed.id, day) && !canGrow(kid, named(kid, 'Toys away').id, day));
+});
+
+test('chores take turns: a grown chore waits until every other chore has grown', () => {
+  const { kid } = littleKid();
+  const ids = growable(kid).map((t) => t.id);
+  const bed = named(kid, 'Make bed').id;
+  let week = day;
+  const grow = (id) => { const d = planDraft(kid, week); d.grow = id; d.seed = 'seed-daisy'; const r = signPlan(kid, d, week); week = addDays(week, 7); return r; };
+  assert.ok(grow(bed));
+  assert.equal(canGrow(kid, bed, week), false, 'not again next week');
+  // trying anyway: no grow chore, no packet
+  assert.equal(grow(bed), null);
+  assert.equal(kid.plan.grow, null);
+  for (const id of ids.filter((x) => x !== bed)) {
+    assert.ok(canGrow(kid, id, week));
+    assert.ok(grow(id), 'each other chore gets its week');
+  }
+  // every chore has grown: a new round, bed can go again
+  assert.equal(growTurns(kid).size, ids.length);
+  assert.ok(canGrow(kid, bed, week));
+  assert.ok(grow(bed));
+  assert.deepEqual(kid.grown, [bed]);
+  // a new chore joins the round waiting for its turn; a deleted one drops out
+  kid.tasks.push({ id: 'new1', name: 'Feed the fish', icon: '🐟', period: 'afternoon', days: [1, 2, 3, 4, 5], verify: 'parent', minutes: 0 });
+  assert.ok(canGrow(kid, 'new1', week));
 });

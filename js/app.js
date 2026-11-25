@@ -28,7 +28,7 @@ import { houseChores, shelfLevel, placeOf, setPlace, setInside, HOUSE_CHORES, HO
 import { CHORE_SETS, SET_CHORES, choreSetById, setChanges, applySet, routineOfTask } from './choresets.js';
 import { tokenPages, chartRoutines, stickers, defaultStyle, chartSignature, chartOutdated, DAY_ORDER } from './charts.js';
 import { chartArt } from './chartart.js';
-import { ROUTINES, FREE_SEEDS, planDraft, routineList, moveChore, nudgeChore, flexTasks, dayCheck, toggleDay, growable, signPlan, signedThisWeek, seedThisWeek } from './planrules.js';
+import { ROUTINES, FREE_SEEDS, planDraft, routineList, moveChore, nudgeChore, flexTasks, dayCheck, toggleDay, growable, growTurns, canGrow, signPlan, signedThisWeek, seedThisWeek } from './planrules.js';
 import { musicHouseHtml, mountMusicHouses, cameInMusic } from './musichouse.js';
 import { musicTier, daysToMusicHouse, studioOpen, labOpen, deskOpen, tierInfo } from './musicrules.js';
 import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse, tankOf, tankRoom } from './furniture.js';
@@ -501,8 +501,11 @@ function planGrowHtml(kid, d) {
   return `<div class="pl-grow">${choices.map((t) => {
     const r = rate.get(t.id);
     const name = twin(t) ? `${t.name} (${when[d.routines[t.id] || routineOf(t)]})` : t.name;
+    // chores take turns: one that grew a seed waits until the others have had theirs
+    if (!canGrow(kid, t.id, today())) return `<button class="pl-pick pl-grown" disabled>${esc(t.icon)} ${esc(name)}<small>${given ? 'Not this week' : '🌼 Grown already'}</small></button>`;
     return `<button class="pl-pick ${d.grow === t.id ? 'on' : ''}" data-action="plan-grow" data-id="${t.id}" aria-pressed="${d.grow === t.id}">${esc(t.icon)} ${esc(name)}${r ? `<small>last week ${r.done} of ${r.of}</small>` : ''}</button>`;
   }).join('')}</div>
+    ${!given && (kid.grown || []).length && growTurns(kid).size < choices.length ? `<p class="muted small">🌼 Each chore gets its own week to grow. The ones you've grown wait until every chore has had a turn.</p>` : ''}
     ${given ? `<p class="pl-seed-given">🌱 Your free seed this week: <b>${esc(given.name)}</b></p>` : `
     <h3>🎁 Pick your free seed packet</h3>
     <p class="muted small">It's planted for the chore you grow: it grows a step every day you do it, and blooms in 7 days.</p>
@@ -4110,6 +4113,7 @@ Object.assign(actions, {
   'plan-grow': (el) => {
     const kid = kidById(ui.planKid);
     if (!kid || !ui.planDraft) return;
+    if (!canGrow(kid, el.dataset.id, today())) return;
     ui.planDraft.grow = el.dataset.id;
     planModal(kid);
   },

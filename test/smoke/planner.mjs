@@ -20,6 +20,7 @@ const state = () => {
   const kid = { id: 'kid_ava', name: 'Ava', color: '#4dabf7', tasks: defaultTasks(), startDate: addDays(TEST_DAY, -2) };
   applySet(kid, 'little', (p) => `${p}_${(n += 1)}`);
   kid.tasks.find((t) => t.name === 'Vacuum your room').kidDays = 1;
+  kid.grown = [kid.tasks.find((t) => t.name === 'Make bed').id]; // bed had its grow week already
   kid.tasks.push({ id: 'task_run', name: 'Bike ride', icon: '🚲', period: 'exercise', days: [1, 3, 5], verify: 'parent', minutes: 0, kidDays: 4 });
   s.kids.push(kid);
   return s;
@@ -114,6 +115,12 @@ async function run(viewport, tag) {
   // 6. grow + free seed
   await page.click('[data-action="plan-step"][data-dir="1"]');
   await page.waitForSelector('.planner[data-step="grow"]');
+  // chores take turns: bed grew last time, so it waits
+  const bedPick = page.locator(`.pl-grown:has-text("Make bed")`);
+  assert.equal(await bedPick.count(), 1);
+  assert.ok(await bedPick.isDisabled());
+  assert.match(await bedPick.innerText(), /Grown already/);
+  assert.equal(await page.locator(`[data-action="plan-grow"][data-id="${bed}"]`).count(), 0);
   await page.click(`[data-action="plan-grow"][data-id="${id(s, 'Brush teeth', 'teeth-night')}"]`);
   await page.click('[data-action="plan-seed"][data-id="seed-hibiscus"]');
   if (shots) await page.locator('.modal-card').screenshot({ path: `${shots}/${tag}-3-grow.png` });
