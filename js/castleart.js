@@ -8,6 +8,7 @@
 // putImageData. villageprops.js calls paintCastle() for 'bg-castle' only.
 
 import { ramp, mix, rng, h2, vnoise, bayer, grid, inEll, pathField, pixelBuffer, bbox, cobble } from './pixelkit.js';
+import { kidGardenB } from './villageplot.js';
 import { PB, propB, groundShadow, grassB, flowerB, treeB, bushB, gardenB, flowersB, lilyPad, reeds, laundryB, wellB, smokeB, stoneB, tuft } from './meadowart.js';
 
 export const CB = {
@@ -1124,7 +1125,7 @@ export function paintCastle(canvas, L, opts = {}, lib = {}) {
     tree: (p) => treeB(px, p, L),
     bush: (p) => bushB(px, p.x, p.y, p.berries),
     well: (p) => wellB(px, p.x, p.y),
-    garden: (p) => gardenB(px, p.x, p.y, p.w || 62, p.h || 34),
+    garden: (p) => kidGardenB(px, p.x, p.y, p.w || 62, p.h || 34, p.theme, gardenB),
     stall: (p) => stallK(px, p.x, p.y, p.pal),
     laundry: (p) => laundryB(px, p.x, p.y, p.w || 84),
     flowers: (p) => flowersB(px, p.x, p.y, p.x + p.y),

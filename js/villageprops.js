@@ -5,9 +5,10 @@
 // hand-drawn trees and cottages in villageart.js.
 
 import {
-  OUT, shade, hashXY, seeded, painter, bigTree, bush, cottage, well, fence, garden, laundry, plaza, flower, noteSign, pond, frozen,
+  OUT, shade, hashXY, seeded, painter, bigTree, bush, cottage, well, laundry, plaza, flower, noteSign, pond, frozen,
 } from './villageart.js';
-import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrowB, mushroomsB, snailB } from './meadowart.js';
+import { kidGardenB } from './villageplot.js';
+import { paintMeadow, lanternB, birdhouseB, mailboxB, scarecrowB, benchB, barrowB, mushroomsB, snailB, gardenB } from './meadowart.js';
 import { paintOcean, anemoneB, helmetB, mermaidB, sunkboatB, bootB, urchinsB, seahorseB, seaventB } from './oceanart.js';
 import { paintVolcano, spaV, totemV, dodoV, crystalsV, campfireV, geyserV, dragonfruitV } from './volcanoart.js';
 import { paintRainforest, dartfrogR, bromeliadR, orchidsR, mushlogR, antsR, maskR, morphoR } from './rainforestart.js';
@@ -501,7 +502,7 @@ export const PROPS = {
   tree: { w: 32, h: 40, foot: [6, 14, 20, 24], base: 36, draw: (px, p) => bigTree(px, p.x, p.y, p.pal) },
   bush: { w: 18, h: 13, foot: [1, 2, 16, 10], base: 12, draw: (px, p) => bush(px, p.x, p.y, p.berries) },
   well: { w: 26, h: 30, foot: [0, 14, 26, 16], base: 28, draw: (px, p) => well(px, p.x, p.y) },
-  garden: { w: 62, h: 34, foot: [0, 0, 62, 48], base: 0, draw: (px, p) => { garden(px, p.x, p.y, p.w || 62, p.h || 34); fence(px, p.x - 2, p.y + (p.h || 34) + 4, (p.w || 62) + 4); } },
+  garden: { w: 62, h: 34, foot: [0, 0, 62, 48], base: 0, draw: (px, p) => kidGardenB(px, p.x, p.y, p.w || 62, p.h || 34, p.theme, gardenB) },
   stall: { w: 44, h: 33, foot: [0, 12, 44, 20], base: 30, draw: (px, p) => stallOf(px, p.x, p.y, p.pal) },
   laundry: { w: 84, h: 28, foot: null, base: 26, draw: (px, p) => laundry(px, p.x, p.y, p.w || 84) },
   flowers: { w: 16, h: 12, foot: null, flat: true, draw: (px, p) => { const cs = p.colors || ['#ff8fa3', '#ffd43b', '#ffffff', '#b197fc']; for (let i = 0; i < 9; i += 1) flower(px, p.x + (i % 3) * 5 + (Math.floor(i / 3) % 2) * 2, p.y + Math.floor(i / 3) * 4, cs[(i + p.x) % cs.length]); } },

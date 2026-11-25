@@ -279,6 +279,10 @@
 }
 .v-garden-n { font-style: normal; margin-left: 2px; color: #1c7ed6; }
 .v-garden:hover .v-garden-board, .v-garden:focus-visible .v-garden-board { background: #d3f9d8; }
+/* the kid's garden plot beside the house (js/villageplot.js paints it on the land): the whole plot is the button, its sign hangs on the back fence */
+.v-plot { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; }
+.v-plot:focus-visible { outline: 1px dashed var(--px-ink); outline-offset: 1px; }
+.v-garden.on-plot .v-garden-post { left: 50%; margin-left: -1px; height: 6px; }
 /* the family's trees and flowers (js/villagebloom.js): drawn in village pixels, only pictures */
 .v-tree, .v-bloom-life { position: absolute; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
 .v-bloom-life { left: 0; top: 0; }
