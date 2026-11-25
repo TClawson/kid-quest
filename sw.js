@@ -124,6 +124,7 @@ const SHELL = [
   'js/chartart.js',
   'js/gardenrules.js',
   'js/gardenart.js',
+  'js/villageplot.js',
   'js/garden.js',
   'js/seasons.js',
   'js/seasonfx.js',

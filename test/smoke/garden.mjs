@@ -5,7 +5,7 @@
 // thirsty plants with the can, each gets a bounce and its drop goes away, and tapping
 // elsewhere stops it; with no tree seeds the picker offers the shop, whose Garden tab lists
 // the packets and decorations and buys one; the back door goes into the house (the vase and
-// the fruit bowl are on the table), the village has a garden sign that leads back; a map with
+// the fruit bowl are on the table), the village shows the garden as a plot beside the house that leads in at its gate, and the buddy comes back out there; a map with
 // a dome (ocean) draws it over the garden. Saves screenshots.
 // Run: node test/smoke/garden.mjs [outDir]
 // (needs `ln -s /opt/node-tools/node_modules node_modules` when node_modules is missing)
@@ -206,22 +206,27 @@ for (const [label, viewport] of [['tablet', { width: 1280, height: 800 }], ['pho
   assert.equal((await kidOf(sp)).gardenDecor.water, 'garden-pond');
   await shopCtx.ctx.close();
 
-  // ---- the village sign leads to the garden ----
+  // ---- the garden plot beside the house, seen from the village, leads into the garden ----
   const v = await start(viewport, family(), 'out');
   const vp = v.page;
   await vp.locator('.village').scrollIntoViewIfNeeded();
   await run(vp, 1000);
   assert.match(await vp.locator('.v-garden').innerText(), /Garden/);
   assert.match(await vp.locator('.v-garden').innerText(), /💧3/);
+  assert.equal(await vp.locator('.v-plot').count(), 1, 'the plot beside the house can be tapped');
   const vbox = await vp.locator('.village-view').boundingBox();
   const vy = await vp.evaluate(() => window.scrollY);
   await vp.screenshot({ path: `${out}9-village-${label}.png`, clip: { ...vbox, y: vbox.y + vy }, fullPage: true });
-  await click(vp, '.v-garden');
-  assert.ok(await until(vp, () => document.querySelector('.garden'), null, 20000), 'the sign walks to the garden');
+  await click(vp, '.v-plot');
+  assert.ok(await until(vp, () => document.querySelector('.garden'), null, 20000), 'the plot walks in at its gate, to the garden');
   // stepping in with thirsty plants: the buddy gets the can out by itself
   assert.ok(await until(vp, () => document.querySelector('.g-droplet'), null, 20000), 'the buddy waters on its own');
   await click(vp, '.g-gate');
   assert.ok(await until(vp, () => document.querySelector('.village'), null, 15000), 'the gate goes out to the village');
+  await run(vp, 600);
+  // ...where the buddy stands at the plot's gate, not at the house's door
+  const at = await vp.evaluate(async () => { const { villageLayout } = await import('/js/villagemaps.js'); const g = villageLayout('bg-meadow').plot.gate; const b = document.querySelector('.v-buddy'); return { g, left: parseFloat(b.style.left), top: parseFloat(b.style.top) }; });
+  assert.ok(Math.abs(at.left - at.g.x) < 6 && Math.abs(at.top - at.g.y) < 10, `the buddy comes out at the plot's gate (${JSON.stringify(at)})`);
   await v.ctx.close();
 
   // ---- a map with a dome puts it over the garden ----

@@ -13,6 +13,8 @@
 
 import { drawVillager, VILLAGER_KINDS, villagerGrid, headRows, bowlCanvas, BOWL_THEMES } from './villageart.js';
 import { paintVillage } from './villageprops.js';
+import { paintPlot, plotKey } from './villageplot.js';
+import { SHIELDS } from './gardenart.js';
 import { villageLayout } from './villagemaps.js';
 import { MAP_THEMES } from './maparts.js';
 import { startMapLife } from './maplife.js';
@@ -305,15 +307,24 @@ function bakeryDoor(L, little) {
     </button>`;
 }
 
-// The sign beside the kid's house that points round the back to the garden (garden.js). A 💧
-// count shows when plants there are waiting for water.
+// The kid's garden plot beside the house (villageplot.js paints it on the land): the plot is a
+// button the buddy walks to and goes in at the gate, with a sign on its back fence. A 💧 count
+// shows when plants there are waiting for water. A map without a plot keeps the sign beside
+// the house that points round the back.
 function gardenSign(L, garden, people = []) {
+  const n = garden?.thirsty || 0;
+  const label = n ? `Go to the garden (${n} ${n === 1 ? 'plant is' : 'plants are'} thirsty)` : 'Go to the garden';
+  const board = `<span class="v-garden-post"></span><span class="v-garden-board">🌱 Garden${n ? `<i class="v-garden-n">💧${n}</i>` : ''}</span>`;
+  const w = n ? 46 : 34;
+  if (L.plot) {
+    const P = L.plot;
+    return `<button class="v-plot" style="left:${P.x}px;top:${P.y - 6}px;width:${P.w}px;height:${P.h + 6}px;z-index:${P.y + P.h}" aria-label="${label}"></button>
+      <button class="v-garden on-plot" style="left:${Math.round(P.x + P.w / 2 - w / 2)}px;top:${P.y - 15}px;z-index:450" aria-label="${label}">${board}</button>`;
+  }
   const h = L.home;
   // beside the house, on the side with room: not off the map and not on a villager (or their chore bubble)
   // the sign is about 34 village pixels wide (46 with a 💧 count) and 18 tall; a villager's chore
   // bubble reaches 38 over their feet, and it keeps a couple of pixels clear of all of it
-  const n = garden?.thirsty || 0;
-  const w = n ? 46 : 34;
   const base = h.y + h.h - 18;
   const spots = [];
   for (const top of [base, base - 14, base - 28, base + 6]) {
@@ -324,9 +335,7 @@ function gardenSign(L, garden, people = []) {
   const hits = ({ x, top }) => people.filter((p) => p.x + 12 > x && p.x - 12 < x + w && p.y + 4 > top && p.y - 40 < top + 18).length;
   // the first spot with nobody near (beside the house, low down, comes first), else the least crowded
   const pick = spots.find((sp) => !hits(sp)) || spots.sort((a, b) => hits(a) - hits(b))[0] || { x: h.x + h.w + 3, top: base };
-  const left = pick.x; const top = pick.top;
-  const label = n ? `Go to the garden (${n} ${n === 1 ? 'plant is' : 'plants are'} thirsty)` : 'Go to the garden';
-  return `<button class="v-garden" style="left:${left}px;top:${top}px;z-index:450" aria-label="${label}"><span class="v-garden-post"></span><span class="v-garden-board">🌱 Garden${n ? `<i class="v-garden-n">💧${n}</i>` : ''}</span></button>`;
+  return `<button class="v-garden" style="left:${pick.x}px;top:${pick.top}px;z-index:450" aria-label="${label}">${board}</button>`;
 }
 
 /** The id the coach goes by among the quest givers. */
@@ -381,7 +390,8 @@ export function labelSpot(label, avoid, L, { w: width = 0, win = null } = {}) {
  *     to go before it opens,
  *   little: { stars } or null: the bakery's door for a kid who plays the little games (little.js),
  *     and the stars in their jar,
- *   garden: { thirsty }: how many plants in the garden are waiting for water (the sign by the house),
+ *   garden: { thirsty, plot }: how many plants in the garden are waiting for water (on its sign),
+ *     and its plants as the plot beside the house shows them (plotPlants in villageplot.js),
  *   bloom: the family's trees and flowers (bloomData in villagebloom.js) or null,
  *   coach: { tasks: [quests, as in tasks], line } or null: the bonus exercise, given by the coach
  *     beside the play spots; line: how the kid's strong weeks are going,
@@ -407,6 +417,7 @@ export function villageHtml(v) {
     coach: v.coach ? { line: v.coach.line || '' } : null,
     music: { tier: v.music?.tier || 0, left: v.music?.left || 0 },
     little: v.little || null,
+    plot: v.garden?.plot || null, // the kid's garden plot's plants (villageplot.js)
     bloom: v.bloom || null, // the family's trees and flowers (villagebloom.js)
     today: v.today || v.bloom?.today || '', // the season follows this day (seasons.js)
   };
@@ -668,6 +679,14 @@ const memory = new Map();
 const spriteCache = new Map();
 
 /** The buddy just came out of the kid's house: it stands outside the door. */
+/** The buddy just came out of the garden: it stands outside the plot's gate (or at the house). */
+export function cameOutOfGarden(kidId, theme) {
+  const L = villageLayout(theme);
+  if (!L.plot) { cameOut(kidId, theme); return; }
+  const key = `${kidId}|${L.id}`;
+  memory.set(key, { ...(memory.get(key) || { seen: {} }), x: L.plot.gate.x, y: L.plot.gate.y + 2, face: 1, cam: null, path: [], goal: null });
+}
+
 export function cameOut(kidId, theme) {
   const L = villageLayout(theme);
   const key = `${kidId}|${L.id}`;
@@ -823,12 +842,14 @@ function spriteUrl(kind, happy) {
 // The painted land is kept for the next redraw; the season is part of the key, and the
 // season's tint is done here, once per paint (never per frame).
 let landCache = { key: '', canvas: null };
-function land(L, color, areas = [], se = null) {
-  const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}|${se ? `${se.season}${Math.round(se.progress * 20)}` : ''}`;
+function land(L, color, areas = [], se = null, plot = null) {
+  const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}|${se ? `${se.season}${Math.round(se.progress * 20)}` : ''}|${L.plot ? plotKey(plot) : ''}`;
   if (landCache.key !== key) {
     // a map that paints its own seasons (the fjord) is told the season; the others are tinted
     const own = L.ownSeasons && se;
     const base = paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas, ...(own ? { season: se.season, progress: se.progress } : {}) });
+    // the kid's garden plot beside the house, with the kid's own plants (villageplot.js)
+    if (L.plot) paintPlot(base.getContext('2d'), L.plot, plot || {}, SHIELDS[L.id] || null);
     landCache = { key, canvas: se && !own ? tintLand(base, se, L.id) : base };
   }
   return landCache.canvas;
@@ -873,7 +894,7 @@ function mount(section, handlers) {
   // the land and the villagers' faces
   const canvas = section.querySelector('.village-land');
   const se = seasonNow(data.today);
-  canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas, se), 0, 0);
+  canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas, se, data.plot), 0, 0);
   // over the top edge (where the view goes past it on a phone, to bring the house's name out from
   // under the HUD), the map's own border carries on: its top rows again, drawn once
   const fringe = document.createElement('canvas');
@@ -1275,6 +1296,8 @@ function mount(section, handlers) {
     walkTo(spot.x, spot.y, { person: p.id, focus });
   };
   const goHome = () => walkTo(L.start.x, L.start.y, { home: true });
+  // to the garden: in at the plot's gate (or round the back of the house, on a map without a plot)
+  const goGarden = () => (L.plot ? walkTo(L.plot.gate.x, L.plot.gate.y, { garden: true }) : walkTo(L.start.x, L.start.y, { garden: true }));
   // the Today list's Go: walk to whoever gives a quest (or in at the door for a house chore)
   section.goTask = (id) => {
     const p = people.find((o) => o.tasks.some((t) => t.id === id));
@@ -1423,7 +1446,7 @@ function mount(section, handlers) {
     if (who) { handlers.sound?.('tap'); goTalk(personById(who.dataset.vid)); return; }
     if (e.target.closest('.v-chest')) { goChest(); return; }
     if (e.target.closest('.v-home')) { handlers.sound?.('tap'); walkTo(L.start.x, L.start.y, { home: true }); return; }
-    if (e.target.closest('.v-garden')) { handlers.sound?.('tap'); walkTo(L.start.x, L.start.y, { garden: true }); return; }
+    if (e.target.closest('.v-garden, .v-plot')) { handlers.sound?.('tap'); goGarden(); return; }
     if (e.target.closest('.v-bakery') && L.bakery) { handlers.sound?.('tap'); walkTo(L.bakery.door.x, L.bakery.door.y, { bakery: true }); return; }
     if (e.target.closest('.v-music') && L.music) { handlers.sound?.('tap'); walkTo(L.music.door.x, L.music.door.y, { music: true }); return; }
     if (!dialog.hidden) { closeDialog(); return; }

@@ -19,7 +19,7 @@ import { dailySummaries } from './familygarden.js';
 import { bloomData, gardenLine } from './villagebloom.js';
 import { openLittle } from './little.js';
 import { playsLittle, jarStars, spendStar, earnSticker, newLittle } from './littlerules.js';
-import { villageHtml, mountVillages, cameOut, cameOutOfMusic, placeVillagers, villagerName, villageGoal } from './village.js';
+import { villageHtml, mountVillages, cameOut, cameOutOfMusic, cameOutOfGarden, placeVillagers, villagerName, villageGoal } from './village.js';
 import { villageLayout } from './villagemaps.js';
 import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
 import { todayHud, todayListHtml } from './today.js';
@@ -38,6 +38,7 @@ import { furnitureThumb } from './houseart.js';
 import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
 import { seedThumb, decorThumb } from './gardenart.js';
 import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
+import { plotPlants } from './villageplot.js';
 import { leaderboard, weekOf } from './leaderboard.js';
 import { openSkiBook } from './skibook-ui.js';
 import { openFindsBook, openFindPage, bookTabs } from './findsbook-ui.js';
@@ -1330,7 +1331,7 @@ function villageView(kid, s, entry, mood) {
     chest: { html: chestSvg(c.tier.id, Boolean(c.opened), 1), ready: c.ready, opened: Boolean(c.opened) },
     music: { tier, left: tier ? 0 : daysToMusicHouse(prog) },
     little: playsLittle(kid) ? { stars: jarStars(state, kid, today()) } : null,
-    garden: { thirsty: gardenThirsty(kid) },
+    garden: { thirsty: gardenThirsty(kid), plot: plotPlants(gardenView(state, kid, today())) },
     bloom: bloomData(gardenKids(), today()),
     today: today(),
     coach: coachFor(kid, entry),
@@ -1517,7 +1518,7 @@ const gardenHandlers = {
     const kid = kidById(ui.kidId);
     if (!kid) return;
     setPlace(kid.id, today(), 'out');
-    cameOut(kid.id, kidTheme(kid));
+    cameOutOfGarden(kid.id, kidTheme(kid));
     render();
   },
   refresh: () => render(),
@@ -2121,7 +2122,7 @@ function goQuest(kid, id) {
   if (where === 'out' && $app.querySelector('.village')?.goTask?.(id)) return;
   villageGoal(kid.id, { task: id });
   setPlace(kid.id, t, 'out');
-  if (where === 'music') cameOutOfMusic(kid.id, kidTheme(kid)); else cameOut(kid.id, kidTheme(kid));
+  if (where === 'music') cameOutOfMusic(kid.id, kidTheme(kid)); else if (where === 'garden') cameOutOfGarden(kid.id, kidTheme(kid)); else cameOut(kid.id, kidTheme(kid));
   render();
 }
 
