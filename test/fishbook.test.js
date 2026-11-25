@@ -2,16 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FISH_SPECIES, FISH_MAPS, speciesId, fishSpecies, catchSpecies, recordCatch, bookCount, bookPages, cleanNickname, makeTank, tankFish, tankFishes, tankSlots, putInTank, takeFromTank, TANK_MAX, NICK_MAX } from '../js/fishbook.js';
 import { homeLayout, tankRoom, furnitureById, placeFurniture } from '../js/furniture.js';
-import { SPOTS } from '../js/fishing.js';
+import { SPOTS, HOLIDAY_FISH } from '../js/fishing.js';
 
-test('the fish book has six fish for every lake: five kinds and its rare fish', () => {
+test('the fish book has seven fish for every lake: five kinds, its rare fish and its December fish', () => {
   assert.equal(FISH_MAPS.length, Object.keys(SPOTS).length);
-  assert.equal(FISH_SPECIES.length, FISH_MAPS.length * 6);
+  assert.equal(FISH_SPECIES.length, FISH_MAPS.length * 7);
   assert.equal(new Set(FISH_SPECIES.map((s) => s.id)).size, FISH_SPECIES.length, 'ids are unique');
   for (const map of FISH_MAPS) {
     const fish = FISH_SPECIES.filter((s) => s.map === map);
     assert.equal(fish.filter((s) => s.rare).length, 1, map);
     assert.equal(fish.find((s) => s.rare).name, SPOTS[map].special.name);
+    assert.equal(fish.filter((s) => s.december).length, 1, `${map}: one December fish`);
+    assert.equal(fish.find((s) => s.december).name, HOLIDAY_FISH[map].name);
   }
   // ids are safe as field names (no dots or slashes)
   for (const s of FISH_SPECIES) assert.match(s.id, /^[a-z]+-[a-z]+$/);
@@ -72,7 +74,7 @@ test('the book: a page per lake, the kid\'s own lake first, uncaught fish blank'
   assert.equal(pages.length, FISH_MAPS.length);
   assert.equal(pages[0].map, 'bg-ocean');
   assert.equal(pages[0].name, 'Coral Reef');
-  assert.equal(pages[0].fish.length, 6);
+  assert.equal(pages[0].fish.length, 7);
   assert.equal(pages[0].fish.find((f) => f.id === 'ocean-sword').record.size, 30);
   assert.equal(pages[0].fish.filter((f) => f.record).length, 1);
   assert.equal(bookPages(recs)[0].map, FISH_MAPS[0]);
@@ -143,4 +145,17 @@ test('bigger tanks: more fish, each species once, the first stays where old copi
   // taking the wall aquarium out goes back to the little tank
   kid.home = placeFurniture(kid, furnitureById('home-tank-wall'));
   assert.equal(homeLayout(kid).tank.id, 'home-tank-basic');
+});
+
+test('December fish: one in every lake, a pretend fish with a fun December line', async () => {
+  const { DECEMBER_FACTS, realFish } = await import('../js/fishfacts.js');
+  const { inDecember } = await import('../js/seasons.js');
+  for (const map of FISH_MAPS) {
+    const f = FISH_SPECIES.find((s) => s.map === map && s.december);
+    assert.ok(f, map);
+    assert.ok(DECEMBER_FACTS[f.id]?.length > 20, `${f.id} has its fun line`);
+    assert.ok(realFish(f.id)?.pretend, `${f.id} teaches its real cousin`);
+  }
+  assert.ok(inDecember('2026-12-01') && inDecember('2026-12-31'));
+  assert.ok(!inDecember('2026-11-30') && !inDecember('2027-01-01') && !inDecember(undefined));
 });

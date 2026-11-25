@@ -261,14 +261,14 @@ export function startSync({ familyId, role, kidId }, { onState, onStatus = () =>
   }
 }
 
-// Every kid's name, buddy (with outfit), gear, best exercise streak and game scores in the family, for visiting buddies
+// Every kid's name, buddy (with outfit and what it owns), gear, ornaments found, best exercise streak and game scores in the family, for visiting buddies
 // on a kid's device, which otherwise only loads its own kid. daily, startDate and tasks let the device work out how
 // the whole family did each day (familygarden.js grows the village from that).
 export function watchBuddies(familyId, onBuddies) {
   unsubs.push(fb.onSnapshot(kidsCol(familyId), (snap) => {
     onBuddies(snap.docs.map((d) => {
       const k = d.data();
-      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: k.exBest || 0, today: k.today || null, milestone: k.milestone || null, playBest: k.playBest || {}, gameBests: k.gameBests || null, daily: k.daily || {}, startDate: k.startDate || null, tasks: k.tasks || [] };
+      return { id: d.id, name: k.name, color: k.color, buddy: k.buddy, owned: k.owned || [], exBest: k.exBest || 0, today: k.today || null, milestone: k.milestone || null, playBest: k.playBest || {}, gameBests: k.gameBests || null, daily: k.daily || {}, startDate: k.startDate || null, tasks: k.tasks || [], buddyOwned: k.buddyOwned || {}, xmasFound: k.xmas?.found || [] };
     }));
   }, (err) => console.error('Kid Quest buddies', err)));
 }
@@ -278,6 +278,14 @@ export function watchBuddies(familyId, onBuddies) {
 export function sendCheer(familyId, toKidId, milestoneId, fromKidId, cheer) {
   const batch = fb.writeBatch(db);
   batch.update(fb.doc(kidsCol(familyId), toKidId), new fb.FieldPath('cheers', milestoneId, fromKidId), cheer);
+  return batch.commit();
+}
+
+// December: a present wrapped for a sibling (xmasgifts.js), put under their tree: one field on that
+// kid's document, xmasGifts[giftId]. Works offline like any save.
+export function sendGift(familyId, toKidId, gift) {
+  const batch = fb.writeBatch(db);
+  batch.update(fb.doc(kidsCol(familyId), toKidId), new fb.FieldPath('xmasGifts', gift.id), clean(gift));
   return batch.commit();
 }
 

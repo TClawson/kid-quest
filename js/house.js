@@ -6,12 +6,13 @@
 // book, the turntable (once bought) its records (turntable.js), and the door leads back out
 // to the village. houseart.js draws it all.
 
-import { ROOM, TURNTABLE, DRESSER, paintRoom } from './houseart.js';
+import { ROOM, TURNTABLE, DRESSER, paintRoom, xtreeAt } from './houseart.js';
 import { tankSpec } from './tankart.js';
 import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
 import { furnitureById } from './furniture.js';
 import { fishSpecies } from './fishbook.js';
 import { fishPic } from './fishart.js';
+import { artCanvas, giftShake, unwrapArt, GIFT_AT, GIFT_SIZE, TREE } from './xmasart.js';
 import { vaseArt, basketArt as veggieBasketArt, bowlArt } from './gardenart.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -39,6 +40,8 @@ export const HOUSE_SPOTS = {
   vacuum: { x: 80, y: 142 }, // on the floor (vacuuming)
   dust: { x: 101, y: 64 }, // in front of the shelf (dusting)
 };
+/** December: where the buddy stands to look at the ornament tree (in front of it, a little to the right). */
+const xtreeSpot = (layout) => { const T = xtreeAt(layout); return { x: T.x + 32, y: T.y + 74 }; };
 const M = ROOM.at.music;
 // the tappable things: [x, y, w, h] boxes over the art
 const HOT = {
@@ -102,6 +105,21 @@ const DONE_SAY = {
 };
 
 /**
+ * December (xmas.js xmasHouse): the tree's tap box and tag (the ornament count), and one for each
+ * present under it, with the name of the buddy it's from. In January the tree is packed away and
+ * only presents not opened yet are left.
+ */
+function xmasSpots(x, layout) {
+  const T = xtreeAt(layout);
+  const tree = !x.tree ? '' : `<button class="h-spot" data-spot="xtree" style="left:${T.x + 5}px;top:${T.y + 2}px;width:${TREE.w - 10}px;height:${TREE.h - 2}px" aria-label="Ornament tree: ${x.found} of ${x.total} ornaments"><span class="h-tag">${x.tree?.big ? '🎄' : `🎄 ${x.found}/${x.total}`}</span></button>`;
+  const gifts = (x.gifts || []).map((g, i) => {
+    const p = GIFT_AT[i % GIFT_AT.length]; const [w, hh] = GIFT_SIZE[g.shape] || GIFT_SIZE.small;
+    return `<button class="h-spot h-gift" data-spot="gift" data-gift="${i}" style="left:${T.x + p.x - Math.floor(w / 2)}px;top:${T.y + p.y - hh}px;width:${w}px;height:${hh}px" aria-label="A present from ${esc(g.from)}"><span class="h-tag">🎁 ${esc(g.from)}</span></button>`;
+  }).join('');
+  return tree + gifts;
+}
+
+/**
  * The house for a kid. h: {
  *   kidId, kidName, color, buddy: live buddy markup,
  *   layout: homeLayout(kid), chores: { bed, teeth, floor: { id, name, icon, st, verify, timer, sub } or null },
@@ -124,6 +142,7 @@ export function houseHtml(h) {
     tank: fishes.map((f) => ({ species: f.species, len: f.len, nickname: f.nickname })),
     harvest: h.harvest || null,
     dig: h.dig || null,
+    xmas: h.xmas || null,
   };
   const spec = tankSpec(h.layout?.tank?.art);
   const T = spec.at;
@@ -161,6 +180,7 @@ export function houseHtml(h) {
           <span class="h-notes" style="left:${M.x + TURNTABLE.record.x}px;top:${M.y + 2}px" aria-hidden="true"><i>♪</i><i>♫</i><i>♪</i></span>` : ''}
           ${h.dig ? `${spot('stand', 'Skeleton stand', `<span class="h-tag">🦴 ${h.dig.skeleton ? 'Skeleton' : 'Stand'}</span>`)}
           ${spot('pedestal', 'Treasure pedestal', '<span class="h-tag">💎 Pedestal</span>')}` : ''}
+          ${h.xmas ? xmasSpots(h.xmas, { music: Boolean(h.layout?.music) }) : ''}
           ${h.little ? spot('puzzle', 'Animal puzzles', '<span class="h-puzzle" style="left:1px;top:2px"></span><span class="h-tag">🧩 Puzzles</span>') : ''}
           ${spot('bed', 'Bed')}
           ${spot('sink', 'Sink')}
@@ -205,12 +225,12 @@ export function mountHouses(root, handlers) {
 
 let roomCache = { key: '', canvas: null, res: null };
 function room(doc, data) {
-  const key = JSON.stringify([data.layout, data.chores && Object.fromEntries(Object.entries(data.chores).map(([k, v]) => [k, v ? v.st : null])), data.mess, data.shelf, data.gear, data.color, data.dig]);
+  const key = JSON.stringify([data.layout, data.chores && Object.fromEntries(Object.entries(data.chores).map(([k, v]) => [k, v ? v.st : null])), data.mess, data.shelf, data.gear, data.color, data.dig, data.xmas]);
   if (roomCache.key !== key) {
     const canvas = doc.createElement('canvas');
     const done = (k) => !data.chores?.[k] || data.chores[k].st === 'done' || data.chores[k].st === 'pending';
     const layout = Object.fromEntries(Object.entries(data.layout).map(([k, id]) => [k, id ? furnitureById(id) : null]));
-    const res = paintRoom(canvas, { layout, made: done('bed'), teeth: done('teeth'), dresser: done('dresser'), books: done('books'), mess: data.mess, shelf: data.shelf, gear: data.gear, color: data.color, dig: data.dig });
+    const res = paintRoom(canvas, { layout, made: done('bed'), teeth: done('teeth'), dresser: done('dresser'), books: done('books'), mess: data.mess, shelf: data.shelf, gear: data.gear, color: data.color, dig: data.dig, xmas: data.xmas });
     roomCache = { key, canvas, res };
   }
   return roomCache;
@@ -239,6 +259,20 @@ function mount(section, handlers) {
   }
 
   harvestPieces(section, world, buddyEl, res.pieces.find((p) => p.id === 'table'), data.harvest);
+  // December: the tree's lights, three frames taking turns (css h-twinkle)
+  if (res.xmas?.lights) {
+    const L = res.xmas.lights;
+    const box = section.ownerDocument.createElement('div');
+    box.className = 'h-lights';
+    box.style.cssText = `left:${L.x}px;top:${L.y}px;width:${L.w}px;height:${L.h}px;z-index:${L.foot + 1}`;
+    for (const f of L.frames) {
+      const c = section.ownerDocument.createElement('canvas');
+      c.width = f.width; c.height = f.height;
+      c.getContext('2d').drawImage(f, 0, 0);
+      box.append(c);
+    }
+    world.insertBefore(box, buddyEl);
+  }
 
   // where the buddy can walk: the floor, round the furniture, through the bathroom doorway
   const pt = R.partition;
@@ -254,7 +288,7 @@ function mount(section, handlers) {
   };
   const grid = makeGrid(L);
 
-  const SPOTS = spotsFor(tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art));
+  const SPOTS = { ...spotsFor(tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art)), ...(data.xmas?.tree ? { xtree: xtreeSpot({ music: Boolean(data.layout.music) }) } : {}) };
   const mem = memory.get(data.kid) || { ...HOUSE_SPOTS.wake, face: 1, cam: null };
   memory.set(data.kid, mem);
   // a walk carries on if the house is redrawn on the way (a chore just done, a sync)
@@ -310,7 +344,59 @@ function mount(section, handlers) {
     e.stopPropagation();
     closeDialog();
     if (b.dataset.h === 'do') handlers.onTask?.(b.dataset.q, buddyEl);
+    if (b.dataset.h === 'unwrap') unwrap(Number(b.dataset.gift));
   });
+
+  // December: a present under the tree wiggles and rattles when tapped (it opens on Christmas morning)
+  const shakeGift = (i) => {
+    const g = data.xmas?.gifts?.[i];
+    const piece = world.querySelector(`.h-piece[data-piece="gift${i}"]`);
+    if (!g || !piece || piece.dataset.shaking) return;
+    piece.dataset.shaking = '1';
+    handlers.sound?.('rattle');
+    const ctx = piece.getContext('2d');
+    const still = ctx.getImageData(0, 0, piece.width, piece.height);
+    const frames = [0, 1, 2, 1].map((f) => artCanvas(giftShake(g.shape, g.paper, f), section.ownerDocument));
+    let n = 0;
+    const step = () => {
+      ctx.clearRect(0, 0, piece.width, piece.height);
+      if (n < 8) { ctx.drawImage(frames[n % 4], 0, 0); n += 1; setTimeout(step, 110); return; }
+      ctx.putImageData(still, 0, 0);
+      delete piece.dataset.shaking;
+      if (g.open) say(`A present from ${g.from}! It's Christmas, so you can open it.`, '', `<button class="btn" data-h="unwrap" data-gift="${i}">🎁 Open it!</button><button class="btn ghost" data-h="bye">Not yet</button>`);
+      else say(`A present from ${g.from}! Something inside goes rattle-rattle.`, `<div class="v-quest"><span class="v-quest-icon">🎄</span><span><b>Opens on Christmas morning</b><small>25 December</small></span></div>`, '<button class="btn" data-h="bye">OK!</button>');
+    };
+    step();
+  };
+  // Christmas morning: the present tears open in 4 frames where it stands (xmasart.js unwrapArt),
+  // then the app hands over what's inside (handlers.onUnwrap, by the present's id)
+  const unwrap = (i) => {
+    const g = data.xmas?.gifts?.[i];
+    const piece = world.querySelector(`.h-piece[data-piece="gift${i}"]`);
+    if (!g || !g.open || !piece || piece.dataset.opening) return;
+    piece.dataset.opening = '1';
+    handlers.sound?.('rattle');
+    const frames = [0, 1, 2, 3].map((f) => artCanvas(unwrapArt(g.shape, g.paper, f, g.item || null), section.ownerDocument));
+    const c = section.ownerDocument.createElement('canvas');
+    c.width = frames[0].width; c.height = frames[0].height;
+    c.className = 'h-piece h-unwrap';
+    // the frames are 30 x 26 (plus their pad), standing on the present's foot, centered on it
+    const left = parseFloat(piece.style.left) + piece.width / 2 - c.width / 2;
+    const top = parseFloat(piece.style.top) + piece.height - c.height;
+    c.style.cssText = `left:${left}px;top:${top}px;width:${c.width}px;height:${c.height}px;z-index:${piece.style.zIndex}`;
+    piece.style.visibility = 'hidden';
+    world.insertBefore(c, buddyEl);
+    let n = 0;
+    const step = () => {
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.drawImage(frames[n], 0, 0);
+      n += 1;
+      if (n < frames.length) { setTimeout(step, 260); return; }
+      setTimeout(() => handlers.onUnwrap?.(g.id), 500);
+    };
+    step();
+  };
 
   // ---- walking ----
   const arrive = () => {
@@ -338,6 +424,7 @@ function mount(section, handlers) {
     else if (goal.use === 'stand') handlers.onStand?.();
     else if (goal.use === 'pedestal') handlers.onPedestal?.();
     else if (goal.use === 'puzzle') handlers.onPuzzle?.();
+    else if (goal.use === 'xtree') handlers.onOrnaments?.();
     else if (goal.use) choreTalk(goal.use);
   };
   const walkTo = (x, y, goal = null) => {
@@ -368,6 +455,7 @@ function mount(section, handlers) {
       const k = sp.dataset.spot;
       // the bed and the sink talk about their chore (or say how tidy they are)
       if (k === 'sink') { use('teeth'); return; }
+      if (k === 'gift') { shakeGift(Number(sp.dataset.gift)); return; }
       use(k);
       return;
     }
@@ -382,7 +470,7 @@ function mount(section, handlers) {
   });
 
   // the trophy, chart, tank and book tags show when the buddy is close
-  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"], .h-spot[data-spot="stand"], .h-spot[data-spot="pedestal"], .h-spot[data-spot="puzzle"]')].map((el) => ({ el, at: SPOTS[el.dataset.spot] }));
+  const tags = [...section.querySelectorAll('.h-spot[data-spot="shelf"], .h-spot[data-spot="chart"], .h-spot[data-spot="tank"], .h-spot[data-spot="book"], .h-spot[data-spot="music"], .h-spot[data-spot="stand"], .h-spot[data-spot="pedestal"], .h-spot[data-spot="puzzle"], .h-spot[data-spot="xtree"]')].map((el) => ({ el, at: SPOTS[el.dataset.spot] }));
   const tankSpecNow = tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art);
   const swim = tankSwimmer(section, data.tank, tankSpecNow);
   const plaque = section.querySelector('.h-plaque');
@@ -406,7 +494,9 @@ function mount(section, handlers) {
     const k = Math.min(1, dt * 5);
     cam.x += (t.x - cam.x) * k; cam.y += (t.y - cam.y) * k;
     Object.assign(mem, { x: me.x, y: me.y, face: me.face, cam, S, path: me.path, goal: me.goal });
-    for (const g of tags) g.el.classList.toggle('near', Math.hypot(me.x - g.at.x, me.y - g.at.y) < (g.el.dataset.spot === 'tank' || g.el.dataset.spot === 'book' ? 26 : 48));
+    // at the December tree only its tag shows (by the couch it stands near the tank and the book)
+    const atTree = SPOTS.xtree && Math.hypot(me.x - SPOTS.xtree.x, me.y - SPOTS.xtree.y) < 8;
+    for (const g of tags) g.el.classList.toggle('near', (!atTree || g.el.dataset.spot === 'xtree') && Math.hypot(me.x - g.at.x, me.y - g.at.y) < (g.el.dataset.spot === 'tank' || g.el.dataset.spot === 'book' ? 26 : 48));
     swim?.(now / 1000);
     // with more than one fish, the plaque takes turns saying each one's name
     if (data.tank.length > 1 && plaque) {

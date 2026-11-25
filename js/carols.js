@@ -1,0 +1,456 @@
+// The December carols (design-v2 section 6): seven public-domain carols, each a game loop (in
+// the SONGS format of songs.js, so Listen plays it with the band) and Easy / Medium / Hard piano
+// versions (Easy is written from the loop's lead by sheetmusic.js, Medium and Hard are in the
+// ARRANGEMENTS format of arrangements.js). Arranged by Tailleur Claude & Son and approved by
+// Taylor; the notes, sources and checks are in the music's NOTES.md (the December project
+// files, carols/). They are not map songs: no map plays them, and the studio and the
+// Note-o-Matic don't use them. The songbook shows them in December (sheetmusic.js: carolbookFor).
+// Each carol: title, subtitle (or none), composer (the line on the sheet), sheetTempo (the
+// printed speed in quarter notes a minute, when it differs from the loop's bpm), song, medium,
+// hard. Pure data.
+
+/** Who arranged the carols, as the sheets say it. */
+export const CAROL_ARRANGER = 'Tailleur Claude & Son (arr.)';
+
+export const CAROLS = {
+  // Jingle Bells
+  'xmas-jingle': {
+    title: 'Jingle Bells',
+    composer: 'James Lord Pierpont (1857)',
+    sheetTempo: 132,
+    song: {
+      name: 'Jingle Bells',
+      key: 'C',
+      bpm: 184,
+      leadWave: 'pulse25',
+      leadVol: 0.36,
+      lead: [
+        'E5 - E5 - E5 - - -', 'E5 - E5 - E5 - - -', 'E5 - G5 - C5 - - D5', 'E5 - - - - - - -',
+        'F5 - F5 - F5 - - F5', 'F5 - E5 - E5 - E5 E5', 'E5 - D5 - D5 - E5 -', 'D5 - - - G5 - - -',
+        'E5 - E5 - E5 - - -', 'E5 - E5 - E5 - - -', 'E5 - G5 - C5 - - D5', 'E5 - - - - - - -',
+        'F5 - F5 - F5 - - F5', 'F5 - E5 - E5 - E5 E5', 'G5 - G5 - F5 - D5 -', 'C5 - - - - - - -',
+      ],
+      chords: ['C', 'C', 'C', 'C', 'F', 'C', 'D', 'G', 'C', 'C', 'C', 'C', 'F', 'C', 'G', 'C'],
+      arp: { from: 8, wave: 'pulse12', env: 'pluck', octave: 5, order: 'updown', vol: 0.05 },
+      bass: [[0, 2, 3.8], null, null, null, [2, 2, 3.8], null, null, null],
+      drums: [
+        ['k...k...', '........', 'h.hhh.hh'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k...k...', '..s...s.', 'hhhhhhhh'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+      ],
+      fill: ['k...k...', '..s.s.ss', 'h.h.o...'],
+    },
+    medium: {
+      rh: [
+        '!mf! [Gce]2 [Gce]2 [Gce]4', '[Gce]2 [Gce]2 [Gce]2 ce', '[Gce]2 [ceg]2 [EGc]3 d', '[Gce]2 ge cG EG',
+        '[Acf]2 [Acf]2 [Acf]3 f', '[Gcf]2 [Gce]2 [Gce]2 [ce][ce]', '[^Fce]2 [Fcd]2 [Fcd]2 [Fce]2', '[GBd]2 Bd [Bdg]4',
+        '!f! [ge\']2 [ge\']2 [ge\']4', '[ge\']2 [ge\']2 [ge\']2 c\'g', '[ge\']2 [e\'g\']2 [ec\']3 d\'', '[ge\']2 g\'e\' c\'g ec',
+        '[af\']2 [af\']2 [af\']3 f\'', 'f\'2 [ge\']2 [ge\']2 [ge\'][ge\']', '[bg\']2 [bg\']2 [bf\']2 [gbd\']2', '[egc\']2 ge [EGc]2 z2',
+      ],
+      lh: [
+        'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'C,2 [E,G,C]2 G,,2 [E,G,]2', 'C,2 [E,G,C]2 A,,2 G,,2',
+        'F,,2 [F,A,C]2 C,2 [F,A,C]2', 'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'D,2 [^F,A,C]2 A,,2 [F,A,C]2', 'G,,2 [D,G,B,]2 A,,2 B,,2',
+        'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'C,2 [E,G,C]2 E,2 [G,C]2', 'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'C,2 [E,G,C]2 A,,2 G,,2',
+        'F,,2 [F,A,C]2 C,2 [F,A,C]2', 'C,2 [E,G,C]2 G,,2 [E,G,C]2', 'G,,2 [D,G,B,]2 B,,2 [F,G,B,]2', 'C,2 E,G,, [C,,C,]2 z2',
+      ],
+    },
+    hard: {
+      rh: [
+        '!f! [EGce]2 [EGce]2 [EGce]4', '[EGce]2 [EGce]2 [EGce]2 ce', '[EGce]2 [Gceg]2 [EGc]3 [Fd]', '[EGce]2 ge cG EG',
+        '[FAcf]2 [FAcf]2 [FAcf]3 [Af]', '[Gcf]2 [EGce]2 [EGce]2 [ce][ce]', '[^FAce]2 [FAcd]2 [FAcd]2 [FAce]2', '[DGBd]2 Bd [GBdg]2 gf',
+        '!ff! [ege\']2 [ege\']2 [ege\']4', '[ege\']2 [ege\']2 [ege\']2 c\'g', '[ege\']2 [gc\'g\']2 [cec\']3 [dd\']', '[ege\']2 g\'e\' c\'g ec',
+        '[faf\']2 [faf\']2 [faf\']3 [ff\']', '[gc\'f\']2 [gc\'e\']2 [gc\'e\']2 [c\'e\'][c\'e\']', '[gbg\']2 [gbg\']2 [fbf\']2 [dgbd\']2', '[egc\']2 ge [CEGc]2 z2',
+      ],
+      lh: [
+        '[C,,C,]2 [E,G,C]2 [G,,G,]2 [E,G,C]2', '[C,,C,]2 [E,G,C]2 [G,,G,]2 [E,G,C]2', '[C,,C,]2 [E,G,C]2 [E,,E,]2 [G,C]2', '[C,,C,]2 [E,G,C]2 [A,,A,]2 [G,,G,]2',
+        '[F,,F,]2 [F,A,C]2 [C,,C,]2 [F,A,C]2', '[C,,C,]2 [E,G,C]2 [G,,G,]2 [E,G,C]2', '[D,,D,]2 [^F,A,C]2 [A,,A,]2 [F,A,C]2', '[G,,G,]2 [D,G,B,]2 [A,,A,]2 [B,,B,]2',
+        '[C,,C,]2 [E,,E,]2 [G,,G,]2 [A,,A,]2', '[C,C]2 [A,,A,]2 [G,,G,]2 [E,,E,]2', '[C,,C,]2 [E,,E,]2 [G,,G,]2 [A,,A,]2', '[C,C]2 [B,,B,]2 [A,,A,]2 [G,,G,]2',
+        '[F,,F,]2 [A,,A,]2 [C,C]2 [D,D]2', '[C,C]2 [E,,E,]2 [G,,G,]2 [C,C]2', '[G,,G,]2 [B,,B,]2 [D,D]2 [B,,B,]2', '[C,,C,]2 [E,,E,]2 [C,,G,,C,]2 z2',
+      ],
+    },
+  },
+  // Deck the Halls (Nos Galan)
+  'xmas-deck': {
+    title: 'Deck the Halls',
+    subtitle: 'Nos Galan',
+    composer: 'Welsh traditional',
+    sheetTempo: 120,
+    song: {
+      name: 'Deck the Halls',
+      key: 'F',
+      bpm: 148,
+      lead: [
+        'C6 - - Bb5 A5 - G5 -', 'F5 - G5 - A5 - F5 -', 'G5 A5 Bb5 G5 A5 - - G5', 'F5 - E5 - F5 - - -',
+        'C6 - - Bb5 A5 - G5 -', 'F5 - G5 - A5 - F5 -', 'G5 A5 Bb5 G5 A5 - - G5', 'F5 - E5 - F5 - - -',
+        'G5 - - A5 Bb5 - G5 -', 'A5 - - Bb5 C6 - G5 -', 'A5 B5 C6 - D6 E6 F6 -', 'E6 - D6 - C6 - - -',
+        'C6 - - Bb5 A5 - G5 -', 'F5 - G5 - A5 - F5 -', 'D6 D6 D6 D6 C6 - - Bb5', 'A5 - G5 - F5 - - -',
+      ],
+      chords: ['F', 'F Dm', 'C F', 'C F', 'F', 'F Dm', 'C F', 'C F', 'C', 'F C', 'F Dm', 'G C', 'F', 'F Dm', 'Bb F', 'C F'],
+      arp: { from: 8, wave: 'pulse12', octave: 5, vol: 0.05 },
+      bass: [[0, 2], null, [2, 2], null, [0, 2], null, [2, 2], null],
+      drums: [
+        ['k...k...', '..s...s.', 'h.h.h.h.'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k...k...', '..s...s.', 'hhhhhhhh'],
+        ['k...k...', '..s...s.', 'h.hhh.hh', '......t.'],
+      ],
+      fill: ['k...k...', '..s.s.ss', 'h.h.o...'],
+    },
+    medium: {
+      rh: [
+        '!mf! [FAc]3 B [FA]2 G2', '[A,CF]2 [CG]2 [DFA]2 [A,DF]2', '[EG][FA][GB][EG] [FA]3 [EG]', '[G,CF]2 [G,CE]2 [A,CF]2 (c/A/F/C/)',
+        '[cc\']3 [Bb] [Aa]2 [Gg]2', '[Ff]2 [Gg]2 [Aa]2 [Ff]2', '[eg][fa][gb][eg] [fa]3 [eg]', '[Gcf]2 [Gce]2 [Acf]4',
+        '!mp! [EG]3 A [GB]2 [EG]2', '[FA]3 B [EGc]2 [EG]2', '!mf! [FA]=B [Ac]2 [Fd]e [Af]2', '[ce]2 [=Bd]2 [EGc]4',
+        '!f! [fac\']3 b [cfa]2 [cg]2', '[Acf]2 [cg]2 [dfa]2 [Adf]2', '[bd\'][bd\'][bd\'][bd\'] [fac\']3 b', '[cfa]2 [ceg]2 [Acf]4',
+      ],
+      lh: [
+        'F,,2 [C,F,]2 C,,2 [C,F,A,]2', 'F,,2 [C,F,]2 D,,2 [A,,D,F,]2', 'C,2 [G,B,]2 F,,2 [C,F,A,]2', 'C,,2 C,2 F,,2 [C,F,]2',
+        'F,,C,A,C, F,,C,A,C,', 'F,,C,F,C, D,,A,,D,A,,', 'C,,G,,C,E, F,,C,F,A,', 'C,,2 [C,G,B,]2 F,,C,F,A,',
+        'C,G,E,G, C,G,B,G,', 'F,,C,A,C, C,G,E,G,', 'F,,2 [C,F,A,]2 D,,2 [D,F,A,]2', 'G,,2 [G,=B,D]2 C,,G,,C,E,',
+        'F,,2 [C,F,A,]2 C,,2 [C,F,A,]2', 'F,,2 [C,F,A,]2 D,,2 [D,F,A,]2', 'B,,2 [D,F,B,]2 F,,2 [C,F,A,]2', 'C,,2 [C,G,B,]2 [F,,C,F,]4',
+      ],
+    },
+    hard: {
+      rh: [
+        '!f! [fac\']3 b [cfa]2 [cg]2', '[Acf]2 [cg]2 [dfa]2 [Adf]2', '[eg][fa][gb][eg] [fa]3 [eg]', '[Gcf]2 [Gce]2 [Acf]2 (c\'/a/f/c/)',
+        '!mp! [FAc]3 B [FA]2 G2', '[A,CF]2 [CG]2 [DFA]2 [A,DF]2', '[EG][FA][GB][EG] [FA]3 [EG]', '[G,CF]2 [G,CE]2 [A,CF]2 (F/A/c/f/)',
+        '!mf! [eg]3 a [gb]2 [eg]2', '[fa]3 b [ec\']2 [eg]2', '[Aa][=B=b] [cc\']2 [dd\'][ee\'] [ff\']2', '[ec\'e\']2 [d=bd\']2 [cegc\']2 (g/e/c/G/)',
+        '!ff! [cfac\']3 b [Acfa]2 [cg]2', '[FAcf]2 [cg]2 [Adfa]2 [FAdf]2', '[dfbd\'][bd\'][dfbd\'][bd\'] [cfac\']3 b', '[cfa]2 [Bceg]2 [FAcf]4',
+      ],
+      lh: [
+        '[F,,F,]2 [C,F,A,]2 [C,,C,]2 [C,F,A,]2', '[F,,F,]2 [C,F,A,]2 [D,,D,]2 [D,F,A,]2', '[C,,C,]2 [C,G,B,]2 [F,,F,]2 [C,F,A,]2', '[C,,C,]2 [C,G,B,]2 [F,,F,]2 [C,F,A,]2',
+        'F,,C,A,C F,CA,C,', 'F,,C,F,C, D,,A,,D,A,,', 'C,,G,,C,E, F,,C,F,A,', 'C,,2 C,2 F,,2 [C,F,]2',
+        'C,,G,,C,E, G,E,C,G,,', 'F,,C,F,C, C,,G,,C,E,', '[F,,F,]2 [C,F,A,]2 [D,,D,]2 [D,F,A,]2', '[G,,G,]2 [G,=B,D]2 C,,G,,C,E,',
+        '[F,,F,]2 [C,F,A,]2 [C,,C,]2 [C,F,A,]2', '[F,,F,]2 [C,F,A,]2 [D,,D,]2 [D,F,A,]2', '[B,,,B,,]2 [D,F,B,]2 [F,,F,]2 [C,F,A,]2', '[C,,C,]2 [C,G,B,]2 F,,/C,/F,/A,/ [F,,C,F,]2',
+      ],
+    },
+  },
+  // We Wish You a Merry Christmas
+  'xmas-wish': {
+    title: 'We Wish You a Merry Christmas',
+    composer: 'English traditional',
+    song: {
+      name: 'We Wish You a Merry Christmas',
+      key: 'G',
+      bpm: 160,
+      beat: 6,
+      lead: [
+        '. . . . D5 -', 'G5 - G5 A5 G5 F#5', 'E5 - C5 - E5 -', 'A5 - A5 B5 A5 G5',
+        'F#5 - D5 - F#5 -', 'B5 - B5 C6 B5 A5', 'G5 - E5 - D5 D5', 'E5 - A5 - F#5 -',
+        'G5 - - - D5 -', 'G5 - G5 - G5 -', 'F#5 - - - F#5 -', 'G5 - F#5 - E5 -',
+        'D5 - - - A5 -', 'B5 - A5 - G5 -', 'D6 - D5 - D5 D5', 'E5 - A5 - F#5 -',
+        'G5 - - - - -',
+      ],
+      chords: ['D', 'G', 'C', 'A', 'D', 'B', 'Em', 'C D D', 'G', 'G', 'D', 'Em', 'D', 'G', 'Bm', 'C D D', 'G'],
+      arp: { from: 0, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.045 },
+      bass: [[0, 2, 1.8], null, null, null, [0, 3], null],
+      drums: [
+        ['k.....', '......', '..h.h.'],
+        ['k.....', '..s.s.', 'h.h.h.'],
+        ['k.....', '..s.s.', 'hhhhhh'],
+      ],
+      fill: ['k.....', '..s.ss', 'h.h.o.'],
+    },
+    medium: {
+      rh: [
+        '!mf! z2 [FA]2 [Ad]2', '[Bdg]2 [Bg]a [Bg]f', '[Gce]2 [EGc]2 [Gce]2', '[^cea]2 [ca]b [ca]g',
+        '[Adf]2 [FAd]2 [Adf]2', '[^dfb]2 [db]c\' [db]a', '[Beg]2 [GBe]2 dd', '[Gce]2 [cfa]2 [Acf]2',
+        '[Bdg]2 dB [GBd]2', '!mp! [Bdg]2 [Bdg]2 [Bdg]2', '[Adf]4 [Adf]2', '[Beg]2 [Bf]2 [GBe]2',
+        '[FAd]2 FA [dfa]2', '!f! [dgb]2 [da]2 [Bdg]2', '[fbd\']2 [FBd]2 [Fd][Fd]', '[Gce]2 [cfa]2 [Acf]2',
+        '[Bdg]2 dB [GBdg]2',
+      ],
+      lh: [
+        '[D,,D,]2 [A,,A,]2 [F,,F,]2', 'G,,2 [D,G,B,]2 [D,G,B,]2', 'C,,2 [E,G,C]2 [E,G,C]2', 'A,,2 [E,G,^C]2 [E,G,C]2',
+        'D,,2 [D,F,A,]2 [D,F,A,]2', 'B,,2 [^D,F,B,]2 [D,F,A,]2', 'E,,2 [E,G,B,]2 [E,G,B,]2', 'C,2 [D,A,]2 [D,,D,]2',
+        'G,,2 [D,G,B,]2 [G,,G,]2', 'G,,D,G,B,DB,', 'D,,A,,D,F,A,F,', 'E,,B,,E,G,B,G,',
+        'D,,A,,D,F, [F,C]2', 'G,,2 [D,G,B,]2 [D,G,B,]2', 'B,,2 [D,F,B,]2 [D,F,B,]2', 'C,,2 D,,2 [D,A,C]2',
+        'G,,2 D,2 [G,,D,G,]2',
+      ],
+    },
+    hard: {
+      rh: [
+        '!f! z A Bc [FAd]2', '[GBdg]2 [Bg]a [Bg]f', '[EGce]2 [CEGc]2 [EGce]2', '[A^cea]2 [ca]b [ca]g',
+        '[FAdf]2 [DFAd]2 [FAdf]2', '[B^dfb]2 [db]c\' [db]a', '[GBeg]2 [EGBe]2 [Bd][Bd]', '[EGce]2 [Acfa]2 [FAcf]2',
+        '[GBdg]2 dB [GBd]2', '!mp! [dg]B [dg]B [dg]B', '[Adf]4 [Adf]2', '[Beg]2 [Bf]2 [GBe]2',
+        '[FAd]2 FA [dfa]2', '!ff! [Bdgb]2 [da]2 [GBdg]2', '[dfbd\']2 [DFBd]2 [Fd][Fd]', '[EGce]2 [Acfa]2 [FAcf]2',
+        '[Bdg]2 dB [GBdg]2',
+      ],
+      lh: [
+        '[D,,D,]2 [A,,A,]2 [F,,F,]2', '[G,,G,]2 [D,G,B,]2 [D,G,B,]2', '[C,,C,]2 [G,,E,G,]2 [G,,E,G,]2', 'A,,2 [E,G,^C]2 [E,G,C]2',
+        '[D,,D,]2 [A,,D,F,]2 [A,,D,F,]2', '[B,,,B,,]2 [^D,F,B,]2 [D,F,A,]2', '[E,,E,]2 [E,G,B,]2 [E,G,B,]2', '[C,,C,]2 [D,,D,]2 [D,A,]2',
+        '[G,,G,]2 [D,G,B,]2 [G,,D,G,]2', 'G,,D,G,B,DB,', 'D,,A,,D,F,A,F,', 'E,,B,,E,G,B,G,',
+        'D,,A,,D,F, [F,C]2', '[G,,G,]2 [D,G,B,]2 [D,G,B,]2', '[B,,,B,,]2 [D,F,B,]2 [D,F,]2', '[C,,C,]2 [D,,D,]2 [D,A,]2',
+        '[G,,G,]2 [D,G,]2 [G,,D,G,]2',
+      ],
+    },
+  },
+  // Up on the Housetop
+  'xmas-housetop': {
+    title: 'Up on the Housetop',
+    composer: 'Benjamin R. Hanby (1864)',
+    song: {
+      name: 'Up on the Housetop',
+      key: 'D',
+      bpm: 140,
+      lead: [
+        'A5 - A5 B5 A5 - F#5 -', 'D5 - F#5 - A5 - - -', 'B5 - B5 - A5 - F#5 -', 'E5 - A5 - A5 - - -',
+        'A5 - A5 B5 A5 - F#5 -', 'D5 - F#5 - A5 - - -', 'B5 - B5 - A5 - F#5 -', 'E5 - A5 - D5 - - -',
+        'G5 - G5 - B5 - - -', 'A5 - A5 A5 F#5 - - -', 'E5 - E5 - G5 - - -', 'F#5 - F#5 F#5 D5 - - -',
+        'A5 - A5 B5 A5 - F#5 -', 'G5 - G5 - B5 - - -', 'A5 - A5 B5 A5 - G5 F#5', 'E5 - A5 - D5 - - -',
+      ],
+      chords: ['D', 'D', 'G D', 'A', 'D', 'D', 'G D', 'A D', 'G', 'D', 'A', 'D', 'D', 'G', 'D', 'A D'],
+      arp: { from: 8, wave: 'pulse12', octave: 5, vol: 0.05 },
+      bass: [[0, 2], null, [0, 3], null, [0, 2], null, [2, 2], null],
+      drums: [
+        ['k...k...', '..s...s.', 'h.h.h.h.'],
+        ['k...k...', '..s...s.', 'h.h.h.h.'],
+        ['k...k...', '..s...s.', 'h.h.h.h.'],
+        ['k...k...', '..s...s.', 'h.h.h.h.'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k.k.k...', '......s.', 'h.h.h.h.'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k.k.k...', '......s.', 'h.h.h.h.'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['........', 's.s.s...', '........'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+        ['k...k...', '..s...s.', 'h.hhh.hh'],
+      ],
+      fill: ['k...k...', '..s.s.ss', 'h.h.o...'],
+    },
+    medium: {
+      rh: [
+        '!mf! [dfa]2 [fa]b [dfa]2 [Adf]2', '[FAd]2 [Adf]2 [dfa]4', '[dgb]2 [dgb]2 [dfa]2 [Adf]2', '[Ace]2 [cea]2 [cea]4',
+        '[Aa]2 [Aa][Bb] [Aa]2 [Ff]2', '[Dd]2 [Ff]2 [Aa]2 [Adf]2', '[Bb]2 [Bb]2 [Aa]2 [Ff]2', '[Ee]2 [Aa]2 [FAd]4',
+        '!f! .[Bdg]2 .[Bdg]2 [dgb]3 [dgb]', '[dfa]2 [fa][fa] [Adf]4', '.[Ace]2 .[Ace]2 [ceg]3 [ceg]', '[Adf]2 [df][df] [FAd]2 (F/A/d/f/)',
+        '!mf! [dfa]2 [fa]b [dfa]2 [Adf]2', '!p! .[Bdg]2 .[Bdg]2 .[dgb]2 z2', '!f! [dfa]2 [fa]b [dfa]2 [dg][df]', '[Ace]2 [cea]2 [FAd]2 [dfad\']2',
+      ],
+      lh: [
+        'D,,2 [D,F,A,]2 A,,2 [D,F,A,]2', 'D,,2 [D,F,A,]2 F,,2 [D,F,A,]2', 'G,,2 [D,G,B,]2 D,,2 [D,F,A,]2', 'A,,2 [E,A,C]2 [B,,B,]2 [C,C]2',
+        'D,,2 [D,F,A,]2 A,,2 [D,F,A,]2', 'D,,2 [D,F,A,]2 F,,2 [D,F,A,]2', 'G,,2 [D,G,B,]2 D,,2 [D,F,A,]2', 'A,,2 [E,G,C]2 D,,2 [D,F,A,]2',
+        '.[G,,G,]2 .[G,,G,]2 [G,,G,]2 [D,G,B,]2', 'D,,2 [D,F,A,]2 A,,2 [D,F,A,]2', '.[A,,A,]2 .[A,,A,]2 [A,,A,]2 [E,G,C]2', 'D,,2 [D,F,A,]2 A,,2 [D,F,A,]2',
+        '[D,,D,]2 [F,,F,]2 [A,,A,]2 [A,,,A,,]2', '.[G,,G,]2 .[D,G,B,]2 .[G,,D,G,]2 z2', 'D,,2 [D,F,A,]2 A,,2 [D,A,]2', 'A,,2 [E,G,C]2 [D,,D,]2 [D,,A,,D,]2',
+      ],
+    },
+    hard: {
+      rh: [
+        '!f! [Adfa]2 [fa]b [Adfa]2 [FAdf]2', '[DFAd]2 [FAdf]2 [Adfa]2 a/f/d/f/', '[Bdgb]2 [Bdgb]2 [Adfa]2 [FAdf]2', '[Ace]2 [cea]2 [cea]2 (a/e/c/e/)',
+        '!mp! [fa]2 [fa]b [fa]2 [df]2', '[Ad]2 [df]2 [fa]2 (a/b/a/f/)', '[gb]2 [gb]2 [fa]2 [df]2', '[ce]2 [ea]2 [FAd]2 (A/d/f/a/)',
+        '!f! .[GBdg]2 .[GBdg]2 [Bdgb]3 [Bdgb]', '[Adfa]2 [fa][fa] [FAdf]2 (d/f/a/f/)', '.[EAce]2 .[EAce]2 [Aceg]3 [Aceg]', '[FAdf]2 [df][df] [DFAd]2 (F/A/d/f/)',
+        '[Adfa]2 [fa]b [Adfa]2 [FAdf]2', '!p! .[Bdg]2 .[Bdg]2 .[dgb]2 z2', '!f! [Adfa]2 [fa]b [Adfa]2 [dg][df]', '[Ace]2 [cea]2 [FAd]2 [dfad\']2',
+      ],
+      lh: [
+        '[D,,D,]2 [D,F,A,]2 [A,,A,]2 [D,F,A,]2', '[D,,D,]2 [D,F,A,]2 [F,,F,]2 [D,F,A,]2', '[G,,G,]2 [D,G,B,]2 [D,,D,]2 [D,F,A,]2', '[A,,A,]2 [E,A,C]2 [B,,B,]2 [C,C]2',
+        'D,,A,,D,F, A,F,D,A,,', 'D,,A,,D,F, A,F,D,A,,', 'G,,D,G,D, D,,A,,D,F,', 'A,,E,G,E, D,,A,,D,F,',
+        '.[G,,G,]2 .[G,,G,]2 [G,,G,]2 [D,G,B,]2', '[D,,D,]2 [D,F,A,]2 [A,,A,]2 [D,F,A,]2', '.[A,,A,]2 .[A,,A,]2 [A,,A,]2 [E,G,C]2', '[D,,D,]2 [D,F,A,]2 [A,,A,]2 [D,F,A,]2',
+        '[D,,D,]2 [F,,F,]2 [A,,A,]2 [A,,,A,,]2', '.[G,,G,]2 .[D,G,B,]2 .[G,,D,G,]2 z2', '[D,,D,]2 [D,F,A,]2 [A,,A,]2 [D,A,]2', '[A,,A,]2 [E,G,C]2 D,,/A,,/D,/F,/ [D,,A,,D,]2',
+      ],
+    },
+  },
+  // O Christmas Tree (O Tannenbaum)
+  'xmas-tree': {
+    title: 'O Christmas Tree',
+    subtitle: 'O Tannenbaum',
+    composer: 'German traditional',
+    song: {
+      name: 'O Christmas Tree',
+      key: 'Bb',
+      bpm: 104,
+      beat: 6,
+      leadWave: 'triangle',
+      leadVol: 0.45,
+      echo: 0.25,
+      lead: [
+        '. . . . . F5', 'Bb5 Bb5 Bb5 - - C6', 'D6 D6 D6 - - D6', 'C6 D6 Eb6 - - A5',
+        'C6 - Bb5 - . F5', 'Bb5 Bb5 Bb5 - - C6', 'D6 D6 D6 - - D6', 'C6 D6 Eb6 - - A5',
+        'C6 - Bb5 - . F6', 'F6 D6 G6 - - F6', 'F6 Eb6 Eb6 - - Eb6', 'Eb6 C6 F6 - - Eb6',
+        'Eb6 D6 D6 - . F5', 'Bb5 Bb5 Bb5 - - C6', 'D6 D6 D6 - - D6', 'C6 D6 Eb6 - - A5',
+        'C6 - Bb5 - - -',
+      ],
+      chords: ['F', 'Bb', 'Bb', 'F', 'F Bb Bb', 'Bb', 'Gm', 'F', 'F Bb Bb', 'Bb', 'F', 'F', 'Bb', 'Bb', 'Gm', 'F', 'F Bb Bb'],
+      arp: { from: 0, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.04 },
+      bass: [[0, 2, 1.8], null, [0, 3], null, [2, 2], null],
+      drums: [['k.....', '......', '..h.h.'], ['k.....', '......', 'h.h.h.']],
+      fill: ['k.....', '......', '..h.o.'],
+      drumVol: 0.5,
+    },
+    medium: {
+      rh: [
+        '!mp! z4 z F', '[DFB]3/2 [DFB]/2 [DFB]3 c', '[FBd]3/2 [FBd]/2 [FBd]3 [Fd]', '[Ac][Bd] [Ace]3 A',
+        '[EAc]2 [DFB]2 z F', '[DFB]3/2 [DFB]/2 [DFB]3 c', '[GBd]3/2 [GBd]/2 [GBd]3 d', '[Ac][Bd] [Ace]3 A',
+        '[EAc]2 [DFB]2 z f', '!mf! [df]d [Beg]3 f', '[cf]e [Ace]3 e', '[Ae]c [Acf]3 e',
+        '[ce][Bd] [FBd]2 z F', '!f! [dfb]3/2 [dfb]/2 [dfb]3 c\'', '[gbd\']3/2 [gbd\']/2 [gbd\']3 [gd\']', '[ac\'][bd\'] [ac\'e\']3 a',
+        '[eac\']2 [dfb]2- [dfb]2',
+      ],
+      lh: [
+        'F,,C, F,A, C2', 'B,,F, D,F, B,F,', 'D,,B,, D,F, B,F,', 'F,,C, F,A, CA,',
+        'F,,A,, B,,F, B,,2', 'B,,F, D,F, B,F,', 'G,,D, B,,D, B,,D,', 'F,C A,C A,C',
+        'F,,A,, B,,F, B,2', 'B,,F, E,,B,, E,,B,,', 'F,,C, F,A, CA,', 'A,,F, C,A, CA,',
+        'B,,F, D,F, B,,2', 'B,,2 [F,B,D]2 [F,B,D]2', '[G,,G,]2 [D,G,B,]2 [D,G,B,]2', '[F,,F,]2 [C,E,A,]2 [C,E,A,]2',
+        'F,,2 [B,,F,B,]4',
+      ],
+    },
+    hard: {
+      rh: [
+        '!mp! z4 z F', '[DFB]3/2 [DFB]/2 [DFB]3 c', '[FBd]3/2 [FBd]/2 [FBd]3 [Fd]', '[Ac][Bd] [Ace]3 A',
+        '[EAc]2 [DFB]2 z F', '!mf! [DFB]3/2 [DFB]/2 [DFB]3 c', '[GBd]3/2 [GBd]/2 [GBd]3 d', '[Ac][Bd] [Ace]3 A',
+        '[EAc]2 [DFB]2 z f', '!mp! [df]d [Beg]3 f', '[cf]e [Ace]3 e', '[Ae]c [Acf]3 e',
+        '[ce][Bd] [FBd]2 z F', '!f! [Bdfb]3/2 [Bdfb]/2 [Bdfb]3 c\'', '[dgbd\']3/2 [dgbd\']/2 [dgbd\']3 [gd\']', '[ac\'][bd\'] [ac\'e\']3 a',
+        '[eac\']2 [Bdfb]2- [Bdfb]2',
+      ],
+      lh: [
+        'F,,C, F,A, C2', 'B,,,F,, B,,D, F,D,', 'D,,B,, D,F, B,F,', 'F,,C, F,A, CA,',
+        'F,,A,, B,,F, B,,2', 'B,,/F,/B,/F,/ D,/F,/B,/F,/ D,/F,/B,/F,/', 'G,,/D,/G,/D,/ B,,/D,/G,/D,/ B,,/D,/G,/D,/', 'F,,/C,/F,/C,/ A,,/C,/F,/C,/ A,,/C,/E,/C,/',
+        'F,,/C,/F,/A,,/ B,,/F,/B,/F,/ B,,2', 'B,,/F,/B,/F,/ E,/G,/B,/G,/ E,/G,/B,/G,/', 'F,,/C,/F,/A,/ C/A,/F,/C,/ A,,/C,/F,/C,/', 'A,,/C,/F,/A,/ C/A,/F,/C,/ E,/C,/A,,/C,/',
+        'B,,/F,/B,/F,/ D,/F,/B,/F,/ B,,2', '[B,,,B,,]2 [F,B,D]2 [F,B,D]2', '[G,,G,]2 [D,G,B,]2 [D,G,B,]2', '[F,,F,]2 [C,E,A,]2 [C,E,A,]2',
+        '[F,,F,]2 B,,/F,/B,/D/ [B,,F,B,]2',
+      ],
+    },
+  },
+  // Carol of the Bells (Shchedryk)
+  'xmas-bells': {
+    title: 'Carol of the Bells',
+    subtitle: 'Shchedryk',
+    composer: 'Mykola Leontovych (1916)',
+    sheetTempo: 144,
+    song: {
+      name: 'Carol of the Bells',
+      key: 'Am',
+      bpm: 168,
+      beat: 6,
+      leadWave: 'pulse25',
+      leadEnv: 'pluck',
+      leadVol: 0.42,
+      echo: 0.25,
+      lead: [
+        'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -',
+        'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -',
+        'E5 - D5 E5 C5 -', 'E5 - D5 E5 C5 -', 'E5 - D5 E5 C5 -', 'E5 - D5 E5 C5 -',
+        'A5 - A5 A5 G5 F5', 'E5 - E5 E5 D5 C5', 'D5 - D5 D5 E5 D5', 'A4 - A4 A4 A4 -',
+        'A5 - A5 A5 G5 F5', 'E5 - E5 E5 D5 C5', 'D5 - D5 D5 E5 D5', 'A4 - A4 A4 A4 -',
+        'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -', 'C5 - B4 C5 A4 -',
+      ],
+      chords: ['Am', 'Am', 'Am', 'Am', 'Am', 'G', 'F', 'E', 'Am', 'G', 'F', 'E', 'F', 'C', 'Dm', 'Am', 'F', 'C', 'Dm', 'Am', 'Am', 'G', 'F', 'E'],
+      ending: { lead: 'A4 - - - - -', chord: 'Am' },
+      bass: [[0, 2, 1.9], null, [2, 2, 1.9], null, [0, 3, 1.9], null],
+      drums: [
+        ['......', '......', 'h.....'],
+        ['k.....', '......', 'h.h.h.'],
+        ['k.....', '......', 'hhhhhh'],
+        ['k.....', '....s.', 'hhhhhh'],
+        ['k.....', '......', 'hhhhhh', 't.t.t.'],
+        ['k.....', '..s.s.', 'hhhhhh'],
+      ],
+      fill: ['k.....', '....s.', 'h.h.o.'],
+      drumVol: 0.8,
+    },
+    medium: {
+      rh: [
+        '!p! c2 Bc A2', 'c2 Bc A2', 'c2 Bc A2', 'c2 Bc A2',
+        '!mp! [Ec]2 [EB][Ec] [EA]2', '[Ec]2 [EB][Ec] [EA]2', '[Ec]2 [EB][Ec] [EA]2', '[Ec]2 [EB][Ec] [EA]2',
+        '!mf! [ce]2 [Bd][ce] [Ac]2', '[ce]2 [Bd][ce] [Ac]2', '[ce]2 [Bd][ce] [Ac]2', '[ce]2 [Bd][ce] [Ac]2',
+        '!f! [cfa]2 aagf', '[Gce]2 eedc', '[FAd]2 dded', '[CEA]2 AA [CEA]2',
+        '!ff! [Aa]2 aagf', '[Ee]2 eedc', '[Dd]2 dded', '[A,A]2 AA [A,A]2',
+        '!mf! [cc\']2 bc\' [Aa]2', '[cc\']2 bc\' [Aa]2', '[cc\']2 bc\' [Aa]2', '[cc\']2 bc\' [Aa]2',
+        '!fermata![CEA]6',
+      ],
+      lh: [
+        'z6', 'z6', '[A,,A,]6', '[A,,A,]6',
+        'A,,E, A,E, A,E,', 'G,,D, G,D, G,D,', 'F,,C, F,C, F,C,', 'E,,E, ^G,,E, E,,E,',
+        'A,,E, A,C EC', 'G,,D, G,D, G,,D,', 'F,,C, F,A, CA,', 'E,,E, ^G,,E, E,,E,',
+        'F,,2 [C,F,A,]2 [C,F,A,]2', 'C,2 [E,G,C]2 [E,G,C]2', 'D,2 [F,A,]2 [F,A,]2', 'A,,2 [E,A,]2 [E,A,]2',
+        'F,,C, F,A, CA,', 'C,,G,, C,E, G,E,', 'D,,A,, D,F, A,F,', 'A,,,E,, A,,E,, A,,2',
+        '[A,,A,]2 [E,A,]2 [E,A,]2', '[G,,G,]2 [D,G,]2 [D,G,]2', '[F,,F,]2 [C,F,]2 [C,F,]2', '[E,,E,]2 [E,^G,B,]E, [E,,E,]2',
+        '!fermata![A,,E,A,]6',
+      ],
+    },
+    hard: {
+      rh: [
+        '!p! c2 Bc A2', 'c2 Bc A2', 'c2 Bc A2', 'c2 Bc A2',
+        '!mp! [Ec]2 [EB][Ec] [EA]2', '[Ec]2 [EB][Ec] [EA]2', '[Ec]2 [EB][Ec] [EA]2', '[Ec]2 [EB][Ec] [EA]2',
+        '!mf! [ce]2 [Bd][ce] [Ac]2', '[ce]2 [Bd][ce] [Ac]2', '[ce]2 [Bd][ce] [Ac]2', '[ce]2 [Bd][ce] [Ac]2',
+        '!f! [Acfa]2 [Aa][Aa] [Gg][Ff]', '[EGce]2 [Ee][Ee] [Dd][Cc]', '[DFAd]2 [Dd][Dd] [Ee][Dd]', '[A,CEA]2 [A,A][A,A] [A,CEA]2',
+        '!ff! [ac\'f\'a\']2 a\'a\'g\'f\'', '[egc\'e\']2 e\'e\'d\'c\'', '[dfad\']2 d\'d\'e\'d\'', '[Acea]2 aa [Acea]2',
+        '!f! [cc\']2 bc\' [Aa]2', '[cc\']2 bc\' [Aa]2', '[cc\']2 [Bb][cc\'] [Aa]2', '[cc\']2 [Bb][cc\'] [Aa]2',
+        '!fermata![A,CEA]6',
+      ],
+      lh: [
+        'z6', 'z6', '[A,,A,]6', '[A,,A,]6',
+        'A,,E, A,E, A,E,', 'G,,D, G,D, G,D,', 'F,,C, F,C, F,C,', 'E,,E, ^G,,E, E,,E,',
+        'A,,E, A,C EC', 'G,,D, G,D, G,,D,', 'F,,C, F,A, CA,', 'E,,E, ^G,,E, E,,E,',
+        '[F,,F,]2 [C,F,A,]2 [C,F,A,]2', '[C,,C,]2 [G,,C,E,]2 [G,,C,E,]2', '[D,,D,]2 [A,,D,F,]2 [A,,D,F,]2', '[A,,,A,,]2 [E,,A,,E,]2 [E,,A,,E,]2',
+        '[F,,F,]2 [C,F,A,]C [F,A,C]2', '[C,,C,]2 [G,,C,E,]G, [C,E,G,]2', '[D,,D,]2 [A,,D,F,]A, [D,F,A,]2', '[A,,,A,,]2 [E,,A,,E,]2 [A,,,A,,]2',
+        '[A,,A,]2 [E,A,E]2 [E,A,E]2', '[G,,G,]2 [D,G,D]2 [D,G,D]2', '[F,,F,]2 [C,F,C]2 [C,F,C]2', '[E,,E,]2 [B,,E,^G,]E, [E,,E,]2',
+        '!fermata![A,,,E,,A,,]6',
+      ],
+    },
+  },
+  // Silent Night (Stille Nacht)
+  'xmas-silent': {
+    title: 'Silent Night',
+    subtitle: 'Stille Nacht',
+    composer: 'Franz Xaver Gruber (1818)',
+    song: {
+      name: 'Silent Night',
+      key: 'C',
+      bpm: 96,
+      beat: 6,
+      leadWave: 'triangle',
+      leadVol: 0.42,
+      echo: 0.35,
+      lead: [
+        'G5 - - A5 G5 -', 'E5 - - - - -', 'G5 - - A5 G5 -', 'E5 - - - - -',
+        'D6 - - - D6 -', 'B5 - - - - -', 'C6 - - - C6 -', 'G5 - - - - -',
+        'A5 - - - A5 -', 'C6 - - B5 A5 -', 'G5 - - A5 G5 -', 'E5 - - - - -',
+        'A5 - - - A5 -', 'C6 - - B5 A5 -', 'G5 - - A5 G5 -', 'E5 - - - - -',
+        'D6 - - - D6 -', 'F6 - - D6 B5 -', 'C6 - - - - -', 'E6 - - - - -',
+        'C6 - G5 - E5 -', 'G5 - - F5 D5 -', 'C5 - - - - -', '. . . . . .',
+      ],
+      chords: ['C', 'C', 'C', 'C', 'G', 'G', 'C', 'C', 'F', 'F', 'C', 'C', 'F', 'F', 'C', 'C', 'G', 'G', 'C', 'C', 'C', 'G', 'C', 'C'],
+      arp: { from: 8, wave: 'pulse12', octave: 5, order: 'updown', vol: 0.03 },
+      bass: [[0, 2, 3.6], null, null, null, [2, 2, 1.8], null],
+      drums: [['......', '......', '......'], ['......', '......', '....h.']],
+      drumVol: 0.3,
+    },
+    medium: {
+      rh: [
+        '!p! [ceg]3 [fa] [ceg]2', '[ce]6', '[ceg]3 [fa] [ceg]2', '[ce]4 (e/g/c\'/e\'/)',
+        '[gbd\']4 [gbd\']2', '[dgb]6', '[egc\']4 [egc\']2', '[ceg]6',
+        '!mp! [cfa]4 [cfa]2', '[fac\']3 [gb] [cfa]2', '[ceg]3 [fa] [ceg]2', '[ce]6',
+        '[cfa]4 [cfa]2', '[fac\']3 [gb] [cfa]2', '[ceg]3 [fa] [ceg]2', '[ce]6',
+        '!mf! [gbd\']4 [gbd\']2', '[bd\'f\']3 [bd\'] [dgb]2', '[egc\']6', '[gc\'e\']6',
+        '!p! [egc\']2 [ceg]2 [Gce]2', '[Bdg]3 [Bf] [GBd]2', '[EGc]6-', '[EGc]6',
+      ],
+      lh: [
+        'C,G,CG,CG,', 'C,G,CG,CG,', 'C,G,CG,CG,', 'C,G,CG,CG,',
+        'G,,D,G,D,G,D,', 'G,,D,G,D,G,D,', 'C,G,CG,CG,', 'C,G,CG,CG,',
+        'F,,C,F,C,F,C,', 'F,,C,F,C,F,C,', 'C,G,CG,CG,', 'C,G,CG,CG,',
+        'F,CA,CA,C', 'F,CA,CA,C', 'C,G,CG,CG,', 'C,G,CG,CG,',
+        'G,,D,G,D,G,D,', 'G,,D,G,D,F,D,', 'C,G,CG,CG,', 'C,G,CG,CG,',
+        'C,G,CG,CG,', 'G,,D,G,D,F,B,,', 'C,G,CG,CG,', 'C,G, C2 C,2',
+      ],
+    },
+    hard: {
+      rh: [
+        '!p! [ceg]3 [fa] [ceg]2', '[ce]6', '[ceg]3 [fa] [ceg]2', '[ce]4 (e/g/c\'/e\'/)',
+        '[gbd\']4 [gbd\']2', '[dgb]4 (d/g/b/d\'/)', '[egc\']4 [egc\']2', '[ceg]4 (G/c/e/g/)',
+        '!mp! [cfa]4 [cfa]2', '[fac\']3 [gb] [cfa]2', '[ceg]3 [fa] [ceg]2', '[ce]6',
+        '[Acfa]4 [Acfa]2', '[fac\']3 [gb] [Acfa]2', '[Gceg]3 [fa] [Gceg]2', '[EGce]4 (c/e/g/c\'/)',
+        '!mf! [dgbd\']4 [dgbd\']2', '[fbd\'f\']3 [bd\'] [dgb]2', '[egc\']4 e/g/c\'/d\'/', '!f! [egc\'e\']6',
+        '!p! [egc\']2 [ceg]2 [Gce]2', '[Bdg]3 [Bf] [GBd]2', '[EGc]6-', '[EGc]6',
+      ],
+      lh: [
+        'C,/G,/C/G,/ C/G,/C/G,/ E,/G,/C/G,/', 'C,/G,/C/G,/ C/G,/C/G,/ E,/G,/C/G,/', 'C,/G,/C/G,/ C/G,/C/G,/ E,/G,/C/G,/', 'C,/G,/C/G,/ E,/G,/C/G,/ C/G,/E,/G,/',
+        'G,,/D,/G,/D,/ G,/D,/G,/D,/ B,,/D,/G,/D,/', 'G,,/D,/G,/D,/ G,/D,/G,/D,/ B,,/D,/G,/B,,/', 'C,/G,/C/G,/ C/G,/C/G,/ E,/G,/C/G,/', 'C,/G,/C/G,/ E,/G,/C/G,/ E,/G,/C/G,/',
+        'F,,/C,/F,/C,/ F,/C,/F,/C,/ A,,/C,/F,/C,/', 'F,,/C,/F,/C,/ F,/C,/F,/C,/ A,,/C,/F,/C,/', 'C,/G,/C/G,/ C/G,/C/G,/ E,/G,/C/G,/', 'C,/G,/C/G,/ C/G,/C/G,/ E,/G,/C/G,/',
+        'F,/C/A,/C/ F,/C/A,/C/ F,/C/A,/C/', 'F,/C/A,/C/ F,/C/A,/C/ F,/C/A,/C/', 'C,/G,/C/G,/ E,/G,/C/G,/ E,/G,/C/G,/', 'C,/G,/C/G,/ E,/G,/C/G,/ E,/G,/C/G,/',
+        'G,,/D,/G,/D,/ G,/D,/G,/D,/ B,,/D,/G,/D,/', 'G,,/D,/G,/D,/ F,/D,/G,/D,/ D,/F,/G,/F,/', 'C,/G,/C/G,/ E,/G,/C/G,/ C/G,/E,/G,/', 'C,/G,/C/G,/ E,/G,/C/G,/ G,/C/E/C/',
+        'C,/G,/C/G,/ E,/G,/C/G,/ C/G,/E,/G,/', 'G,,/D,/G,/D,/ F,/D,/G,/D,/ B,,/D,/G,/B,,/', 'C,/G,/C/G,/ E,/G,/C/G,/ E,/G,/C/G,/', 'C,/G,/C/G,/ E,/G,/C/G,/ C,2',
+      ],
+    },
+  },
+};

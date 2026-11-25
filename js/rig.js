@@ -171,6 +171,7 @@ export function buildRig(buddy, opts = {}) {
   return {
     species, heads, ears, body, footL, footR, tail, armL, armR,
     hat: item(look.hat), face: item(look.face), neck: item(look.neck), neckFront: item(look.neckFront),
+    paws: item(look.paws), blink: look.blink ? look.blink.map(item) : null,
     wand: look.wand,
     music: look.music && { behind: scene(look.music.behind), front: scene(look.music.front), flames: look.music.flames.map(scene) },
     gear: look.gear && { ...scene(look.gear.c), kind: look.gear.kind, held: look.gear.held },
@@ -333,6 +334,9 @@ export function render(rig, pose, frame = 0, opts = {}) {
   draw(head, headM, hb);
   if (rig.neck && !rig.neck.behind) draw(rig.neck, neckM);
   if (rig.neckFront) draw(rig.neckFront, neckM);
+  // the light-up sweater's bulbs take turns, half a second each (12 frames a second)
+  if (rig.blink) draw(rig.blink[Math.floor(frame / 6) % 2], neckM);
+  if (rig.paws) draw(rig.paws, neckM);
   if (rig.face) draw(rig.face, headM);
   if (rig.hat) draw(rig.hat, headM);
   if (rig.wand) {

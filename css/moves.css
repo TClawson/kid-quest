@@ -120,3 +120,9 @@
 @keyframes tk-paparazzi-prop-flash { 0% { opacity: 0; } 10% { opacity: 1; transform: translate(0px, -2px); } 20% { opacity: 0; } 30% { opacity: 1; transform: translate(-3px, -6px); } 40% { opacity: 0; } 50% { opacity: 1; transform: translate(3px, -6px); } 60% { opacity: 0; } 70% { opacity: 1; transform: translate(0px, -3px) scale(1.4, 1.4); } 80% { opacity: 0; } 90% { opacity: 0; } 100% { opacity: 0; } }
 .buddy-svg.trick-paparazzi .char { animation: tk-paparazzi-char 2s steps(1, end) 1 both; }
 @keyframes tk-paparazzi-char { 0% { opacity: 1; transform: none; } 10% { opacity: 1; transform: translate(0px, -1px); } 20% { opacity: 1; transform: translate(-1px, 0px); } 30% { opacity: 1; transform: translate(0px, -1px); } 40% { opacity: 1; transform: translate(1px, 0px); } 50% { opacity: 1; transform: translate(0px, -1px); } 60% { opacity: 1; transform: translate(-1px, 0px); } 70% { opacity: 1; transform: translate(0px, -1px); } 80% { opacity: 1; transform: none; } 90% { opacity: 1; transform: none; } 100% { opacity: 1; transform: none; } }
+
+/* the light-up sweater (December): its two sets of bulbs take turns */
+.buddy-svg .blink { animation: buddy-blink 1s steps(1, end) infinite; }
+.buddy-svg .blink-b { animation-delay: -0.5s; }
+@keyframes buddy-blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .buddy-svg .blink { animation: none; } .buddy-svg .blink-b { opacity: 0; } }

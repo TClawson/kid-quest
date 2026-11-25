@@ -26,6 +26,7 @@ function critterImg(c, shadow = false) {
 
 /** A hint for an animal not found yet: where to look. */
 export function hintFor(c) {
+  if (c.december) return 'Only in December!';
   if (c.tunnel) return 'Lives in the dark';
   if (c.sea) return 'Likes the water';
   const h = c.how;
@@ -59,13 +60,13 @@ export function openCritterAlbum(kid, scrollTo = 0) {
         ${clues ? `<p class="muted small">🐾 Clues to this map's legend: ${clues} of ${CLUES_FOR_LEGEND}${clues >= CLUES_FOR_LEGEND ? '. It could come on your next ride!' : ''}</p>` : ''}
         <div class="fb-grid ca-grid">
           ${page.animals.map(({ c, rec }) => (rec ? `
-            <button class="fb-fish ca-card ${c.rarity === 'rare' || c.rarity === 'legend' ? 'rare' : ''}" data-action="critter-page" data-critter="${esc(c.id)}">
+            <button class="fb-fish ca-card ${c.rarity === 'rare' || c.rarity === 'legend' ? 'rare' : ''} ${c.december ? 'december' : ''}" data-action="critter-page" data-critter="${esc(c.id)}">
               <img src="${photoOf(kid.id, c.id) || critterImg(c)}" alt="">
               <b>${esc(c.name)}</b>
               <span class="ca-q ${esc(rec.q)}">${esc(QUALITY[rec.q]?.name || '')}</span>
               ${seasonsRow(c)}
             </button>` : `
-            <div class="fb-fish ca-card none ${c.rarity === 'rare' || c.rarity === 'legend' ? 'rare' : ''}">
+            <div class="fb-fish ca-card none ${c.rarity === 'rare' || c.rarity === 'legend' ? 'rare' : ''} ${c.december ? 'december' : ''}">
               <img src="${critterImg(c, true)}" alt="">
               <b>???</b>
               <small>${esc(hintFor(c))}</small>
@@ -94,17 +95,18 @@ export function openCritterPage(kid, id) {
   openModal(`
     <div class="fishpage critter-page" style="--kid:${esc(kid.color)}">
       <button class="btn ghost small-btn fp-back" data-action="album-back">◀ Critter album</button>
-      <div class="fp-head ${c.rarity === 'rare' || c.rarity === 'legend' ? 'rare' : ''}">
+      <div class="fp-head ${c.rarity === 'rare' || c.rarity === 'legend' ? 'rare' : ''} ${c.december ? 'december' : ''}">
         <img src="${photoOf(kid.id, id) || critterImg(c)}" alt="">
         <div>
           <h2>${c.rarity === 'legend' ? '🌟 ' : c.rarity === 'rare' ? '⭐ ' : ''}${esc(c.name)}</h2>
-          <p class="muted small">${esc(RARITIES[c.rarity]?.name || '')} · ${seasonsRow(c)}</p>
+          <p class="muted small">${esc(RARITIES[c.rarity]?.name || '')}${c.december ? ' · December animal' : ''} · ${seasonsRow(c)}</p>
         </div>
       </div>
       <div class="fp-mine ca-mine ${esc(rec.q)}">
         <div><b>Your best photo: ${esc(QUALITY[rec.q]?.name || '')}</b><small>${esc(dateOf(rec.date))}</small></div>
       </div>
       <ul class="ca-slots">${slots}</ul>
+      ${c.december ? `<p class="fp-december">🎄 <b>A December animal!</b> ${esc(c.fun || '')} It rides the photo train only in December, and comes back every year.</p>` : ''}
       ${c.cousin ? `<p class="fp-pretend">✨ The ${esc(c.name.toLowerCase())} is a pretend animal: it lives only in this game. Its real-life cousin is the <b>${esc(c.cousin)}</b>, so the facts here are the real cousin's.</p>` : ''}
       ${facts.map(([h, t]) => `<h3>${h}</h3><p>${esc(t)}</p>`).join('')}
       <button class="btn" data-action="album-back">Back to the critter album</button>

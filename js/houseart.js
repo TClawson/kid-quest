@@ -13,6 +13,7 @@ import { ramp, mix, h2, vnoise, bayer, Buf, grid, inEll, pixelBuffer } from './p
 import { HOME_COLORS, furnitureById } from './furniture.js';
 import { tankSpec, tankArt, tankFront, tankThumb } from './tankart.js';
 import { displayPic } from './digart.js';
+import { treeArt, TREE, giftArt, GIFT_AT } from './xmasart.js';
 
 export const INK = '#3b2235';
 const WD = ['#4a2a36', '#7a4436', '#a8663e', '#cc8a50', '#e8b674', '#f8dca0'];
@@ -66,6 +67,16 @@ export const ROOM = {
   },
 };
 const R = ROOM;
+
+/**
+ * December: where the ornament tree stands (its box's top-left, see xmasart.js TREE). Against
+ * the back wall in front of the window, between the bed and the shelf, where it moves no chore
+ * spot (the buddy makes the bed and wakes up in front of it). A kid with the turntable has that
+ * spot taken, so the tree stands on the floor in front of the couch instead.
+ */
+export function xtreeAt(layout = {}) {
+  return layout.music ? { x: 150, y: 57 } : { x: 46, y: 5 };
+}
 
 // ---------- drawing helpers ----------
 
@@ -1180,6 +1191,14 @@ export function paintRoom(canvas, o) {
   showerArt().blit(px, at.shower.x, at.shower.y);
   blocks.push([at.shower.x - 1, R.floorTop - 2, 28, at.shower.y + 76 - R.floorTop + 1]);
 
+  // December: the tree's shadow on the floor, and the presents' (xmas.js xmasHouse)
+  // (in January the tree is packed away, but presents not opened yet still sit in its spot)
+  const xt = o.xmas ? xtreeAt(lay) : null;
+  if (xt) {
+    if (o.xmas.tree) shadow(px, xt.x + TREE.foot.x, xt.y + TREE.foot.y, 10, 2, 0.26);
+    (o.xmas.gifts || []).forEach((g, i) => { const p = GIFT_AT[i % GIFT_AT.length]; shadow(px, xt.x + p.x, xt.y + p.y, 6, 1.5, 0.22); });
+  }
+
   partition(px);
   frontWalls(px, o.color || '#e03131');
   put(canvas.getContext('2d'));
@@ -1220,7 +1239,34 @@ export function paintRoom(canvas, o) {
     blocks.pop();
     pieces[pieces.length - 1].foot += 2; // over the fish's water (house.js puts it one above the tank)
   }
-  return { pieces, blocks };
+  // December: the ornament tree (its lights as three frames for house.js to blink in turn), and the
+  // siblings' presents round its pot, each standing on the floor on its own
+  let xmas = null;
+  if (xt) {
+    xmas = { lights: null, gifts: [] };
+    if (o.xmas.tree) {
+      const t = treeArt(o.xmas.tree);
+      stand('xmas-tree', t.body, xt.x, xt.y, [xt.x + 11, xt.y + 54, 18, 10]);
+      const frames = t.lights.map((b) => {
+        const c = canvas.ownerDocument.createElement('canvas');
+        c.width = b.W; c.height = b.H;
+        const buf = pixelBuffer(b.W, b.H);
+        b.blit(buf.px, b.pad, b.pad);
+        buf.put(c.getContext('2d'));
+        return c;
+      });
+      xmas.lights = { x: xt.x - 4, y: xt.y - 4, w: frames[0].width, h: frames[0].height, foot: xt.y + TREE.h, frames };
+    }
+    (o.xmas.gifts || []).forEach((g, i) => {
+      const b = giftArt(g.shape, g.paper);
+      const p = GIFT_AT[i % GIFT_AT.length];
+      const x = xt.x + p.x - Math.floor(b.w / 2); const y = xt.y + p.y - b.h;
+      stand(`gift${i}`, b, x, y, null);
+      blocks.pop();
+      xmas.gifts.push({ i, x, y, w: b.w, h: b.h, foot: y + b.h });
+    });
+  }
+  return { pieces, blocks, xmas };
 }
 
 /** A piece of furniture on its own, for the shop: a canvas sized to the piece (with a little room). */

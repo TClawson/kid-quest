@@ -58,6 +58,20 @@
 .song-buttons .btn.on { background: var(--brand); color: #fff; }
 .song-play.playing { background: #e8590c; }
 .song-buttons a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+/* the December carols: free in December, and their dancers (the buddy and the day's visitors) */
+.song-tier .carol-note { margin: -4px 0 8px; }
+.carol-dance { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 2px 0 4px; }
+.carol-dancers { display: flex; align-items: flex-end; gap: 2px; }
+.carol-dancer { display: block; width: 52px; height: 52px; }
+.carol-dancer.me { width: 64px; height: 64px; }
+.carol-dancer svg { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.carol-dancer.dance-l svg { animation: dance-l var(--move, 0.4s) ease-out forwards; }
+.carol-dancer.dance-r svg { animation: dance-r var(--move, 0.4s) ease-out forwards; }
+/* beside the piano timer's buddy in December (timer-ui.js) */
+.timer-crowd { display: flex; align-items: flex-end; justify-content: center; gap: 4px; }
+.timer-visitors { display: flex; align-items: flex-end; gap: 2px; padding-bottom: 4px; }
+.timer-visitors .carol-dancer { width: min(15vw, 64px); height: min(15vw, 64px); }
+@media (prefers-reduced-motion: reduce) { .carol-dancer.dance-l svg, .carol-dancer.dance-r svg { animation: none; } }
 /* the parent area's list of printable sheet music */
 .print-sheets summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
 .print-list { list-style: none; margin: 8px 0 0; padding: 0; }

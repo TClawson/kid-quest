@@ -33,6 +33,8 @@ import { musicSign } from './musicart.js';
 import { cookieIcon } from './little.js';
 import { seasonNow, tintLand, mountWeather } from './seasonlife.js';
 import { isNewSeason, seasonLine } from './seasonhints.js';
+import { nightProbe } from './nightfx.js';
+import { dressLand } from './xmasvillage.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
 const LANDMARK_ART = { oak: { size: OAK, start: startOak }, wreck: { size: WRECK, start: startWreck }, galleon: { size: GALLEON, start: startGalleon }, cave: { size: CAVE, start: startCave }, gate: { size: GATE, start: startGate }, stone: { size: STONE, start: startStone }, kapok: { size: KAPOK, start: startKapok }, goldpot: { size: GOLDPOT, start: startGoldpot }, starwhale: { size: STARWHALE, start: startStarwhale }, lighthouse: { size: LIGHTHOUSE, start: startLighthouse } };
@@ -845,11 +847,12 @@ function land(L, color, areas = [], se = null) {
   if (landCache.key !== key) {
     // a map that paints its own seasons (the fjord) is told the season; the others are tinted
     const own = L.ownSeasons && se;
-    const base = paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas, ...(own ? { season: se.season, progress: se.progress } : {}) });
+    // noted as it is painted (nightfx.js): where the windows, roofs and doors went, for the night and December
+    const { result: base, cells } = nightProbe(() => paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas, ...(own ? { season: se.season, progress: se.progress } : {}) }));
     // the dome over the kid's garden on the maps where the garden needs one (villageplot.js)
     const dome = L.plot && domeKind(L.id, SHIELDS[L.id]);
     if (dome) domeB(painter(base.getContext('2d')), L.plot, dome);
-    landCache = { key, canvas: se && !own ? tintLand(base, se, L.id) : base };
+    landCache = { key, canvas: se && !own ? tintLand(base, se, L.id) : base, base, probe: { cells } };
   }
   return landCache.canvas;
 }
@@ -893,7 +896,11 @@ function mount(section, handlers) {
   // the land and the villagers' faces
   const canvas = section.querySelector('.village-land');
   const se = seasonNow(data.today);
-  canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas, se), 0, 0);
+  land(L, data.color || '#e03131', data.areas, se);
+  // December's lights and the night (xmasvillage.js): the land at night, and what stands on it
+  const dressed = dressLand(L, landCache, { today: data.today, snow: se.season === 'winter' });
+  se.night = dressed.night;
+  canvas.getContext('2d').drawImage(dressed.land, 0, 0);
   // over the top edge (where the view goes past it on a phone, to bring the house's name out from
   // under the HUD), the map's own border carries on: its top rows again, drawn once
   const fringe = document.createElement('canvas');
@@ -915,6 +922,7 @@ function mount(section, handlers) {
     }
   }
   canvas.after(fringe);
+  dressed.mount(section, world, { xmas: handlers.xmas }); // handlers.xmas: Santa and the advent house (advent-ui.js)
   const paintSprite = (el, kind, happy) => {
     const c = el.querySelector('.v-sprite');
     const src = spriteUrl(kind, happy);
@@ -952,6 +960,7 @@ function mount(section, handlers) {
     ...Object.values(data.spots).map((p) => [p.x - 7, p.y - 8, 14, 10]),
     ...(L.shop ? [[L.shop.x - 7, L.shop.y - 8, 14, 10]] : []),
     ...(lm ? [landmarkBlock(lm)] : []),
+    ...dressed.blocks, // the December tree, lanterns and advent house
   ]);
   const me = { x: mem.x, y: mem.y, path: [], goal: null, face: mem.face || 1 };
   let S = 3;
