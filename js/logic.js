@@ -1242,3 +1242,13 @@ export function milestoneFor(state, kid, today) {
 
 /** True while a milestone is new enough to talk about (its day or the next). */
 export const milestoneFresh = (m, today) => Boolean(m && m.day >= addDays(today, -1) && m.day <= today);
+
+/**
+ * How long words that close by themselves stay up (a toast, a speech bubble), in ms: long enough
+ * for a young reader, about 100 words a minute after a moment to look, and never under min.
+ * Anything longer than a short line belongs in a box the kid closes instead.
+ */
+export function readMs(text, min = 2600) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  return Math.min(15000, Math.max(min, 1500 + words * 600));
+}

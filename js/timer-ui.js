@@ -1,6 +1,6 @@
 // The practice timer, listening during practice, and the piano listening test
 // (split out of app.js; shared things come from ctx.js).
-import { entryFor, tasksForDay, addDays, weekStart, pianoStreakInfo, habitInfo, monthDays, isPianoTask } from './logic.js';
+import { entryFor, tasksForDay, addDays, weekStart, pianoStreakInfo, habitInfo, monthDays, isPianoTask, readMs } from './logic.js';
 import { sounds, confetti } from './fx.js';
 import { buddySvg } from './avatar.js';
 import { liveHtml, live, feel } from './live.js';
@@ -266,7 +266,7 @@ export function buddyCheer() {
   $b.querySelector('.timer-sprite')?.addEventListener('animationend', () => $b.classList.remove('hop'), { once: true });
   sounds.tap();
   clearTimeout(cheerTimeout);
-  cheerTimeout = setTimeout(() => $b.classList.remove('talking'), 4000);
+  cheerTimeout = setTimeout(() => $b.classList.remove('talking'), readMs($say.textContent, 4000));
 }
 
 export const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;

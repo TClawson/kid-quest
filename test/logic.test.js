@@ -635,3 +635,12 @@ test('a visitor lends gear for two games a day, per kind of gear', () => {
   assert.equal(lendLeft(kid, '2026-11-08', 'soccer'), 2);
   assert.equal(lendLeft(kid, '2026-11-09', 'hockey'), 2);
 });
+
+test('readMs: words that close by themselves stay up long enough to read', async () => {
+  const { readMs } = await import('../js/logic.js');
+  assert.equal(readMs('Saved!'), 2600, 'a short toast keeps the usual time');
+  assert.equal(readMs('', 4000), 4000, 'never under the minimum');
+  const long = 'Exercise 4 days in one week for a strong week and your first move! Keep going, you can do it.';
+  assert.ok(readMs(long) >= 10000, 'a long line gets about 0.6 s a word');
+  assert.equal(readMs('word '.repeat(200)), 15000, 'capped');
+});

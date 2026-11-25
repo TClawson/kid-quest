@@ -11,9 +11,10 @@
 // marking a chore done: watering is a little treat, and tapping elsewhere stops it.
 
 import * as A from './gardenart.js';
-import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
+import { makeGrid, findPath, hudBands, camAxis, roomScale, keptTalk } from './village.js';
 import { seasonNow, tintLand, spriteFor, mountWeather } from './seasonlife.js';
 import { KINDS, seedById, sellPrice, SEEDS, decorById } from './gardenrules.js';
+import { readMs } from './logic.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const Y = A.YARD;
@@ -318,12 +319,14 @@ function mount(section, handlers) {
   }
 
   // ---- talking ----
-  const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); };
-  const say = (text, body, buttons) => {
+  const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); mem.talk = null; };
+  // quiet: the same box again after a redraw (see keptTalk in village.js)
+  const say = (text, body, buttons, quiet = false) => {
     dialog.innerHTML = `<div class="v-talk"><b class="v-name">${esc(data.name)}'s garden</b><p class="v-text">${esc(text)}</p>${body || ''}<div class="v-buttons">${buttons || '<button class="btn" data-g="bye">OK!</button>'}</div></div>`;
     dialog.hidden = false;
     section.classList.add('talking');
-    handlers.sound?.('talk');
+    mem.talk = { box: dialog, args: [text, body, buttons] };
+    if (!quiet) handlers.sound?.('talk');
   };
   const btn = (act, label, extra = '', cls = '') => `<button class="btn ${cls}" data-g="${act}" ${extra}>${label}</button>`;
   const bye = (label = 'OK!') => btn('bye', label, '', 'ghost');
@@ -412,7 +415,7 @@ function mount(section, handlers) {
   noteEl.className = 'g-note'; noteEl.hidden = true;
   view.append(noteEl);
   let noteTimer = 0;
-  const note = (text) => { noteEl.textContent = text; noteEl.hidden = false; clearTimeout(noteTimer); noteTimer = setTimeout(() => { noteEl.hidden = true; }, 2600); };
+  const note = (text) => { noteEl.textContent = text; noteEl.hidden = false; clearTimeout(noteTimer); noteTimer = setTimeout(() => { noteEl.hidden = true; }, readMs(text)); };
   const canId = V.layout.can;
   // the can in the buddy's paw, in 4 tilts (upright .. pouring), each hung by its handle; the spray comes off the rose
   const canArts = canId && A.canArt ? [0, 1, 2, 3].map((k) => paste(doc, A.canArt(canId, k / 3), 'g-cf')) : [];
@@ -590,6 +593,9 @@ function mount(section, handlers) {
   placeAll();
   requestAnimationFrame(tick);
 
+  // a talk box that was up when the garden was drawn again stays up, till the kid closes it
+  const kept = keptTalk(mem);
+  if (kept) say(...kept.args, true);
   // a line waiting from the last thing done (planted, picked, ...)
   if (mem.say) { const text = mem.say; mem.say = ''; say(text); }
   // stepping into the garden with thirsty plants: the buddy gets the can out

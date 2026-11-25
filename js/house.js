@@ -8,7 +8,7 @@
 
 import { ROOM, TURNTABLE, DRESSER, paintRoom } from './houseart.js';
 import { tankSpec } from './tankart.js';
-import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
+import { makeGrid, findPath, hudBands, camAxis, roomScale, keptTalk } from './village.js';
 import { furnitureById } from './furniture.js';
 import { fishSpecies } from './fishbook.js';
 import { fishPic } from './fishart.js';
@@ -286,13 +286,15 @@ function mount(section, handlers) {
   }
 
   // ---- talking ----
-  const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); };
+  const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); mem.talk = null; };
   const doLabel = (q) => (q.timer && !/^Time done/.test(q.sub || '') ? '▶ Start the timer' : q.verify === 'parent' ? '🙋 I did it! Ask a parent' : '✓ I did it!');
-  const say = (text, quest, buttons) => {
+  // quiet: the same box again after a redraw (see keptTalk in village.js)
+  const say = (text, quest, buttons, quiet = false) => {
     dialog.innerHTML = `<div class="v-talk"><b class="v-name">${esc(data.name)}'s house</b><p class="v-text">${esc(text)}</p>${quest}<div class="v-buttons">${buttons}</div></div>`;
     dialog.hidden = false;
     section.classList.add('talking');
-    handlers.sound?.('talk');
+    mem.talk = { box: dialog, args: [text, quest, buttons] };
+    if (!quiet) handlers.sound?.('talk');
   };
   const choreTalk = (kind) => {
     const t = data.chores?.[kind];
@@ -424,6 +426,9 @@ function mount(section, handlers) {
   window.addEventListener('resize', onResize, { passive: true });
   place();
   requestAnimationFrame(tick);
+  // a talk box that was up when the house was drawn again stays up, till the kid closes it
+  const kept = keptTalk(mem);
+  if (kept) say(...kept.args, true);
   const pending = goals.get(data.kid);
   if (pending) { goals.delete(data.kid); use(pending); }
 }
