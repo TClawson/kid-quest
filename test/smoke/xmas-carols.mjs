@@ -17,7 +17,7 @@ import { CAROLS } from '../../js/carols.js';
 import { pickVisitors } from '../../js/visits.js';
 import { openKid } from '../helpers/open-kid.mjs';
 
-const out = (process.argv[2] || 'previews/xmas-carols').replace(/\/$/, '');
+const out = (process.argv[2] || 'test/.tmp/xmas-carols').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
 
 /**

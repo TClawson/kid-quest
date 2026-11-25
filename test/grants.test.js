@@ -115,3 +115,19 @@ test('the real task restore brings the Exercise task back for Ayden, Edison and 
   }
   assert.equal(restoreTasks({ id: 'kid_mvzflap11wbyq', tasks: [] }), false, 'Esther lost none');
 });
+
+test('a bought buddy the kid has (or dressed before) is put back if an old copy lost it', () => {
+  const kid = { owned: [], buddy: { species: 'arcticfox', outfit: {} } };
+  assert.equal(restoreFromRecord(kid), true);
+  assert.deepEqual(kid.owned, ['buddy:arcticfox']);
+  assert.equal(restoreFromRecord(kid), false, 'only once');
+  const other = { owned: [], buddy: { species: 'fox', outfit: {}, closet: { arcticfox: {}, cat: {} } } };
+  restoreFromRecord(other);
+  assert.deepEqual(other.owned, ['buddy:arcticfox'], 'free buddies are not listed');
+});
+
+test('the restore counts a bought buddy at its price', () => {
+  const kid = { id: 'kid_a', owned: ['buddy:arcticfox'], buddyOwned: {}, spent: 300 };
+  restoreBackup(kid, { kid_a: { owned: [], buddyOwned: {}, spent: 0 } });
+  assert.equal(kid.spent, 300);
+});

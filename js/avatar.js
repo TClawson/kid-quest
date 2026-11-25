@@ -39,6 +39,13 @@ const EARS = {
     '..KKOOOOOOOOKK..',
     '.KOOOOOOOOOOOOK.',
   ],
+  // short, rounded little ears set wide apart (the arctic fox keeps its ears small against the cold)
+  short: [
+    '................',
+    '.KK..........KK.',
+    '.KoKK......KKoK.',
+    '.KooOKKKKKKOooK.',
+  ],
   // a smooth round head, no ears
   dome: [
     '................',
@@ -81,6 +88,8 @@ const SPECIES = {
   cat: { ears: 'pointed', tail: true, whiskers: true, pal: { O: '#a6b1c6', W: '#f3f5fa', o: '#ffb3c6', T: '#a6b1c6', t: '#a6b1c6' }, shade: { O: ['#c8d0de', '#7d889e'], W: ['#ffffff', '#d5dae6'], T: ['#c8d0de', '#7d889e'] } },
   puppy: { ears: 'floppy', tail: true, floppy: true, pal: { O: '#e0a85e', W: '#fff4df', o: '#8a5530', T: '#e0a85e', t: '#8a5530' }, shade: { O: ['#f5c582', '#b47a3a'], W: ['#ffffff', '#e8d2ae'], o: ['#a8703f', '#5e3519'], T: ['#f5c582', '#b47a3a'] } },
   turtle: { ears: 'dome', tail: false, shell: true, pal: { O: '#7ccf6a', W: '#dff5b8', S: '#4f8a3a', s: '#a6d86b', y: '#f2d27a', Y: '#c99a3f' }, shade: { O: ['#a3e38f', '#4f9e44'], W: ['#f2ffd8', '#b8d98a'], S: ['#6aa84f', '#2f5e22'], y: ['#ffe8a3', '#c99a3f'] } },
+  // a snowy white coat with icy blue shading, slate inner ears and a big fluffy tail (arcticMarks)
+  arcticfox: { ears: 'short', tail: true, pal: { O: '#e3e9f3', W: '#ffffff', o: '#7d89a6', T: '#e3e9f3', t: '#ffffff', u: '#c3cfe2' }, shade: { O: ['#f7faff', '#a7b6d0'], W: ['#ffffff', '#dfe6f1'], T: ['#f7faff', '#a7b6d0'] } },
   dino: { ears: 'plates', tail: true, pal: { O: '#5cbf5f', W: '#e6f7c8', w: '#c2e09a', d: '#3f9446', c: '#fffbe6', s: '#f79a38', T: '#5cbf5f', t: '#5cbf5f' }, shade: { O: ['#88d98a', '#3a8c41'], W: ['#f6ffe6', '#bcd99a'], T: ['#88d98a', '#3a8c41'], s: ['#ffc46b', '#c8650f'] } },
 };
 
@@ -140,6 +149,34 @@ function dinoMarks(g, mood) {
   return g;
 }
 
+// Arctic fox: fluffy cheek ruffs and a big, bushy tail that curls up beside it.
+function arcticMarks(g) {
+  g = g.map((r) => [...r, '.', '.', '.', '.']);
+  // cheek ruffs: the fur pokes out past the face in two tufts on each side
+  for (const [y, x] of [[8, 0], [9, 1]]) {
+    g[y][x] = 'K'; g[y][x + 1] = 'O';
+    g[y][15 - x] = 'K'; g[y][14 - x] = 'O';
+  }
+  g[10][2] = 'K'; g[10][13] = 'K';
+  // take away the little tail, then paint the bushy one
+  for (let y = 12; y < 16; y += 1) for (let x = 14; x < 16; x += 1) g[y][x] = '.';
+  g[12][13] = '.'; g[13][13] = 'K'; g[14][13] = 'K';
+  const tail = {
+    6: '     KK ',
+    7: '    KttK',
+    8: '   KTtTK',
+    9: '   KTTuK',
+    10: '  KTTTuK',
+    11: '  KTTTTK',
+    12: ' KTTTTuK',
+    13: ' KTTTuK ',
+    14: ' KTTuuK ',
+    15: '  KKKK  ',
+  };
+  for (const [y, r] of Object.entries(tail)) paint(g, Number(y), 12, r);
+  return g;
+}
+
 function speciesGrid(speciesId, mood) {
   const sp = SPECIES[speciesId] || SPECIES.bear;
   const rows = [...EARS[sp.ears], ...BODY];
@@ -153,6 +190,7 @@ function speciesGrid(speciesId, mood) {
   }
   if (speciesId === 'panda') g = pandaMarks(g);
   if (speciesId === 'dino') g = dinoMarks(g, mood);
+  if (speciesId === 'arcticfox') g = arcticMarks(g);
   if (sp.floppy) {
     // ears hang down beside the cheeks
     const left = ['Koo', 'Koo', 'KooK', 'KooK', '.KoK'];
@@ -561,6 +599,16 @@ const ITEM_ART = {
     'JJJJWWJJJ',
     'JJJJJWJJJ',
   ], { J: SH('#7048e8', '#9775fa', '#4c2bb5'), T: '#ffd43b', W: '#ffffff' }],
+  // arctic fox: a little crown of ice crystals between its ears, with a snowflake on the band
+  'hat-icecrown': [7, 4, [
+    '....KK....',
+    '.K.KWCK.K.',
+    'KWKKWCKKWK',
+    'KCCKCcKKcK',
+    'KCcCCcCCcK',
+    'KSSSWSSSSK',
+    'KKKKKKKKKK',
+  ], { C: SH('#a5d8ff', '#e7f5ff', '#74c0fc'), c: '#4dabf7', W: '#ffffff', S: SH('#5c7cfa', '#91a7ff', '#3b5bdb') }],
   // puppy: a chew bone held in its mouth
   'neck-bone': [3, 15, [
     '.KK............KK.',

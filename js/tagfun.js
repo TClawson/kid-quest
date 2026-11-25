@@ -20,7 +20,7 @@
 // Personalities follow the visiting buddy's kind, so a kid learns them:
 //   sneaky (fox, panda): hides behind things when running away; when IT, creeps up, then pounces
 //   speedy (puppy, bear, dino): faster than anyone, but runs out of puff and has to rest
-//   dodger (cat, turtle): side-steps at the last moment, then needs 3 seconds before the next one
+//   dodger (cat, turtle, arctic fox): side-steps at the last moment, then needs 3 seconds before the next one
 import { clamp } from './pixelkit.js';
 
 const lerp = (a, b, k) => a + (b - a) * k;
@@ -32,7 +32,7 @@ export const PERSONALITIES = {
   speedy: { name: 'Speedy', likes: 'mushroom', tip: (n) => `${n} is speedy, but runs out of puff!` },
   dodger: { name: 'Dodger', likes: 'snow', tip: (n) => `${n} is a dodger: side-steps at the last second!` },
 };
-const BY_SPECIES = { fox: 'sneaky', panda: 'sneaky', puppy: 'speedy', bear: 'speedy', dino: 'speedy', cat: 'dodger', turtle: 'dodger' };
+const BY_SPECIES = { fox: 'sneaky', panda: 'sneaky', puppy: 'speedy', bear: 'speedy', dino: 'speedy', cat: 'dodger', turtle: 'dodger', arcticfox: 'dodger' };
 
 /** A visiting buddy's personality, from its kind (or its name, for a kind with none). */
 export function personalityFor(species, name = '') {

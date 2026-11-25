@@ -2,7 +2,7 @@
 // its id goes in kid.grants (on the kid's synced record), so every device agrees and
 // it never runs twice. Pure logic, no DOM.
 
-import { itemById, isWorn } from './items.js';
+import { itemById, isWorn, speciesById, buddyOwnedId } from './items.js';
 import { spotById } from './furniture.js';
 
 export const GRANTS = [
@@ -60,6 +60,13 @@ export function restoreFromRecord(kid) {
   for (const [species, worn] of Object.entries(buddy.closet || {})) for (const id of Object.values(worn || {})) give(id, species);
   for (const id of Object.values(kid.home || {})) give(id);
   for (const id of Object.values(kid.gardenDecor || {})) give(id);
+  // a bought buddy the kid has now, or has dressed before (its closet), was bought once too
+  for (const species of [buddy.species, ...Object.keys(buddy.closet || {})]) {
+    const id = buddyOwnedId(species);
+    if (!speciesById(species)?.price || (kid.owned || []).includes(id)) continue;
+    kid.owned = [...(kid.owned || []), id];
+    changed = true;
+  }
   return changed;
 }
 
@@ -78,7 +85,9 @@ const BACKUP_2026_11_08 = {
 export const RESTORE_ID = 'restore-2026-11-08-backup';
 
 /** A shop price in coins of an id in kid.owned (a song is SONG_PRICE; gear costs gems, not coins). */
-const coinPrice = (id) => (typeof id === 'string' && id.startsWith('song:') ? 20 : itemById(id)?.price || 0);
+const coinPrice = (id) => (typeof id === 'string' && id.startsWith('song:') ? 20
+  : typeof id === 'string' && id.startsWith('buddy:') ? speciesById(id.slice(6))?.price || 0
+  : itemById(id)?.price || 0);
 
 /**
  * Put back everything a kid had on the Nov 8 backup (lists only grow), and their coins
