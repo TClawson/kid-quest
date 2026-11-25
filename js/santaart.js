@@ -319,6 +319,14 @@ export function letterArt() {
 // ---------- the flight ----------
 
 export const FLIGHT_S = 8; // seconds across
+
+// Where the present lands: beside the kid's front door, on its right, or on its left on the maps
+// whose garden sign stands on the right of the door (it would cover the sign)
+export const PRESENT_SIDE = { 'bg-rainbow': -1, 'bg-space': -1, 'bg-volcano': -1 };
+/** The present's spot by the kid's door: { x, y } its foot. */
+export function presentSpot(L) {
+  return { x: Math.round(L.home.x + L.home.w / 2 + 26 * (PRESENT_SIDE[L.id] || 1)), y: L.home.y + L.home.h + 12 };
+}
 /** Where the flight is at t seconds: { team: { x, y, frame }, shadow, snow: [[x, y, kind]], present: { x, y, state } | null }. */
 export function flyover(L, t, o = {}) {
   const W = L.W;
@@ -339,7 +347,7 @@ export function flyover(L, t, o = {}) {
     snow.push([fx, fy, h2(k, 3, 5) < 0.2 ? 'spark' : h2(k, 4, 5) < 0.5 ? 'gold' : 'flake']);
   }
   // the present: let go over the kid's house, it floats down to the doorstep on its parachute
-  const door = o.door || { x: L.home.x + L.home.w / 2 + 26, y: L.home.y + L.home.h + 12 };
+  const door = o.door || presentSpot(L);
   const dropX = door.x; const tDrop = ((dropX + 140 - 60) / (W + 170)) * FLIGHT_S;
   let present = null;
   if (t >= tDrop) {

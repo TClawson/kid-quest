@@ -42,21 +42,27 @@ function family(day, { inside = true } = {}) {
 }
 
 const errors = [];
-async function open(day, time, { state, house, night = null } = {}) {
+async function open(day, time, { state, house, night = null, parent = false } = {}) {
   // the family's clock is Denver's (the night follows Denver's sunset): every day here is in winter time
   const ctx = await browser.newContext({ viewport: { width: 900, height: 1200 }, deviceScaleFactor: 1, timezoneId: 'America/Denver' });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.clock.install({ time: new Date(`${day}T${time}:00-07:00`) });
+  // a parent's phone: signed in to the family as a parent (the cloud itself stays offline here)
+  if (parent) await page.route('**/js/vendor/firebase.js', (r) => r.abort());
   // seed on another page of the site first, so the app never runs on top of old data
   await page.goto(`${site.url}manifest.webmanifest`);
-  await page.evaluate(([s, h, n]) => {
+  await page.evaluate(([s, h, n, par]) => {
     localStorage.clear();
     localStorage.setItem('kidquest.v1', JSON.stringify(s));
     localStorage.setItem('kidquest.house', JSON.stringify(h));
     if (n) localStorage.setItem('kidquest.night', n);
-  }, [state, house, night]);
+    if (par) {
+      localStorage.setItem('kidquest.cloud', JSON.stringify({ familyId: 'fam', role: 'parent', kidId: null, email: 'parent@example.com' }));
+      localStorage.setItem('kidquest.cloud.cache', JSON.stringify(s));
+    }
+  }, [state, house, night, parent]);
   await page.goto(site.url);
   return { page, ctx };
 }
@@ -145,6 +151,7 @@ try {
   assert.equal(await page.locator('.village .v-present').count(), 0);
   // the letter is kept: the mailbox by the door opens the letters book
   await page.waitForSelector('.village .v-mailbox');
+  assert.equal(await page.locator('.village .v-mailbox.painted').count(), 1, 'on the meadow, the painted mailbox by the door is Santa\'s');
   await page.locator('.village .v-mailbox').evaluate((el) => el.click());
   await page.waitForSelector('#modal .xm-letters');
   assert.match(await page.textContent('#modal .xm-letters'), /11 December · Czech Republic/);
@@ -223,6 +230,22 @@ try {
   await shot(page, '9-little-wall');
   await ctx.close();
 
+  // ---------- a parent's phone looking at Ava's village: no flight, no prize, no doors ----------
+  ({ page, ctx } = await open(DAY, '12:00', { state: s, house, parent: true }));
+  await page.waitForSelector('[data-action="open-kid"][data-id="kid_ava"]');
+  await openKid(page, 'kid_ava');
+  await goOutside(page);
+  await page.clock.runFor(3000);
+  assert.notEqual(await page.locator('.village').getAttribute('data-santa'), 'flying', 'Santa doesn\'t fly on a parent\'s phone');
+  await page.clock.runFor(10000);
+  assert.ok(!(await kidState(page, 'kid_ava')).xmas?.santa, 'no prize rolled on a parent\'s phone');
+  await page.locator('.village .v-advent').evaluate((el) => el.click());
+  await page.waitForSelector('#modal .xm-advent');
+  await tapDoor(page, 11);
+  assert.match(await page.textContent('#modal .xm-line'), /Ava opens the doors on Ava's own device/);
+  assert.ok(!(await kidState(page, 'kid_ava')).xmas?.doors);
+  await ctx.close();
+
   // ---------- Christmas Day: door 25 needs no chores, and the kid picks a star ----------
   const xmasDay = '2026-12-25';
   const c = family(xmasDay);
@@ -240,6 +263,9 @@ try {
   await page.locator('.village .v-advent').evaluate((el) => el.click());
   await page.waitForSelector('#modal .xm-advent');
   assert.match(await page.textContent('#modal .xm-line'), /Waiting for a grown-up. Door 25 needs no chores!/);
+  // door 7's golden door gave a Santa hat: it is drawn in its niche (not the stand-in bauble)
+  await tapDoor(page, 7);
+  assert.match(await page.textContent('#modal .xm-line'), /Door 7: A golden door: Santa hat!/);
   await shot(page, '10-christmas-wall');
   const benCoins = (await coins(page, 'kid_ben')).coins;
   await tapDoor(page, 25);
@@ -273,7 +299,7 @@ try {
     }
   }
   // the night comes to every map, all year
-  const { VILLAGE_THEMES } = await import('../../js/villagemaps.js');
+  const { VILLAGE_THEMES, villageLayout } = await import('../../js/villagemaps.js');
   for (const theme of VILLAGE_THEMES) {
     const fam = family('2027-01-02', { inside: false });
     fam.s.kids[0].buddy.outfit.background = theme;
@@ -284,13 +310,31 @@ try {
     assert.equal(await page.locator('.village .v-advent').count(), 0, `${theme}: no advent house in January`);
     await ctx.close();
   }
+  // the present lands clear of the garden sign on every map (rainbow, space and volcano: left of the door)
+  const { presentSpot } = await import('../../js/santaart.js');
+  for (const theme of VILLAGE_THEMES) {
+    const fam = family(DAY, { inside: false });
+    fam.s.kids[0].buddy.outfit.background = theme;
+    fam.s.kids[0].xmas = { santa: { [DAY]: { prize: 'coins' }, '2026-12-10': { prize: 'gems', opened: '2026-12-10' } } };
+    ({ page, ctx } = await open(DAY, '12:00', { state: fam.s, house: fam.house }));
+    await openKid(page, 'kid_ava');
+    await page.waitForSelector('.village .v-present');
+    const g = await page.evaluate(() => { const el = document.querySelector('.village .v-garden'); return el && { x: parseFloat(el.style.left), y: parseFloat(el.style.top), w: el.offsetWidth, h: el.offsetHeight }; });
+    const at = presentSpot(villageLayout(theme));
+    if (g) assert.ok(at.x + 8 < g.x || at.x - 8 > g.x + g.w || at.y < g.y || at.y - 16 > g.y + g.h, `${theme}: the present covers the garden sign`);
+    const mb = await page.evaluate(() => { const el = document.querySelector('.village .v-mailbox'); return { x: parseFloat(el.style.left), w: el.offsetWidth }; });
+    assert.ok(mb.x + mb.w < at.x - 6 || mb.x > at.x + 6, `${theme}: the mailbox and the present apart`);
+    if (shots) { await page.locator('.village .v-present').scrollIntoViewIfNeeded(); const b = await page.locator('.village .v-present').boundingBox(); await page.screenshot({ path: `${shots}/14-present-${theme}.png`, clip: { x: Math.max(0, b.x - 120), y: Math.max(0, b.y - 100), width: 280, height: 190 } }); }
+    await ctx.close();
+  }
   // and on a December evening, the night and the decorations together
   ({ page, ctx } = await open(DAY, '18:30', { state: s, house: family(DAY, { inside: false }).house }));
   await openKid(page, 'kid_ava');
   await page.waitForSelector('.village.night .v-advent');
   await ctx.close();
 
-  assert.deepEqual(errors, []);
+  // (the parent's phone can't reach the made-up family's cloud here)
+  assert.deepEqual(errors.filter((e) => !/firebase|Failed to fetch|ERR_FAILED|dynamically imported/i.test(e)), []);
   console.log('xmas-village: ok');
 } finally {
   await browser.close();

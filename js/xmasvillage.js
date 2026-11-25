@@ -10,7 +10,7 @@
 import { xmasOn, xmasScene, xmasLayer, xmasLights, xmasTreeArt, lanternArt } from './xmaslights.js';
 import { shownNight, nightLand, landLights, nightFrames, nightFilter, folkFilters, lightAt } from './nightfx.js';
 import { adventSpot, adventHouseArt, adventLights, adventWallArt } from './adventart.js';
-import { mountSanta, mailboxArt } from './santaart.js';
+import { mountSanta, mailboxArt, PRESENT_SIDE } from './santaart.js';
 
 const TWINKLE_MS = 420;
 
@@ -92,7 +92,16 @@ function mountDecor(section, world, L, o) {
   // Santa's mailbox by the kid's door, once he has written: his letters book (advent-ui.js)
   const live = o.xm && o.xmas?.live ? o.xmas.live(kid) : null;
   if (live?.letters) {
-    const box = standing('v-mailbox', mailboxSpot(L), [0, 1, 2].map(() => mailboxArt({ night: nm })), "Santa's letters");
+    const spot = mailboxSpot(L);
+    let box;
+    if (spot.painted) {
+      // the map's own mailbox (painted with the land): just a place to tap, over it
+      box = document.createElement('button');
+      box.className = 'v-deco v-mailbox painted';
+      box.setAttribute('aria-label', "Santa's letters");
+      box.style.cssText = `left:${spot.x - 8}px;top:${spot.y - 22}px;width:16px;height:24px;z-index:${spot.y}`;
+      world.insertBefore(box, world.querySelector('.v-buddy'));
+    } else box = standing('v-mailbox', spot, [0, 1, 2].map(() => mailboxArt({ night: nm })), "Santa's letters");
     box.addEventListener('click', (e) => { e.stopPropagation(); o.xmas.onLetters?.(kid); });
   }
   const draw = (f) => {
@@ -125,9 +134,16 @@ function mountDecor(section, world, L, o) {
   return { house };
 }
 
-/** Where Santa's mailbox stands: on the left of the kid's front door (the present lands on its right). */
+/**
+ * Where Santa's mailbox stands: the map's own painted mailbox when it has one (the meadow's: a
+ * tap there opens the letters book, nothing is drawn over it), else on the left of the kid's
+ * front door, further left where the present lands on that side (santaart.js presentSpot).
+ * { x, y } its foot, painted: true for the map's own.
+ */
 export function mailboxSpot(L) {
-  return { x: Math.round(L.home.x + L.home.w / 2 - 22), y: Math.round(L.home.y + L.home.h + 10) };
+  const own = (L.props || []).find((p) => p.kind === 'mailbox');
+  if (own) return { x: own.x + 6, y: own.y + 19, painted: true };
+  return { x: Math.round(L.home.x + L.home.w / 2 - (PRESENT_SIDE[L.id] < 0 ? 50 : 22)), y: Math.round(L.home.y + L.home.h + 10) };
 }
 
 /** The inside of the advent house over the village: the wall of doors (a sketch of the real screen). */

@@ -24,8 +24,9 @@ import { openedArt, letterArt } from './santaart.js';
 import { critterById } from './critters.js';
 import { critterPic } from './critterart.js';
 import {
-  state, ui, $modal, today, esc, kidById, save, render, openModal, kidTheme,
+  state, ui, $modal, today, esc, kidById, save, render, openModal, kidTheme, toast, cloud, cloudCfg,
 } from './ctx.js';
+import { itemArt } from './avatar.js';
 
 const TWINKLE_MS = 420;
 const nameOf = (id) => ornamentById(id)?.name || itemById(id)?.name || id;
@@ -39,6 +40,29 @@ const animalUrl = (id) => picUrl(`animal:${id}`, () => { const c = critterById(i
 const letterUrl = () => picUrl('letter', () => letterArt());
 const openedUrl = (kind, f = 0) => picUrl(`opened:${kind}:${f}`, () => openedArt(kind, f));
 
+/**
+ * A parent's phone looking at a kid's village (app.js parentDevice: signed in to the family as a
+ * parent): Santa doesn't fly there and nothing is opened there; the presents and doors are the
+ * kid's, on the kid's own device.
+ */
+const parentSide = () => cloudCfg?.role === 'parent' && !cloud?.signedOut;
+
+// an outfit piece's own picture (avatar.js, its 24 x 24 grid), as a sprite buffer for the wall
+// (adventart.js blitArt) and as an image for the prize card
+function itemBuf(id) {
+  const a = itemArt(id);
+  if (!a) return null;
+  return { each: (fn) => a.c.forEach((row, y) => row.forEach((_, x) => fn(x, y))), get: (x, y) => a.c[y]?.[x] || null };
+}
+const itemUrl = (id) => picUrl(`item:${id}`, () => {
+  const a = itemArt(id);
+  if (!a) return null;
+  const c = document.createElement('canvas'); c.width = 24; c.height = 24;
+  const ctx = c.getContext('2d');
+  a.c.forEach((row, y) => row.forEach((col, x) => { if (col) { ctx.fillStyle = col; ctx.fillRect(x, y, 1, 1); } }));
+  return c;
+});
+
 /** What the village asks and tells (see xmasvillage.js mountDecor). */
 export const xmasHandlers = {
   /** Santa: does he fly now, presents already by the door, letters kept (for the mailbox). */
@@ -46,12 +70,12 @@ export const xmasHandlers = {
     const kid = kidById(kidId);
     if (!kid) return null;
     const t = today();
-    return { fly: santaDue(kid, t), waiting: presentsWaiting(kid, t).length, letters: playsLittle(kid) ? 0 : lettersKept(kid).length };
+    return { fly: santaDue(kid, t) && !parentSide(), waiting: presentsWaiting(kid, t).length, letters: playsLittle(kid) ? 0 : lettersKept(kid).length };
   },
   /** Santa sets off: the present is the kid's now, on every device. */
   onFly: (kidId) => {
     const kid = kidById(kidId);
-    if (!kid || !santaDue(kid, today())) return;
+    if (!kid || !santaDue(kid, today()) || parentSide()) return;
     santaFlies(kid, today(), playsLittle(kid));
     save();
   },
@@ -72,6 +96,7 @@ export function openPresent(kidId) {
   const days = presentsWaiting(kid, t);
   const day = days[0];
   if (!day) return 0;
+  if (parentSide()) { toast(`🎁 This present is for ${kid.name} to open.`); return days.length; }
   const rec = santaRecord(kid, day);
   const extra = {};
   if (rec.prize === 'sticker') {
@@ -166,10 +191,11 @@ function wallFrames(kid, mapId, t, little) {
   const opened = doorsOf(kid, year);
   const date = isXmas(t) ? Number(t.slice(8, 10)) : 0;
   const shown = {};
-  for (const [n, p] of Object.entries(opened)) shown[n] = p.kind === 'star' ? { kind: 'ornament', id: p.id } : p.kind === 'sticker' ? { kind: 'sticker' } : p;
+  // (a golden door's outfit piece is drawn from its own picture: prizeArt's item: ids)
+  for (const [n, p] of Object.entries(opened)) shown[n] = p.kind === 'star' ? { kind: 'ornament', id: p.id } : p.kind === 'sticker' ? { kind: 'sticker' } : p.kind === 'golden' && p.item && !p.id ? { ...p, id: `item:${p.item}` } : p;
   const missed = missedDoors(kid, t);
   return [0, 1, 2].map((frame) => {
-    const cv = adventWallArt({ mapId, today: date <= STAR_DOOR ? date : 0, opened: shown, missed, frame, prizeArt: (id, f) => ornamentArt(id, f % 2) });
+    const cv = adventWallArt({ mapId, today: date <= STAR_DOOR ? date : 0, opened: shown, missed, frame, prizeArt: (id, f) => (id.startsWith('item:') ? itemBuf(id.slice(5)) : ornamentArt(id, f % 2)) });
     // the little one's doors hold her animal stickers, drawn into their niches
     if (little) {
       const ctx = cv.getContext('2d');
@@ -235,6 +261,7 @@ export function tapDoor(kidId, n, o = {}) {
   const little = playsLittle(kid);
   const s = doorState(kid, t, n, storeOpen(state, kid, t));
   const again = (msg) => openAdvent(kidId, { ...o, keep: true }, msg);
+  if (parentSide() && s.why !== 'opened') { sounds.tap(); again({ text: `${kid.name} opens the doors on ${kid.name}'s own device.`, why: 'parent' }); return; }
   if (!s.ok) {
     if (s.why === 'opened') {
       sounds.tap();
@@ -265,7 +292,7 @@ export function tapDoor(kidId, n, o = {}) {
   confetti(prize.kind === 'golden' ? 160 : 70, 1800);
   if (little) { again({ html: prize.animal ? `<div class="xm-sticker small"><img src="${animalUrl(prize.animal)}" alt=""></div>` : '' }); return; }
   const w = doorWords(prize, nameOf);
-  const pic = prize.id ? `<img class="xm-orn" src="${ornUrl(prize.id)}" alt="">` : '';
+  const pic = prize.id ? `<img class="xm-orn" src="${ornUrl(prize.id)}" alt="">` : prize.item && itemUrl(prize.item) ? `<img class="xm-orn" src="${itemUrl(prize.item)}" alt="">` : '';
   again({ html: `<div class="xm-door-prize${prize.kind === 'golden' ? ' golden' : ''}">${pic}<div><b>Door ${n}: ${esc(w.title)}</b><small>${esc(w.text)}</small></div></div>` });
 }
 
