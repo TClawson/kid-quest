@@ -48,7 +48,7 @@ test('the wand moves to the right when a ball or stick is held on the left', () 
 
 test('every buddy draws the wizard set, still and live', () => {
   const outfit = { hat: 'hat-wizard-star', face: 'face-beard', neck: 'neck-robe', hand: 'hand-wand' };
-  for (const species of ['fox', 'bear', 'panda', 'cat', 'dino', 'puppy', 'turtle']) {
+  for (const species of ['fox', 'bear', 'panda', 'cat', 'dino', 'puppy', 'turtle', 'arcticfox']) {
     const svg = buddySvg({ species, outfit, wand: 1 }, 'happy');
     assert.match(svg, /class="wand wand-full"/);
     const rig = buildRig({ species, outfit });

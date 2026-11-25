@@ -215,6 +215,10 @@ label { color: var(--ink); }
 .buddy-chip { overflow: hidden; padding: 2px; }
 .buddy-chip svg, .pick-item.species svg { width: 100%; height: 100%; display: block; }
 .pick-item.species { width: 64px; height: 64px; padding: 4px; }
+/* a buddy bought with coins: its price sits on it until the kid owns it */
+.pick-item.species.for-sale { position: relative; }
+.species-price { position: absolute; left: 50%; bottom: 1px; transform: translateX(-50%); font: 800 0.75rem/1.2 var(--px-font, system-ui); white-space: nowrap; color: #8a5a00; background: #fff3bf; border: 2px solid #f0c040; border-radius: 4px; padding: 0 4px; }
+.species-price.can { background: #ffe066; border-color: var(--px-ink, #2a1838); }
 
 .buddy svg.pixel { image-rendering: pixelated; }
 .buddy .char, .buddy .fx, .buddy .shadow { transform-box: view-box; }

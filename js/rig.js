@@ -93,8 +93,9 @@ export function buildRig(buddy, opts = {}) {
   const L = base.lift; const W = base.grid[0].length;
   const ox = SPRITE_X; const oy = SPRITE_Y - L;
   const isDino = species === 'dino';
-  const earKind = { fox: 'pointed', cat: 'pointed', bear: 'round', panda: 'round', dino: 'plates' }[species];
-  const hasTail = ['fox', 'cat', 'puppy', 'dino'].includes(species);
+  const isArctic = species === 'arcticfox';
+  const earKind = { fox: 'pointed', cat: 'pointed', bear: 'round', panda: 'round', dino: 'plates', arcticfox: 'short' }[species];
+  const hasTail = ['fox', 'cat', 'puppy', 'dino', 'arcticfox'].includes(species);
 
   // the rig draws the eyes, so take them out of the sprite
   const wipe = (rows) => rows.map((r, y) => ((y >= L + 5 && y <= L + 7)
@@ -121,6 +122,8 @@ export function buildRig(buddy, opts = {}) {
   const isTail = (x, y) => {
     if (!hasTail) return false;
     if (isDino) return (y >= L + 11 && x >= 13) || (y >= L + 8 && y <= L + 10 && x >= 16);
+    // the arctic fox's bushy tail stands up beside its head and body
+    if (isArctic) return (y >= L + 12 && x >= 13) || (y >= L + 10 && y <= L + 11 && x >= 14) || (y >= L + 6 && y <= L + 9 && x >= 16);
     return y >= L + 12 && y <= L + 14 && x >= 13;
   };
   const all = () => true;
@@ -149,8 +152,10 @@ export function buildRig(buddy, opts = {}) {
   const footR = slice(c0, L + 15, L + 15, 8, W - 1, (x, y) => !isTail(x, y), ox, oy);
   let tail = null;
   if (hasTail) {
-    tail = slice(c0, L + 8, L + 15, 0, W - 1, isTail, ox, oy);
-    tail.pivot = [ox + 13, oy + L + 14];
+    tail = slice(c0, isArctic ? L + 6 : L + 8, L + 15, 0, W - 1, isTail, ox, oy);
+    tail.pivot = [ox + (isArctic ? 14 : 13), oy + L + 14];
+    // big tails bend instead of turning (see render)
+    tail.bend = isDino || isArctic;
   }
 
   // arms: a little stick in fur color, turning at the shoulder (0 degrees hangs down)
@@ -312,10 +317,10 @@ export function render(rig, pose, frame = 0, opts = {}) {
   const showArm = (a) => Math.abs(snap(a.rot, 45)) > 0;
 
   if (rig.neck?.behind) draw(rig.neck, neckM);
-  // the dino's big tail breaks apart when it turns or slides, so it bends instead:
-  // the end at the body stays put and each column further out lifts or dips a
-  // little more, at most one pixel per column, so it never comes loose
-  if (rig.tail && rig.species === 'dino') drawBent(rig.tail, rootX, rootY, Math.max(-4, Math.min(2.4, pose.tail.rot / 12)));
+  // the big tails (the dino's, the arctic fox's) break apart when they turn or
+  // slide, so they bend instead: the end at the body stays put and each column
+  // further out lifts or dips a little more, at most one pixel per column, so it never comes loose
+  if (rig.tail?.bend) drawBent(rig.tail, rootX, rootY, Math.max(-4, Math.min(2.4, pose.tail.rot / 12)));
   else if (rig.tail) draw(rig.tail, mul(root, about(rig.tail.pivot, snap(pose.tail.rot, 30))));
   draw(rig.footL, mul(root, T(q(pose.footL.dx || 0), q(pose.footL.dy))));
   draw(rig.footR, mul(root, T(q(pose.footR.dx || 0), q(pose.footR.dy))));
