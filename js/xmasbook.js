@@ -11,9 +11,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(
 /**
  * kid: { name, color, xmas: { found: ids, star: the star on top, tinsel } }. img(id, { grey,
  * frame }): an image URL for an ornament or star, found (frame 0 or 1) or not yet (grey).
+ * opts.gifts: markup for the presents to wrap for the family (xmas-ui.js), shown under the tinsel.
  * Returns the book's markup.
  */
-export function ornamentBookHtml(kid, img) {
+export function ornamentBookHtml(kid, img, { gifts = '' } = {}) {
   const x = kid.xmas || {};
   const found = new Set(x.found || []);
   const won = new Set(starsWon(x.found || []));
@@ -48,8 +49,9 @@ export function ornamentBookHtml(kid, img) {
   return `
     <div class="ornbook" style="--kid:${esc(kid.color || '#7048e8')}">
       <h2>🎄 ${esc(kid.name)}'s ornament book</h2>
-      <p class="muted small fb-count">${n} of ${ORNAMENTS.length} ornaments found, and ${won.size} of ${STARS.length} star toppers. Find all 4 of a map's ornaments to win its star, and pick any star at door 25. Every map has its own, so travel to fill the tree!</p>
+      <p class="muted small fb-count">${n} of ${ORNAMENTS.length} ornaments found, and ${won.size} of ${STARS.length} star toppers. Find all 4 of a map's ornaments to win its star, and pick any star at door 25. Chests, fish, digs and photos on a map find that map's ornaments.</p>
       <div class="ob-tinsel"><span class="ob-tin">✨ ${tinsel} tinsel</span><span class="muted small">A double turns into tinsel. ${TINSEL_PRICE} tinsel buys any ornament you're missing.</span><button class="btn small" data-action="tinsel-swap" ${tinsel >= TINSEL_PRICE && n < ORNAMENTS.length ? '' : 'disabled'}>Pick one</button></div>
+      ${gifts}
       <div class="ob-maps">${pages}</div>
       <button class="btn" data-action="modal-close">Close</button>
     </div>`;
