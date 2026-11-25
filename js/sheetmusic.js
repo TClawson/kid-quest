@@ -5,9 +5,12 @@
 // staff below. Also the songbook itself: which pieces there are, how hard each is, and
 // which unlock with each piano (the first piano opens every map song, the upright piano the
 // secret shows' tunes, and a finished treasure map opens its show's tune early), and buying an
-// open piece with coins (SONG_PRICE). Pure logic, no DOM.
+// open piece with coins (SONG_PRICE). And the December carols (carols.js, CAROLBOOK): free in
+// the songbook in December, and kept by a kid who opened one then. Pure logic, no DOM.
 
 import { SONGS, SHOW_SONGS, barChords, songBeat } from './songs.js';
+import { CAROLS, CAROL_ARRANGER } from './carols.js';
+import { isXmas } from './xmas.js';
 
 const LETTERS = 'CDEFGAB';
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
@@ -154,11 +157,11 @@ export function barEvents(bar) {
 const onPaper = new Map();
 /**
  * A piece's song data as its sheet music has it: 'bg-meadow' is a map song, 'show:bg-meadow' a
- * secret show's tune. A song with a closing bar (songs.js: ending) has it here as its last
- * bar; the game's loop never plays it.
+ * secret show's tune, 'xmas-jingle' a December carol (carols.js). A song with a closing bar
+ * (songs.js: ending) has it here as its last bar; the game's loop never plays it.
  */
 export function songById(id) {
-  const song = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] : SONGS[id];
+  const song = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] : SONGS[id] || (Object.hasOwn(CAROLS, id) ? CAROLS[id].song : undefined);
   if (!song?.ending) return song;
   if (!onPaper.has(id)) onPaper.set(id, { ...song, lead: [...song.lead, song.ending.lead], chords: [...song.chords, song.ending.chord] });
   return onPaper.get(id);
@@ -281,13 +284,71 @@ export function buySong(kid, piece, coins) {
   return true;
 }
 
-/** Stars for a piece's level (1-3), for the songbook list. */
+/** Stars for a piece's level (1-3), for the songbook list (measured against the map songs and show tunes). */
 export function stars(level) {
   const levels = SONGBOOK.map((p) => p.level);
   const lo = Math.min(...levels);
   const span = Math.max(...levels) - lo || 1;
-  return 1 + Math.min(2, Math.floor(((level - lo) / span) * 3));
+  return 1 + Math.max(0, Math.min(2, Math.floor(((level - lo) / span) * 3)));
 }
+
+// ---------- the December carols ----------
+// Seven carols (carols.js), apart from SONGBOOK: they are not map songs, so the studio, the
+// Note-o-Matic and the piano tiers never see them. In December (Denver days, 1-31 Dec) every
+// carol is in the songbook, open and free. A carol the kid opens in December is kept: it goes
+// in the kid's shared purchases (kid.owned) as 'song:<id>', like a bought song but costing
+// nothing, so it syncs with the kid and stays in the songbook after December.
+
+/** Whether a piece id is a carol. */
+export const isCarol = (id) => typeof id === 'string' && Object.hasOwn(CAROLS, id);
+
+/**
+ * Every carol: { id, kind: 'carol', name, subtitle, composer, key, bars, level }, easiest first.
+ */
+export const CAROLBOOK = Object.entries(CAROLS)
+  .map(([id, c]) => ({ id, kind: 'carol', name: c.title, subtitle: c.subtitle || '', composer: c.composer, key: c.song.key, bars: songById(id).lead.length, level: difficulty(c.song) }))
+  .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id));
+
+/**
+ * The carols a kid's songbook shows on a day (YYYY-MM-DD, Denver): in December every carol, the
+ * rest of the year only the ones kept (owned: kid.owned). Each is open and bought (free), with
+ * kept (in kid.owned already).
+ */
+export function carolbookFor(day, owned = []) {
+  const have = songsBought(owned);
+  const december = isXmas(day);
+  return CAROLBOOK.filter((p) => december || have.has(p.id)).map((p) => ({ ...p, secret: false, open: true, bought: true, free: true, kept: have.has(p.id) }));
+}
+
+/**
+ * The kid opened a carol on day: in December it is theirs to keep (kid.owned gets 'song:<id>',
+ * nothing is spent). Returns true when kid.owned changed (the caller saves).
+ */
+export function keepCarol(kid, id, day) {
+  if (!kid || !isCarol(id) || !isXmas(day) || songsBought(kid.owned).has(id)) return false;
+  kid.owned = [...(kid.owned || []), songItemId(id)];
+  return true;
+}
+
+/**
+ * A carol's sheet header as ABC fields: its title, subtitle (Shchedryk), the level line when
+ * given (the print's), the composer and the arranger. [] for any other piece.
+ */
+export function carolHeader(id, levelLine = '') {
+  if (!isCarol(id)) return [];
+  const c = CAROLS[id];
+  const field = (s) => String(s).replace(/[\n%]/g, ' ');
+  return [
+    `T:${field(c.title)}`,
+    ...(c.subtitle ? [`T:${field(c.subtitle)}`] : []),
+    ...(levelLine ? [`T:${field(levelLine)}`] : []),
+    `C:${field(c.composer)}`,
+    `C:${field(CAROL_ARRANGER)}`,
+  ];
+}
+
+/** The speed a carol's sheet gives (quarter notes a minute): its sheetTempo, else the loop's. */
+export const carolTempo = (id) => (isCarol(id) ? CAROLS[id].sheetTempo || CAROLS[id].song.bpm : null);
 
 // ---------- ABC ----------
 

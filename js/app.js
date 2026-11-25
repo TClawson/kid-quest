@@ -4100,6 +4100,7 @@ provide({
   toast, actions, openModal, closeModal, confirmModal,
   cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY,
   currentKid, buddyHtml, progressFor, mover, doMove, exerciseInfo, kidTheme,
+  todaysVisitors, dressedVisitor,
 });
 
 restoreTimer();
