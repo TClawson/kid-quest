@@ -13,20 +13,20 @@ const item = (key, name, icon, routine, days, extra = {}) => ({ key, name, icon,
 
 // key: what makes two chores "the same" across kids and sets; house: the buddy-house link
 export const SET_CHORES = {
-  dressed: item('dressed', 'Get dressed', '👕', 'morning', ALL_DAYS),
+  dressed: item('dressed', 'Get dressed', '👕', 'morning', ALL_DAYS, { house: 'dressed' }),
   bed: item('bed', 'Make bed', '🛏️', 'morning', ALL_DAYS, { house: 'bed' }),
   teeth: item('teeth', 'Brush teeth', '🪥', 'morning', ALL_DAYS, { house: 'teeth' }),
   room: item('room', 'Clean up your room', '🧹', 'morning', ALL_DAYS, { house: 'floor' }),
-  clothes: item('clothes', 'Clothes away', '👚', 'afternoon', ALL_DAYS),
+  clothes: item('clothes', 'Clothes away', '👚', 'afternoon', ALL_DAYS, { house: 'clothes' }),
   toys: item('toys', 'Toys away', '🧸', 'afternoon', ALL_DAYS, { house: 'floor' }),
-  books: item('books', 'Books away', '📚', 'afternoon', ALL_DAYS),
+  books: item('books', 'Books away', '📚', 'afternoon', ALL_DAYS, { house: 'books' }),
   piano: item('piano', 'Piano practice', '🎹', 'afternoon', WEEKDAYS, { verify: 'parent', minutes: 30 }),
   chore: item('chore', 'Chore of the week', '🧽', 'afternoon', [1, 2, 3, 4], { verify: 'parent' }),
   deep: item('deep', 'Chore of the week: deep clean', '✨', 'afternoon', [5], { verify: 'parent' }),
-  vacuum: item('vacuum', 'Vacuum your room', '🌀', 'afternoon', [5], { verify: 'parent' }),
-  dust: item('dust', 'Dust your room', '🪶', 'afternoon', [5], { verify: 'parent' }),
+  vacuum: item('vacuum', 'Vacuum your room', '🌀', 'afternoon', [5], { verify: 'parent', house: 'vacuum' }),
+  dust: item('dust', 'Dust your room', '🪶', 'afternoon', [5], { verify: 'parent', house: 'dust' }),
   laundry: item('laundry', 'Laundry', '🧺', 'afternoon', [6], { verify: 'parent' }),
-  pajamas: item('pajamas', 'Pajamas on', '🌙', 'evening', ALL_DAYS),
+  pajamas: item('pajamas', 'Pajamas on', '🌙', 'evening', ALL_DAYS, { house: 'pajamas' }),
   'teeth-night': item('teeth-night', 'Brush teeth', '🪥', 'evening', ALL_DAYS, { house: 'teeth-night' }),
 };
 
