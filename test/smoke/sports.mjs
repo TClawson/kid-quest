@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 import { serve } from '../helpers/serve.mjs';
 import { emptyState, defaultTasks, addDays, fallbackHash } from '../../js/logic.js';
 import { TEST_DAY, useTestDay } from '../helpers/clock.mjs';
-import { openKid, doChore } from '../helpers/open-kid.mjs';
+import { openKid, doChore, closePops } from '../helpers/open-kid.mjs';
 
 const site = await serve('.');
 const browser = await chromium.launch();
@@ -60,6 +60,7 @@ try {
   await page.waitForTimeout(800);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
   assert.match(await page.locator('.k-hud .k-gem').innerText(), /1,?100/);
+  await closePops(page); // the coach's thanks stays up until it's closed
 
   // buy a soccer ball with gems
   await page.click('.k-hud [data-action="wardrobe"]');

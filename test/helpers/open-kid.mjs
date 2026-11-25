@@ -9,7 +9,13 @@ export async function openKid(page, sel = '[data-action="open-kid"]') {
 
 /** Closes whatever pop-up is open over the kid's village (the start-of-day ones, a talk box). */
 export async function closePops(page) {
-  await page.evaluate(() => document.querySelector('#modal:not([hidden]) [data-action="modal-close"]')?.click());
+  await page.evaluate(() => {
+    const close = document.querySelector('#modal:not([hidden]) [data-action="modal-close"]');
+    if (close) { close.click(); return; }
+    // a talk box stays up until the kid closes it (a villager's thanks after a chore, say)
+    if (document.querySelector('#modal:not([hidden])')) return;
+    document.querySelector('.v-dialog:not([hidden]) :is([data-v="bye"], [data-h="bye"], [data-g="bye"], [data-m="bye"])')?.click();
+  });
 }
 
 /** Opens the kid's Menu (the ☰ button at the top right of the village). */
