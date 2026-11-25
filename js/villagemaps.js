@@ -679,7 +679,7 @@ export function villageLayout(theme) {
     const s = PROPS[q.kind] || {}; const w = q.w || s.w || 8; const h = q.h || s.h || 8;
     return q.x < plotRoom[0] + plotRoom[2] && q.x + w > plotRoom[0] && q.y < plotRoom[1] + plotRoom[3] && q.y + h > plotRoom[1];
   };
-  const props = [...borderProps(spec, H), ...spec.props].filter((q) => !inPlot(q)).concat(plot ? [p('garden', plot.x, plot.y, { w: plot.w, h: plot.h, kid: true })] : []);
+  const props = [...borderProps(spec, H), ...spec.props].filter((q) => !inPlot(q)).concat(plot ? [p('garden', plot.x, plot.y, { w: plot.w, h: plot.h, kid: true, theme: id })] : []);
   const water = spec.water;
   const crossings = spec.crossings.map((c) => bridgeBox(c, water));
   const houses = spec.houses;
