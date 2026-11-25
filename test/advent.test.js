@@ -5,7 +5,7 @@ import {
   doorState, doorsToday, missedDoors, rollDoor, rollLittleDoor, openDoor, xmasPay, xmasGames,
   outfitColors, outfitsMissing, DOOR_TABLE, STAR_DOOR, MAX_DOORS_A_DAY,
 } from '../js/advent.js';
-import { ORNAMENTS, rollAnyOrnament } from '../js/xmas.js';
+import { ORNAMENTS, pickMissing } from '../js/xmas.js';
 import { SANTA_NOTES, santaNote } from '../js/santanotes.js';
 import { emptyState, totalCoins, totalGems } from '../js/logic.js';
 
@@ -126,15 +126,15 @@ test('an ornament door gives an ornament from any map, one the kid is missing', 
   const found = ORNAMENTS.filter((o) => o.map !== 'bg-fjord').map((o) => o.id);
   const maps = new Set();
   for (let i = 0; i < 500; i += 1) {
-    const id = rollAnyOrnament(found, Math.random);
+    const id = pickMissing(found, Math.random);
     assert.ok(!found.includes(id));
     maps.add(ORNAMENTS.find((o) => o.id === id).map);
   }
   assert.deepEqual([...maps], ['bg-fjord']);
   const mapOf = (id) => ORNAMENTS.find((o) => o.id === id).map;
-  const any = new Set(Array.from({ length: 400 }, () => mapOf(rollAnyOrnament([], Math.random))));
+  const any = new Set(Array.from({ length: 400 }, () => mapOf(pickMissing([], Math.random))));
   assert.equal(any.size, 10);
-  assert.equal(rollAnyOrnament(ORNAMENTS.map((o) => o.id)), null);
+  assert.equal(pickMissing(ORNAMENTS.map((o) => o.id)), null);
   // with every ornament found, an ornament door gives coins
   for (let i = 0; i < 300; i += 1) {
     const p = rollDoor({ kidId: `k${i}`, year: '2026', n: 2, found: ORNAMENTS.map((o) => o.id) });
@@ -173,7 +173,7 @@ test('opening a door keeps its prize on the kid; an ornament goes on the tree', 
   openDoor(k, '2026-12-02', 2, { kind: 'ornament', id: 'orn-puffin' });
   openDoor(k, '2026-12-02', 1, { kind: 'gem', gems: 3 });
   assert.deepEqual(k.xmas.found, ['orn-acorn', 'orn-puffin']);
-  assert.deepEqual(k.xmas.doors['2026'][2], { kind: 'ornament', id: 'orn-puffin', on: '2026-12-02' });
+  assert.deepEqual(k.xmas.doors['2026-2'], { kind: 'ornament', id: 'orn-puffin', on: '2026-12-02' });
   assert.deepEqual(xmasPay(k), { coins: 0, gems: 3 });
   openDoor(k, '2026-12-03', 3, { kind: 'game', games: 1 });
   assert.equal(xmasGames(k, '2026-12-03'), 1);

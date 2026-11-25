@@ -1134,6 +1134,9 @@ const { SLOTS, BULBS } = (() => {
   return { SLOTS: out, BULBS: bulbs };
 })();
 
+/** Where the big picture baubles hang (their centers), top to bottom. */
+const BIG_AT = [[20, 22], [11, 36], [29, 36], [20, 48]];
+
 /** A small faceted star topper (9 x 9), centered on (cx, cy). */
 function miniStar(b, cx, cy, id) {
   const [P, mid] = STAR_MINI[id] || STAR_MINI['star-meadow'];
@@ -1143,7 +1146,8 @@ function miniStar(b, cx, cy, id) {
 
 /**
  * The little tree in the buddy's room. o: { ornaments: ids hung on it (xmas.js ORNAMENTS, in
- * the order they were found), star: a star topper id or null, garland: 0 none, 1 gold beads }.
+ * the order they were found), star: a star topper id or null, garland: 0 none, 1 gold beads,
+ * big: ids hung as big pictures (the 3-year-old's tree) }.
  * Returns { body, lights }: body is the tree (outlined, its foot at TREE.foot) with every bulb
  * unlit; lights are three twinkle frames (see-through, no outline) to lay over it in turn, with
  * the star's warm glow in each.
@@ -1227,6 +1231,15 @@ export function treeArt(o = {}) {
         }
       }
     },
+  });
+  // the 3-year-old's tree (o.big): a few ornaments hung as big pictures in their own art (about
+  // 13 x 15 each), so she can see what they are, instead of the little 2 x 2 baubles
+  (o.big || []).slice(0, BIG_AT.length).forEach((id, i) => {
+    const g = ornamentArt(id, 0);
+    if (!g) return;
+    const [cx, cy] = BIG_AT[i];
+    const gx = Math.round(cx - g.w / 2); const gy = Math.round(cy - g.h / 2);
+    g.each((x, y) => { const c = g.get(x, y); if (c) body.set(gx + x, gy + y, c, g.tag(x, y)); });
   });
   // the star's warm glow: two pixels round it, outside its outline (soft, see-through)
   const glow = [];
@@ -1404,7 +1417,7 @@ export function giftShake(shape, paper, frame) {
  * Christmas morning: four frames of unwrapping, 30 x 26 each. 0 the paper rips at the top and
  * the ribbon springs loose, 1 the paper bursts open and bits fly, 2 the gift pops up out of the
  * box in a burst of light, 3 the gift on show on its pile of torn paper. gift: an ornament id
- * (what was inside).
+ * (what was inside), or null for a present that isn't an ornament (the box is then empty).
  */
 export function unwrapArt(shape, paper, frame, gift = 'orn-unicorn') {
   const P = GIFT_PAPER_BY[paper] || GIFT_PAPER_BY.candy;
@@ -1455,7 +1468,7 @@ export function unwrapArt(shape, paper, frame, gift = 'orn-unicorn') {
     }
   }, { pad: 4, inkUp: 0 });
   // the gift itself (its own sprite, already outlined) and the light round it
-  if (frame >= 2) {
+  if (frame >= 2 && artOf(gift)) {
     const g = ornamentArt(gift, frame % 2);
     const gx = Math.round(W / 2 - g.w / 2); const gy = frame === 2 ? oy - g.h + 2 : oy - g.h + 7;
     if (frame === 2) for (let i = 0; i < 12; i += 1) { const a = (i / 12) * Math.PI * 2; for (let r = 9; r < 13; r += 1) { const x = Math.round(W / 2 + Math.cos(a) * r); const y = Math.round(gy + g.h / 2 + Math.sin(a) * r * 0.9); if (!b.get(x, y)) b.set(x, y, r < 11 ? 'rgba(255,240,170,0.75)' : 'rgba(255,240,170,0.4)', 'soft'); } }

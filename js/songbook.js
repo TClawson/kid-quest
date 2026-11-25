@@ -12,10 +12,15 @@
 // A piece the pianos have opened is then bought with coins (SONG_PRICE, sheetmusic.js), once
 // for all its levels and every buddy; only a bought piece shows its music and Listen.
 // Buying isn't held back by today's chores (the buddy shop is): the songbook is always open.
+// In December the December carols (carols.js) are here too, free: a carol opened then is kept
+// (sheetmusic.js: keepCarol), and while one plays from Listen the buddy dances to it, and in
+// December the day's visiting buddies dance beside it.
 // Shared things come from ctx.js; app.js adds songbookActions to its actions.
 
-import { ui, state, esc, kidById, render, progressFor, toast, viewKid, save, openModal, closeModal } from './ctx.js';
-import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars, SONG_PRICE, songBuyCheck, buySong } from './sheetmusic.js';
+import { ui, state, esc, kidById, render, progressFor, toast, viewKid, save, openModal, closeModal, today, dressed, todaysVisitors, dressedVisitor } from './ctx.js';
+import { songbookFor, songAbc, songById, keyLabel, chordLabel, barEvents, meterOf, stars, SONG_PRICE, songBuyCheck, buySong, carolbookFor, keepCarol, isCarol, carolHeader, carolTempo } from './sheetmusic.js';
+import { isXmas } from './xmas.js';
+import { buddySvg } from './avatar.js';
 import { barChords, songTempo } from './songs.js';
 import { treasureFound } from './treasure.js';
 import { musicTier, MUSIC_TIERS } from './musicrules.js';
@@ -66,19 +71,20 @@ const mapName = (p) => itemById(p.map)?.name || 'map';
 const nameHtml = (name) => esc(name).replace(/\//g, '/<wbr>');
 /** Where a piece comes from, in words. */
 function source(p) {
+  if (p.kind === 'carol') return 'A Christmas carol';
   if (p.kind === 'long') return `From the ${mapName(p)} map song`;
   return p.kind === 'show' ? `The secret show on the ${mapName(p)} map` : `The ${mapName(p)} map song`;
 }
-const ICONS = { map: '🎵', show: '✨', long: '🎹' };
+const ICONS = { map: '🎵', show: '✨', long: '🎹', carol: '🎄' };
 const iconOf = (p) => ICONS[p.kind] || '🎵';
 
 /**
- * The kid's songbook: every piece (the songs, then the concert pieces), with open (the piano
- * lets them have it) and bought.
+ * The kid's songbook: every piece (the songs, the concert pieces, and the carols in December or
+ * once kept), with open (the piano lets them have it) and bought.
  */
 function bookFor(kid) {
   const tier = musicTier(progressFor(kid));
-  return [...songbookFor(tier, treasureFound(state.log, kid.id).maps, kid.owned), ...concertBookFor(tier, kid.owned)];
+  return [...songbookFor(tier, treasureFound(state.log, kid.id).maps, kid.owned), ...concertBookFor(tier, kid.owned), ...carolbookFor(today(), kid.owned)];
 }
 /** A piece the kid may look at and hear: open and bought. Anything else: null. */
 const playable = (kid, id) => (id && bookFor(kid).find((p) => p.id === id && p.open && p.bought)) || null;
@@ -117,11 +123,14 @@ function listHtml(kid, book) {
       <small>${esc(keyLabel(p.key))} · ${p.bars} bars</small>
       <span class="song-stars" aria-label="${['', 'Easy', 'Medium', 'Tricky'][s]}">${'★'.repeat(s)}${'☆'.repeat(3 - s)}</span></button>`;
   };
-  const section = (title, list, locked) => `<section class="song-tier ${locked ? 'locked' : ''}"><h3>${title}</h3><div class="song-grid">${list.map(card).join('')}</div></section>`;
+  const section = (title, list, locked, note = '') => `<section class="song-tier ${locked ? 'locked' : ''}"><h3>${title}</h3>${note}<div class="song-grid">${list.map(card).join('')}</div></section>`;
   const maps = book.filter((p) => p.kind === 'map');
   const shows = book.filter((p) => p.kind === 'show');
   const longs = book.filter((p) => p.kind === 'long');
-  const sections = section('Map songs', maps, !maps.some((p) => p.open))
+  const carols = book.filter((p) => p.kind === 'carol');
+  const carolNote = isXmas(today()) ? '<p class="muted small carol-note">Free in December! Open a carol and it stays in your songbook.</p>' : '';
+  const sections = (carols.length ? section('🎄 Christmas carols', carols, false, carolNote) : '')
+    + section('Map songs', maps, !maps.some((p) => p.open))
     + section('✨ Secret show songs', shows, !shows.some((p) => p.open))
     + (longs.length ? section('🎹 Concert pieces', longs, !longs.some((p) => p.open)) : '');
   return `
@@ -140,6 +149,7 @@ function pieceHtml(kid, p) {
   if (p.kind === 'long') return longPieceHtml(kid, p);
   const o = prefs();
   const song = songById(p.id);
+  const speed = p.kind === 'carol' ? carolTempo(p.id) : songTempo(song).bpm;
   const level = levelOf(p.id);
   const tabs = HANDS.map(([h, label]) => `<button class="${o.hands === h ? 'on' : ''}" data-action="song-hands" data-val="${h}" aria-pressed="${o.hands === h}">${label}</button>`).join('');
   const levels = LEVELS.filter((l) => hasLevel(p.id, l));
@@ -148,8 +158,9 @@ function pieceHtml(kid, p) {
     <div class="screen songbook piece" style="--kid:${kid.color}">
       <header class="kid-head">
         <button class="btn ghost round" data-action="song-back" aria-label="Back to the songbook">←</button>
-        <div class="kid-title"><b>${iconOf(p)} ${esc(p.name)}</b><small>${esc(keyLabel(p.key))} · speed ${songTempo(song).bpm}${song.swing ? ', swing' : ''} · ${esc(source(p))}</small></div>
+        <div class="kid-title"><b>${iconOf(p)} ${esc(p.name)}</b><small>${esc(keyLabel(p.key))} · speed ${speed}${song.swing ? ', swing' : ''} · ${esc(source(p))}</small></div>
       </header>
+      ${p.kind === 'carol' ? dancersHtml(kid) : ''}
       <div class="song-tools">
         ${levels.length > 1 ? `<nav class="tabs song-levels" aria-label="How hard">${levelTabs}</nav>` : ''}
         ${level === 'easy' ? `<nav class="tabs song-hands" aria-label="Which hands">${tabs}</nav>` : ''}
@@ -193,6 +204,20 @@ function longPieceHtml(kid, p) {
       </div>
       <div class="sheet" id="sheet" data-id="${esc(p.id)}" data-level="${level}" data-names="${o.names ? 1 : 0}" aria-label="Sheet music for ${esc(p.name)}"><p class="muted sheet-wait">Getting the music ready…</p></div>
       <p class="muted small song-tip">Both hands, written out: the top line is your right hand, the bottom line your left. Each part starts on a new line, with its name and speed.</p>
+    </div>`;
+}
+
+/**
+ * A carol's dancers: the kid's buddy and, in December, the day's visiting buddies. They stand
+ * still until the carol plays from Listen, then dance on its beat (danceToCarol).
+ */
+function dancersHtml(kid) {
+  const visitors = isXmas(today()) ? todaysVisitors(kid) : [];
+  const one = (buddy, name, cls = '') => `<span class="carol-dancer ${cls}" title="${esc(name)}">${buddySvg(buddy, 'happy', { background: false })}</span>`;
+  const line = visitors.length ? 'Press Listen: your buddy and today’s visitors dance to the carol!' : 'Press Listen: your buddy dances to the carol!';
+  return `<div class="carol-dance" aria-hidden="true">
+      <div class="carol-dancers">${one(dressed(kid), kid.name, 'me')}${visitors.map((v) => one(dressedVisitor(v), v.name)).join('')}</div>
+      <small class="muted">${line}</small>
     </div>`;
 }
 
@@ -271,6 +296,8 @@ function draw(el, ABCJS) {
   let abc;
   if (long) abc = longAbc(el.dataset.id, level, o);
   else abc = level === 'easy' ? songAbc(el.dataset.id, o) : arrangementAbc(el.dataset.id, level, o);
+  // a carol's sheet has its title, subtitle, composer and arranger at the top, like the print
+  if (isCarol(el.dataset.id)) abc = abc.replace(/^X:1\n/, `X:1\n${carolHeader(el.dataset.id).join('\n')}\n`);
   const [tune] = ABCJS.renderAbc(el, abc, {
     add_classes: true,
     responsive: 'resize',
@@ -316,8 +343,8 @@ globalThis.addEventListener?.('resize', () => {
 
 // ---------- listening ----------
 
-// the piece playing: { id, h (music.js handle), raf, lit (the bar lit up) }
-const player = { id: null, h: null, raf: 0, lit: -1 };
+// the piece playing: { id, h (music.js handle), raf, lit (the bar lit up), step (a carol's dance step heard last) }
+const player = { id: null, h: null, raf: 0, lit: -1, step: -1 };
 
 /** The Listen button says Stop while its piece plays. */
 function showPlaying() {
@@ -331,8 +358,9 @@ function showPlaying() {
 function stopPiece() {
   cancelAnimationFrame(player.raf);
   player.h?.stop();
-  Object.assign(player, { id: null, h: null, raf: 0, lit: -1 });
+  Object.assign(player, { id: null, h: null, raf: 0, lit: -1, step: -1 });
   document.querySelectorAll('#sheet .now').forEach((e) => e.classList.remove('now'));
+  document.querySelectorAll('.carol-dancer').forEach((e) => e.classList.remove('dance-l', 'dance-r'));
   showPlaying();
 }
 
@@ -348,12 +376,14 @@ function startPiece(id) {
     h = playTimeline(notes, { bars, tempo });
   } else {
     const song = songById(id);
+    // a carol plays at the speed its sheet gives (sheetTempo), which may be slower than its loop's
+    const bpm = carolTempo(id) || song.bpm;
     h = level === 'easy'
-      ? playPiece(id, { tempo })
-      : playNotes(arrangementNotes(id, level), { bpm: song.bpm, beat: meterOf(song).steps, tempo, swing: song.swing || 0 });
+      ? playPiece(id, { tempo: (tempo * bpm) / song.bpm })
+      : playNotes(arrangementNotes(id, level), { bpm, beat: meterOf(song).steps, tempo, swing: song.swing || 0 });
   }
   if (!h) return;
-  Object.assign(player, { id, h, lit: -1 });
+  Object.assign(player, { id, h, lit: -1, step: -1 });
   showPlaying();
   player.raf = requestAnimationFrame(follow);
 }
@@ -381,8 +411,32 @@ function follow() {
       p.lit = bar;
     }
   }
+  if (isCarol(p.id)) danceToCarol(p);
   p.raf = requestAnimationFrame(follow);
 }
+
+/**
+ * A carol playing: its dancers step from side to side on its beat (a quarter note; a half
+ * note, or the whole bar of a waltz, when the beat comes quicker than a step can be danced).
+ */
+function danceToCarol(p) {
+  if (!p.h.step || !p.h.at) return;
+  const at = p.h.at();
+  const bar = meterOf(songById(p.id)).steps;
+  const unit = [2, 4, bar].find((u) => bar % u === 0 && u * p.h.step >= DANCE_STEP_MIN) || bar;
+  const n = at < 0 ? -1 : Math.floor(at / unit);
+  if (n === p.step || n < 0) return;
+  p.step = n;
+  const ms = Math.min(450, unit * p.h.step * 1000 * 0.85);
+  document.querySelectorAll('.songbook .carol-dancer').forEach((el, i) => {
+    el.classList.remove('dance-l', 'dance-r');
+    void el.offsetWidth;
+    el.style.setProperty('--move', `${Math.round(ms)}ms`);
+    el.classList.add((n + i) % 2 ? 'dance-l' : 'dance-r');
+  });
+}
+/** Seconds: a dance step never comes quicker than this. */
+const DANCE_STEP_MIN = 0.34;
 
 /** Scroll the bar being played into view when it isn't (below the buttons, which stay on top). */
 function keepInView(els) {
@@ -433,7 +487,7 @@ function redrawKeepingPlace(change) {
 export function pieceSeconds(id, tempo = 1) {
   if (isLongPiece(id)) return longSeconds(id, levelOf(id)) / tempo;
   const song = songById(id);
-  return (song.lead.length * meterOf(song).steps * 60) / song.bpm / 2 / tempo;
+  return (song.lead.length * meterOf(song).steps * 60) / (carolTempo(id) || song.bpm) / 2 / tempo;
 }
 
 // ---------- taps ----------
@@ -443,6 +497,8 @@ function openPiece(id) {
   stopPiece();
   const kid = kidById(ui.kidId);
   if (!kid || !playable(kid, id)) { ui.songId = null; render(); return; }
+  // a carol opened in December is the kid's to keep
+  if (keepCarol(kid, id, today())) save();
   listScroll = window.scrollY;
   ui.songId = id;
   render();

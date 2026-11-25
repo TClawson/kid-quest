@@ -8,15 +8,17 @@
 //       one record per December day Santa flew for the kid; opened is the day it was unwrapped
 //       (its prize counts from then: coins and gems in totals, games on that day), animal is the
 //       little one's sticker
-//   kid.xmas.doors = { 'YYYY': { n: { kind, coins?, gems?, games?, id?, item?, color?, animal?, on } } }
-//       the advent doors opened each December, what each gave and the day it was opened
+//   kid.xmas.doors = { 'YYYY-n': { kind, coins?, gems?, games?, id?, item?, color?, animal?, on } }
+//       the advent doors opened each December (door n of year YYYY), what each gave and the day
+//       it was opened; one field per door, so doors opened on two devices both sync (store.js
+//       diffFields goes three levels down)
 //
 // Prizes are rolled from the kid's id and the day (or the door), like the treasure chest, so
 // every device rolls the same. Coins and gems are never stored as a running total: they are
 // added up from these records (xmasPay, used by logic.js totalEarned), so they sync with them.
 
 import { rng } from './treasure.js';
-import { ORNAMENTS, isXmas, rollAnyOrnament } from './xmas.js';
+import { isXmas, pickMissing, addOrnament } from './xmas.js';
 import { ITEMS } from './items.js';
 
 // ---------- Santa ----------
@@ -92,7 +94,14 @@ export const DOOR_TABLE = [['coins', 0.4], ['ornament', 0.25], ['gem', 0.1], ['g
 
 const dateOf = (day) => Number(String(day).slice(8, 10));
 /** The doors opened in a December (year 'YYYY'): { n: prize }. */
-export const doorsOf = (kid, year) => kid?.xmas?.doors?.[year] || {};
+export function doorsOf(kid, year) {
+  const out = {};
+  for (const [key, p] of Object.entries(kid?.xmas?.doors || {})) {
+    const [y, n] = key.split('-');
+    if (y === String(year) && p) out[Number(n)] = p;
+  }
+  return out;
+}
 
 /** How many doors (25 not counted) the kid opened today. */
 export function doorsToday(kid, today) {
@@ -149,7 +158,7 @@ export function rollDoor({ kidId, year, n, found = [], owned = [] }) {
   for (const [k, p] of DOOR_TABLE) { acc += p; if (x < acc) { kind = k; break; } }
   const pick = r();
   if (kind === 'ornament') {
-    const o = rollAnyOrnament(found, () => pick);
+    const o = pickMissing(found, () => pick); // from any map (xmas.js)
     return o ? { kind, id: o } : coins;
   }
   if (kind === 'gem') return { kind, gems: DOOR_GEMS };
@@ -162,8 +171,8 @@ export function rollDoor({ kidId, year, n, found = [], owned = [] }) {
   }
   if (kind === 'golden') {
     // a super-rare ornament the kid lacks, else a holiday outfit piece they lack, else gems
-    const supers = ORNAMENTS.filter((o) => o.rarity === 'super' && !found.includes(o.id));
-    if (supers.length) return { kind, id: supers[Math.floor(pick * supers.length)].id };
+    const sup = pickMissing(found, () => pick, { rarity: 'super' });
+    if (sup) return { kind, id: sup };
     const pieces = outfitsMissing(owned);
     if (pieces.length) return { kind, item: pieces[Math.floor(pick * pieces.length)].id };
     return { kind, gems: GOLDEN_GEMS };
@@ -187,10 +196,9 @@ export function rollLittleDoor({ kidId, year, n, animals = [], met = {} }) {
 export function openDoor(kid, today, n, prize) {
   const year = today.slice(0, 4);
   const rec = { ...prize, on: today };
+  if (prize.id) addOrnament(kid, prize.id); // a new one (prizes are always missing ones); a double would be tinsel
   const x = kid.xmas || {};
-  let found = x.found || [];
-  if (prize.id && !found.includes(prize.id)) found = [...found, prize.id];
-  kid.xmas = { ...x, found, doors: { ...(x.doors || {}), [year]: { ...doorsOf(kid, year), [n]: rec } } };
+  kid.xmas = { ...x, doors: { ...(x.doors || {}), [`${year}-${n}`]: rec } };
   return rec;
 }
 
@@ -204,9 +212,7 @@ export function xmasPay(kid) {
     const p = SANTA_PRIZES[r.prize] || LITTLE_SANTA[r.prize] || {};
     out.coins += p.coins || 0; out.gems += p.gems || 0;
   }
-  for (const year of Object.values(kid?.xmas?.doors || {})) {
-    for (const p of Object.values(year || {})) { out.coins += p?.coins || 0; out.gems += p?.gems || 0; }
-  }
+  for (const p of Object.values(kid?.xmas?.doors || {})) { out.coins += p?.coins || 0; out.gems += p?.gems || 0; }
   return out;
 }
 

@@ -15,6 +15,8 @@ export let save, render, viewKid, markDone, askParentNowOrLater;
 export let toast, actions, openModal, closeModal, confirmModal;
 export let cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY;
 export let currentKid, buddyHtml, progressFor, mover, doMove, exerciseInfo, kidTheme;
+// the day's visiting buddies (app.js), and a visitor's buddy dressed for the day (the December carols' dancers)
+export let todaysVisitors, dressedVisitor;
 
 /** app.js hands over its shared things, by name. */
 export function provide(parts) {
@@ -23,4 +25,5 @@ export function provide(parts) {
   ({ toast, actions, openModal, closeModal, confirmModal } = parts);
   ({ cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY } = parts);
   ({ currentKid, buddyHtml, progressFor, mover, doMove, exerciseInfo, kidTheme } = parts);
+  ({ todaysVisitors, dressedVisitor } = parts);
 }

@@ -20,6 +20,7 @@ import { shownSeason } from './seasons.js';
 import { recordPhoto, keepPhoto, addClue, spendClues } from './album.js';
 import { critterById } from './critters.js';
 import { recordFan } from './fans.js';
+import { playXmas, photoXmas } from './xmas-ui.js';
 import {
   state, today, esc, save, render, openModal, currentKid, mover, exerciseInfo, kidTheme,
 } from './ctx.js';
@@ -200,6 +201,7 @@ export function playWith(kid, v, kind) {
     },
     onCatch: (c) => {
       const kid = currentKid(kid0);
+      playXmas(kid.id, 'fish', c.map); // December: 1 catch in 8 has an ornament snagged on it
       const sp = catchSpecies(c.map, c.kind);
       const got = sp && recordCatch(kid.fishRecords, { species: sp.id, size: c.size, lb: c.lb, points: c.points, date: today() });
       if (!got?.isNew) return null;
@@ -222,6 +224,7 @@ export function playWith(kid, v, kind) {
       const map = kidTheme(kid);
       kid.digDry = { ...(kid.digDry || {}), [map]: nextDry(kid.digDry?.[map] || 0, Boolean(r.key)) };
       save();
+      playXmas(kid.id, 'dig', map); // December: 1 dig in 6 turns up an ornament
     },
     // the treasure hill: every find goes in the finds book (in the house)
     onFind: (f) => {
@@ -241,6 +244,7 @@ export function playWith(kid, v, kind) {
     // stays on this device; the game fills in shot.pic when it draws next)
     onPhoto: (shot) => {
       const kid = currentKid(kid0);
+      photoXmas(kid.id, critterById(shot.critter), shot.quality); // December: a map's first perfect holiday critter photo
       const got = recordPhoto(kid.critterAlbum, shot, today());
       if (!got.isNew) return null;
       kid.critterAlbum = got.album;

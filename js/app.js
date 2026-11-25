@@ -35,9 +35,8 @@ import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse, tankOf
 import { houseRecord, openTurntable, spinning, stopRecord, setTurntableSync } from './turntable.js';
 import { applyGrants, restoreFromRecord, restoreBackup, restoreTasks, mergeBackup } from './grants.js';
 import { furnitureThumb } from './houseart.js';
-import { xmasHouse, isXmas, starsWon } from './xmas.js';
-import { ornamentBookHtml } from './xmasbook.js';
-import { ornamentArt, ornamentSilhouette, artCanvas } from './xmasart.js';
+import { xmasHouse, isXmas } from './xmas.js';
+import { openOrnamentBook, openPresent, chestXmas, chestXmasHtml, xmasParentCard, xmasActions } from './xmas-ui.js';
 import { xmasHandlers } from './advent-ui.js';
 import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
 import { seedThumb, decorThumb } from './gardenart.js';
@@ -803,7 +802,9 @@ function openChest(kid, key) {
   // extra games are only any use with visitors to play with (they keep until tomorrow)
   const games = key === today() && pickVisitors(kid.id, familyBuddies(), today()).length > 0;
   const prize = chestPrize({ seed: `${kid.id}|${key}`, tier: c.tier, found, maps, games });
-  entryFor(state, kid.id, key, true).chest = { ...prize, at: Date.now() };
+  // December: 1 in 2 chests also hold an ornament of the map the kid is on (xmas-ui.js)
+  const orn = chestXmas(kid, kidTheme(kid), key);
+  entryFor(state, kid.id, key, true).chest = { ...prize, ...(orn ? { ornament: orn } : {}), at: Date.now() };
   save();
   const after = treasureFound(state.log, kid.id);
   const words = prizeText(prize, mapName);
@@ -835,7 +836,7 @@ function openChest(kid, key) {
         <div class="prize-art">${art}</div>
         <h1>${esc(words.title)}</h1>
         <p>${esc(words.text)}</p>
-        ${extra}
+        ${extra}${chestXmasHtml(orn)}
         <button class="btn huge" data-action="modal-close">Awesome!</button>
       </div>
     </div>`, () => render());
@@ -1428,7 +1429,7 @@ function houseView(kid, list, mood) {
     hud: kidHud(kid),
     little: playsLittle(kid),
     dig: hasDig(kid) ? digShow(kid) : null,
-    xmas: xmasHouse(state, kid, t),
+    xmas: xmasHouse(state, kid, t, { little: playsLittle(kid) }),
   });
 }
 
@@ -1443,6 +1444,7 @@ const houseHandlers = {
   onPedestal: () => openDisplayPicker(kidById(ui.kidId), 'pedestal'),
   onPuzzle: () => openLittleGames('puzzle'),
   onOrnaments: () => openOrnamentBook(kidById(ui.kidId)),
+  onUnwrap: (id) => openPresent(ui.kidId, id),
   spinning: (kidId) => spinning(kidId),
   onGarden: () => goGarden('house'),
   onExit: () => {
@@ -1594,21 +1596,6 @@ function openFishBook(kid, scrollTo = 0) {
       <button class="btn" data-action="modal-close">Close</button>
     </div>`);
   if (scrollTo) { const card = $modal.querySelector('.modal-card'); if (card) card.scrollTop = scrollTo; }
-}
-
-// December: the ornament book (xmasbook.js), its pictures drawn once each (xmasart.js)
-const ornImgCache = new Map();
-function ornImg(id, { grey = false, frame = 0 } = {}) {
-  const key = `${id}:${grey ? 'grey' : frame}`;
-  if (!ornImgCache.has(key)) {
-    const art = grey ? ornamentSilhouette(id) : ornamentArt(id, frame);
-    ornImgCache.set(key, art ? artCanvas(art, document).toDataURL() : '');
-  }
-  return ornImgCache.get(key);
-}
-function openOrnamentBook(kid) {
-  if (!kid) return;
-  openModal(ornamentBookHtml(kid, ornImg));
 }
 
 /** A small / typical / trophy badge for a record. */
@@ -2860,6 +2847,7 @@ function parentEditKid() {
         <small class="muted allow-help">Leave empty to use the family's amount (Settings). A perfect week earns exactly this, split across ${esc(kid.name)}'s chores by size.</small>
       </div>` : ''}
     </div>
+    ${xmasParentCard(kid)}
     <div class="card chore-set">
       <div class="block">Chore set <div class="row wrap">${CHORE_SETS.map((cs) => `<button class="btn ${kid.choreSet === cs.id ? '' : 'ghost'} small-btn" data-action="kid-set" data-set="${cs.id}">${esc(cs.name)} (${esc(cs.ages)})</button>`).join('')}</div>
         <small class="muted">${esc(choreSetById(kid.choreSet)?.note || 'Pick a starter set for their age, then change anything below. Switching adds the set\'s chores and takes off the ones it replaces; piano and your own chores stay.')}</small></div>
@@ -3453,18 +3441,6 @@ const actions = {
     else toast(`${c.s.total - c.s.done} more to reach the ${c.tier.name.toLowerCase()}!`);
   },
   trophies: () => openTrophies(kidById(ui.kidId)),
-  // the ornament book: put a won star topper on top of the tree (a map's 4 ornaments, or door 25)
-  'tree-star': (el) => {
-    const kid = kidById(ui.kidId);
-    const id = el.dataset.star;
-    if (!kid || !starsWon(kid.xmas?.found).includes(id)) return;
-    kid.xmas = { ...kid.xmas, star: id };
-    const scroll = $modal.querySelector('.modal-card')?.scrollTop || 0;
-    sounds.tap(); save();
-    openOrnamentBook(kid);
-    const card = $modal.querySelector('.modal-card'); if (card) card.scrollTop = scroll;
-    render();
-  },
   'buy-confirm': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
@@ -3830,6 +3806,7 @@ Object.assign(actions, songbookActions);
 Object.assign(actions, studioActions);
 Object.assign(actions, labActions);
 Object.assign(actions, composeActions);
+Object.assign(actions, xmasActions); // December in the buddy's house (xmas-ui.js): the ornament book, tinsel, presents
 actions['lb-mode'] = (el) => openLeaderboard(kidById(ui.kidId), el.dataset.mode);
 
 // the fish book: a fish's own page, and back to the book where it was
@@ -4102,6 +4079,7 @@ provide({
   toast, actions, openModal, closeModal, confirmModal,
   cloud, cloudCfg, family, store, CLOUD_KEY, CLOUD_CACHE_KEY, BUDDIES_KEY,
   currentKid, buddyHtml, progressFor, mover, doMove, exerciseInfo, kidTheme,
+  todaysVisitors, dressedVisitor,
 });
 
 restoreTimer();

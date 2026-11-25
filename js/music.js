@@ -3,6 +3,7 @@
 // triangle bass and noise drums, like old consoles). No audio files. A small look-ahead
 // scheduler keeps the timing steady.
 import { SONGS, SHOW_SONGS, barChords, songBeat } from './songs.js';
+import { CAROLS } from './carols.js';
 import { LOOPS } from './maploops.js';
 import { VOICES, KITS, DRUM_HALVES } from './studiokit.js';
 
@@ -41,7 +42,9 @@ const compiled = new Map();
 export function songScore(id) { return compile(id); }
 function compile(id) {
   if (compiled.has(id)) return compiled.get(id);
-  const s = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] || SHOW_SONGS['bg-meadow'] : SONGS[id] || SONGS['bg-meadow'];
+  // a December carol (carols.js) plays from the songbook only: startMusic never takes one
+  const carol = Object.hasOwn(CAROLS, id) ? CAROLS[id].song : null;
+  const s = id.startsWith('show:') ? SHOW_SONGS[id.slice(5)] || SHOW_SONGS['bg-meadow'] : SONGS[id] || carol || SONGS['bg-meadow'];
   const beat = s.beat || 8;
   const song = {
     ...s,

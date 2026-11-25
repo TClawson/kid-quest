@@ -422,6 +422,153 @@
    "fingerprint": "d7726f41"
   },
   {
+   "id": "xmas-jingle",
+   "level": "easy",
+   "name": "Jingle Bells",
+   "file": "sheets/jingle-bells-easy-94f481.pdf",
+   "fingerprint": "94f481ab"
+  },
+  {
+   "id": "xmas-jingle",
+   "level": "medium",
+   "name": "Jingle Bells",
+   "file": "sheets/jingle-bells-medium-223cc5.pdf",
+   "fingerprint": "223cc51a"
+  },
+  {
+   "id": "xmas-jingle",
+   "level": "hard",
+   "name": "Jingle Bells",
+   "file": "sheets/jingle-bells-hard-f47254.pdf",
+   "fingerprint": "f4725417"
+  },
+  {
+   "id": "xmas-housetop",
+   "level": "easy",
+   "name": "Up on the Housetop",
+   "file": "sheets/up-on-the-housetop-easy-d4a412.pdf",
+   "fingerprint": "d4a412fb"
+  },
+  {
+   "id": "xmas-housetop",
+   "level": "medium",
+   "name": "Up on the Housetop",
+   "file": "sheets/up-on-the-housetop-medium-08afb4.pdf",
+   "fingerprint": "08afb41a"
+  },
+  {
+   "id": "xmas-housetop",
+   "level": "hard",
+   "name": "Up on the Housetop",
+   "file": "sheets/up-on-the-housetop-hard-59c57e.pdf",
+   "fingerprint": "59c57e6a"
+  },
+  {
+   "id": "xmas-silent",
+   "level": "easy",
+   "name": "Silent Night",
+   "file": "sheets/silent-night-easy-0031f9.pdf",
+   "fingerprint": "0031f9f3"
+  },
+  {
+   "id": "xmas-silent",
+   "level": "medium",
+   "name": "Silent Night",
+   "file": "sheets/silent-night-medium-59b555.pdf",
+   "fingerprint": "59b5556a"
+  },
+  {
+   "id": "xmas-silent",
+   "level": "hard",
+   "name": "Silent Night",
+   "file": "sheets/silent-night-hard-be919e.pdf",
+   "fingerprint": "be919e6a"
+  },
+  {
+   "id": "xmas-wish",
+   "level": "easy",
+   "name": "We Wish You a Merry Christmas",
+   "file": "sheets/we-wish-you-a-merry-christmas-easy-47ab5c.pdf",
+   "fingerprint": "47ab5c57"
+  },
+  {
+   "id": "xmas-wish",
+   "level": "medium",
+   "name": "We Wish You a Merry Christmas",
+   "file": "sheets/we-wish-you-a-merry-christmas-medium-a24bb3.pdf",
+   "fingerprint": "a24bb312"
+  },
+  {
+   "id": "xmas-wish",
+   "level": "hard",
+   "name": "We Wish You a Merry Christmas",
+   "file": "sheets/we-wish-you-a-merry-christmas-hard-4ec981.pdf",
+   "fingerprint": "4ec9812f"
+  },
+  {
+   "id": "xmas-deck",
+   "level": "easy",
+   "name": "Deck the Halls",
+   "file": "sheets/deck-the-halls-easy-4cf4a1.pdf",
+   "fingerprint": "4cf4a1f5"
+  },
+  {
+   "id": "xmas-deck",
+   "level": "medium",
+   "name": "Deck the Halls",
+   "file": "sheets/deck-the-halls-medium-500fb4.pdf",
+   "fingerprint": "500fb4b2"
+  },
+  {
+   "id": "xmas-deck",
+   "level": "hard",
+   "name": "Deck the Halls",
+   "file": "sheets/deck-the-halls-hard-613788.pdf",
+   "fingerprint": "613788a5"
+  },
+  {
+   "id": "xmas-bells",
+   "level": "easy",
+   "name": "Carol of the Bells",
+   "file": "sheets/carol-of-the-bells-easy-8ccee2.pdf",
+   "fingerprint": "8ccee24a"
+  },
+  {
+   "id": "xmas-bells",
+   "level": "medium",
+   "name": "Carol of the Bells",
+   "file": "sheets/carol-of-the-bells-medium-f22a51.pdf",
+   "fingerprint": "f22a5154"
+  },
+  {
+   "id": "xmas-bells",
+   "level": "hard",
+   "name": "Carol of the Bells",
+   "file": "sheets/carol-of-the-bells-hard-056553.pdf",
+   "fingerprint": "056553e0"
+  },
+  {
+   "id": "xmas-tree",
+   "level": "easy",
+   "name": "O Christmas Tree",
+   "file": "sheets/o-christmas-tree-easy-5707ae.pdf",
+   "fingerprint": "5707ae8f"
+  },
+  {
+   "id": "xmas-tree",
+   "level": "medium",
+   "name": "O Christmas Tree",
+   "file": "sheets/o-christmas-tree-medium-62bf70.pdf",
+   "fingerprint": "62bf7010"
+  },
+  {
+   "id": "xmas-tree",
+   "level": "hard",
+   "name": "O Christmas Tree",
+   "file": "sheets/o-christmas-tree-hard-429d82.pdf",
+   "fingerprint": "429d8268"
+  },
+  {
    "id": "long:bg-ocean",
    "level": "easy",
    "name": "Bubble Waltz/Mermaid's Lullaby",

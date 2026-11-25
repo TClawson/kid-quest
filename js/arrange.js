@@ -5,6 +5,7 @@
 // Pure logic, no DOM.
 
 import { ARRANGEMENTS } from './arrangements.js';
+import { CAROLS } from './carols.js';
 import { songById, signature, meterOf, chordLabel, lineRanges, SWING_MARK } from './sheetmusic.js';
 import { barChords } from './songs.js';
 
@@ -16,8 +17,15 @@ const SIGN = { 2: '𝄪', 1: '♯', 0: '', '-1': '♭', '-2': '𝄫' };
 /** The levels a piece can be shown at: easy is the song itself (sheetmusic.js). */
 export const LEVELS = ['easy', 'medium', 'hard'];
 
+/** A piece's written version at a level ({ rh, lh }): from arrangements.js, or a December carol's (carols.js). */
+export function versionOf(id, level) {
+  if (level !== 'medium' && level !== 'hard') return null;
+  const piece = Object.hasOwn(ARRANGEMENTS, id) ? ARRANGEMENTS[id] : Object.hasOwn(CAROLS, id) ? CAROLS[id] : null;
+  return piece?.[level] || null;
+}
+
 /** Whether a piece has a medium or hard version yet. */
-export const hasLevel = (id, level) => level === 'easy' || Boolean(ARRANGEMENTS[id]?.[level]);
+export const hasLevel = (id, level) => level === 'easy' || Boolean(versionOf(id, level));
 
 /**
  * Read one bar of one hand: notes ('c', '^F,', '_b'''), chords ('[CEG]'), rests ('z'), with
@@ -156,7 +164,7 @@ export function readAbcBar(text, sig) {
  * Both hands of a piece's version, bar by bar: { rh: [readAbcBar], lh: [readAbcBar] }.
  * version: the version's { rh, lh } (by default the one in arrangements.js).
  */
-export function arrangementBars(id, level, version = ARRANGEMENTS[id]?.[level]) {
+export function arrangementBars(id, level, version = versionOf(id, level)) {
   const song = songById(id);
   const arr = version;
   if (!song || !arr) return null;
@@ -168,7 +176,7 @@ export function arrangementBars(id, level, version = ARRANGEMENTS[id]?.[level]) 
  * Every note of a version to play: [{ midi, start, len, hand: 'rh'|'lh' }], in eighths from
  * the start of the piece, with tied notes joined into one.
  */
-export function arrangementNotes(id, level, version = ARRANGEMENTS[id]?.[level]) {
+export function arrangementNotes(id, level, version = versionOf(id, level)) {
   const bars = arrangementBars(id, level, version);
   if (!bars) return [];
   const steps = meterOf(songById(id)).steps;
@@ -201,7 +209,7 @@ const noteName = (n) => `${LETTERS[n.letter]}${SIGN[n.alter]}`;
  * above the right hand, and (o.names) the name of the right hand's top note under each note.
  * o.perLine: bars on a line (the last lines are shared out evenly).
  */
-export function arrangementAbc(id, level, o = {}, version = ARRANGEMENTS[id]?.[level]) {
+export function arrangementAbc(id, level, o = {}, version = versionOf(id, level)) {
   const song = songById(id);
   const arr = version;
   if (!song || !arr) throw new Error(`no ${level} version of ${id}`);

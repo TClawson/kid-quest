@@ -169,8 +169,8 @@ try {
   await tapDoor(page, 11); // an open door says what it gave
   assert.match(await page.textContent('#modal .xm-line'), /Door 11:/);
   ava = await kidState(page, 'kid_ava');
-  assert.deepEqual(Object.keys(ava.xmas.doors['2026']).sort(), ['11', '3']);
-  assert.equal(ava.xmas.doors['2026']['11'].on, DAY);
+  assert.deepEqual(Object.keys(ava.xmas.doors).sort(), ['2026-11', '2026-3']);
+  assert.equal(ava.xmas.doors['2026-11'].on, DAY);
   // the same prizes on any device: the roll is seeded by kid and door
   const again = await page.evaluate(async () => {
     const { rollDoor } = await import('./js/advent.js');
@@ -217,7 +217,7 @@ try {
   await tapDoor(page, 11);
   await page.waitForSelector('#modal .xm-sticker');
   mia = await kidState(page, 'kid_mia');
-  assert.equal(mia.xmas.doors['2026']['11'].kind, 'sticker');
+  assert.equal(mia.xmas.doors['2026-11'].kind, 'sticker');
   assert.equal(Object.keys(mia.little.stickers).length, stickers + 1, 'her door gives a sticker for her book');
   await page.clock.runFor(500);
   await shot(page, '9-little-wall');
@@ -227,12 +227,12 @@ try {
   const xmasDay = '2026-12-25';
   const c = family(xmasDay);
   // Ben's earlier doors show what they gave (an ornament from another map, a golden door, a scarf color...)
-  c.s.kids[1].xmas = { found: ['orn-puffin', 'orn-owl'], doors: { 2026: {
-    1: { kind: 'coins', coins: 35, on: '2026-12-01' }, 2: { kind: 'ornament', id: 'orn-puffin', on: '2026-12-02' },
-    3: { kind: 'gem', gems: 3, on: '2026-12-03' }, 4: { kind: 'game', games: 1, on: '2026-12-04' },
-    5: { kind: 'golden', id: 'orn-owl', on: '2026-12-05' }, 6: { kind: 'outfit', item: 'neck-knitscarf-blue', color: 'blue', on: '2026-12-06' },
-    7: { kind: 'golden', item: 'hat-santa', on: '2026-12-07' },
-  } } };
+  c.s.kids[1].xmas = { found: ['orn-puffin', 'orn-owl'], doors: {
+    '2026-1': { kind: 'coins', coins: 35, on: '2026-12-01' }, '2026-2': { kind: 'ornament', id: 'orn-puffin', on: '2026-12-02' },
+    '2026-3': { kind: 'gem', gems: 3, on: '2026-12-03' }, '2026-4': { kind: 'game', games: 1, on: '2026-12-04' },
+    '2026-5': { kind: 'golden', id: 'orn-owl', on: '2026-12-05' }, '2026-6': { kind: 'outfit', item: 'neck-knitscarf-blue', color: 'blue', on: '2026-12-06' },
+    '2026-7': { kind: 'golden', item: 'hat-santa', on: '2026-12-07' },
+  } };
   ({ page, ctx } = await open(xmasDay, '12:00', { state: c.s, house: c.house }));
   await openKid(page, 'kid_ben');
   await goOutside(page);
@@ -252,7 +252,7 @@ try {
   const benAfter = await kidState(page, 'kid_ben');
   assert.ok(benAfter.xmas.found.includes('star-castle'));
   assert.equal(benAfter.xmas.star, 'star-castle');
-  assert.equal(benAfter.xmas.doors['2026']['25'].kind, 'star');
+  assert.equal(benAfter.xmas.doors['2026-25'].kind, 'star');
   assert.equal((await page.evaluate(async () => { const { state } = await import('./js/ctx.js'); const { totalCoins } = await import('./js/logic.js'); return totalCoins(state, state.kids[1], '2026-12-25'); })) - benCoins, 100);
   await ctx.close();
 
