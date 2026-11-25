@@ -123,6 +123,18 @@ export function rollOrnament(map, found = [], rand = Math.random) {
   return { id, double: found.includes(id) };
 }
 
+/**
+ * An ornament from ANY map that the kid hasn't found yet (advent doors, design-v2 section 0):
+ * each missing one by its rarity's chance. null once every ornament is found. rand: () => 0..1.
+ */
+export function rollAnyOrnament(found = [], rand = Math.random) {
+  const list = ORNAMENTS.filter((o) => !found.includes(o.id));
+  if (!list.length) return null;
+  let r = rand() * list.reduce((t, o) => t + RARITY[o.rarity].chance, 0);
+  for (const o of list) { r -= RARITY[o.rarity].chance; if (r < 0) return o.id; }
+  return list[list.length - 1].id;
+}
+
 /** The star a map's 4 ornaments win, once all 4 are found. */
 export const mapStar = (map) => STARS.find((s) => s.map === map);
 /** Is every ornament of a map found? */

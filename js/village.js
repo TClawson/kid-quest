@@ -922,7 +922,7 @@ function mount(section, handlers) {
     }
   }
   canvas.after(fringe);
-  dressed.mount(section, world);
+  dressed.mount(section, world, { xmas: handlers.xmas }); // handlers.xmas: Santa and the advent house (advent-ui.js)
   const paintSprite = (el, kind, happy) => {
     const c = el.querySelector('.v-sprite');
     const src = spriteUrl(kind, happy);

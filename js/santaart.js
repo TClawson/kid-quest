@@ -1,6 +1,6 @@
 // Santa's flyover (December): the first time each day a kid comes out into the village, Santa's
 // sleigh and his reindeer fly across it, trailing gently falling snow, and drop a present by the
-// kid's door on a little candy-striped parachute. Tapping it opens it: 5 gems, 10 coins or 2 extra
+// kid's door on a little candy-striped parachute. Tapping it opens it: 3 gems, 10 coins or 2 extra
 // visitor game plays, with a letter from Santa about a Christmas tradition somewhere in the world.
 // Style B like the village (hue-shifted ramps, selective outlines, dithering), one art pixel per
 // village pixel, drawn frame by frame (no smoothing).
@@ -10,7 +10,8 @@
 //   openedArt(prize, frame) the present opened, its prize popping out ('gems', 'coins', 'plays')
 //   letterArt()             Santa's letter: a parchment card with a wax seal and a holly sprig
 //   flyover(L, t, o)        where everything is t seconds into the flight (for drawing or a preview)
-//   mountSanta(section, world, L, o)  runs it in a live village, once a day per kid
+//   mountSanta(section, world, L, o)  runs it in a live village (advent-ui.js says when), the present by the door
+//   mailboxArt(o)           Santa's mailbox by the kid's door (his letters book)
 
 import { mix, h2, bayer, inEll } from './pixelkit.js';
 import { spriteOf, lighter, darker, INK } from './xmaskit.js';
@@ -245,7 +246,7 @@ export function openedArt(prize = 'gems', frame = 0, o = {}) {
     // the prize, popping out
     if (prize === 'gems') {
       const gem = ['..CCCC..', '.CWWCCc.', 'CWCCCccc', '.cCCccd.', '..cCcd..', '...cd...'];
-      [[13, 25, '#58d070'], [31, 26, '#40c8d8'], [22, 17, '#8a6aff'], [19, 28, '#ff5aa8'], [26, 30, '#ffb03a']].forEach(([x, y, c]) => put(b, gem, { c, C: lighter(c, 0.45), W: '#ffffff', d: darker(c, 0.35) }, x, y));
+      [[14, 26, '#58d070'], [30, 26, '#40c8d8'], [22, 19, '#ff5aa8']].forEach(([x, y, c]) => put(b, gem, { c, C: lighter(c, 0.45), W: '#ffffff', d: darker(c, 0.35) }, x, y));
     } else if (prize === 'coins') {
       const coin = ['.dddd.', 'dyYYyd', 'dYWyyd', 'dYyyod', 'dyyood', '.dddd.'];
       [[16, 30], [23, 31], [30, 30], [19, 25], [27, 24], [23, 19], [33, 22], [12, 23], [29, 15], [17, 16]].forEach(([x, y], i) => put(b, i % 3 === 2 ? ['.dd.', 'dYyd', 'dyod', 'dyod', 'dyod', '.dd.'] : coin, { y: GOLD[3], Y: GOLD[4], W: GOLD[5], o: GOLD[2], d: GOLD[1] }, x, y));
@@ -354,18 +355,25 @@ export function flyover(L, t, o = {}) {
 
 const SEEN = 'kidquest.santaSeen';
 /**
- * Santa in a live village, once a December day per kid (remembered on this device): his flight over
- * a canvas above everything, then the present by the door to tap. o: { night, mapId, today, kid,
- * onPresent(prize) }. With kidquest.santa = 'off' he stays home; 'test' draws only what a preview
- * asks for (section.kqSanta(t)).
+ * Santa in a live village: his flight over a canvas above everything, then the present by the
+ * door to tap. o: { night, mapId, today, kid, fly, waiting, onFly(), onOpen(), paused() }.
+ *   fly: he flies now (advent-ui.js asks the kid's synced state); onFly() is called as he sets
+ *   off (the present is the kid's from then, on every device); waiting: presents already by the
+ *   door (a present lands on top of them); onOpen() is called when the present is tapped and
+ *   says how many are left; paused(): wait while it says so (a pop-up is open).
+ * Without fly (previews), he flies once a day per kid on this device (kidquest.santaSeen).
+ * With kidquest.santa = 'off' he stays home; 'test' draws only what a preview asks for
+ * (section.kqSanta(t)).
  */
 export function mountSanta(section, world, L, o = {}) {
   let mode = null;
   try { mode = localStorage.getItem('kidquest.santa'); } catch { /* none */ }
   if (mode === 'off') return null;
+  const real = 'fly' in o;
   let seen = {};
-  try { seen = JSON.parse(localStorage.getItem(SEEN) || '{}') || {}; } catch { /* none */ }
-  if (mode !== 'test' && seen[o.kid] === o.today) return null;
+  if (!real) try { seen = JSON.parse(localStorage.getItem(SEEN) || '{}') || {}; } catch { /* none */ }
+  const fly = mode === 'test' || (real ? Boolean(o.fly) : seen[o.kid] !== o.today);
+  if (!fly && !(o.waiting > 0)) return null;
   const nm = o.night ? o.mapId : null;
   const team = [0, 1, 2, 3].map((f) => teamArt(f, { night: nm }));
   const states = Object.fromEntries(['chute0', 'chute1', 'squash', 'bounce', 'rest'].map((s) => [s, presentArt(s, { night: nm })]));
@@ -418,24 +426,65 @@ export function mountSanta(section, world, L, o = {}) {
     gift.style.cssText = `left:${s.present.x - p.ax}px;top:${s.present.y - p.ay}px;width:${p.width}px;height:${p.height}px;z-index:${s.present.y}`;
     const gc = document.createElement('canvas'); gc.className = 'v-deco-art'; gc.width = p.width; gc.height = p.height; gc.getContext('2d').drawImage(p, 0, 0);
     gift.append(gc);
-    gift.addEventListener('click', (e) => { e.stopPropagation(); openPresent(section, o); gift.remove(); });
+    gift.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!o.onOpen) { openPresent(section, o); gift.remove(); return; }
+      const left = o.onOpen();
+      if (!(left > 0)) gift.remove();
+    });
     world.insertBefore(gift, world.querySelector('.v-buddy'));
   };
   section.kqSanta = (t) => { const s = draw(t); if (s.present?.state === 'rest') land(s); else if (gift) { gift.remove(); gift = null; } return s; };
   if (mode === 'test') return c;
-  try { localStorage.setItem(SEEN, JSON.stringify({ ...seen, [o.kid]: o.today })); } catch { /* fine */ }
-  const t0 = performance.now();
+  // presents from earlier (or from this morning, on another device) already wait by the door
+  if (!fly) { land(flyover(L, FLIGHT_S + 3)); return c; }
+  if (o.waiting > 0) land(flyover(L, FLIGHT_S + 3));
+  let t0 = null; let set = false;
   const tick = (now) => {
     if (!c.isConnected) return;
+    // he waits while a pop-up is open (the morning's hello, a talk box) or the app is hidden
+    if (t0 === null || o.paused?.() || document.visibilityState === 'hidden') { t0 = now; requestAnimationFrame(tick); return; }
     const t = (now - t0) / 1000 - 1.2;
-    if (t >= 0) { const s = draw(t); if (s.present?.state === 'rest') land(s); if (t > FLIGHT_S + 2.5) { ctx.clearRect(0, 0, L.W, L.H); return; } }
+    if (t >= 0) {
+      if (!set) {
+        set = true;
+        if (real) o.onFly?.();
+        else try { localStorage.setItem(SEEN, JSON.stringify({ ...seen, [o.kid]: o.today })); } catch { /* fine */ }
+      }
+      const s = draw(t); if (s.present?.state === 'rest') land(s);
+      if (t > FLIGHT_S + 2.5) { ctx.clearRect(0, 0, L.W, L.H); section.dataset.santa = 'done'; return; }
+    }
     requestAnimationFrame(tick);
   };
+  section.dataset.santa = 'flying';
   requestAnimationFrame(tick);
   return c;
 }
 
-const PRIZES = [['gems', '5 gems'], ['coins', '10 coins'], ['plays', '2 extra game plays']];
+/** Santa's mailbox (19 x 24), red with a gold star and a letter peeking out; its foot is the post's. */
+export function mailboxArt(o = {}) {
+  return spriteOf(19, 24, (b) => {
+    // the post
+    for (let y = 12; y < 24; y += 1) for (let x = 7; x <= 8; x += 1) b.set(x, y, x === 7 ? '#8a5a3a' : '#5a3a2a', 'post');
+    // the box: a rounded top, red, lighter on the left
+    for (let y = 2; y < 13; y += 1) for (let x = 1; x < 15; x += 1) {
+      if (y < 5 && !inEll(x, y, 7.5, 5, 7, 3.6)) continue;
+      const c = x < 3 ? RED[4] : x > 12 ? RED[1] : y < 4 ? RED[4] : RED[3];
+      b.set(x, y, c, 'box');
+    }
+    // its door with a slot, a gold star, and a letter peeking out of the slot
+    for (let x = 3; x < 12; x += 1) b.set(x, 7, RED[1], 'box');
+    put(b, ['..y..', '.yYy.', 'yYWYy', '.y.y.'], { y: GOLD[3], Y: GOLD[4], W: '#ffffff' }, 5, 8, 'lit');
+    put(b, ['wwww', 'wWWw'], { w: '#f4e2b8', W: '#fcf2d8' }, 5, 5, 'letter');
+    // the little flag, up: a letter for the kid
+    for (let y = 1; y < 7; y += 1) b.set(15, y, '#c8c0d8', 'flag');
+    put(b, ['ff', 'fF', 'ff'], { f: GOLD[3], F: GOLD[4] }, 16, 1, 'flag');
+    // a cap of snow
+    for (let x = 2; x < 14; x += 1) b.set(x, 1 + (x < 4 || x > 11 ? 1 : 0), x % 3 ? '#ffffff' : '#eef0fa', 'snow');
+  }, { night: o.night || null, nightMix: 0.6, ax: 8, ay: 23, pad: 3, ground: 1, noLine: ['snow', 'letter'] });
+}
+
+const PRIZES = [['gems', '3 gems'], ['coins', '10 coins'], ['plays', '2 extra game plays']];
 export const TRADITION = 'In Iceland, 13 Yule Lads visit on the 13 nights before Christmas. Children leave a shoe on the windowsill, and each Lad leaves a little gift in it (or a potato, if they were naughty!).';
 
 /** The present opened over the village: the prize (equal odds) and Santa's letter (a sketch of the real pop-up). */

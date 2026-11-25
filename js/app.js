@@ -38,6 +38,7 @@ import { furnitureThumb } from './houseart.js';
 import { xmasHouse, isXmas, starsWon } from './xmas.js';
 import { ornamentBookHtml } from './xmasbook.js';
 import { ornamentArt, ornamentSilhouette, artCanvas } from './xmasart.js';
+import { xmasHandlers } from './advent-ui.js';
 import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
 import { seedThumb, decorThumb } from './gardenart.js';
 import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
@@ -1846,6 +1847,7 @@ const villageHandlers = {
   },
   onBakery: () => openLittleGames('bakery'),
   onBuddy: (el) => actions['buddy-move'](el),
+  xmas: xmasHandlers, // December: Santa's present, his letters, the advent house (advent-ui.js)
   sound: (name) => (name === 'talk' ? sounds.tap() : sounds.tap()),
 };
 

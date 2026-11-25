@@ -10,7 +10,7 @@
 import { xmasOn, xmasScene, xmasLayer, xmasLights, xmasTreeArt, lanternArt } from './xmaslights.js';
 import { shownNight, nightLand, landLights, nightFrames, nightFilter, folkFilters, lightAt } from './nightfx.js';
 import { adventSpot, adventHouseArt, adventLights, adventWallArt } from './adventart.js';
-import { mountSanta } from './santaart.js';
+import { mountSanta, mailboxArt } from './santaart.js';
 
 const TWINKLE_MS = 420;
 
@@ -41,6 +41,7 @@ export function dressLand(L, kept, o = {}) {
 function mountDecor(section, world, L, o) {
   const { scene, advent, night } = o;
   const mapId = L.id;
+  const kid = section.dataset.kid;
   const nm = night ? mapId : null;
   const reduce = Boolean(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   if (night) {
@@ -86,7 +87,13 @@ function mountDecor(section, world, L, o) {
   if (advent) {
     const today = Math.max(1, Math.min(25, Number(String(o.today || '').slice(8, 10)) || 1));
     house = standing('v-advent', advent, [0, 1, 2].map((frame) => adventHouseArt(mapId, { night: nm, frame })), 'The advent calendar house');
-    house.addEventListener('click', (e) => { e.stopPropagation(); (o.onAdvent || openAdventWall)(section, { mapId, today }); });
+    house.addEventListener('click', (e) => { e.stopPropagation(); if (o.xmas?.onAdvent) o.xmas.onAdvent(kid, { mapId }); else (o.onAdvent || openAdventWall)(section, { mapId, today }); });
+  }
+  // Santa's mailbox by the kid's door, once he has written: his letters book (advent-ui.js)
+  const live = o.xm && o.xmas?.live ? o.xmas.live(kid) : null;
+  if (live?.letters) {
+    const box = standing('v-mailbox', mailboxSpot(L), [0, 1, 2].map(() => mailboxArt({ night: nm })), "Santa's letters");
+    box.addEventListener('click', (e) => { e.stopPropagation(); o.xmas.onLetters?.(kid); });
   }
   const draw = (f) => {
     fctx.clearRect(0, 0, L.W, L.H);
@@ -110,8 +117,17 @@ function mountDecor(section, world, L, o) {
     requestAnimationFrame(tick);
   }
   // Santa flies over the first time each December day the kid comes outside (santaart.js decides)
-  if (o.xm && o.santa !== false) mountSanta(section, world, L, { night, mapId, today: o.today, kid: section.dataset.kid, advent, onPresent: o.onPresent });
+  // (live: the kid's synced state says whether he has flown today, and what waits by the door)
+  if (o.xm && o.santa !== false) {
+    const sa = live ? { fly: live.fly, waiting: live.waiting, onFly: () => o.xmas.onFly?.(kid), onOpen: () => o.xmas.onPresent?.(kid), paused: o.xmas.paused } : {};
+    mountSanta(section, world, L, { night, mapId, today: o.today, kid, advent, onPresent: o.onPresent, ...sa });
+  }
   return { house };
+}
+
+/** Where Santa's mailbox stands: on the left of the kid's front door (the present lands on its right). */
+export function mailboxSpot(L) {
+  return { x: Math.round(L.home.x + L.home.w / 2 - 22), y: Math.round(L.home.y + L.home.h + 10) };
 }
 
 /** The inside of the advent house over the village: the wall of doors (a sketch of the real screen). */
