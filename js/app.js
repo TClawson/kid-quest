@@ -19,7 +19,7 @@ import { dailySummaries } from './familygarden.js';
 import { bloomData, gardenLine } from './villagebloom.js';
 import { openLittle } from './little.js';
 import { playsLittle, jarStars, spendStar, earnSticker, newLittle } from './littlerules.js';
-import { villageHtml, mountVillages, cameOut, cameOutOfMusic, placeVillagers, villagerName, villageGoal } from './village.js';
+import { villageHtml, mountVillages, cameOut, cameOutOfMusic, cameOutOfGarden, placeVillagers, villagerName, villageGoal } from './village.js';
 import { villageLayout } from './villagemaps.js';
 import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
 import { todayHud, todayListHtml } from './today.js';
@@ -1517,7 +1517,7 @@ const gardenHandlers = {
     const kid = kidById(ui.kidId);
     if (!kid) return;
     setPlace(kid.id, today(), 'out');
-    cameOut(kid.id, kidTheme(kid));
+    cameOutOfGarden(kid.id, kidTheme(kid));
     render();
   },
   refresh: () => render(),
@@ -2121,7 +2121,7 @@ function goQuest(kid, id) {
   if (where === 'out' && $app.querySelector('.village')?.goTask?.(id)) return;
   villageGoal(kid.id, { task: id });
   setPlace(kid.id, t, 'out');
-  if (where === 'music') cameOutOfMusic(kid.id, kidTheme(kid)); else cameOut(kid.id, kidTheme(kid));
+  if (where === 'music') cameOutOfMusic(kid.id, kidTheme(kid)); else if (where === 'garden') cameOutOfGarden(kid.id, kidTheme(kid)); else cameOut(kid.id, kidTheme(kid));
   render();
 }
 
