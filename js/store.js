@@ -229,12 +229,21 @@ export class AddTo { constructor(items) { this.items = items; } }
 export class Increase { constructor(by) { this.by = by; } }
 const KID_LISTS = new Set(['owned', 'grants', 'seenUnlocks']);
 const KID_COUNTS = new Set(['spent', 'gemsSpent']);
-const isList = (p) => (p.length === 1 && KID_LISTS.has(p[0])) || (p.length === 2 && p[0] === 'buddyOwned');
-const isCount = (p) => p.length === 1 && KID_COUNTS.has(p[0]);
+// December (xmas.js): the ornaments found and the maps whose photo gave one only grow; tinsel is a count
+const XMAS_LISTS = new Set(['found', 'photo']);
+const isList = (p) => (p.length === 1 && KID_LISTS.has(p[0])) || (p.length === 2 && p[0] === 'buddyOwned') || (p.length === 2 && p[0] === 'xmas' && XMAS_LISTS.has(p[1]));
+const isCount = (p) => (p.length === 1 && KID_COUNTS.has(p[0])) || (p.length === 2 && p[0] === 'xmas' && p[1] === 'tinsel');
+
+// December maps a kid gets for the first time are sent a field at a time, so another device's
+// present or ornament written meanwhile is kept (xmas.js, xmasgifts.js)
+const SPREAD = new Set(['xmas', 'xmasGifts']);
+const spread = (fields) => fields.flatMap(([p, v]) => (p.length === 1 && SPREAD.has(p[0]) && v && typeof v === 'object' && !Array.isArray(v)
+  ? Object.entries(v).map(([k, x]) => [[p[0], k], x])
+  : [[p, v]]));
 
 /** Kid document fields from diffFields, with purchase lists and spending made safe to merge (see AddTo). */
 export function mergeSafe(fields, was) {
-  return fields.map(([p, v]) => {
+  return spread(fields).map(([p, v]) => {
     const old = p.reduce((o, k) => (o == null ? undefined : o[k]), was);
     if (isList(p) && Array.isArray(v) && (old === undefined || Array.isArray(old))) {
       const had = new Set((old || []).map((x) => JSON.stringify(x)));

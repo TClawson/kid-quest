@@ -119,6 +119,8 @@ const SHELL = [
   'js/xmas.js',
   'js/xmasart.js',
   'js/xmasbook.js',
+  'js/xmasgifts.js',
+  'js/xmas-ui.js',
   'js/tankart.js',
   'js/houserules.js',
   'js/choresets.js',

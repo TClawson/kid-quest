@@ -1192,9 +1192,10 @@ export function paintRoom(canvas, o) {
   blocks.push([at.shower.x - 1, R.floorTop - 2, 28, at.shower.y + 76 - R.floorTop + 1]);
 
   // December: the tree's shadow on the floor, and the presents' (xmas.js xmasHouse)
-  const xt = o.xmas?.tree ? xtreeAt(lay) : null;
+  // (in January the tree is packed away, but presents not opened yet still sit in its spot)
+  const xt = o.xmas ? xtreeAt(lay) : null;
   if (xt) {
-    shadow(px, xt.x + TREE.foot.x, xt.y + TREE.foot.y, 10, 2, 0.26);
+    if (o.xmas.tree) shadow(px, xt.x + TREE.foot.x, xt.y + TREE.foot.y, 10, 2, 0.26);
     (o.xmas.gifts || []).forEach((g, i) => { const p = GIFT_AT[i % GIFT_AT.length]; shadow(px, xt.x + p.x, xt.y + p.y, 6, 1.5, 0.22); });
   }
 
@@ -1242,17 +1243,20 @@ export function paintRoom(canvas, o) {
   // siblings' presents round its pot, each standing on the floor on its own
   let xmas = null;
   if (xt) {
-    const t = treeArt(o.xmas.tree);
-    stand('xmas-tree', t.body, xt.x, xt.y, [xt.x + 11, xt.y + 54, 18, 10]);
-    const frames = t.lights.map((b) => {
-      const c = canvas.ownerDocument.createElement('canvas');
-      c.width = b.W; c.height = b.H;
-      const buf = pixelBuffer(b.W, b.H);
-      b.blit(buf.px, b.pad, b.pad);
-      buf.put(c.getContext('2d'));
-      return c;
-    });
-    xmas = { lights: { x: xt.x - 4, y: xt.y - 4, w: frames[0].width, h: frames[0].height, foot: xt.y + TREE.h, frames }, gifts: [] };
+    xmas = { lights: null, gifts: [] };
+    if (o.xmas.tree) {
+      const t = treeArt(o.xmas.tree);
+      stand('xmas-tree', t.body, xt.x, xt.y, [xt.x + 11, xt.y + 54, 18, 10]);
+      const frames = t.lights.map((b) => {
+        const c = canvas.ownerDocument.createElement('canvas');
+        c.width = b.W; c.height = b.H;
+        const buf = pixelBuffer(b.W, b.H);
+        b.blit(buf.px, b.pad, b.pad);
+        buf.put(c.getContext('2d'));
+        return c;
+      });
+      xmas.lights = { x: xt.x - 4, y: xt.y - 4, w: frames[0].width, h: frames[0].height, foot: xt.y + TREE.h, frames };
+    }
     (o.xmas.gifts || []).forEach((g, i) => {
       const b = giftArt(g.shape, g.paper);
       const p = GIFT_AT[i % GIFT_AT.length];

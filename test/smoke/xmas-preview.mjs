@@ -53,7 +53,12 @@ function family(o = {}) {
     mk('kid_cy', 'Cy', '#69db7c', 'cat'),
     mk('kid_dee', 'Dee', '#da77f2', 'dino'),
   );
-  s.xmas = { gifts: (o.gifts || []).map((g) => ({ to: 'kid_ava', year: 2026, ...g })) };
+  // presents from her siblings (xmasgifts.js): kept on her, kid.xmasGifts
+  s.kids[0].xmasGifts = Object.fromEntries((o.gifts || []).map((g) => {
+    const giver = s.kids.find((k) => k.id === g.from);
+    const id = `2026-${g.from}-kid_ava`;
+    return [id, { id, from: g.from, fromName: giver.name, fromBuddy: giver.buddy.species, year: '2026', kind: 'seed', item: 'seed-tulip', n: 3, cost: 20, shape: g.shape, paper: g.paper, at: '2026-12-01' }];
+  }));
   const ava = s.kids[0];
   const done = (key, tasks) => { s.log[key] ||= {}; s.log[key].kid_ava ||= { tasks: {} }; for (const t of tasks) s.log[key].kid_ava.tasks[t.id] = { status: 'done', by: 'parent' }; };
   for (let i = 0; i <= 30; i += 1) done(addDays(o.date || day, -i), ava.tasks.filter((t) => t.period !== 'exercise'));

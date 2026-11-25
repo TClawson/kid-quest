@@ -12,7 +12,7 @@ import { makeGrid, findPath, hudBands, camAxis, roomScale } from './village.js';
 import { furnitureById } from './furniture.js';
 import { fishSpecies } from './fishbook.js';
 import { fishPic } from './fishart.js';
-import { artCanvas, giftShake, GIFT_AT, GIFT_SIZE, TREE } from './xmasart.js';
+import { artCanvas, giftShake, unwrapArt, GIFT_AT, GIFT_SIZE, TREE } from './xmasart.js';
 import { vaseArt, basketArt as veggieBasketArt, bowlArt } from './gardenart.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -106,11 +106,12 @@ const DONE_SAY = {
 
 /**
  * December (xmas.js xmasHouse): the tree's tap box and tag (the ornament count), and one for each
- * present under it, with the name of the buddy it's from.
+ * present under it, with the name of the buddy it's from. In January the tree is packed away and
+ * only presents not opened yet are left.
  */
 function xmasSpots(x, layout) {
   const T = xtreeAt(layout);
-  const tree = `<button class="h-spot" data-spot="xtree" style="left:${T.x + 5}px;top:${T.y + 2}px;width:${TREE.w - 10}px;height:${TREE.h - 2}px" aria-label="Ornament tree: ${x.found} of ${x.total} ornaments"><span class="h-tag">🎄 ${x.found}/${x.total}</span></button>`;
+  const tree = !x.tree ? '' : `<button class="h-spot" data-spot="xtree" style="left:${T.x + 5}px;top:${T.y + 2}px;width:${TREE.w - 10}px;height:${TREE.h - 2}px" aria-label="Ornament tree: ${x.found} of ${x.total} ornaments"><span class="h-tag">${x.tree?.big ? '🎄' : `🎄 ${x.found}/${x.total}`}</span></button>`;
   const gifts = (x.gifts || []).map((g, i) => {
     const p = GIFT_AT[i % GIFT_AT.length]; const [w, hh] = GIFT_SIZE[g.shape] || GIFT_SIZE.small;
     return `<button class="h-spot h-gift" data-spot="gift" data-gift="${i}" style="left:${T.x + p.x - Math.floor(w / 2)}px;top:${T.y + p.y - hh}px;width:${w}px;height:${hh}px" aria-label="A present from ${esc(g.from)}"><span class="h-tag">🎁 ${esc(g.from)}</span></button>`;
@@ -259,7 +260,7 @@ function mount(section, handlers) {
 
   harvestPieces(section, world, buddyEl, res.pieces.find((p) => p.id === 'table'), data.harvest);
   // December: the tree's lights, three frames taking turns (css h-twinkle)
-  if (res.xmas) {
+  if (res.xmas?.lights) {
     const L = res.xmas.lights;
     const box = section.ownerDocument.createElement('div');
     box.className = 'h-lights';
@@ -287,7 +288,7 @@ function mount(section, handlers) {
   };
   const grid = makeGrid(L);
 
-  const SPOTS = { ...spotsFor(tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art)), ...(data.xmas ? { xtree: xtreeSpot({ music: Boolean(data.layout.music) }) } : {}) };
+  const SPOTS = { ...spotsFor(tankSpec(data.layout.tank && furnitureById(data.layout.tank)?.art)), ...(data.xmas?.tree ? { xtree: xtreeSpot({ music: Boolean(data.layout.music) }) } : {}) };
   const mem = memory.get(data.kid) || { ...HOUSE_SPOTS.wake, face: 1, cam: null };
   memory.set(data.kid, mem);
   // a walk carries on if the house is redrawn on the way (a chore just done, a sync)
@@ -343,6 +344,7 @@ function mount(section, handlers) {
     e.stopPropagation();
     closeDialog();
     if (b.dataset.h === 'do') handlers.onTask?.(b.dataset.q, buddyEl);
+    if (b.dataset.h === 'unwrap') unwrap(Number(b.dataset.gift));
   });
 
   // December: a present under the tree wiggles and rattles when tapped (it opens on Christmas morning)
@@ -361,7 +363,37 @@ function mount(section, handlers) {
       if (n < 8) { ctx.drawImage(frames[n % 4], 0, 0); n += 1; setTimeout(step, 110); return; }
       ctx.putImageData(still, 0, 0);
       delete piece.dataset.shaking;
-      say(`A present from ${g.from}! Something inside goes rattle-rattle.`, `<div class="v-quest"><span class="v-quest-icon">🎄</span><span><b>Opens on Christmas morning</b><small>25 December</small></span></div>`, '<button class="btn" data-h="bye">OK!</button>');
+      if (g.open) say(`A present from ${g.from}! It's Christmas, so you can open it.`, '', `<button class="btn" data-h="unwrap" data-gift="${i}">🎁 Open it!</button><button class="btn ghost" data-h="bye">Not yet</button>`);
+      else say(`A present from ${g.from}! Something inside goes rattle-rattle.`, `<div class="v-quest"><span class="v-quest-icon">🎄</span><span><b>Opens on Christmas morning</b><small>25 December</small></span></div>`, '<button class="btn" data-h="bye">OK!</button>');
+    };
+    step();
+  };
+  // Christmas morning: the present tears open in 4 frames where it stands (xmasart.js unwrapArt),
+  // then the app hands over what's inside (handlers.onUnwrap, by the present's id)
+  const unwrap = (i) => {
+    const g = data.xmas?.gifts?.[i];
+    const piece = world.querySelector(`.h-piece[data-piece="gift${i}"]`);
+    if (!g || !g.open || !piece || piece.dataset.opening) return;
+    piece.dataset.opening = '1';
+    handlers.sound?.('rattle');
+    const frames = [0, 1, 2, 3].map((f) => artCanvas(unwrapArt(g.shape, g.paper, f, g.item || null), section.ownerDocument));
+    const c = section.ownerDocument.createElement('canvas');
+    c.width = frames[0].width; c.height = frames[0].height;
+    c.className = 'h-piece h-unwrap';
+    // the frames are 30 x 26 (plus their pad), standing on the present's foot, centered on it
+    const left = parseFloat(piece.style.left) + piece.width / 2 - c.width / 2;
+    const top = parseFloat(piece.style.top) + piece.height - c.height;
+    c.style.cssText = `left:${left}px;top:${top}px;width:${c.width}px;height:${c.height}px;z-index:${piece.style.zIndex}`;
+    piece.style.visibility = 'hidden';
+    world.insertBefore(c, buddyEl);
+    let n = 0;
+    const step = () => {
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.drawImage(frames[n], 0, 0);
+      n += 1;
+      if (n < frames.length) { setTimeout(step, 260); return; }
+      setTimeout(() => handlers.onUnwrap?.(g.id), 500);
     };
     step();
   };

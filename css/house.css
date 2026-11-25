@@ -297,3 +297,48 @@ button.ob-star:hover, button.ob-star:focus-visible { border-color: var(--px-ink)
 .ob-orn.none b { color: var(--muted); letter-spacing: 1px; }
 @media (prefers-reduced-motion: reduce) { .ob-pic.twinkle .ob-f1 { animation: none; opacity: 0; } }
 .modal-card:has(.ornbook) { width: min(780px, 100%); }
+
+/* December in the house (xmas-ui.js): presents to wrap, ornament pages, tinsel's pick, the reveal */
+.ob-gifts { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; margin: 0 0 8px; padding: 6px 10px; background: #fff4f4; border: 2px dashed #e0546a; border-radius: 6px; }
+.ob-gifts > b { font-family: var(--px-font); }
+.ob-giftrow { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
+.ob-sent { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; background: #e6fcf5; color: #2b8a3e; font-weight: 700; font-size: 0.85rem; }
+.ornpage { text-align: center; display: grid; justify-items: center; gap: 6px; }
+.ornpage h2 { margin: 4px 0 0; }
+.op-pic { position: relative; display: block; width: min(200px, 50vw); aspect-ratio: 1; }
+.op-pic img, .op-mini img, .op-chest img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+.op-pic.twinkle .ob-f1, .op-mini.twinkle .ob-f1, .op-chest.twinkle .ob-f1 { animation: ob-twinkle 1.2s steps(1, end) infinite; }
+.op-tags { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 0; }
+.op-tag { padding: 3px 10px; border-radius: 999px; background: #f4ede0; font: 700 0.8rem/1.2 var(--px-font); }
+.op-tag.rare { background: #fff3bf; color: #a8701e; }
+.op-tag.super { background: #f3f0ff; color: #7048e8; }
+.op-chest { position: relative; display: block; width: 96px; height: 96px; margin: 0 auto; }
+.orn-pop { position: fixed; left: 50%; top: max(16px, env(safe-area-inset-top)); transform: translateX(-50%); z-index: 3000; display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 10px; max-width: calc(100% - 32px); background: #fff8e7; color: var(--px-ink); border: 3px solid var(--px-ink); border-radius: 8px; box-shadow: 0 4px 0 var(--px-ink); pointer-events: none; animation: orn-pop 3.4s ease-out both; }
+.orn-pop b { display: block; font-family: var(--px-font); }
+.orn-pop small { display: block; font-size: 0.85rem; }
+.op-mini { position: relative; display: block; width: 48px; height: 48px; flex: none; }
+@keyframes orn-pop { 0% { opacity: 0; transform: translate(-50%, -20px) scale(0.8); } 10% { opacity: 1; transform: translate(-50%, 0) scale(1.06); } 16% { transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
+.xgift h3 { margin: 10px 0 4px; font-size: 0.95rem; }
+.xg-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.xg-item { display: grid; grid-template-rows: 72px auto auto; justify-items: center; align-items: center; gap: 2px; padding: 6px 4px; background: #fff; border: 2px solid #e8d6b8; border-radius: 6px; font: inherit; color: inherit; cursor: pointer; text-align: center; }
+.xg-item b { font-size: 0.78rem; line-height: 1.15; }
+.xg-item.on { border-color: #e0546a; box-shadow: 0 0 0 3px #ffc9c9; background: #fff4f4; }
+.xg-item.dear { opacity: 0.55; }
+.xg-art { display: grid; place-items: center; width: 72px; height: 72px; }
+.xg-art svg { width: 72px; height: 72px; }
+.xg-art .ob-pic { width: 60px; height: 60px; }
+.xg-seed { font-size: 2.6rem; line-height: 1; }
+.xg-seed.big { font-size: 5rem; }
+.xg-papers { display: flex; gap: 6px; flex-wrap: wrap; }
+.xg-paper { display: grid; justify-items: center; gap: 2px; width: 84px; padding: 6px 2px 4px; background: #fff; border: 2px solid #e8d6b8; border-radius: 6px; font: inherit; color: inherit; cursor: pointer; }
+.xg-paper img { height: 44px; width: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+.xg-paper small { font-size: 0.68rem; line-height: 1.1; text-align: center; }
+.xg-paper.on { border-color: #e0546a; box-shadow: 0 0 0 3px #ffc9c9; }
+.xgift .row.end { margin-top: 12px; }
+.xg-big { height: 120px; width: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+.xgift-open .prize-art svg { width: 140px; height: 140px; }
+.xgift-done, .xgift-open { text-align: center; }
+.modal-card:has(.xgift) { width: min(640px, 100%); }
+.h-unwrap { pointer-events: none; }
+.xmas-parent .ob-sent { margin-right: 4px; }
+@media (prefers-reduced-motion: reduce) { .op-pic.twinkle .ob-f1, .op-mini.twinkle .ob-f1, .op-chest.twinkle .ob-f1 { animation: none; opacity: 0; } .orn-pop { animation-duration: 3.4s; } }
