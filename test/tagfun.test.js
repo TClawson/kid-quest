@@ -9,7 +9,7 @@ test('each visiting buddy kind has one personality, so kids can learn them', () 
   assert.equal(personalityFor('fox'), 'sneaky');
   assert.equal(personalityFor('puppy'), 'speedy');
   assert.equal(personalityFor('cat'), 'dodger');
-  for (const sp of ['fox', 'bear', 'panda', 'cat', 'puppy', 'turtle', 'dino']) assert.ok(PERSONALITIES[personalityFor(sp)], sp);
+  for (const sp of ['fox', 'bear', 'panda', 'cat', 'puppy', 'turtle', 'dino', 'arcticfox']) assert.ok(PERSONALITIES[personalityFor(sp)], sp);
   assert.equal(personalityFor('unicorn', 'Max'), personalityFor('unicorn', 'Max'), 'an unknown kind goes by name, the same every time');
   assert.deepEqual(POWERUPS, ['mushroom', 'snow', 'bush']);
   for (const p of Object.values(PERSONALITIES)) assert.ok(POWERUPS.includes(p.likes));

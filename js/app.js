@@ -57,7 +57,7 @@ import { viewLab, mountLab, labActions, openLab } from './notolab.js';
 import { viewCompose, mountCompose, composeActions, openCompose } from './composedesk.js';
 import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, comingSoon, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
+  SPECIES, SLOTS, ITEMS, itemById, comingSoon, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies, hasSpecies, speciesById, buddyOwnedId,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
 import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
@@ -2243,6 +2243,13 @@ function exWeekHtml(ex) {
   return `<div class="ex-week"><div class="ex-dots" aria-label="${ex.thisWeek} exercise days this week: ${ex.keep} keeps your strong weeks, ${ex.goal} adds one">${dots}</div><small>${text}</small></div>`;
 }
 
+/** A buddy in a picker. A buddy bought with coins shows its price until the kid owns it. prog: show whether they can afford it. */
+function speciesButton(kid, sp, action, prog) {
+  const owned = hasSpecies(kid, sp.id);
+  const tag = owned ? '' : `<span class="price species-price ${prog && prog.coins >= sp.price ? 'can' : ''}">🪙 ${sp.price}</span>`;
+  return `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''} ${owned ? '' : 'for-sale'}" data-action="${action}" data-val="${sp.id}" aria-label="${esc(sp.name)}${owned ? '' : `, ${sp.price} coins`}">${buddySvg({ species: sp.id }, 'happy', { background: false })}${tag}</button>`;
+}
+
 function viewWardrobe() {
   const kid = kidById(ui.kidId);
   if (!kid) { ui.view = 'home'; return viewHome(); }
@@ -2263,7 +2270,7 @@ function viewWardrobe() {
         <button class="buddy-tap" data-action="buddy-move" data-kid="${kid.id}" aria-label="Tap ${esc(kid.name)}'s buddy">${buddyHtml(kid, 'happy', 'lg', { live: true, feel: { valence: 0.8, arousal: 0.6 } })}</button>
         <div class="buddy-side">
           ${ui.speciesOpen
-    ? `<div class="pick species-pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="wardrobe-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div>
+    ? `<div class="pick species-pick">${SPECIES.map((sp) => speciesButton(kid, sp, 'wardrobe-species', prog)).join('')}</div>
           <button class="btn ghost small-btn switch-buddy" data-action="wardrobe-switch">Keep my ${esc(speciesName(kid.buddy.species).toLowerCase())}</button>`
     : `<button class="btn ghost small-btn switch-buddy" data-action="wardrobe-switch">🔁 Switch buddy</button>`}
           ${sportTab ? `<p class="gem-line">💎 <b>${prog.gems}</b> gems to spend</p>
@@ -2815,7 +2822,7 @@ function parentEditKid() {
     <div class="row"><button class="btn ghost" data-action="edit-kid-done">← All kids</button></div>
     <div class="card">
       <label class="block">Name <input data-kidfield="name" value="${esc(kid.name)}"></label>
-      <div class="block">Buddy <div class="pick">${SPECIES.map((sp) => `<button class="pick-item species ${kid.buddy.species === sp.id ? 'on' : ''}" data-action="kid-species" data-val="${sp.id}" aria-label="${sp.name}">${buddySvg({ species: sp.id }, 'happy', { background: false })}</button>`).join('')}</div></div>
+      <div class="block">Buddy <div class="pick">${SPECIES.map((sp) => speciesButton(kid, sp, 'kid-species')).join('')}</div></div>
       <div class="block">Color <div class="pick">${COLORS.map((c) => `<button class="pick-item swatch ${kid.color === c ? 'on' : ''}" style="background:${c}" data-action="kid-color" data-val="${c}" aria-label="${c}"></button>`).join('')}</div></div>
       ${allowance ? `<div class="block">Weekly allowance
         <div class="row wrap allow-row">
@@ -3045,6 +3052,7 @@ function putAwayOther(kid, slot) {
   if (name) setTimeout(() => toast(`${name} put away for now`), 50);
 }
 
+const FREE_SPECIES = SPECIES.filter((sp) => !sp.price);
 const speciesName = (id) => SPECIES.find((sp) => sp.id === id)?.name || 'buddy';
 const furnitureName = (id) => (itemById(id)?.name || 'furniture').toLowerCase();
 
@@ -3094,6 +3102,26 @@ function buyItem(kid, item, prog) {
       : item.home ? `<p class="muted small">It goes in your buddy's house (${esc(spotById(item.spot).name.toLowerCase())}), for every buddy you have.</p>` : ''}
       <div class="stack">
         <button class="btn huge" data-action="buy-confirm" data-id="${item.id}">Buy it!</button>
+        <button class="btn ghost" data-action="modal-close">Keep saving</button>
+      </div>
+    </div>`);
+}
+
+/** Buy a new kind of buddy with coins. It's the kid's for good, and they switch to it right away. */
+function buySpecies(kid, sp, prog) {
+  if (prog.coins < sp.price) {
+    sounds.error();
+    toast(`${sp.price - prog.coins} more coins to go for the ${sp.name.toLowerCase()}! Finish tasks to earn them.`);
+    return;
+  }
+  openModal(`
+    <div class="celebrate">
+      <div class="buddy buddy-xl mood-happy">${buddySvg({ species: sp.id, outfit: { background: kid.buddy.outfit?.background || 'bg-meadow' } }, 'happy')}</div>
+      <h1>Get the ${esc(sp.name.toLowerCase())}?</h1>
+      <p>It costs <b>🪙 ${sp.price}</b>. You'll have ${prog.coins - sp.price} coins left.</p>
+      <p class="muted small">The ${esc(sp.name.toLowerCase())} is yours to keep. Switch back to it any time. Like every buddy, it needs its own hats and such.</p>
+      <div class="stack">
+        <button class="btn huge" data-action="buy-species" data-val="${sp.id}">Buy it!</button>
         <button class="btn ghost" data-action="modal-close">Keep saving</button>
       </div>
     </div>`);
@@ -3323,7 +3351,7 @@ const actions = {
   'rewards-see': () => { ui.showRewards = !ui.showRewards; render(); },
   'add-kid': () => {
     const n = state.kids.length;
-    const kid = { id: newId('kid'), name: `Kid ${n + 1}`, buddy: defaultBuddy(SPECIES[n % SPECIES.length].id), seenUnlocks: [], color: COLORS[(n * 2) % COLORS.length], tasks: defaultTasks(), startDate: today() };
+    const kid = { id: newId('kid'), name: `Kid ${n + 1}`, buddy: defaultBuddy(FREE_SPECIES[n % FREE_SPECIES.length].id), seenUnlocks: [], color: COLORS[(n * 2) % COLORS.length], tasks: defaultTasks(), startDate: today() };
     state.kids.push(kid); save();
     ui.editKidId = kid.id; render();
   },
@@ -3336,7 +3364,13 @@ const actions = {
     document.querySelector(`.task-edit[data-task="${id}"]`)?.scrollIntoView({ block: 'nearest' });
   },
   'edit-kid-done': () => { ui.editKidId = null; render(); },
-  'kid-species': (el) => { changeSpecies(kidById(ui.editKidId), el.dataset.val); save(); render(); },
+  'kid-species': (el) => {
+    const kid = kidById(ui.editKidId);
+    const sp = speciesById(el.dataset.val);
+    if (!kid || !sp) return;
+    if (!hasSpecies(kid, sp.id)) { sounds.error(); toast(`${kid.name} can buy the ${sp.name.toLowerCase()} in the shop for ${sp.price} coins.`); return; }
+    changeSpecies(kid, sp.id); save(); render();
+  },
   wardrobe: () => {
     const lock = storeOpen(state, kidById(ui.kidId), today());
     if (!lock.open) { sounds.error(); toast(`🔒 ${storeLockText(lock)}`); return; }
@@ -3346,7 +3380,29 @@ const actions = {
   // picking another kind of buddy is a choice made on purpose: the picker opens from its own button
   'wardrobe-switch': () => { ui.speciesOpen = !ui.speciesOpen; sounds.tap(); render(); },
   'wardrobe-slot': (el) => { ui.slot = el.dataset.slot; render(); },
-  'wardrobe-species': (el) => { changeSpecies(kidById(ui.kidId), el.dataset.val); ui.speciesOpen = false; sounds.tap(); save(); render(); },
+  'wardrobe-species': (el) => {
+    const kid = kidById(ui.kidId);
+    const sp = speciesById(el.dataset.val);
+    if (!kid || !sp) return;
+    if (!hasSpecies(kid, sp.id)) { buySpecies(kid, sp, progressFor(kid)); return; }
+    changeSpecies(kid, sp.id); ui.speciesOpen = false; sounds.tap(); save(); render();
+  },
+  'buy-species': (el) => {
+    const kid = kidById(ui.kidId);
+    const sp = speciesById(el.dataset.val);
+    const prog = kid && progressFor(kid);
+    if (!kid || !sp?.price || hasSpecies(kid, sp.id) || prog.coins < sp.price || !storeOpen(state, kid, today()).open) { closeModal(); return; }
+    kid.spent = (kid.spent || 0) + sp.price;
+    kid.owned = [...(kid.owned || []), buddyOwnedId(sp.id)];
+    changeSpecies(kid, sp.id);
+    ui.speciesOpen = false;
+    save();
+    closeModal();
+    sounds.day();
+    confetti(80, 1600);
+    toast(`Say hi to your ${sp.name.toLowerCase()}!`);
+    render();
+  },
   'wardrobe-item': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);

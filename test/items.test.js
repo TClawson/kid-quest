@@ -259,3 +259,28 @@ test('new gear goes on sale on its Friday, one a week (Taylor, 2026-11-20)', asy
   assert.equal(new Set(days).size, days.length, 'one a week');
   assert.equal(releaseLabel('2026-11-27'), 'Friday, Nov 27');
 });
+
+test('the arctic fox is a buddy bought once for 300 coins', async () => {
+  const { buddySvg } = await import('../js/avatar.js');
+  const { SPECIES, hasSpecies, speciesById, buddyOwnedId } = await import('../js/items.js');
+  const sp = speciesById('arcticfox');
+  assert.equal(sp.price, 300);
+  assert.equal(SPECIES.filter((s) => s.price).map((s) => s.id).join(), 'arcticfox', 'the other buddies stay free');
+  const kid = { owned: [], buddy: { species: 'fox', outfit: {} } };
+  assert.equal(hasSpecies(kid, 'fox'), true);
+  assert.equal(hasSpecies(kid, 'arcticfox'), false, 'not until bought');
+  kid.owned.push(buddyOwnedId('arcticfox'));
+  assert.equal(hasSpecies(kid, 'arcticfox'), true);
+  assert.equal(hasSpecies(kid, 'unicorn'), false);
+  // it looks like neither the fox nor the cat, in every mood
+  for (const mood of ['happy', 'excited', 'proud', 'sleepy', 'sad']) {
+    const draw = (species) => buddySvg({ species, outfit: {} }, mood, { background: false });
+    assert.notEqual(draw('arcticfox'), draw('fox'));
+    assert.notEqual(draw('arcticfox'), draw('cat'));
+  }
+  // and it wears everything a buddy can wear
+  const draw = (outfit = {}) => buddySvg({ species: 'arcticfox', outfit }, 'happy', { background: false });
+  for (const item of ITEMS.filter((i) => ['hat', 'face', 'neck', 'music'].includes(i.slot) && (!i.species || i.species === 'arcticfox'))) {
+    assert.notEqual(draw({ [item.slot]: item.id }), draw(), `wears ${item.id}`);
+  }
+});

@@ -25,7 +25,7 @@ try {
     // -1200 spent = 1200 coins to spend
     saved.kids.push({
       id: 'kid_ava', name: 'Ava', color: '#ff6b6b', tasks: defaultTasks(), startDate: TEST_DAY, seenUnlocks: [],
-      owned: [], spent: -1200, buddy: { species: 'panda', outfit: { background: 'bg-meadow' } },
+      owned: ['buddy:arcticfox'], spent: -1200, buddy: { species: 'panda', outfit: { background: 'bg-meadow' } },
     });
     saved.log[TEST_DAY] = { kid_ava: { tasks: {}, excused: true } }; // the store opens once the day's chores are done
     await page.goto(site.url);
@@ -56,7 +56,7 @@ try {
     await page.waitForTimeout(1800);
 
     // Each other buddy sees only its own special, in its own tab.
-    const tabs = { fox: ['hat', 'hat-coonskin'], bear: ['hat', 'hat-beehive'], cat: ['neck', 'neck-yarn'], dino: ['neck', 'neck-jersey'], puppy: ['neck', 'neck-bone'], turtle: ['face', 'face-ninja'] };
+    const tabs = { fox: ['hat', 'hat-coonskin'], bear: ['hat', 'hat-beehive'], cat: ['neck', 'neck-yarn'], dino: ['neck', 'neck-jersey'], puppy: ['neck', 'neck-bone'], turtle: ['face', 'face-ninja'], arcticfox: ['hat', 'hat-icecrown'] };
     for (const [species, [slot, id]] of Object.entries(tabs)) {
       await page.click('[data-action="wardrobe-switch"]'); // the buddy picker opens on purpose
       await page.click(`[data-action="wardrobe-species"][data-val="${species}"]`);

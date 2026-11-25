@@ -11,6 +11,8 @@ export const SPECIES = [
   { id: 'dino', name: 'Dino' },
   { id: 'puppy', name: 'Puppy' },
   { id: 'turtle', name: 'Turtle' },
+  // price: a buddy the kid buys once with coins (kid.owned gets 'buddy:<id>'), then keeps
+  { id: 'arcticfox', name: 'Arctic fox', price: 300 },
 ];
 
 export const SLOTS = [
@@ -85,6 +87,7 @@ const BASE_ITEMS = [
   { id: 'neck-jersey', slot: 'neck', name: 'Basketball jersey', price: 1000, species: 'dino' },
   { id: 'neck-bone', slot: 'neck', name: 'Chew bone', price: 1000, species: 'puppy' },
   { id: 'face-ninja', slot: 'face', name: 'Ninja mask', price: 1000, species: 'turtle' },
+  { id: 'hat-icecrown', slot: 'hat', name: 'Ice crystal crown', price: 1000, species: 'arcticfox' },
 
   { id: 'music-keyboard', slot: 'music', name: 'Little keyboard', need: { pianoWeeks: 2 } },
   { id: 'music-upright', slot: 'music', name: 'Upright piano', need: { pianoWeeks: 4 } },
@@ -283,6 +286,19 @@ export function wandPower(summary) {
   if (!summary) return 0;
   if (!summary.total) return 1;
   return Math.max(0, Math.min(1, summary.done / summary.total));
+}
+
+// ---------- buddies bought with coins ----------
+// A species with a price is bought once in the shop; kid.owned then holds 'buddy:<id>'.
+export const speciesById = (id) => SPECIES.find((sp) => sp.id === id);
+export const buddyOwnedId = (species) => `buddy:${species}`;
+
+/** Whether the kid can switch to this kind of buddy: free ones always, a bought one once owned (or while it is the buddy they have). */
+export function hasSpecies(kid, species) {
+  const sp = speciesById(species);
+  if (!sp) return false;
+  if (!sp.price) return true;
+  return kid?.buddy?.species === species || (kid?.owned || []).includes(buddyOwnedId(species));
 }
 
 /** Map an old emoji avatar to a species, for kids created before buddies existed. */

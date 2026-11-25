@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildRig, render, Brain, CALM } from '../js/rig.js';
 
-const SPECIES = ['fox', 'bear', 'panda', 'cat', 'puppy', 'turtle', 'dino'];
+const SPECIES = ['fox', 'bear', 'panda', 'cat', 'puppy', 'turtle', 'dino', 'arcticfox'];
 const filled = (buf) => buf.filter(Boolean).length;
 
 test('every buddy builds and draws, with and without a background', () => {
@@ -77,5 +77,18 @@ test('the dino tail stays joined to its body as it wags', () => {
   for (const rot of [-70, -40, -20, -8, 8, 20, 40, 70]) {
     const pose = { ...b.pose(0, 1 / 12), tail: { rot }, fx: [] };
     assert.deepEqual(join(render(rig, pose)), rest, `tail turned ${rot}: comes loose`);
+  }
+});
+
+test('the arctic fox tail stays joined to its body as it wags', () => {
+  const rig = buildRig({ species: 'arcticfox', outfit: {} }, { background: false });
+  const t = rig.tail;
+  assert.equal(t.bend, true, 'the bushy tail bends instead of turning');
+  const u0 = t.c[0].findIndex((_, u) => t.c.some((r) => r[u]));
+  const join = (buf) => t.c.map((_, v) => buf[(t.y + v) * 24 + t.x + u0]);
+  const b = new Brain(5);
+  const rest = join(render(rig, { ...b.pose(0, 1 / 12), tail: { rot: 0 }, fx: [] }));
+  for (const rot of [-70, -40, -20, 20, 40, 70]) {
+    assert.deepEqual(join(render(rig, { ...b.pose(0, 1 / 12), tail: { rot }, fx: [] })), rest, `tail turned ${rot}: comes loose`);
   }
 });
