@@ -27,6 +27,13 @@ export function seasonProgress(key) {
   return Math.min(1, Math.max(0, (Date.UTC(y, m - 1, d) - start) / (end - start)));
 }
 
+/**
+ * December (the holiday month, 1 to 31 December; the day key is the family's local day): the
+ * lakes have their December fish and the photo train its December animals. They are gone on
+ * 1 January and come back next December.
+ */
+export const inDecember = (key) => /^\d{4}-12-\d{2}$/.test(String(key || ''));
+
 const KEY = 'kidquest.season';
 /** The season to show: a parent's try-out on this device if set, else the real one. */
 export function shownSeason(key, storage = globalThis.localStorage) {

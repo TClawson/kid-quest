@@ -45,6 +45,18 @@
 .h-plaque.empty { color: #7a4a1e; font-weight: 400; }
 @media (prefers-reduced-motion: reduce) { .h-bubble { animation: none; opacity: 0.6; } }
 
+/* December: the ornament tree's lights blink in three frames, a third of the bulbs at a time;
+   its tag (the ornament count) and the presents' tags float over the buddy, like the tank's */
+.h-lights { position: absolute; pointer-events: none; }
+.h-lights canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; opacity: 0; animation: h-twinkle 2.4s steps(1, end) infinite; }
+.h-lights canvas:nth-child(2) { animation-delay: -1.6s; }
+.h-lights canvas:nth-child(3) { animation-delay: -0.8s; }
+@keyframes h-twinkle { 0% { opacity: 1; } 33.333% { opacity: 0; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .h-lights canvas { animation: none; } .h-lights canvas:first-child { opacity: 1; } }
+.h-spot[data-spot="xtree"], .h-spot.h-gift { z-index: 185; }
+.h-spot[data-spot="xtree"] .h-tag { left: calc(100% + 10px); top: 20px; } /* beside the tree top: clear of its star and of the screen's top bar */
+.h-spot.h-gift:hover .h-tag, .h-spot.h-gift:focus-visible .h-tag { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+
 /* the fish book and the tank's fish picker */
 .fishbook h2, .tankpick h2 { margin: 0 0 4px; }
 .fb-count { margin: 0 0 8px; }
@@ -67,6 +79,10 @@
 .fb-fish.none b { color: var(--muted); letter-spacing: 1px; }
 .fb-fish.rare { border-color: #f0c040; }
 .fb-fish.rare::after { content: '⭐ Rare'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #a8701e; }
+.fb-fish.december { border: 3px solid transparent; background: linear-gradient(#fff, #fff) padding-box, repeating-linear-gradient(45deg, #e03131 0 5px, #fff 5px 10px) border-box; }
+.fb-fish.none.december { background: linear-gradient(#fdf3ee, #fdf3ee) padding-box, repeating-linear-gradient(45deg, #ffa8a8 0 5px, #fff 5px 10px) border-box; }
+.fb-fish.december::after { content: '❄️ December'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #c92a2a; }
+.fb-grid.mini .fb-fish.december::after { content: '❄️'; top: 1px; right: 2px; }
 .fb-fish .fb-tank { position: absolute; top: 3px; left: 4px; font-size: 0.8rem; }
 button.fb-fish { cursor: pointer; font: inherit; color: inherit; }
 button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink); }
@@ -84,6 +100,8 @@ button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink)
 .fp-mine .fp-badge { font-size: 1.8rem; line-height: 1; }
 .fp-mine b { display: block; font: 700 1.25rem/1.1 var(--px-font); }
 .fp-mine small { color: var(--muted); font-size: 0.8rem; }
+.fp-head.december { border-color: #e03131; }
+.fp-december { padding: 6px 10px; background: #fff5f5; border: 2px dashed #ff8787; border-radius: 6px; font-size: 0.9rem; }
 .fp-pretend { padding: 6px 10px; background: #f3f0ff; border: 2px dashed #b197fc; border-radius: 6px; font-size: 0.9rem; }
 .fp-scale { position: relative; margin: 6px 0 4px; padding-top: 16px; }
 .fp-bar { display: flex; height: 14px; border: 2px solid var(--px-ink); border-radius: 4px; overflow: hidden; }
@@ -244,3 +262,38 @@ button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink)
 .dig-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 6px 0; }
 .dig-facts dt { font-weight: 700; white-space: nowrap; }
 .dig-facts dd { margin: 0; }
+
+/* the ornament book (December, xmasbook.js): a card per map, its 4 ornaments and its star */
+.ornbook h2 { margin: 0 0 4px; }
+.ob-tinsel { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; padding: 6px 10px; background: #fffaf0; border: 2px dashed #f0c040; border-radius: 6px; }
+.ob-tin { font: 700 1.1rem/1 var(--px-font); color: #a8701e; }
+.ob-maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 0 10px; }
+.ob-map h3 small { white-space: nowrap; }
+.ob-map.done { border-color: #f0c040; background: linear-gradient(#fffaf0, #fff8e7); }
+.ob-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.ob-orn { position: relative; display: grid; grid-template-rows: 58px auto auto; justify-items: center; align-items: center; text-align: center; gap: 1px; padding: 5px 2px 4px; background: #fff; border: 2px solid #e8d6b8; border-radius: 6px; min-width: 0; font: inherit; color: inherit; }
+button.ob-orn { cursor: pointer; }
+button.ob-orn:hover, button.ob-orn:focus-visible { border-color: var(--px-ink); }
+.ob-pic { position: relative; display: block; width: 56px; height: 56px; }
+.ob-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+.ob-pic.twinkle .ob-f1 { animation: ob-twinkle 1.2s steps(1, end) infinite; }
+@keyframes ob-twinkle { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 1; } }
+.ob-orn b { font-size: 0.72rem; line-height: 1.1; overflow-wrap: anywhere; }
+.ob-orn small { font: 700 0.68rem/1 var(--px-font); color: var(--muted); }
+.ob-orn.rare { border-color: #f0c040; background: #fffaf0; }
+.ob-orn.rare small { color: #a8701e; }
+.ob-orn.super { border-color: #b197fc; background: linear-gradient(#fbf6ff, #fff); }
+.ob-orn.super small { color: #7048e8; }
+.ob-star { display: flex; align-items: center; gap: 8px; width: 100%; margin: 5px 0 2px; padding: 3px 8px 3px 4px; text-align: left; background: linear-gradient(90deg, #fff9e0, #fff); border: 2px solid #ffd23f; border-radius: 6px; font: inherit; color: inherit; }
+.ob-star .ob-pic { width: 44px; height: 44px; flex: none; }
+.ob-star b { display: block; font-size: 0.8rem; }
+.ob-star small { font: 700 0.68rem/1.1 var(--px-font); color: #c98a00; }
+button.ob-star { cursor: pointer; }
+button.ob-star:hover, button.ob-star:focus-visible { border-color: var(--px-ink); }
+.ob-star.on-top { border-color: #f08c00; box-shadow: 0 0 0 2px #ffe8a3; background: linear-gradient(90deg, #ffefb0, #fff9e0); }
+.ob-star.none { background: #f4ede0; border: 2px dashed #e0cfae; }
+.ob-star.none b, .ob-star.none small { color: var(--muted); }
+.ob-orn.none { background: #f4ede0; border-style: dashed; }
+.ob-orn.none b { color: var(--muted); letter-spacing: 1px; }
+@media (prefers-reduced-motion: reduce) { .ob-pic.twinkle .ob-f1 { animation: none; opacity: 0; } }
+.modal-card:has(.ornbook) { width: min(780px, 100%); }

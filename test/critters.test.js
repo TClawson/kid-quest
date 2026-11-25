@@ -122,3 +122,19 @@ test('the camera: three versions for gems, each one better, and a held camera me
   assert.ok(!cameraFor(1).zoom && cameraFor(2).zoom && cameraFor(3).tele);
   assert.equal(MOVES.filter((m) => m.kind === 'camera').length, 3);
 });
+
+test('December animals: one rare one on every map, only from 1 to 31 December, with real facts and a fun line', () => {
+  const dec = CRITTERS.filter((c) => c.december);
+  assert.deepEqual(dec.map((c) => c.map).sort(), [...CRITTER_MAPS].sort(), 'one on every map');
+  for (const c of dec) {
+    assert.equal(c.rarity, 'rare', c.id);
+    assert.ok(c.fun?.length > 20, `${c.id} fun`);
+    assert.deepEqual(c.seasons, ['winter'], c.id);
+    const ids = (day) => oddsFor(c.map, 'winter', 'snow', { day }).map(([x]) => x.id);
+    assert.ok(ids('2026-12-01').includes(c.id) && ids('2026-12-31').includes(c.id), `${c.id} comes in December`);
+    assert.ok(!ids('2026-11-30').includes(c.id) && !ids('2027-01-01').includes(c.id) && !ids(null).includes(c.id), `${c.id} is gone outside December`);
+    assert.ok(!oddsFor(c.map, 'winter', 'snow').map(([x]) => x.id).includes(c.id), 'no day, no December animal');
+  }
+  // never the Wanted animal outside December
+  for (const day of ['2026-11-21', '2027-01-05']) for (const map of CRITTER_MAPS) assert.ok(!critterById(wantedOf(day, map, 'winter'))?.december, `${day} ${map}`);
+});

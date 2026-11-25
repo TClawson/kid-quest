@@ -253,6 +253,12 @@ export const REAL_FISH = {
     eats: 'Squid and small fish of the deep water.',
     wow: 'In 2015 scientists found that the opah is the first fish known to be warm-blooded through its whole body, like we are. Flapping its red fins all the time makes heat, and fatty tissue keeps it in. Being warm keeps its brain quick in cold, deep water.',
   },
+  midshipman: {
+    name: 'Plainfin midshipman', w: [0.03, 0.08, 0.2, 0.5, 1],
+    where: 'Plainfin midshipman live along the Pacific coast of North America, from Alaska to Mexico. They spend the day buried in sand and mud, and come out at night.',
+    eats: 'Shrimp, crabs, worms and little fish, snapped up in the dark.',
+    wow: 'A midshipman has rows of tiny lights along its belly, like the shiny buttons on a sailor\'s coat, which is how it got its name. On summer nights the dads hum to call the moms, a buzzing drone so loud that people on houseboats in California once thought it was a machine, or even aliens!',
+  },
   unicornfish: {
     name: 'Bluespine unicornfish', w: [0.3, 1, 3, 6, 10],
     where: 'Unicornfish live on coral reefs in the warm Indian and Pacific Oceans, from Africa to Hawaii.',
@@ -271,7 +277,29 @@ const REAL_OF = {
   'fjord-bluegill': 'herring', 'fjord-smallmouth': 'dollyvarden', 'fjord-largemouth': 'sockeye', 'fjord-pike': 'lingcod', 'fjord-catfish': 'halibut', 'fjord-king': 'kingsalmon',
 };
 /** The pretend maps' fish take after a real cousin: the same kind of fish at Forest Lake, but for these. */
-const COUSIN_OF = { 'space-moon': 'opah', 'rainbow-unicorn': 'unicornfish' };
+const COUSIN_OF = {
+  'space-moon': 'opah', 'rainbow-unicorn': 'unicornfish',
+  // the December fish (fishing.js HOLIDAY_FISH) are all pretend, each with a real cousin
+  'meadow-globe': 'bluegill', 'sunset-cane': 'moray', 'ocean-present': 'puffer', 'space-lights': 'midshipman', 'castle-jester': 'pike',
+  'volcano-cocoa': 'carp', 'rainforest-poinsettia': 'piranha', 'fjord-aurora': 'dollyvarden', 'rainbow-mint': 'puffer', 'galaxy-tree': 'angelfish',
+};
+
+/**
+ * A December fish's own pretend fact, for its page in the fish book (its real cousin's facts
+ * come after it).
+ */
+export const DECEMBER_FACTS = {
+  'meadow-globe': 'Shake the lake and it snows inside it! Forest Lake ice fishers say a snow-globe fish only comes up when it hears sleigh bells, so ring yours on the way to the water.',
+  'sunset-cane': 'Candy-cane eels hang by their crooks from the lagoon\'s mangrove roots to nap. They taste like peppermint, so even the barracudas leave them alone.',
+  'ocean-present': 'Nobody knows what is inside a present boxfish. Every December it swims round the reef with its bow on, and the clownfish all try to guess.',
+  'space-lights': 'Its lights blink on one bulb at a time when it is happy. On the moon, a whole crater of them twinkling is how you know it is nearly Christmas.',
+  'castle-jester': 'The jester pike jingles when it swims, so the moat\'s fish always hear it coming. It does a somersault when it is caught, just to make the king laugh.',
+  'volcano-cocoa': 'Lava Lake keeps it just the right warmth: not too hot, not too cold. Its marshmallows never melt, and it shares them with the ember minnows.',
+  'rainforest-poinsettia': 'Its flower opens a little more each day of December and is all the way open on Christmas morning. It has piranha teeth, but it only nibbles fruit in December.',
+  'fjord-aurora': 'On the longest nights its stripes glow just like the northern lights above the fjord. Eagles swoop down to look, thinking the sky fell into the water.',
+  'rainbow-mint': 'When it puffs up, Candy Pond smells like peppermint for a whole day. Its tail is the twist of its own wrapper.',
+  'galaxy-tree': 'It decorates itself! Every year it picks up a new bauble from the stars at Star Lake, and its star topper shines brightest on Christmas Eve.',
+};
 const ROLE_COUSIN = { bluegill: 'bluegill', smallmouth: 'smallmouth', largemouth: 'largemouth', pike: 'pike', catfish: 'channelcat' };
 /** What the pretend maps' rare fish swim like (fishing.js SPOTS special.as), for their cousins. */
 const RARE_ROLE = { 'volcano-dragon': 'pike', 'galaxy-comet': 'pike' };
@@ -289,7 +317,7 @@ export function realFish(id) {
     key = COUSIN_OF[s] || ROLE_COUSIN[role] || ROLE_COUSIN[RARE_ROLE[s]];
     pretend = true;
   }
-  return key && REAL_FISH[key] ? { key, ...REAL_FISH[key], pretend } : null;
+  return key && REAL_FISH[key] ? { key, ...REAL_FISH[key], pretend, ...(DECEMBER_FACTS[s] ? { december: DECEMBER_FACTS[s] } : {}) } : null;
 }
 
 // where on the hidden size (0 to 1.6) each of a fish's five weights falls

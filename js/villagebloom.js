@@ -11,6 +11,7 @@
 //     grown trees and blooms. One animation loop, paused while the page is hidden.
 // The painted layers are cached per (map, today, garden hash), so a redraw doesn't repaint them.
 
+import { nightSprite } from './nightfx.js';
 import { villageGarden, critterLevel, familyMark } from './familygarden.js';
 import { addDays } from './logic.js';
 
@@ -266,7 +267,8 @@ export function mountBloom(section, L, data, ground, se, cam) {
   if (!bloom || (!bloom.trees.length && !bloom.flowers.length)) return;
   const layers = layersFor(L.id, bloom, se);
   // flowers go flat on the ground
-  ground.getContext('2d').drawImage(layers.ground, 0, 0);
+  // (at night, nightfx.js: the flowers in the night's colors, like the land under them)
+  ground.getContext('2d').drawImage(se?.night ? nightSprite(layers.ground, L.id) : layers.ground, 0, 0);
   // trees stand where the buddy and villagers stand: sorted by their feet
   const world = section.querySelector('.village-world');
   const before = section.querySelector('.v-buddy');

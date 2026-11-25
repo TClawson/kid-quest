@@ -86,6 +86,16 @@ const BASE_ITEMS = [
   { id: 'neck-bone', slot: 'neck', name: 'Chew bone', price: 1000, species: 'puppy' },
   { id: 'face-ninja', slot: 'face', name: 'Ninja mask', price: 1000, species: 'turtle' },
 
+  // December only (design-v2 section 7): sold in the shop's Holiday tab 1 to 31 Dec, hidden the
+  // rest of the year (inSeason). Owned ones stay forever and show in their own tabs all year.
+  { id: 'hat-santa', slot: 'hat', name: 'Santa hat', price: 100, holiday: 'xmas' },
+  { id: 'hat-elf', slot: 'hat', name: 'Elf hat', price: 85, holiday: 'xmas' },
+  { id: 'hat-antlers', slot: 'hat', name: 'Reindeer antlers', price: 85, holiday: 'xmas' },
+  { id: 'hat-earmuffs', slot: 'hat', name: 'Earmuffs', price: 60, holiday: 'xmas' },
+  { id: 'neck-knitscarf', slot: 'neck', name: 'Knit scarf', price: 55, holiday: 'xmas' },
+  { id: 'neck-xmas-sweater', slot: 'neck', name: 'Light-up sweater', price: 140, holiday: 'xmas', note: 'Its lights blink!' },
+  { id: 'hand-mittens', slot: 'hand', name: 'Mittens', price: 40, holiday: 'xmas' },
+
   { id: 'music-keyboard', slot: 'music', name: 'Little keyboard', need: { pianoWeeks: 2 } },
   { id: 'music-upright', slot: 'music', name: 'Upright piano', need: { pianoWeeks: 4 } },
   { id: 'music-rock', slot: 'music', name: 'Rock star piano', need: { pianoWeeks: 6 } },
@@ -106,6 +116,7 @@ export const COLOR_VERSIONS = {
   'face-round': { colors: ['red', 'blue', 'green', 'pink', 'gold'] },
   'hat-beanie': { colors: ['red', 'green', 'teal', 'purple', 'pink'] },
   'neck-scarf': { colors: ['red', 'yellow', 'green', 'blue', 'purple'] },
+  'neck-knitscarf': { price: 55, colors: ['green', 'blue', 'purple'] },
 };
 
 /** "Blue" + "Ball cap" -> "Blue ball cap" */
@@ -218,10 +229,17 @@ export const ITEMS = [...BASE_ITEMS, ...SPORT_ITEMS, ...FURNITURE].flatMap((item
     price: cv.price || item.price,
     base: item.id,
     color,
+    ...(item.holiday ? { holiday: item.holiday } : {}),
   }))];
 });
 
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
+
+/**
+ * Whether an item is on sale on this day: December-only items (holiday: 'xmas') are sold 1 to 31
+ * Dec and hidden the rest of the year. A kid who owns one keeps it. day: 'YYYY-MM-DD'.
+ */
+export const inSeason = (item, day) => !item?.holiday || (item.holiday === 'xmas' && /^\d{4}-12-/.test(day || ''));
 
 /**
  * On show in the shop, but not for sale yet: marked soon, or new gear before its Friday
@@ -242,8 +260,9 @@ export function isUnlocked(item, progress) {
 // Color versions came later, so they were never level items.
 // Buddy specials came later too.
 // Furniture came later too, and so did the wizard set.
+// Holiday items too: they are only ever sold in December.
 const LATER = new Set(['hat-wizard-star', 'face-beard', 'neck-robe', 'hand-wand']);
-export const LEGACY_LEVEL = (item) => (item.price && !item.base && !item.species && !item.home && !LATER.has(item.id) ? item.price / 20 : Infinity);
+export const LEGACY_LEVEL = (item) => (item.price && !item.base && !item.species && !item.home && !item.holiday && !LATER.has(item.id) ? item.price / 20 : Infinity);
 
 /** Whether a buddy of this species can have this item: buddy specials are for their own species only. */
 export const fitsSpecies = (item, species) => !item?.species || item.species === species;

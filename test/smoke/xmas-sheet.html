@@ -1,0 +1,117 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../css/pixel.css">
+<style>
+body { background: #1e1a26; margin: 0; padding: 12px; font-family: 'Jersey 10', sans-serif; color: #fff; }
+canvas { image-rendering: pixelated; display: block; }
+.row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+.cell { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 26px; }
+.card { background: #fff6e0; border: 4px solid #3b2235; border-radius: 8px; padding: 14px 18px; color: #3b2235; text-align: center; }
+.card h2 { margin: 0 0 8px; font-weight: 400; font-size: 40px; line-height: 1; }
+.card p { margin: 8px 0 0; font-size: 26px; }
+.v-letter { position: relative; width: 468px; aspect-ratio: 156 / 108; }
+.v-letter canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.v-letter-text { position: absolute; left: 12%; right: 8%; top: 16%; bottom: 14%; font-size: 23px; line-height: 1.02; color: #5a2a2a; text-align: left; }
+.v-letter-text b { display: block; font-weight: 400; font-size: 28px; color: #a82a3a; margin-left: 7%; }
+.v-sign { display: block; text-align: right; margin: 4px 3% 0 0; font-size: 26px; color: #a82a3a; }
+.v-letter-text::before { content: ''; float: right; width: 0; height: 64%; }
+.v-seal-room { float: right; clear: right; width: 17%; height: 36%; }
+.tag { font-size: 24px; color: #ffe8a0; }
+</style></head>
+<body><div id="out" style="display:inline-block"></div>
+<script type="module">
+// The December art on its own, for previews (test/smoke/xmas-art-preview.mjs):
+//   ?mode=inside      the advent house's wall of doors, as the kid sees it (3x)
+//   ?mode=houses      every map's advent house, by day and at night
+//   ?mode=team        the sleigh team's four flying frames, by day and at night
+//   ?mode=prizes      the present opened: 5 gems, 10 coins, 2 game plays; and Santa's letter
+//   ?mode=letter      Santa's letter on its own
+//   ?mode=bits        each map's tree, lantern and wreath, day and night, three twinkle frames
+import { adventWallArt, adventHouseArt, ADVENT_LOOK } from '../../js/adventart.js';
+import { teamArt, presentArt, openedArt, letterArt, TRADITION } from '../../js/santaart.js';
+import { xmasTreeArt, lanternArt, wreathOf, XMAS } from '../../js/xmaslights.js';
+import { nightColor } from '../../js/nightfx.js';
+
+const q = new URLSearchParams(location.search);
+const mode = q.get('mode') || 'inside';
+const K = Number(q.get('scale') || 3);
+const out = document.getElementById('out');
+const big = (c, k = K, bg = null) => {
+  const b = document.createElement('canvas'); b.width = c.width * k; b.height = c.height * k;
+  const x = b.getContext('2d'); x.imageSmoothingEnabled = false;
+  if (bg) { x.fillStyle = bg; x.fillRect(0, 0, b.width, b.height); }
+  x.drawImage(c, 0, 0, b.width, b.height); return b;
+};
+const cell = (el, label) => { const d = document.createElement('div'); d.className = 'cell'; d.append(el); if (label) { const s = document.createElement('div'); s.textContent = label; d.append(s); } return d; };
+const row = () => { const r = document.createElement('div'); r.className = 'row'; out.append(r); return r; };
+await document.fonts.load('26px "Jersey 10"');
+
+if (mode === 'inside') {
+  const f = Number(q.get('frame') || 0);
+  const today = 11;
+  // the real ornaments come from xmasart.js (the buddy's-house work): in this checkout once it is merged, or
+  // from another checkout that xmas-sheet.mjs serves at /house/ (KQ_HOUSE=...); else the stand-in pictures
+  let ornamentArt = null;
+  for (const u of ['../../js/xmasart.js', '/house/js/xmasart.js']) { try { ({ ornamentArt } = await import(u)); break; } catch { /* not here */ } }
+  const opened = {
+    1: 'coins', 2: 'gem', 3: { kind: 'ornament', id: 'orn-acorn' }, 4: 'coins', 5: { kind: 'golden', id: 'orn-owl' }, 6: 'game',
+    7: 'gem', 8: { kind: 'ornament', id: 'orn-toadstool' }, 9: { kind: 'outfit', item: 'neck-knitscarf', color: 'blue' },
+  };
+  const art = adventWallArt({ mapId: q.get('map') || 'bg-meadow', today, opened, missed: [10], frame: f, prizeArt: ornamentArt });
+  const card = document.createElement('div'); card.className = 'card';
+  card.innerHTML = '<h2>Advent calendar</h2>';
+  card.append(big(art));
+  const p = document.createElement('p'); p.innerHTML = 'Day 11: today\'s door is glowing. Door 10 waited for you too!<br>Finish today\'s chores to open them.'; card.append(p);
+  out.append(card);
+}
+
+if (mode === 'houses') {
+  const maps = Object.keys(ADVENT_LOOK);
+  for (const night of [false, true]) {
+    const r = row();
+    for (const m of maps) r.append(cell(big(adventHouseArt(m, { night: night ? m : null, frame: 0 }), K, night ? nightColor('#86c4ec', m) : '#cfe0d8'), `${m.replace('bg-', '')}${night ? ' night' : ''}`));
+  }
+}
+
+if (mode === 'team') {
+  for (const night of [false, true]) {
+    const r = row();
+    for (let f = 0; f < 4; f += 1) r.append(cell(big(teamArt(f, { night: night ? 'bg-meadow' : null }), K, night ? '#1e2650' : '#a8c8e8'), `frame ${f + 1}${night ? ' (night)' : ''}`));
+  }
+}
+
+if (mode === 'prizes' || mode === 'letter') {
+  const card = document.createElement('div'); card.className = 'card';
+  if (mode === 'prizes') {
+    card.innerHTML = '<h2>A present from Santa!</h2>';
+    const r = document.createElement('div'); r.className = 'row'; r.style.justifyContent = 'center';
+    for (const [k, label] of [['gems', '5 gems'], ['coins', '10 coins'], ['plays', '2 extra game plays']]) {
+      const c = cell(big(openedArt(k, 0), K), label); c.style.color = '#3b2235'; r.append(c);
+    }
+    card.append(r);
+  }
+  const L = letterArt();
+  const v = document.createElement('div'); v.className = 'v-letter'; v.style.margin = '10px auto 0';
+  v.append(big(L)); const t = document.createElement('div'); t.className = 'v-letter-text';
+  t.innerHTML = `<i class="v-seal-room"></i><b>Ho ho ho, Ava!</b>${TRADITION}<span class="v-sign">Love, Santa</span>`; v.append(t);
+  card.append(v);
+  out.append(card);
+}
+
+if (mode === 'bits') {
+  const maps = Object.keys(XMAS);
+  for (const m of maps) {
+    const r = row();
+    for (const night of [false, true]) for (let f = 0; f < 3; f += 1) {
+      const nm = night ? m : null;
+      const c = document.createElement('canvas'); c.width = 64; c.height = 54; const x = c.getContext('2d');
+      x.fillStyle = night ? nightColor('#e8eef8', m) : '#e8eef8'; x.fillRect(0, 0, 64, 54);
+      const t = xmasTreeArt(m, { night: nm, frame: f }); x.drawImage(t, 22 - t.ax, 52 - t.ay);
+      const l = lanternArt(m, { night: nm, frame: f }); x.drawImage(l, 50 - l.ax, 52 - l.ay);
+      const w = wreathOf(XMAS[m].wreath, { night: nm, frame: f }); x.drawImage(w, 52 - w.ax, 10 - w.ay);
+      r.append(cell(big(c), f === 0 ? `${m.replace('bg-', '')}${night ? ' night' : ''}` : ''));
+    }
+  }
+}
+document.body.dataset.ready = '1';
+</script></body></html>

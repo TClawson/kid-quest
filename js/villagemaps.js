@@ -86,6 +86,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[78, 488, MUSIC], [296, 368, LAUNDRY], [170, 382], [262, 422], [170, 496], [252, 474], [64, 366], [130, 530]],
     },
     labels: { morning: [158, 216, '⬆ 🌅 Morning quests'], afternoon: [120, 351, '⬇ ☀️ After-school quests'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [318, 230], tree: [410, 302], lanterns: [[213, 202], [232, 271], [214, 372], [235, 438], [192, 143], [123, 141], [256, 143], [323, 141]] },
   },
 
   // ---------- Sunset Beach: huts on the sand, a lagoon down the middle, the sea at the bottom ----------
@@ -141,6 +143,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[300, 386, MUSIC], [330, 440, LAUNDRY], [340, 252], [420, 214], [270, 460], [420, 452], [258, 500], [400, 420]],
     },
     labels: { morning: [104, 282, '⬅ 🌅 Morning quests'], afternoon: [346, 196, '➡ ☀️ After-school quests'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [122, 246], tree: [118, 404], lanterns: [[96, 162], [361, 237], [313, 272], [314, 330], [311, 455]] },
     pond: { lip: '#d9a35f', water: '#3bc9db', deep: '#1098ad', light: '#66d9e8', shine: '#e3fafc', pads: false },
     clearing: { fill: ['#e5b574', '#d9a35f', '#fde3b6'], grass: '#fde3b6' },
   },
@@ -193,6 +197,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[300, 520, MUSIC], [146, 450, LAUNDRY], [226, 440], [290, 420], [60, 450], [414, 552], [190, 380], [330, 560]],
     },
     labels: { morning: [110, 330, '⬆ 🌅 Morning quests'], afternoon: [370, 410, '⬇ ☀️ After-school quests'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [136, 226], tree: [282, 240], lanterns: [[230, 216], [263, 305], [242, 419], [263, 485], [192, 149], [256, 149], [324, 171]] },
     pond: { lip: '#c9a35d', water: '#163e73', deep: '#0f2d57', light: '#1c5d99', shine: '#4dabf7', pads: false },
     clearing: { fill: ['#f0d9a0', '#c9a35d', '#fff4d1'], grass: '#4fa3e3' },
   },
@@ -247,6 +253,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[120, 466, MUSIC], [220, 494, LAUNDRY], [200, 380], [360, 376], [250, 330], [60, 330], [420, 410], [160, 530]],
     },
     labels: { morning: [210, 260, '⬆ 🌅 Morning quests'], afternoon: [400, 300, '⬇ ☀️ After school'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [244, 442], tree: [190, 530], lanterns: [[80, 167], [206, 159], [273, 157], [311, 265], [312, 339], [311, 405], [356, 441], [332, 181]] },
     pond: { lip: '#45476b', water: '#37b24d', deep: '#2b8a3e', light: '#69db7c', shine: '#b2f2bb', pads: false },
     clearing: { fill: ['#9a9fc4', '#6a6f96', '#b4b8d8'], grass: '#7d82a8' },
   },
@@ -299,6 +307,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[146, 590, MUSIC], [160, 520, LAUNDRY], [300, 330], [80, 470], [332, 470], [246, 540], [80, 400], [400, 400]],
     },
     labels: { morning: [224, 262, '⬆ 🌅 Morning quests in the castle'], afternoon: [224, 350, '⬇ ☀️ After-school quests in town'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [52, 108], tree: [316, 130], lanterns: [[213, 179], [236, 337], [213, 403], [235, 471], [213, 539], [168, 365], [101, 389], [269, 389]] },
     pond: {},
   },
 
@@ -348,6 +358,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[300, 470, MUSIC], [220, 450, LAUNDRY], [200, 340], [86, 372], [300, 400], [420, 330], [186, 516], [420, 500]],
     },
     labels: { morning: [104, 256, '⬆ 🌅 Morning quests'], afternoon: [290, 262, '⬇ ☀️ After-school quests'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [377, 192], tree: [158, 466], lanterns: [[87, 168], [140, 207], [164, 314], [164, 382], [183, 448], [186, 149], [272, 481]] },
     pond: { lip: '#2b211d', water: '#ff6b1a', deep: '#e03131', light: '#ff922b', shine: '#ffe066', pads: false },
     clearing: { fill: ['#8a7466', '#75645c', '#b8a395'], grass: '#5b4b45' },
   },
@@ -402,6 +414,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[310, 150, MUSIC], [400, 350, LAUNDRY], [290, 270], [420, 250], [306, 350], [270, 210], [420, 160], [266, 160]],
     },
     labels: { morning: [104, 196, '⬅ 🌅 Morning quests'], afternoon: [346, 268, '➡ ☀️ After-school quests'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [188, 450], tree: [157, 538], lanterns: [[80, 177], [146, 311], [295, 310], [360, 311], [379, 187], [161, 365], [139, 433], [145, 491]] },
     pond: { lip: '#6e4b2a', water: '#1c9c8c', deep: '#127a6e', light: '#38d9a9', shine: '#96f2d7', pads: true },
     clearing: { fill: ['#8b5a2b', '#6e4b2a', '#b07443'], grass: '#2f9e44' },
   },
@@ -457,6 +471,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[150, 470, MUSIC], [260, 436, LAUNDRY], [150, 356], [400, 370], [60, 390], [260, 380], [110, 540], [190, 470]],
     },
     labels: { morning: [224, 236, '⬆ 🌅 Morning quests'], afternoon: [98, 336, '⬇ ☀️ After-school quests'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [347, 393], tree: [260, 486], lanterns: [[213, 169], [236, 311], [213, 377], [236, 447], [195, 220], [256, 221], [321, 200], [192, 509]] },
     pond: { lip: '#ffffff', water: '#f783ac', deep: '#e64980', light: '#faa2c1', shine: '#fff0f6', pads: false },
     clearing: { fill: ['#fff9db', '#ffec99', '#ffffff'], grass: '#c3fae8' },
   },
@@ -503,6 +519,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[300, 520, MUSIC], [124, 386, LAUNDRY], [170, 380], [300, 390], [100, 330], [400, 400], [268, 446], [420, 470]],
     },
     labels: { morning: [370, 196, '⬆ 🌅 Morning quests'], afternoon: [350, 268, '⬇ ☀️ After-school quests'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [181, 242], tree: [196, 440], lanterns: [[360, 165], [232, 216], [235, 307], [235, 375], [235, 443], [284, 411], [177, 160], [112, 181]] },
     pond: { lip: '#5f3dc4', water: '#7950f2', deep: '#5f3dc4', light: '#9775fa', shine: '#ffffff', pads: false },
     clearing: { fill: ['#5f3dc4', '#4527a0', '#7950f2'], grass: '#3a2878' },
   },
@@ -599,6 +617,8 @@ export const VILLAGE_MAPS = {
       afternoon: [[112, 614, MUSIC], [206, 618, LAUNDRY], [180, 486], [346, 530], [130, 488], [244, 626], [298, 582], [46, 606]],
     },
     labels: { morning: [224, 214, '⬆ 🌅 Morning quests'], afternoon: [190, 484, '⬇ ☀️ After-school quests'] },
+    // December (xmaslights.js, adventart.js): the advent house's doorstep, the lit tree's foot and the path lanterns, picked by hand on open ground
+    xmas: { advent: [316, 232], tree: [208, 470], lanterns: [[169, 155], [221, 140], [340, 139], [100, 153], [242, 510], [243, 652], [178, 651]] },
     pond: { lip: '#6a6676', water: '#2a8896', deep: '#1d6a82', light: '#49a7a8', shine: '#e6faf2', pads: false },
     clearing: { fill: ['#c6c0b8', '#a8a4a6', '#e0d8c8'], grass: '#78b862' },
   },
@@ -741,6 +761,7 @@ export function villageLayout(theme) {
     coach: spec.coach,
     start: spec.start,
     labels: spec.labels,
+    xmas: spec.xmas || null, // December: hand-picked spots for the advent house, the tree and the lanterns (xmaslights.js)
     slots: {
       morning: spec.slots.morning.map(([x, y, likes]) => ({ x, y, likes })),
       afternoon: spec.slots.afternoon.map(([x, y, likes]) => ({ x, y, likes })),

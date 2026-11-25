@@ -35,6 +35,9 @@ import { spotById, homeLayout, isPlaced, placeFurniture, needsMusicHouse, tankOf
 import { houseRecord, openTurntable, spinning, stopRecord, setTurntableSync } from './turntable.js';
 import { applyGrants, restoreFromRecord, restoreBackup, restoreTasks, mergeBackup } from './grants.js';
 import { furnitureThumb } from './houseart.js';
+import { xmasHouse, isXmas, starsWon } from './xmas.js';
+import { ornamentBookHtml } from './xmasbook.js';
+import { ornamentArt, ornamentSilhouette, artCanvas } from './xmasart.js';
 import { SEEDS, DECOR, KINDS, seedById, decorById, gardenSpotById, gardenLayout, placeDecor, buySeed, seedCount, thirsty, gardenView, gardenOf, plantableTasks, plant, digUp, relink, harvest, setWatered, houseHarvest } from './gardenrules.js';
 import { seedThumb, decorThumb } from './gardenart.js';
 import { gardenHtml, mountGardens, cameInGarden } from './garden.js';
@@ -57,7 +60,7 @@ import { viewLab, mountLab, labActions, openLab } from './notolab.js';
 import { viewCompose, mountCompose, composeActions, openCompose } from './composedesk.js';
 import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
 import {
-  SPECIES, SLOTS, ITEMS, itemById, comingSoon, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
+  SPECIES, SLOTS, ITEMS, itemById, comingSoon, inSeason, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies,
   SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
 } from './items.js';
 import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
@@ -1424,6 +1427,7 @@ function houseView(kid, list, mood) {
     hud: kidHud(kid),
     little: playsLittle(kid),
     dig: hasDig(kid) ? digShow(kid) : null,
+    xmas: xmasHouse(state, kid, t),
   });
 }
 
@@ -1437,6 +1441,7 @@ const houseHandlers = {
   onStand: () => openDisplayPicker(kidById(ui.kidId), 'stand'),
   onPedestal: () => openDisplayPicker(kidById(ui.kidId), 'pedestal'),
   onPuzzle: () => openLittleGames('puzzle'),
+  onOrnaments: () => openOrnamentBook(kidById(ui.kidId)),
   spinning: (kidId) => spinning(kidId),
   onGarden: () => goGarden('house'),
   onExit: () => {
@@ -1564,17 +1569,17 @@ function openFishBook(kid, scrollTo = 0) {
         <h3>🎣 ${esc(page.name)} <small>${n} of ${page.fish.length}</small></h3>
         <div class="fb-grid ${n ? '' : 'mini'}">
           ${page.fish.map((f) => (f.record ? `
-            <button class="fb-fish ${f.rare ? 'rare' : ''}" data-action="fish-page" data-species="${esc(f.id)}">
+            <button class="fb-fish ${f.rare ? 'rare' : ''} ${f.december ? 'december' : ''}" data-action="fish-page" data-species="${esc(f.id)}">
               ${inTank.has(f.id) ? '<span class="fb-tank" title="In your tank">🐟</span>' : ''}
               <img src="${fishImg(f.id)}" alt="">
               <b>${esc(f.name)}</b>
               <span class="fb-size">${fishBadge(f.id, f.record)}${fmtWeight(recordLb(f.id, f.record))}</span>
               <small>${esc(fishDate(f.record.date))}</small>
             </button>` : `
-            <div class="fb-fish none ${f.rare ? 'rare' : ''}" title="${f.rare ? 'A rare fish!' : 'Not caught yet'}">
+            <div class="fb-fish none ${f.rare ? 'rare' : ''} ${f.december ? 'december' : ''}" title="${f.december ? 'Only in December!' : f.rare ? 'A rare fish!' : 'Not caught yet'}">
               <img src="${fishImg(f.id, true)}" alt="">
               <b>???</b>
-              <small>${f.rare ? 'A rare fish!' : 'Not caught yet'}</small>
+              <small>${f.december ? 'Only in December!' : f.rare ? 'A rare fish!' : 'Not caught yet'}</small>
             </div>`)).join('')}
         </div>
       </div>`;
@@ -1588,6 +1593,21 @@ function openFishBook(kid, scrollTo = 0) {
       <button class="btn" data-action="modal-close">Close</button>
     </div>`);
   if (scrollTo) { const card = $modal.querySelector('.modal-card'); if (card) card.scrollTop = scrollTo; }
+}
+
+// December: the ornament book (xmasbook.js), its pictures drawn once each (xmasart.js)
+const ornImgCache = new Map();
+function ornImg(id, { grey = false, frame = 0 } = {}) {
+  const key = `${id}:${grey ? 'grey' : frame}`;
+  if (!ornImgCache.has(key)) {
+    const art = grey ? ornamentSilhouette(id) : ornamentArt(id, frame);
+    ornImgCache.set(key, art ? artCanvas(art, document).toDataURL() : '');
+  }
+  return ornImgCache.get(key);
+}
+function openOrnamentBook(kid) {
+  if (!kid) return;
+  openModal(ornamentBookHtml(kid, ornImg));
 }
 
 /** A small / typical / trophy badge for a record. */
@@ -1618,17 +1638,18 @@ function openFishPage(kid, id) {
   openModal(`
     <div class="fishpage" style="--kid:${esc(kid.color)}">
       <button class="btn ghost small-btn fp-back" data-action="fish-book-back">◀ Fish book</button>
-      <div class="fp-head ${sp.rare ? 'rare' : ''}">
+      <div class="fp-head ${sp.rare ? 'rare' : ''} ${sp.december ? 'december' : ''}">
         <img src="${fishImg(id)}" alt="">
         <div>
-          <h2>${sp.rare ? '⭐ ' : ''}${esc(sp.name)}</h2>
-          <p class="muted small">${esc(sp.mapName)}</p>
+          <h2>${sp.rare ? '⭐ ' : ''}${sp.december ? '❄️ ' : ''}${esc(sp.name)}</h2>
+          <p class="muted small">${esc(sp.mapName)}${sp.december ? ' · December fish' : ''}</p>
         </div>
       </div>
       <div class="fp-mine" style="--cls:${c?.color || '#868e96'}">
         <span class="fp-badge">${c?.icon || ''}</span>
         <div><b>Your biggest: ${fmtWeight(lb)}</b><small>${c ? `${c.name}${cls === 'trophy' ? '! Wow!' : ''}` : ''} · ${esc(fishDate(rec.date))}</small></div>
       </div>
+      ${real.december ? `<p class="fp-december">🎄 <b>A December fish!</b> ${esc(real.december)} It swims in the lake only in December, and comes back every year.</p>` : ''}
       ${real.pretend ? `<p class="fp-pretend">✨ The ${esc(sp.name.toLowerCase())} is a pretend fish: it lives only in this game. Its real-life cousin is the <b>${esc(real.name)}</b>, so its weights and facts here are the real cousin's.</p>` : ''}
       <h3>⚖️ How big do they get?</h3>
       <p class="fp-typical">A typical one weighs about <b>${r.typical}</b>.</p>
@@ -2251,8 +2272,13 @@ function viewWardrobe() {
   if (!kid) { ui.view = 'home'; return viewHome(); }
   const prog = progressFor(kid);
   const fresh = new Set(kid.newItems || []);
-  // buddy specials show only for their own buddy, first in their tab
-  const items = ITEMS.filter((i) => i.slot === ui.slot && fitsSpecies(i, kid.buddy.species))
+  const day = today();
+  if (ui.slot === 'holiday' && !isXmas(day)) ui.slot = 'hat'; // the Holiday tab packs away on 1 Jan
+  const holidayTab = ui.slot === 'holiday';
+  // buddy specials show only for their own buddy, first in their tab. December-only items are
+  // sold in the Holiday tab only; the other tabs show them once owned, so they can be worn all year.
+  const items = ITEMS.filter((i) => (holidayTab ? i.holiday : i.slot === ui.slot && (!i.holiday || isUnlocked(i, prog)))
+    && fitsSpecies(i, kid.buddy.species))
     .sort((a, b) => Boolean(b.species) - Boolean(a.species));
   const nextItem = ITEMS.filter((i) => i.need && !isUnlocked(i, prog)).sort((a, b) => needGap(a, prog) - needGap(b, prog))[0];
   const sportTab = ui.slot === 'sport';
@@ -2302,17 +2328,20 @@ function viewWardrobe() {
       ${ui.slot === 'music' ? `<p class="muted small">Do piano every time it's on your list to grow your piano streak (a day off from piano doesn't break it). Your best piano streak is ${prog.pianoBest} days.</p>` : ''}
       ${sportTab ? `<p class="muted small">Only exercise earns 💎 gems, and only gems buy sports gear. Gear works with every buddy. Exercise on 4 days in a week (Monday to Sunday) for a ⭐ strong week. 3 days keeps your strong weeks safe 🛡️ but doesn't add one, and fewer takes one away. 1, 3 and 6 strong weeks unlock new moves for each piece of gear you own, and moves stay yours even if your count goes down. Tap your buddy to see a move. Visiting buddies with a fishing rod go fishing! Better rods see and cast farther, and a fishing boat takes you out to deep water. The farther out you fish, the bigger the fish. Visiting buddies with a sled go sledding down your map's treasure hill: every hill hides its own real treasures for your finds book. Better sleds see farther, pull finds in, and the super sled can jump twice. A camera takes you on the photo train to snap wild animals for your critter album. Better cameras focus faster, hold more film and zoom in on far-off animals. Visiting buddies with a bike do trick jumps: every new trick you land is a card for your trick book, a good bike has pegs for grinding rails, and a super bike can boost in mid-air. Visiting buddies with a shovel go on a 90-second dino dig: dig by cliffs, creeks and rocks for real dinosaur bones and treasures for your dig book, and show off a finished skeleton and a treasure in your house. Better shovels walk faster, see more of the dig site and find more.</p>` : ''}
       ${ui.slot === 'home' ? '<p class="muted small">Every task you finish earns coins to spend on furniture. Furniture goes in your buddy\'s house, and every buddy you have can use it. Each spot holds one thing at a time: tap something you own to put it in, or tap it again to take it out. Walk your buddy in the front door of your house in the village to see it!</p>' : ''}
-      ${sportTab || ui.slot === 'home' || ui.slot === 'garden' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
+      ${holidayTab ? '<p class="muted small">🎄 December only! Holiday outfits are in the shop until 31 December, then they pack away until next December. Anything you buy stays yours forever, and you can wear it all year. Hats, scarves and mittens belong to the buddy wearing them, so a new buddy needs its own.</p>' : ''}
+      ${sportTab || holidayTab || ui.slot === 'home' || ui.slot === 'garden' ? '' : `<p class="muted small">Every task you finish earns coins. Spend them on anything with a 🪙 price. Hats, glasses and extras you buy belong to the buddy wearing them, so a new buddy needs its own. Places and streak prizes work with every buddy. Streak prizes can't be bought: keep your streak going to win them, and they stay yours even if a streak ends. Tap an item again to take it off.</p>`}
     </div>`;
 }
 
 // The shop's 9 tabs in 5 kinds, so they fit one row on a tablet: Places, Dress up (hats,
 // glasses, extras, magic), Music, Sports, House & garden (furniture, garden). A kind with more
 // than one tab shows them in a second row. Each button is still a wardrobe-slot button, so
-// what's sold and how a tab opens stay the same.
+// what's sold and how a tab opens stay the same. In December a sixth kind, Holiday, sells the
+// December-only outfits (items.js inSeason); it is gone the rest of the year.
 const SHOP_KINDS = [
   { slots: ['background'] },
   { name: 'Dress up', icon: '👕', slots: ['hat', 'face', 'neck', 'hand'] },
+  { name: 'Holiday', icon: '🎄', slots: ['holiday'], season: 'xmas' },
   { slots: ['music'] },
   { slots: ['sport'] },
   { name: 'House & garden', icon: '🏠', slots: ['home', 'garden'] },
@@ -2320,12 +2349,13 @@ const SHOP_KINDS = [
 const slotById = (id) => SLOTS.find((sl) => sl.id === id);
 
 function shopTabs() {
-  const kind = SHOP_KINDS.find((k) => k.slots.includes(ui.slot)) || SHOP_KINDS[1];
-  const top = SHOP_KINDS.map((k) => {
+  const kinds = SHOP_KINDS.filter((k) => !k.season || isXmas(today()));
+  const kind = kinds.find((k) => k.slots.includes(ui.slot)) || SHOP_KINDS[1];
+  const top = kinds.map((k) => {
     const sl = slotById(k.slots[0]);
     const on = k === kind;
     // a kind's button opens its first tab (or stays on the one already open)
-    return `<button class="${on ? 'on' : ''}" data-action="wardrobe-slot" data-slot="${on ? ui.slot : sl.id}" aria-pressed="${on}">${k.name ? `${k.icon} ${esc(k.name)}` : `${sl.icon} ${esc(sl.name)}`}</button>`;
+    return `<button class="${on ? 'on' : ''} ${k.season ? `season-${k.season}` : ''}" data-action="wardrobe-slot" data-slot="${on ? ui.slot : k.slots[0]}" aria-pressed="${on}">${k.name ? `${k.icon} ${esc(k.name)}` : `${sl.icon} ${esc(sl.name)}`}</button>`;
   }).join('');
   const sub = kind.slots.length > 1
     ? `<nav class="tabs sub" aria-label="${esc(kind.name)}">${kind.slots.map((id) => { const sl = slotById(id); return `<button class="${ui.slot === id ? 'on' : ''}" data-action="wardrobe-slot" data-slot="${id}">${sl.icon} ${esc(sl.name)}</button>`; }).join('')}</nav>`
@@ -3357,6 +3387,7 @@ const actions = {
     const prog = progressFor(kid);
     if (!isUnlocked(item, prog) && needsMusicHouse(item) && !musicTier(prog)) { sounds.error(); toast('🔒 This opens with your music house. Keep up your piano streak to earn your first piano!'); return; }
     if (!isUnlocked(item, prog) && comingSoon(item)) { sounds.error(); toast(releaseDay(item) ? `🔒 ${item.name} comes to the shop on ${releaseLabel(releaseDay(item))}!` : `🔒 ${item.name} is coming soon. Its song is still being written!`); return; }
+    if (!isUnlocked(item, prog) && !inSeason(item, today())) { sounds.error(); toast(`🎄 ${item.name} is back in the shop next December!`); return; }
     if (!isUnlocked(item, prog) && (item.price || item.gems)) { buyItem(kid, item, prog); return; }
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
     if (item.home) {
@@ -3420,6 +3451,18 @@ const actions = {
     else toast(`${c.s.total - c.s.done} more to reach the ${c.tier.name.toLowerCase()}!`);
   },
   trophies: () => openTrophies(kidById(ui.kidId)),
+  // the ornament book: put a won star topper on top of the tree (a map's 4 ornaments, or door 25)
+  'tree-star': (el) => {
+    const kid = kidById(ui.kidId);
+    const id = el.dataset.star;
+    if (!kid || !starsWon(kid.xmas?.found).includes(id)) return;
+    kid.xmas = { ...kid.xmas, star: id };
+    const scroll = $modal.querySelector('.modal-card')?.scrollTop || 0;
+    sounds.tap(); save();
+    openOrnamentBook(kid);
+    const card = $modal.querySelector('.modal-card'); if (card) card.scrollTop = scroll;
+    render();
+  },
   'buy-confirm': (el) => {
     const kid = kidById(ui.kidId);
     const item = itemById(el.dataset.id);
@@ -3427,6 +3470,7 @@ const actions = {
     if (!item || prog.owned.includes(item.id) || !fitsSpecies(item, kid.buddy.species)) { closeModal(); return; }
     if (needsMusicHouse(item) && !musicTier(prog)) { closeModal(); return; }
     if (comingSoon(item)) { closeModal(); return; }
+    if (!inSeason(item, today())) { closeModal(); return; } // December-only, and December is over
     if (item.gems) {
       if (prog.gems < item.gems) { closeModal(); return; }
       kid.gemsSpent = (kid.gemsSpent || 0) + item.gems;

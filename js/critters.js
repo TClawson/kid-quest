@@ -22,6 +22,9 @@
 // len: picture size in fine pixels (the game draws 2 fine pixels for each game pixel).
 // cousin: (pretend animals) the real animal its page teaches about.
 // where / eats / wow: a short paragraph each, true facts about the real animal.
+// december: (the December animals) only out from 1 to 31 December; fun: a pretend line for its page.
+
+import { inDecember } from './seasons.js';
 
 const SUMMERY = ['spring', 'summer', 'autumn'];
 
@@ -915,6 +918,89 @@ export const CRITTERS = [
     eats: 'Comb jellies eat plankton, fish eggs and even other comb jellies.',
     wow: 'Comb jellies swim by beating rows of tiny hairs called combs. The combs scatter light into flickering rainbows that ripple down their see-through bodies.',
   },
+  // ---------- December animals: one on every map, only in December (design v1 section 3) ----------
+  // december: true keeps them to 1 to 31 December (the family's local day), every year. They are
+  // rare, and each has a fun pretend line (fun) for its album page; the facts are true ones.
+  {
+    id: 'meadow-popcorn', map: 'bg-meadow', name: 'Popcorn porcupine', rarity: 'rare', december: true, how: ['step', 'rise'], from: 'log', seasons: ['winter'], cousin: 'North American porcupine',
+    look: { plan: 'small', len: 30, fur: '#5c4a3d', belly: '#8a7262', dark: '#2e241e', ears: 'round', tail: 'short', bodyH: 0.24, headR: 0.17, muzzle: true, quills: true, quillTip: '#f1e3c8', xmas: ['garland'] },
+    where: 'Its real cousin, the North American porcupine, lives in forests across Canada, Alaska and much of the United States. It sleeps in hollow trees, in rock dens or high up in the branches.',
+    eats: 'Porcupines eat leaves, buds, berries and green plants in summer. In winter they climb trees and nibble the inner bark and the evergreen needles.',
+    wow: 'A porcupine has about 30,000 quills. It can\'t shoot them, but they come out at a touch, and each tip has tiny backward barbs. A baby porcupine is called a porcupette!',
+    fun: 'Every December it strings popcorn and cranberries on its quills, and it shares the popcorn with the chickadees.',
+  },
+  {
+    id: 'sunset-bauble', map: 'bg-sunset', name: 'Bauble crab', rarity: 'rare', december: true, how: ['rise', 'step'], from: 'log', seasons: ['winter'], cousin: 'Caribbean hermit crab',
+    look: { plan: 'crab', len: 24, fur: '#e8590c', claw: '#7048e8', bigClaw: true, mark: 'bauble', bauble: '#e03131', xmas: [] },
+    where: 'Its real cousin, the Caribbean hermit crab, lives on land near the sea in Florida and on the Caribbean islands, from the beach to the forest.',
+    eats: 'Caribbean hermit crabs eat almost anything: fallen fruit, leaves, dead animals and leftovers. They even climb trees and bushes to find food.',
+    wow: 'Its big purple claw works like a door: when the crab pulls back into its shell, it shuts the opening with the claw. Each summer the mothers walk down to the sea at night to let their eggs hatch in the water.',
+    fun: 'Bauble crabs borrow shiny Christmas baubles instead of shells. On a sunny day you can see the whole beach reflected in one.',
+  },
+  {
+    id: 'ocean-treeworm', map: 'bg-ocean', name: 'Christmas tree worm', rarity: 'rare', december: true, how: ['rise'], from: 'coral', seasons: ['winter'], shy: true,
+    look: { plan: 'treeworm', len: 22, fur: '#e03131', accent: '#2f9e44', shell: '#c8a97e', belly: '#f1e3c8', dark: '#8a6a4a' },
+    where: 'Christmas tree worms live on coral reefs in warm seas all around the world. Each one lives in a tube it builds inside a living coral.',
+    eats: 'Plankton: tiny plants and animals drifting in the water. The worm catches them on its feathery crowns, which pass the food down to its mouth.',
+    wow: 'Its two spiral crowns look just like little Christmas trees, in red, orange, yellow, blue or white. If a shadow passes over, it zips them into its tube in a blink and shuts a spiky trapdoor, so you have to be quick!',
+    fun: 'In December the worms of Under the Sea put a gold star on top of each crown, and the clownfish come to see.',
+  },
+  {
+    id: 'space-yeti', map: 'bg-space', name: 'Moon yeti', rarity: 'rare', december: true, how: ['hop', 'step'], from: 'rock', seasons: ['winter'], cousin: 'Himalayan brown bear',
+    look: { plan: 'yeti', len: 34, fur: '#e7e9f7', dark: '#aeb4d4', face: '#8fa2e6', xmas: ['bobble', 'scarf'] },
+    where: 'Its real cousin, the Himalayan brown bear, lives high in the Himalaya mountains of Nepal, India, Pakistan and Tibet, up where the snow lasts most of the year.',
+    eats: 'Himalayan brown bears eat grass, roots and berries, and dig up insects and marmots (big, chubby ground squirrels).',
+    wow: 'Scientists once tested hair, bones and teeth that people said came from yetis. Most of them turned out to come from Himalayan brown bears! These bears sleep through the winter in a den.',
+    fun: 'The moon yeti knits its own bobble hats from moon-moss wool, and in December it leaves one on a crater for anyone with cold ears.',
+  },
+  {
+    id: 'castle-lantern', map: 'bg-castle', name: 'Lantern fox', rarity: 'rare', december: true, how: ['step', 'run'], from: 'bush', seasons: ['winter'], cousin: 'red fox',
+    look: { plan: 'quad', len: 30, fur: '#e8590c', belly: '#ffffff', dark: '#3b2a20', tail: 'bushy', tip: true, legs: 0.36, ears: 'point', muzzle: true, xmas: ['scarf', 'lantern'] },
+    where: 'Its real cousin, the red fox, lives all over Britain: in woods, farms and fields, and in towns and cities too, where some foxes even live in gardens.',
+    eats: 'Red foxes eat mice, voles, rabbits, birds, worms and beetles, plus berries and fallen fruit. A fox buries extra food and comes back for it later.',
+    wow: 'A fox\'s eyes have a shiny layer at the back, like a little mirror, that helps it see at night. That is why they glow green-gold when a light shines on them!',
+    fun: 'On December nights the lantern fox lights the castle path for the carol singers, and it is never late.',
+  },
+  {
+    id: 'volcano-christmas', map: 'bg-volcano', name: 'Christmas iguana', rarity: 'rare', december: true, how: ['step', 'step'], from: 'rock', seasons: ['winter'],
+    look: { plan: 'lizard', len: 52, fur: '#c0392b', extra: 'crest', accent: '#38d9a9', face: '#e8604c', dark: '#3d1410', xmas: ['santa', 'sneeze', 'patches'] },
+    where: 'Marine iguanas live only on the Galápagos Islands. The most colorful ones live on Española, one of the oldest islands.',
+    eats: 'Seaweed! Marine iguanas are the only lizards in the world that feed in the sea. They scrape seaweed off the rocks with their short, flat snouts.',
+    wow: 'Around Christmas time the boys on Española turn bright red and green to show off, so people call them Christmas iguanas. They sneeze out the extra salt from the sea water: achoo!',
+    fun: 'Only in this game does it wear a Santa hat. It says the hat keeps its head warm after a cold swim.',
+  },
+  {
+    id: 'jungle-candycane', map: 'bg-rainforest', name: 'Candy-cane toucan', rarity: 'rare', december: true, how: ['perch', 'fly'], from: 'tree', seasons: ['winter'], cousin: 'toco toucan',
+    look: { plan: 'bird', len: 26, fur: '#212529', belly: '#212529', face: '#ffffff', beak: '#e03131', bigBill: true, bill: 0.34, xmas: ['candy', 'holly'] },
+    where: 'Its real cousin, the toco toucan, lives in South America, in patches of forest, palm groves and woods along rivers.',
+    eats: 'Toucans eat fruit most of all, plus insects, eggs and lizards. A toucan picks a berry with the tip of its bill, then tosses it up and catches it.',
+    wow: 'A toco toucan\'s bill is huge but light: it is made of keratin, like your fingernails, over a honeycomb of thin bone. On hot days warm blood flows into the bill to cool the bird down.',
+    fun: 'Its candy-cane bill smells of peppermint all December, and the monkeys follow it through the trees to sniff it.',
+  },
+  {
+    id: 'fjord-twinkle', map: 'bg-fjord', name: 'Twinkle moose', rarity: 'rare', december: true, how: ['step', 'track'], from: 'tree', land: true, seasons: ['winter'], cousin: 'moose',
+    look: { plan: 'quad', len: 54, fur: '#5a3d2b', belly: '#a08670', paler: true, horns: 'palm', hooves: true, legs: 0.55, extra: 'hump', snout: 1.6, headR: 0.17, tail: 'none', dewlap: true, xmas: ['lights'] },
+    where: 'Its real cousin, the moose, lives in the northern forests of Alaska, Canada, northern Europe and Asia. Alaska moose are the biggest moose of all.',
+    eats: 'Moose eat willow, birch and aspen twigs in winter, and water plants in summer, wading in up to their shoulders.',
+    wow: 'A boy moose grows new antlers every year, up to 6 feet wide, and drops them in winter. In Alaska, moose sometimes walk off with Christmas lights from someone\'s yard tangled in their antlers!',
+    fun: 'Its lights never run out: they twinkle all December, and the ptarmigans follow it home in the dark.',
+  },
+  {
+    id: 'rainbow-ginger', map: 'bg-rainbow', name: 'Gingerbread mouse', rarity: 'rare', december: true, how: ['rise', 'step'], from: 'bush', color: 'orange', seasons: ['winter'], cousin: 'house mouse',
+    look: { plan: 'small', len: 26, fur: '#c97b3c', dark: '#7a4522', ears: 'round', tail: 'long', sits: true, headR: 0.2, nose: '#ff6b6b', xmas: ['ginger'] },
+    where: 'Its real cousin, the house mouse, lives almost everywhere people live, on every continent but Antarctica: in houses, barns, fields and shops.',
+    eats: 'House mice eat seeds and grain most of all, and crumbs of almost anything people eat. A mouse nibbles 15 to 20 little meals a day.',
+    wow: 'Mice sing! Boy mice sing little songs to girl mice, but the notes are too high for people to hear. A mouse can squeeze through a gap as thin as a pencil.',
+    fun: 'It smells of cinnamon and lives in a gingerbread house with a gumdrop door. Every December it pipes itself new icing boots.',
+  },
+  {
+    id: 'galaxy-reindeer', map: 'bg-galaxy', name: 'Comet reindeer', rarity: 'rare', december: true, how: ['fly', 'step', 'perch'], from: 'sky', seasons: ['winter'], cousin: 'reindeer',
+    look: { plan: 'quad', len: 34, fur: '#8a5a3c', belly: '#f1e3c8', dark: '#4a2e1e', horns: 'antler', hornCol: '#fcc419', hooves: true, legs: 0.5, tail: 'short', tailTag: 'belly', mark: 'chest', ears: 'point', muzzle: true, flies: true, xmas: ['bells', 'stardust', 'twinkle'] },
+    where: 'Its real cousin, the reindeer, lives on the cold tundra and in the northern forests of Europe, Asia and North America, where it is called the caribou.',
+    eats: 'Reindeer eat a fluffy lichen called reindeer moss. In winter they dig down through the snow with their wide hooves to reach it.',
+    wow: 'Reindeer are the only deer where the girls grow antlers too. Their eyes turn from gold in summer to blue in winter, to see in the long dark, and their knees click as they walk!',
+    fun: 'Comet reindeer fly between the golden planets, leaving a trail of stardust. If you hear jingling in Golden Galaxy, look up!',
+  },
 ];
 
 export const RARITIES = {
@@ -934,6 +1020,8 @@ export const mapCritters = (map) => {
 
 /** Is this animal out in this season? */
 export const inSeason = (c, season) => !c.seasons || c.seasons.includes(season);
+/** Is this animal out on this day ('YYYY-MM-DD') in this season? December animals only come in December. */
+export const isOut = (c, season, day) => inSeason(c, season) && (!c.december || inDecember(day));
 
 // ---------- daily weather ----------
 // The same weather for the whole family on a day. Winter swaps rain for snow.
@@ -961,7 +1049,7 @@ export function weatherOf(day, season) {
 
 /** The day's Wanted animal on a map: the same one for the whole family (never the legend). */
 export function wantedOf(day, map, season) {
-  const pool = mapCritters(map).filter((c) => inSeason(c, season) && c.rarity !== 'legend' && !c.how.every((h) => h === 'far') && !c.tunnel);
+  const pool = mapCritters(map).filter((c) => isOut(c, season, day) && c.rarity !== 'legend' && !c.how.every((h) => h === 'far') && !c.tunnel);
   return pool.length ? pool[Math.floor(hash(`${day}|${map}|wanted`) * pool.length)].id : null;
 }
 
@@ -969,9 +1057,18 @@ export function wantedOf(day, map, season) {
  * How likely each animal is to turn up next, as [critter, weight]. tier: the kid's camera
  * (a Super camera brings rare animals 75% more often, like the super rod). Far animals only
  * come when the camera has a zoom lens (or as "too far" specks to show what a zoom would reach).
+ * day: the ride's day; the December animals come only when it is in December.
  */
-export function oddsFor(map, season, weather, { tier = 1, clue = 0 } = {}) {
-  return mapCritters(map).filter((c) => inSeason(c, season) && !c.tunnel).map((c) => {
+/**
+ * A December animal's chance each time an animal comes, as a share of all the others' weight
+ * (review 1, D12). The photo train sets it after its own filters, so every map's December animal
+ * comes about 1 ride in 3 with the Super camera (which brings it 75% more often, like a rare),
+ * however many animals its map has: a perfect photo of it should be something to boast about.
+ */
+export const DECEMBER_SHARE = 0.01;
+
+export function oddsFor(map, season, weather, { tier = 1, clue = 0, day = null } = {}) {
+  return mapCritters(map).filter((c) => isOut(c, season, day) && !c.tunnel).map((c) => {
     let w = RARITIES[c.rarity].weight;
     if (c.weather?.includes(weather)) w *= 3;
     if ((c.rarity === 'rare' || c.rarity === 'legend') && tier >= 3) w *= 1.75;
