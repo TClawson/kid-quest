@@ -60,12 +60,12 @@ for (const theme of VILLAGE_THEMES) {
     const L = villageLayout(theme);
     const P = L.plot;
     assert.ok(P, `${theme} has a garden plot`);
-    assert.ok(P.x >= 20 && P.x + P.w <= L.W - 20 && P.y >= 22 && P.y + P.h <= L.H - 18, `${theme}: the plot is inside the village`);
-    for (let y = P.y; y <= P.y + P.h; y += 2) for (let x = P.x; x <= P.x + P.w; x += 2) assert.ok(!L.inWater(x, y), `${theme}: the plot is in the water at ${x},${y}`);
+    assert.ok(P.x >= 20 && P.x + P.w <= L.W - 20 && P.y >= 22 && P.y + P.h + P.fence <= L.H - 18, `${theme}: the garden is inside the village`);
+    for (let y = P.y; y <= P.y + P.h + P.fence; y += 2) for (let x = P.x; x <= P.x + P.w; x += 2) assert.ok(!L.inWater(x, y), `${theme}: the plot is in the water at ${x},${y}`);
     // nobody stands on it or right in front of its fence (a villager's bubble reaches 38 over their feet)
     const who = [...L.slots.morning, ...L.slots.afternoon, L.coach, L.shop, L.chest, L.start, L.landmark.stand].filter(Boolean);
-    for (const s of who) assert.ok(!(s.x > P.x - 8 && s.x < P.x + P.w + 8 && s.y > P.y - 2 && s.y < P.y + P.h + 6), `${theme}: ${s.x},${s.y} stands on the garden plot`);
-    for (const h of [L.home, ...L.houses]) assert.ok(h.x >= P.x + P.w || h.x + h.w <= P.x || h.y - 6 >= P.y + P.h || h.y + h.h <= P.y, `${theme}: the plot overlaps a house`);
+    for (const s of who) assert.ok(!(s.x > P.x - 8 && s.x < P.x + P.w + 8 && s.y > P.y - 2 && s.y < P.y + P.h + P.fence + 4), `${theme}: ${s.x},${s.y} stands on the garden plot`);
+    for (const h of [L.home, ...L.houses]) assert.ok(h.x >= P.x + P.w || h.x + h.w <= P.x || h.y - 6 >= P.y + P.h + P.fence || h.y + h.h <= P.y, `${theme}: the plot overlaps a house`);
   });
 
   test(`${theme}: quest spots stand on open ground, apart from each other and the green`, () => {

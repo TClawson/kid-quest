@@ -37,7 +37,7 @@ const LAUNDRY = /laundry|clothes|fold|wash/i;
 
 const p = (kind, x, y, extra = {}) => ({ kind, x, y, ...extra });
 
-// the little things that step aside for the kid's garden plot (plot, below)
+// the little things that step aside for the kid's garden (plot, below)
 const MOVABLE = new Set(['tree', 'bush', 'flowers', 'palm', 'mushrooms', 'birdhouse', 'rock', 'shell', 'coral', 'fern', 'lantern', 'barrow', 'snail', 'crystal', 'kelp', 'jungletree', 'bigflower', 'candytree', 'lollipop', 'mushroom', 'spruce', 'gumdrops', 'orchids', 'bromeliad', 'crystals', 'anemone', 'urchins', 'driftlog', 'woodpile', 'torch', 'lamp', 'haybale', 'lamppost']);
 
 export const VILLAGE_MAPS = {
@@ -49,7 +49,7 @@ export const VILLAGE_MAPS = {
     scatter: { kind: 'flowers', every: 260 },
     border: { kinds: [TREE] },
     pathStyle: { edge: '#a4743f', fill: '#d9a86c' },
-    plot: [276, 66], // the kid's garden plot (villageplot.js)
+    plot: [34, 150, 62, 34], // the kid's garden (villageplot.js): the village's own vegetable garden
     home: { x: 174, y: 30, w: 100, h: 78, style: 'cottage', shutter: '#4c6ef5' },
     houses: [
       { x: 34, y: 50, w: 80, h: 66, roof: '#4c6ef5', shutter: '#e03131' },
@@ -64,7 +64,7 @@ export const VILLAGE_MAPS = {
     ],
     plazas: [[224, 166, 30], [224, 504, 30]],
     props: [
-      p('well', 211, 140), p('garden', 34, 150), p('stall', 348, 154), p('laundry', 330, 350, { w: 84 }),
+      p('well', 211, 140), p('stall', 348, 154), p('laundry', 330, 350, { w: 84 }),
       p('flowers', 160, 98), p('flowers', 276, 98), p('flowers', 150, 376), p('flowers', 100, 516),
       p('bush', 152, 70, { berries: true }), p('bush', 278, 70), p('bush', 150, 444, { berries: true }), p('bush', 184, 518), p('bush', 118, 528, { berries: true }),
       p('tree', 118, 66), p('tree', 298, 66), p('tree', 380, 190), p('tree', 140, 384), p('tree', 40, 476),
@@ -97,7 +97,7 @@ export const VILLAGE_MAPS = {
     border: { kinds: [{ kind: 'palm' }], sides: ['top', 'left', 'right'] },
     pathStyle: { edge: '#7a4a26', fill: '#c98a4b', kind: 'planks' },
     plazaStyle: { a: '#e0a96d', b: '#c98a4b', gap: '#7a4a26', rim: '#5c3a1e' },
-    plot: [24, 180], // the kid's garden plot (villageplot.js)
+    plot: [24, 180], // the kid's garden (villageplot.js)
     home: { x: 36, y: 34, w: 104, h: 82, style: 'hut', wall: '#ffd8a8' },
     houses: [
       { x: 316, y: 40, w: 92, h: 74, style: 'hut', roof: '#c08a3e', wall: '#ffe8cc' },
@@ -154,7 +154,7 @@ export const VILLAGE_MAPS = {
     border: { kinds: [{ kind: 'kelp' }, { kind: 'coral', c: '#ff8787' }, { kind: 'kelp' }, { kind: 'coral', c: '#f783ac' }] },
     pathStyle: { edge: '#c9a35d', fill: '#f0d9a0' },
     plazaStyle: { a: '#fff4d1', b: '#ffe8cc', gap: '#e5b574', rim: '#c9a35d' },
-    plot: [104, 32], // the kid's garden plot (villageplot.js)
+    plot: [104, 26, 56, 26], // the kid's garden (villageplot.js), two rows to fit above the dome house
     home: { x: 174, y: 34, w: 100, h: 82, style: 'dome', wall: '#fff0f6', glass: '#74c0fc' },
     houses: [
       { x: 40, y: 80, w: 84, h: 70, style: 'dome', roof: '#ffa94d', wall: '#fff0f6', glass: '#74c0fc' },
@@ -207,7 +207,7 @@ export const VILLAGE_MAPS = {
     border: { sides: ['bottom', 'left', 'right'], kinds: [{ kind: 'boulder', c: '#6a6f96' }, { kind: 'crystal', c: '#99e9f2', C: '#3bc9db' }, { kind: 'boulder', c: '#5c5f8a' }] },
     pathStyle: { edge: '#495057', fill: '#adb5bd', kind: 'planks' },
     plazaStyle: { a: '#ced4da', b: '#adb5bd', gap: '#495057', rim: '#ffd43b' },
-    plot: [100, 122], // the kid's garden plot (villageplot.js)
+    plot: [100, 122], // the kid's garden (villageplot.js)
     home: { x: 40, y: 40, w: 100, h: 80, style: 'dome', wall: '#ced4da', glass: '#ff6b6b' },
     houses: [
       { x: 300, y: 36, w: 92, h: 76, style: 'dome', roof: '#63e6be', wall: '#ced4da', glass: '#ffd43b' },
@@ -260,7 +260,7 @@ export const VILLAGE_MAPS = {
     scatter: { kind: 'flowers', every: 300 },
     pathStyle: { edge: '#868e96', fill: '#ced4da', kind: 'cobble' },
     plazaStyle: { a: '#dee2e6', b: '#e9ecef', gap: '#adb5bd', rim: '#868e96' },
-    plot: [366, 44], // the kid's garden plot (villageplot.js), outside the moat
+    plot: [366, 44], // the kid's garden (villageplot.js), outside the moat
     home: { x: 164, y: 34, w: 120, h: 96, style: 'keep' },
     houses: [
       { x: 30, y: 290, w: 84, h: 70, roof: '#e64980', shutter: '#7048e8' },
@@ -279,7 +279,7 @@ export const VILLAGE_MAPS = {
       p('laundry', 120, 476, { w: 80 }), p('banner', 140, 60, { c: '#7048e8' }), p('banner', 296, 60, { c: '#e64980' }),
       p('haybale', 260, 470), p('haybale', 40, 230), p('bush', 140, 200, { berries: true }), p('bush', 290, 200),
       p('tree', 396, 210), p('tree', 26, 120), p('tree', 390, 110), p('flowers', 260, 140), p('flowers', 170, 140),
-      p('garden', 30, 40, { w: 56, h: 30 }), p('bush', 26, 460, { berries: true }), p('flowers', 300, 260),
+      p('bush', 26, 460, { berries: true }), p('flowers', 300, 260),
       // castle whimsy (castleart.js)
       p('dummy', 118, 34), p('target', 310, 34), p('rack', 36, 170), p('cart', 372, 160), p('anvil', 262, 298), p('hound', 176, 556),
     ],
@@ -311,7 +311,7 @@ export const VILLAGE_MAPS = {
     border: { kinds: [{ kind: 'tree', pal: { G: '#2b8a3e', g: '#51cf66', d: '#1b5e20', T: '#5c3a1e' } }, { kind: 'boulder', c: '#3d3330' }] },
     pathStyle: { edge: '#2b211d', fill: '#8a7466', kind: 'cobble' },
     plazaStyle: { a: '#868e96', b: '#adb5bd', gap: '#495057', rim: '#343a40' },
-    plot: [100, 118], // the kid's garden plot (villageplot.js)
+    plot: [100, 118], // the kid's garden (villageplot.js)
     home: { x: 40, y: 36, w: 100, h: 80, style: 'hut', roof: '#2f9e44', wall: '#d9a86c', glass: '#ff922b' },
     houses: [
       { x: 170, y: 40, w: 84, h: 70, style: 'hut', roof: '#5c940d', wall: '#d9a86c', glass: '#ff922b' },
@@ -361,7 +361,7 @@ export const VILLAGE_MAPS = {
     border: { kinds: [{ kind: 'jungletree' }, { kind: 'jungletree', pal: { G: '#237032', g: '#40c057', d: '#174d1b' } }] },
     pathStyle: { edge: '#5c3a1e', fill: '#8b5a2b' },
     plazaStyle: { a: '#94a38f', b: '#a9b8a4', gap: '#5c7a5c', rim: '#3d5a3d' },
-    plot: [96, 170], // the kid's garden plot (villageplot.js)
+    plot: [96, 170], // the kid's garden (villageplot.js)
     home: { x: 40, y: 34, w: 100, h: 96, style: 'stilts', wall: '#d9a066', glass: '#1c9c8c' },
     houses: [
       { x: 40, y: 400, w: 90, h: 90, style: 'stilts', roof: '#2b8a3e', wall: '#d9a066', glass: '#1c9c8c' },
@@ -418,7 +418,7 @@ export const VILLAGE_MAPS = {
       { kind: 'candytree', pal: { G: '#74c0fc', g: '#a5d8ff', d: '#4dabf7', T: '#fff0f6' } },
     ] },
     pathStyle: { layers: [[7, '#ff6b6b'], [6, '#ffa94d'], [5, '#ffd43b'], [4, '#69db7c'], [3, '#4dabf7'], [1, '#b197fc']] },
-    plot: [234, 132], // the kid's garden plot (villageplot.js)
+    plot: [234, 132], // the kid's garden (villageplot.js)
     home: { x: 174, y: 40, w: 100, h: 84, style: 'mushroom', wall: '#fff9db' },
     houses: [
       { x: 40, y: 130, w: 80, h: 72, style: 'mushroom', roof: '#845ef7', wall: '#fff9db' },
@@ -468,7 +468,7 @@ export const VILLAGE_MAPS = {
     ground: { kind: 'stars', c: ['#2a1a5e', '#21134d', '#3a2878'], edge: ['#1c1045', '#201249'] },
     border: { kinds: [{ kind: 'spire', c: '#ffe066', C: '#f59f00' }, { kind: 'crystal', c: '#d0bfff', C: '#9775fa' }, { kind: 'spire', c: '#d0bfff', C: '#9775fa' }] },
     pathStyle: { edge: '#e67700', fill: '#fcc419' },
-    plot: [188, 112], // the kid's garden plot (villageplot.js)
+    plot: [188, 112], // the kid's garden (villageplot.js)
     home: { x: 320, y: 36, w: 100, h: 82, style: 'dome', wall: '#e5dbff', glass: '#ffd43b' },
     houses: [
       { x: 40, y: 50, w: 84, h: 70, style: 'dome', roof: '#b197fc', wall: '#e5dbff', glass: '#ffd43b' },
@@ -517,7 +517,7 @@ export const VILLAGE_MAPS = {
     seed: 4907,
     ground: { kind: 'grass', c: ['#55a05a', '#3f8454', '#78b862'], edge: ['#1f5a46', '#184440'] },
     pathStyle: { edge: '#6a6676', fill: '#c6c0b8' },
-    plot: [238, 46], // the kid's garden plot (villageplot.js)
+    plot: [238, 46], // the kid's garden (villageplot.js)
     home: { x: 130, y: 30, w: 100, h: 80, style: 'cabin' },
     houses: [
       { x: 338, y: 40, w: 80, h: 66, style: 'cabin', roof: '#1c9c8c', wall: '#e8b03a' },
@@ -668,17 +668,18 @@ export function villageLayout(theme) {
   if (cache.has(id)) return cache.get(id);
   const spec = VILLAGE_MAPS[id];
   const H = spec.H;
-  // the kid's garden plot beside the house (villageplot.js): the little things that stood
-  // where it goes (bushes, trees, flowers) make room for it
-  const plot = spec.plot ? { x: spec.plot[0], y: spec.plot[1], w: PLOT.w, h: PLOT.h } : null;
+  // the kid's garden beside the house (villageplot.js): the Forest Village's vegetable garden, its
+  // rail fence in front; the little things that stood where it goes (bushes, trees, flowers)
+  // make room for it
+  const plot = spec.plot ? { x: spec.plot[0], y: spec.plot[1], w: spec.plot[2] || PLOT.w, h: spec.plot[3] || PLOT.h, fence: PLOT.fence } : null;
   if (plot) plot.gate = plotGate(plot);
-  const plotRoom = plot && [plot.x - 3, plot.y - 6, plot.w + 6, plot.h + 10];
+  const plotRoom = plot && [plot.x - 4, plot.y - 6, plot.w + 8, plot.h + plot.fence + 6];
   const inPlot = (q) => {
     if (!plotRoom || !MOVABLE.has(q.kind)) return false;
     const s = PROPS[q.kind] || {}; const w = q.w || s.w || 8; const h = q.h || s.h || 8;
     return q.x < plotRoom[0] + plotRoom[2] && q.x + w > plotRoom[0] && q.y < plotRoom[1] + plotRoom[3] && q.y + h > plotRoom[1];
   };
-  const props = [...borderProps(spec, H), ...spec.props].filter((q) => !inPlot(q));
+  const props = [...borderProps(spec, H), ...spec.props].filter((q) => !inPlot(q)).concat(plot ? [p('garden', plot.x, plot.y, { w: plot.w, h: plot.h, kid: true })] : []);
   const water = spec.water;
   const crossings = spec.crossings.map((c) => bridgeBox(c, water));
   const houses = spec.houses;
@@ -702,8 +703,6 @@ export function villageLayout(theme) {
     // mountains can't be climbed either (the fjord's walls)
     ...(spec.peaks ? peakBlocks(spec.peaks) : []),
     ...(spec.blocks || []),
-    // the plot's fence (the buddy goes in at the gate, into the garden scene)
-    ...(plot ? [[plot.x, plot.y - 2, plot.w, plot.h + 1]] : []),
   ];
   const inWater = (x, y, pad = 0) => water.some((wa) => waterDepth(wa, x, y) > -3 - pad);
   const onBridge = (x, y) => crossings.some((b) => (b.dir === 'h' ? x > b.x - 6 && x < b.x + b.w + 6 && y > b.y + 2 && y < b.y + b.h - 2 : x > b.x + 2 && x < b.x + b.w - 2 && y > b.y - 6 && y < b.y + b.h + 6));

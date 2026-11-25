@@ -11,9 +11,9 @@
 // buddies' pixels. app.js decides what a tap on a quest does (the same as tapping the
 // chore anywhere else).
 
-import { drawVillager, VILLAGER_KINDS, villagerGrid, headRows, bowlCanvas, BOWL_THEMES } from './villageart.js';
+import { drawVillager, VILLAGER_KINDS, villagerGrid, headRows, bowlCanvas, BOWL_THEMES, painter } from './villageart.js';
 import { paintVillage } from './villageprops.js';
-import { paintPlot, plotKey } from './villageplot.js';
+import { domeB, domeKind } from './villageplot.js';
 import { SHIELDS } from './gardenart.js';
 import { villageLayout } from './villagemaps.js';
 import { MAP_THEMES } from './maparts.js';
@@ -307,8 +307,8 @@ function bakeryDoor(L, little) {
     </button>`;
 }
 
-// The kid's garden plot beside the house (villageplot.js paints it on the land): the plot is a
-// button the buddy walks to and goes in at the gate, with a sign on its back fence. A 💧 count
+// The kid's garden beside the house (a 'garden' prop on the land, villageplot.js): the garden is a
+// button the buddy walks to and goes in at its fence, with a sign on its back edge. A 💧 count
 // shows when plants there are waiting for water. A map without a plot keeps the sign beside
 // the house that points round the back.
 function gardenSign(L, garden, people = []) {
@@ -318,7 +318,7 @@ function gardenSign(L, garden, people = []) {
   const w = n ? 46 : 34;
   if (L.plot) {
     const P = L.plot;
-    return `<button class="v-plot" style="left:${P.x}px;top:${P.y - 6}px;width:${P.w}px;height:${P.h + 6}px;z-index:${P.y + P.h}" aria-label="${label}"></button>
+    return `<button class="v-plot" style="left:${P.x}px;top:${P.y - 6}px;width:${P.w}px;height:${P.h + P.fence + 6}px;z-index:${P.y + P.h}" aria-label="${label}"></button>
       <button class="v-garden on-plot" style="left:${Math.round(P.x + P.w / 2 - w / 2)}px;top:${P.y - 15}px;z-index:450" aria-label="${label}">${board}</button>`;
   }
   const h = L.home;
@@ -390,8 +390,7 @@ export function labelSpot(label, avoid, L, { w: width = 0, win = null } = {}) {
  *     to go before it opens,
  *   little: { stars } or null: the bakery's door for a kid who plays the little games (little.js),
  *     and the stars in their jar,
- *   garden: { thirsty, plot }: how many plants in the garden are waiting for water (on its sign),
- *     and its plants as the plot beside the house shows them (plotPlants in villageplot.js),
+ *   garden: { thirsty }: how many plants in the garden are waiting for water (on its sign),
  *   bloom: the family's trees and flowers (bloomData in villagebloom.js) or null,
  *   coach: { tasks: [quests, as in tasks], line } or null: the bonus exercise, given by the coach
  *     beside the play spots; line: how the kid's strong weeks are going,
@@ -417,7 +416,6 @@ export function villageHtml(v) {
     coach: v.coach ? { line: v.coach.line || '' } : null,
     music: { tier: v.music?.tier || 0, left: v.music?.left || 0 },
     little: v.little || null,
-    plot: v.garden?.plot || null, // the kid's garden plot's plants (villageplot.js)
     bloom: v.bloom || null, // the family's trees and flowers (villagebloom.js)
     today: v.today || v.bloom?.today || '', // the season follows this day (seasons.js)
   };
@@ -842,14 +840,15 @@ function spriteUrl(kind, happy) {
 // The painted land is kept for the next redraw; the season is part of the key, and the
 // season's tint is done here, once per paint (never per frame).
 let landCache = { key: '', canvas: null };
-function land(L, color, areas = [], se = null, plot = null) {
-  const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}|${se ? `${se.season}${Math.round(se.progress * 20)}` : ''}|${L.plot ? plotKey(plot) : ''}`;
+function land(L, color, areas = [], se = null) {
+  const key = `${L.id}|${color}|${areas.map((a) => `${a.side}:${a.kind}`).join(',')}|${se ? `${se.season}${Math.round(se.progress * 20)}` : ''}`;
   if (landCache.key !== key) {
     // a map that paints its own seasons (the fjord) is told the season; the others are tinted
     const own = L.ownSeasons && se;
     const base = paintVillage(document.createElement('canvas'), L, { homeRoof: color, areas, ...(own ? { season: se.season, progress: se.progress } : {}) });
-    // the kid's garden plot beside the house, with the kid's own plants (villageplot.js)
-    if (L.plot) paintPlot(base.getContext('2d'), L.plot, plot || {}, SHIELDS[L.id] || null);
+    // the dome over the kid's garden on the maps where the garden needs one (villageplot.js)
+    const dome = L.plot && domeKind(L.id, SHIELDS[L.id]);
+    if (dome) domeB(painter(base.getContext('2d')), L.plot, dome);
     landCache = { key, canvas: se && !own ? tintLand(base, se, L.id) : base };
   }
   return landCache.canvas;
@@ -894,7 +893,7 @@ function mount(section, handlers) {
   // the land and the villagers' faces
   const canvas = section.querySelector('.village-land');
   const se = seasonNow(data.today);
-  canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas, se, data.plot), 0, 0);
+  canvas.getContext('2d').drawImage(land(L, data.color || '#e03131', data.areas, se), 0, 0);
   // over the top edge (where the view goes past it on a phone, to bring the house's name out from
   // under the HUD), the map's own border carries on: its top rows again, drawn once
   const fringe = document.createElement('canvas');

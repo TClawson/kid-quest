@@ -91,7 +91,7 @@ for (const m of maps) {
     const { villageLayout } = await import('/js/villagemaps.js');
     const P = villageLayout(map).plot;
     const c = document.querySelector('.village-land');
-    const x = Math.max(0, Math.min(c.width - 170, P.x + P.w / 2 - 85)); const y = Math.max(0, Math.min(c.height - 110, P.y - 40));
+    const x = Math.max(0, Math.min(c.width - 170, P.x + P.w / 2 - 85)); const y = Math.max(0, Math.min(c.height - 110, P.y - 34));
     const o = document.createElement('canvas'); o.width = 680; o.height = 440; const g = o.getContext('2d'); g.imageSmoothingEnabled = false;
     g.drawImage(c, x, y, 170, 110, 0, 0, 680, 440);
     return o.toDataURL();
