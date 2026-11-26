@@ -10,10 +10,10 @@ export const segBar = (segments) => `<span class="t-seg" aria-hidden="true">${se
 
 /**
  * The corner of the game window: the Today button, and a chest button while an earlier day's
- * chest is waiting. b: { toGo, waiting, total, complete, excused, segments, chest: { key, html, when } or null }.
+ * chest is waiting. b: { toGo, waiting, total, complete, excused, vacation, segments, chest: { key, html, when } or null }.
  */
 export function todayHud(b) {
-  const what = b.excused ? 'day off' : b.total && b.complete ? 'all done!' : b.toGo ? `${b.toGo} to go` : b.waiting ? 'nearly!' : 'all done!';
+  const what = b.vacation ? 'vacation!' : b.excused ? 'day off' : b.total && b.complete ? 'all done!' : b.toGo ? `${b.toGo} to go` : b.waiting ? 'nearly!' : 'all done!';
   const label = `Today's quests: ${b.toGo} to go${b.waiting ? `, ${b.waiting} waiting for a parent` : ''}`;
   return `
       <div class="v-hud">

@@ -404,8 +404,55 @@ export function dayStatus(state, kid, key, today) {
     done,
     pending,
     complete: done === tasks.length,
-    excused: Boolean(entry?.excused),
+    // a family vacation day is excused for every kid
+    excused: isVacation(state, key) || Boolean(entry?.excused),
+    vacation: isVacation(state, key),
   };
+}
+
+// ---------- family vacation ----------
+//
+// A parent picks vacation days on a calendar (Parents › Settings). They live in
+// the family's settings (settings.vacation = { on, days: { dateKey: true } }), so
+// every kid's device sees the same days. A vacation day is an excused day for
+// every kid: nothing missed counts against streaks, strong weeks, the Friday
+// reward, the garden or the house, and the shop opens straight away. Chores done
+// anyway still earn as usual. Visitor games have no limit that day.
+// `on` only shows the calendar: switching it off takes away today's and later
+// days but keeps the ones already past, so past days never turn into misses.
+
+/** True when a day is a family vacation day. */
+export function isVacation(state, key) {
+  return Boolean(state?.settings?.vacation?.days?.[key]);
+}
+
+/** True when a kid's day is excused: a family vacation day, or excused by a parent for that kid. */
+export function excusedOn(state, kidId, key) {
+  return isVacation(state, key) || Boolean(entryFor(state, kidId, key)?.excused);
+}
+
+/** settings.vacation after a day is tapped on the calendar (days before today can't change). */
+export function toggleVacationDay(vacation, key, today) {
+  const days = { ...(vacation?.days || {}) };
+  if (key < today) return { ...vacation, days };
+  if (days[key]) delete days[key]; else days[key] = true;
+  return { ...vacation, on: true, days };
+}
+
+/** settings.vacation after the switch is flipped: on picks today, off drops today and later days. */
+export function switchVacation(vacation, on, today) {
+  const days = { ...(vacation?.days || {}) };
+  if (on) {
+    if (!Object.keys(days).some((k) => k >= today)) days[today] = true;
+  } else {
+    for (const k of Object.keys(days)) if (k >= today) delete days[k];
+  }
+  return { on, days };
+}
+
+/** Vacation days from today on, sorted (for the parent's summary line). */
+export function upcomingVacation(state, today) {
+  return Object.keys(state?.settings?.vacation?.days || {}).filter((k) => k >= today).sort();
 }
 
 /** Evening chores (a shower after dinner) happen too late to hold the store shut. */
@@ -422,7 +469,7 @@ export function missedEvening(state, kid, today) {
   const y = addDays(today, -1);
   if (kid.startDate && y < kid.startDate) return [];
   const entry = entryFor(state, kid.id, y);
-  if (entry?.excused) return [];
+  if (excusedOn(state, kid.id, y)) return [];
   return questTasks(tasksForDay(state, kid, y, today))
     .filter((t) => isEvening(t) && !['done', 'pending'].includes(entry?.tasks?.[t.id]?.status));
 }
@@ -794,6 +841,7 @@ export function kidToday(state, kid, today, daysBack = 14) {
     toGo: s.total - s.done - s.pending,
     complete: s.complete,
     excused: s.excused,
+    vacation: s.vacation,
     waiting,
     todo,
     doneTasks,
@@ -932,7 +980,7 @@ export function pianoStreakInfo(state, kid, today) {
       streak += 1;
       run += 1;
       if (run % PIANO_DAYS_PER_FREEZE === 0) freezes = 1;
-    } else if (key === today || entry?.excused) {
+    } else if (key === today || excusedOn(state, kid.id, key)) {
       // in progress, or excused: keep the streak
     } else if (freezes > 0) {
       freezes = 0;
@@ -991,7 +1039,7 @@ export function exerciseStreakInfo(state, kid, today, goal = EXERCISE_DAYS) {
     for (let i = 0; i < 7; i += 1) {
       const key = addDays(wk, i);
       if (key > today) break;
-      if (entryFor(state, kid.id, key)?.excused) excused += 1;
+      if (excusedOn(state, kid.id, key)) excused += 1;
       else if (exercisedOn(state, kid, key, today)) days += 1;
     }
     need = goal - excused;

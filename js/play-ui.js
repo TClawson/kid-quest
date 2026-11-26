@@ -3,7 +3,7 @@
 // from ctx.js).
 import {
   entryFor, addDays, dayStatus, gamesLeft, carriedGames, freeGamesOn, earlyGames,
-  logGame, lendLeft, logLend, gamesPerDay, GAMES_PER_DAY, OLD_GAMES_PER_DAY,
+  logGame, lendLeft as lendLeftOn, logLend, gamesPerDay, GAMES_PER_DAY, OLD_GAMES_PER_DAY, isVacation,
 } from './logic.js';
 import { sounds } from './fx.js';
 import { xmasGames } from './advent.js';
@@ -49,10 +49,15 @@ const visitGame = (v) => gameFor(bestGear(v.owned), `${today()}|${v.id}`);
 const chestGames = (kid, day) => (entryFor(state, kid.id, day)?.chest?.games || 0) + freeGamesOn(day) + xmasGames(kid, day);
 // A log with no cap is from before the limit dropped from 8 to 4, so yesterday's daily games were 8 (plus exercise).
 const carriedFor = (kid) => carriedGames(kid, today(), chestGames(kid, addDays(today(), -1)), gamesPerDay(exerciseInfo(kid).weeks) + OLD_GAMES_PER_DAY - GAMES_PER_DAY);
-export const gamesLeftFor = (kid) => gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));
+// A family vacation day has no limit at all: any game, as many times as the kid likes,
+// borrowed gear too, before or after chores. Those games aren't logged, so they never
+// eat into chest games carried over to the next day.
+export const vacationToday = () => isVacation(state, today());
+const lendLeft = (kid, day, gear) => (isVacation(state, day) ? Infinity : lendLeftOn(kid, day, gear));
+export const gamesLeftFor = (kid) => vacationToday() ? Infinity : gamesLeft(kid, today(), exerciseInfo(kid).weeks, chestGames(kid, today()) + carriedFor(kid));
 // Before today's chores are done, only last night's carried chest games can be played.
 export const playableFor = (kid, complete = dayStatus(state, kid, today(), today()).complete) =>
-  complete ? gamesLeftFor(kid) : Math.min(gamesLeftFor(kid), earlyGames(kid, today(), carriedFor(kid)));
+  complete || vacationToday() ? gamesLeftFor(kid) : Math.min(gamesLeftFor(kid), earlyGames(kid, today(), carriedFor(kid)));
 
 /** The game the kid's buddy is holding a ball or stick for, if any. */
 function heldGame(kid) {
@@ -147,8 +152,11 @@ export function playWith(kid, v, kind) {
     },
     onStart: () => {
       const kid = currentKid(kid0);
-      if (borrows(kid, kind)) kid.lendLog = logLend(kid, today(), GEAR_KEY[kind]);
-      kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
+      // a vacation day's games aren't counted (no limit that day)
+      if (!vacationToday()) {
+        if (borrows(kid, kind)) kid.lendLog = logLend(kid, today(), GEAR_KEY[kind]);
+        kid.playLog = logGame(kid, today(), gamesPerDay(exerciseInfo(kid).weeks) + carriedFor(kid));
+      }
       // one more game on this map without its rare fan (reset when the rare one comes)
       if (MAP_GAMES.includes(kind)) kid.fanDry = { ...(kid.fanDry || {}), [kidTheme(kid)]: (kid.fanDry?.[kidTheme(kid)] || 0) + 1 };
       save();

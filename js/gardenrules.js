@@ -20,7 +20,7 @@
 // kid.gardenDecor says which owned one stands in each spot (like kid.home for furniture).
 // Watering is only for show and lives on this device (see watered()).
 
-import { tasksForDay, entryFor, addDays, isExercise, habitInfo } from './logic.js';
+import { tasksForDay, entryFor, addDays, isExercise, habitInfo, excusedOn } from './logic.js';
 
 export const BEDS = 6;
 export const TREES = 2;
@@ -159,7 +159,7 @@ function walk(state, kid, plot, today, withToday) {
     if (!onList(state, kid, key, today, plot.task)) continue;
     const entry = entryFor(state, kid.id, key);
     const did = saidDone(entry, plot.task);
-    if (key !== today && entry?.excused && !did) continue;
+    if (key !== today && excusedOn(state, kid.id, key) && !did) continue;
     if (key === today && !did) continue; // today isn't over yet
     scheduled += 1;
     if (did) done += 1;
