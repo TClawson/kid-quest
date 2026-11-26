@@ -33,6 +33,7 @@ import { musicSign } from './musicart.js';
 import { cookieIcon } from './little.js';
 import { seasonNow, tintLand, mountWeather } from './seasonlife.js';
 import { isNewSeason, seasonLine } from './seasonhints.js';
+import { readMs } from './logic.js';
 import { nightProbe } from './nightfx.js';
 import { dressLand } from './xmasvillage.js';
 
@@ -778,6 +779,25 @@ export function bubbleSpot(b, safe, avoid = [], most = 60) {
   return best && { x: best.x, y: best.y, below: best.below };
 }
 
+// ---- a talk box stays up through a redraw ----
+// The kid's screen is drawn again often while a talk box is up: the cheer after a chore ends, the
+// family's copy of a save comes back, a visiting buddy changes clothes. A talk box only closes when
+// the kid closes it (or walks off), so each screen remembers the box it has open (in its memory
+// for the kid, as mem.talk) and opens it again, with no sound and no typing, when the screen was
+// drawn again right then. app.js's render marks the open boxes just before it draws (markRedrawn).
+
+/** Marks every open talk box under root as drawn over now (call just before root is drawn again). */
+export function markRedrawn(root) {
+  root.querySelectorAll('.v-dialog:not([hidden])').forEach((d) => { d.dataset.redrawn = String(Date.now()); });
+}
+
+/** The talk box a screen had open when it was just drawn again, or null (it's forgotten either way). */
+export function keptTalk(mem) {
+  const t = mem.talk;
+  mem.talk = null;
+  return t && t.box && Date.now() - Number(t.box.dataset.redrawn || 0) < 2000 ? t : null;
+}
+
 /**
  * The HUD's corners over a full-screen view (hud.js), in screen pixels from the view's edges:
  * { top, bottom, bl: { w, h }, br: { w, h }, boxes } (bl and br: the bottom corners' buttons, or null;
@@ -1087,8 +1107,10 @@ function mount(section, handlers) {
 
   // ---- talking ----
   const personById = (id) => people.find((p) => p.id === id);
-  const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); };
-  const open = (dialogHtml, kind, happy, vid) => {
+  const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); mem.talk = null; };
+  // text: the words, typed out (or all at once when the box comes back after a redraw)
+  const open = (dialogHtml, kind, happy, vid, text = '', quiet = false) => {
+    mem.talk = { box: dialog, args: [dialogHtml, kind, happy, vid, text] };
     dialog.innerHTML = dialogHtml;
     const src = spriteUrl(kind, happy);
     const pc = dialog.querySelector('.v-portrait canvas');
@@ -1097,7 +1119,9 @@ function mount(section, handlers) {
     dialog.hidden = false;
     dialog.dataset.vid = vid;
     section.classList.add('talking');
+    if (quiet) { dialog.querySelector('.v-text').textContent = text; return; }
     handlers.sound?.('talk');
+    typeText(text);
   };
   // the words appear a few letters at a time, like an old game; a tap shows them all
   const typeText = (text) => {
@@ -1178,8 +1202,7 @@ function mount(section, handlers) {
       // in the first days of a season (or when a parent is trying one), a villager may say so
       else if (isNewSeason(se.progress, se.tried)) { const line = seasonLine(se.season, `${data.today}|${p.id}|${hintTaps}`); if (line) text += ` ${line}`; }
     }
-    open(card(villagerName(p.kind), text, quest, buttons), p.kind, doneAll(p) || mode === 'thanks', p.id);
-    typeText(text);
+    open(card(villagerName(p.kind), text, quest, buttons), p.kind, doneAll(p) || mode === 'thanks', p.id, text);
     el?.classList.add('chatting');
     setTimeout(() => el?.classList.remove('chatting'), 600);
   };
@@ -1192,15 +1215,13 @@ function mount(section, handlers) {
         ? `Hi ${data.name}! ${s.missed.length === 1 ? `${s.missed[0]} was` : 'Some evening quests were'} missed last night, so today my shop waits for every quest, evening ones too.${s.left ? ` ${s.left} to go!` : ''} See you then!`
         : `Hi ${data.name}! My shop opens when ${s.evening ? "today's day quests" : "all of today's quests"} are done and a grown-up has checked them.${s.evening ? ' Evening quests can wait.' : ''}${s.left ? ` ${s.left} to go!` : ''} See you then!`;
     const buttons = s.open ? '<button class="btn" data-v="shop">👕 Shop</button><button class="btn ghost" data-v="bye">Bye!</button>' : '<button class="btn" data-v="bye">OK!</button>';
-    open(card(villagerName('badger'), text, '', buttons), 'badger', s.open, 'shop');
-    typeText(text);
+    open(card(villagerName('badger'), text, '', buttons), 'badger', s.open, 'shop', text);
   };
   // the music hall is locked until the first piano: the frog who looks after it says how far off it is
   const sayMusic = () => {
     const n = data.music.left;
     const text = `Ribbit! This is the music house, ${data.name}. It opens when you earn your first piano with a 2-week piano streak.${n ? ` Just ${n} more piano ${n === 1 ? 'day' : 'days'} in a row!` : ''} Keep practicing!`;
-    open(card(villagerName('frog'), text, '', '<button class="btn" data-v="bye">OK!</button>'), 'frog', false, 'music');
-    typeText(text);
+    open(card(villagerName('frog'), text, '', '<button class="btn" data-v="bye">OK!</button>'), 'frog', false, 'music', text);
   };
   dialog.addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]');
@@ -1330,7 +1351,7 @@ function mount(section, handlers) {
   const visitorTap = (el) => {
     handlers.onVisitor?.(el);
     const who = el.classList.contains('v-visitor') ? el : null;
-    if (who) { talkUntil.set(who, performance.now() + 5000); section.querySelectorAll('.v-visitor').forEach((x) => x.classList.toggle('talking', x === who || x.classList.contains('news') || x.classList.contains('cheering'))); }
+    if (who) { talkUntil.set(who, performance.now() + readMs(who.querySelector('.visitor-bubble')?.textContent, 5000)); section.querySelectorAll('.v-visitor').forEach((x) => x.classList.toggle('talking', x === who || x.classList.contains('news') || x.classList.contains('cheering'))); }
   };
   const goVisitor = (el) => {
     const sp = data.spots[el.dataset.id];
@@ -1365,7 +1386,7 @@ function mount(section, handlers) {
     el.classList.add('reeling');
     setTimeout(() => {
       el.querySelector('.visitor-bubble').firstChild.textContent = `${got.rare ? 'WOW! ' : ''}I caught ${/^[aeiou]/i.test(got.name) ? 'an' : 'a'} ${got.name}! ${got.icon}`;
-      talkUntil.set(el, performance.now() + 4000);
+      talkUntil.set(el, performance.now() + readMs(el.querySelector('.visitor-bubble').textContent, 4000));
       visitors.forEach((x) => x.classList.toggle('talking', x === el || x.classList.contains('news') || x.classList.contains('cheering')));
     }, 900);
     setTimeout(() => el.classList.remove('reeling'), 3400);
@@ -1622,6 +1643,9 @@ function mount(section, handlers) {
   mountWeather(world, { season: se, mapId: L.id, W, H, z: 9500 });
   place();
   requestAnimationFrame(tick);
+  // a talk box that was up when the village was drawn again stays up, till the kid closes it
+  const kept = keptTalk(mem);
+  if (kept) open(...kept.args, true);
   // the Today list sent the buddy here from indoors: off to that quest
   const pending = goals.get(data.kid);
   if (pending) {
@@ -1641,7 +1665,19 @@ function mount(section, handlers) {
       const el = els.get(p.id);
       el.classList.add('cheer');
       setTimeout(() => el.classList.remove('cheer'), 2400);
-      setTimeout(() => say(p, 'thanks'), 500);
-    } else if (changed === 'pending') setTimeout(() => say(p, 'pending'), 300);
+      mem.owed = { pid: p.id, mode: 'thanks', at: Date.now() + 500 };
+    } else if (changed === 'pending') mem.owed = { pid: p.id, mode: 'pending', at: Date.now() + 300 };
+  }
+  // the words are owed to the kid until said: if the village is drawn again first (the family's
+  // copy of the save coming back), the new village says them instead of the old one
+  const owed = mem.owed;
+  if (owed && Date.now() - owed.at > 3000) mem.owed = null;
+  else if (owed) {
+    setTimeout(() => {
+      if (!section.isConnected || mem.owed !== owed) return;
+      mem.owed = null;
+      const p = personById(owed.pid);
+      if (p) say(p, owed.mode);
+    }, Math.max(0, owed.at - Date.now()));
   }
 }

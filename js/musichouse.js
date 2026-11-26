@@ -9,6 +9,7 @@ import { MROOM, paintMusicRoom } from './musicart.js';
 import { walkRoom } from './roomwalk.js';
 import { pixelBuffer } from './pixelkit.js';
 import { tierInfo } from './musicrules.js';
+import { keptTalk } from './village.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const R = MROOM;
@@ -126,13 +127,18 @@ function mount(section, handlers) {
     }
   };
 
+  const mem = memory.get(data.kid) || {};
+  memory.set(data.kid, mem);
+
   // ---- talking ----
-  const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); };
-  const say = (who, text, buttons = '<button class="btn" data-m="bye">OK!</button>') => {
+  const closeDialog = () => { dialog.hidden = true; dialog.innerHTML = ''; section.classList.remove('talking'); mem.talk = null; };
+  // quiet: the same box again after a redraw (see keptTalk in village.js)
+  const say = (who, text, buttons = '<button class="btn" data-m="bye">OK!</button>', quiet = false) => {
     dialog.innerHTML = `<div class="v-talk"><b class="v-name">${esc(who)}</b><p class="v-text">${esc(text)}</p><div class="v-buttons">${buttons}</div></div>`;
     dialog.hidden = false;
     section.classList.add('talking');
-    handlers.sound?.('talk');
+    mem.talk = { box: dialog, args: [who, text, buttons] };
+    if (!quiet) handlers.sound?.('talk');
   };
   dialog.addEventListener('click', (e) => {
     const b = e.target.closest('[data-m]');
@@ -162,8 +168,6 @@ function mount(section, handlers) {
     ({ sheets: handlers.onSheets, studio: handlers.onStudio, lab: handlers.onLab, desk: handlers.onDesk })[id]?.();
   };
 
-  const mem = memory.get(data.kid) || {};
-  memory.set(data.kid, mem);
   // a new look moves the furniture: start again by the door
   if (mem.tier !== data.tier) { mem.x = null; mem.tier = data.tier; }
   if (mem.entering || mem.x == null) {
@@ -213,6 +217,9 @@ function mount(section, handlers) {
     walker.floorTap(e);
   });
   drawLife(performance.now());
+  // a talk box that was up when the music house was drawn again stays up, till the kid closes it
+  const kept = keptTalk(mem);
+  if (kept) say(...kept.args, true);
   // a new look: the buddy says so on the way in
   const hi = `${data.kid}|${data.tier}`;
   if (data.hello && !greeted.has(hi)) {

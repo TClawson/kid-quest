@@ -8,7 +8,7 @@ import {
   DEFAULT_ALLOWANCE, DEFAULT_BONUS_LIMIT, questTasks,
   weekParity, isEveryOtherWeek, onWeek, weekStart,
   withMemo, monthDays, habitInfo, CUES, cueFor, routineCue, routineOf, isPinned, planOrder, planSentence, choreWords, weekLookback,
-  todaySummary, familyDay, FAMILY_GOAL, milestoneFor, milestoneFresh,
+  todaySummary, familyDay, FAMILY_GOAL, milestoneFor, milestoneFresh, readMs,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
@@ -19,7 +19,7 @@ import { dailySummaries } from './familygarden.js';
 import { bloomData, gardenLine } from './villagebloom.js';
 import { openLittle } from './little.js';
 import { playsLittle, jarStars, spendStar, earnSticker, newLittle } from './littlerules.js';
-import { villageHtml, mountVillages, cameOut, cameOutOfMusic, cameOutOfGarden, placeVillagers, villagerName, villageGoal } from './village.js';
+import { villageHtml, mountVillages, markRedrawn, cameOut, cameOutOfMusic, cameOutOfGarden, placeVillagers, villagerName, villageGoal } from './village.js';
 import { villageLayout } from './villagemaps.js';
 import { houseHtml, mountHouses, cameIn, houseGoal } from './house.js';
 import { todayHud, todayListHtml } from './today.js';
@@ -287,7 +287,7 @@ function toast(text, action) {
     el.append(' ', b);
   }
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), action ? 6000 : 2600);
+  setTimeout(() => el.remove(), readMs(text, action ? 6000 : 2600));
 }
 
 function floatText(text, anchor) {
@@ -1795,7 +1795,7 @@ function villageLandmark(el, layer) {
   bubble.textContent = info.lines[(ui.secretLine = ((ui.secretLine ?? -1) + 1) % info.lines.length)];
   bubble.hidden = false;
   clearTimeout(bubble.hideTimer);
-  bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, 3500);
+  bubble.hideTimer = setTimeout(() => { bubble.hidden = true; }, readMs(bubble.textContent, 3500));
   if (showPlaying(layer) || Date.now() - (ui.lastShow || 0) < SHOW_AGAIN_MS) { sounds.tap(); return; }
   const img = new Image();
   img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buddySvg(dressed(kid), 'excited', { background: false }))}`;
@@ -3239,6 +3239,7 @@ function render() {
   // it was, and coming back puts it there again, the village in view
   if (lastView === 'kid' && ui.view !== 'kid') ui.kidScroll = scrollY;
   const back = ui.view === 'kid' && lastView && lastView !== 'kid' && lastView !== 'home' && ui.kidScroll != null;
+  markRedrawn($app); // a talk box that's up comes back up (keptTalk in village.js)
   $app.innerHTML = html;
   lastHtml = html;
   lastView = ui.view;
