@@ -2,7 +2,7 @@
 // floor), how full the trophy shelf looks, and whether the buddy is inside or out.
 // Pure logic, no DOM (house.js is the walkable room, houseart.js draws it).
 
-import { tasksForDay, entryFor, addDays, isExercise } from './logic.js';
+import { tasksForDay, entryFor, addDays, isExercise, excusedOn } from './logic.js';
 
 // Which chores the house shows is set by the parents: a task linked to the house has
 // task.house = one of HOUSE_CHORES' ids (set in the task editor, or by adding a task from a
@@ -107,7 +107,7 @@ export function floorDays(state, kid, today) {
     const key = addDays(today, -i);
     if (kid.startDate && key < kid.startDate) break;
     const entry = entryFor(state, kid.id, key);
-    if (entry?.excused) continue;
+    if (excusedOn(state, kid.id, key)) continue;
     const list = tasksForDay(state, kid, key, today).filter(isFloor);
     if (!list.length) continue;
     if (list.some((t) => saidDone(entry, t))) break;

@@ -9,6 +9,7 @@ import {
   weekParity, isEveryOtherWeek, onWeek, weekStart,
   withMemo, monthDays, habitInfo, CUES, cueFor, routineCue, routineOf, isPinned, planOrder, planSentence, choreWords, weekLookback,
   todaySummary, familyDay, FAMILY_GOAL, milestoneFor, milestoneFresh, readMs,
+  isVacation, toggleVacationDay, switchVacation, upcomingVacation,
 } from './logic.js';
 import { sounds, confetti, setSound } from './fx.js';
 import { buddySvg, buddyLine, MOVE_ART, catchFor, ballSvg } from './avatar.js';
@@ -771,7 +772,7 @@ function chestFor(kid, key) {
   const t = today();
   const s = dayStatus(state, kid, key, t);
   const opened = entryFor(state, kid.id, key)?.chest || null;
-  const ready = chestReady(key, t, { complete: s.complete, total: s.total, excused: s.excused, opened: Boolean(opened) });
+  const ready = chestReady(key, t, { complete: s.complete, total: s.total, excused: s.excused && !s.vacation, opened: Boolean(opened) });
   // the streak counting this day: until the day is done, as if it were
   const streak = streakInfo(state, kid, key).streak + (s.complete ? 0 : 1);
   return { key, s, opened, ready, tier: opened ? tierById(opened.tier) : chestTier(streak) };
@@ -1213,8 +1214,8 @@ function visitorInfo(kid, s) {
   const visitors = todaysVisitors(kid);
   if (!visitors.length) return { visitors, lines: [], news: {} };
   const lines = visitorLines(visitors, { name: kid.name, streak: streakInfo(state, kid, today()).streak, complete: s.complete }, today());
-  // once the quest is done, every visitor wants to play (see playWith)
-  if (s.complete) {
+  // once the quest is done, every visitor wants to play (see playWith); on a vacation day, right away
+  if (s.complete || s.vacation) {
     const left = gamesLeftFor(kid);
     const invite = { soccer: 'Keepy-uppy? Tap me!', hockey: 'Hockey? Tap me!', football: 'Wanna throw the football? Tap me!', fishing: 'Wanna go fishing? Tap me!', sledding: 'Sledding? Tap me!', race: 'Race me down the hill? Tap me!', train: 'Wanna ride the photo train? Tap me!', tricks: 'Trick jumps on our bikes? Tap me!', dig: 'Dino dig? Tap me!', tag: 'Wanna play tag? Tap me!' };
     const plan = visitPlan(kid, visitors);
@@ -1777,7 +1778,7 @@ function villageVisit(kid, s) {
       let look = dressedVisitor(v);
       if (area?.kind === 'pond') look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: `sport-rod-${version(gear.rod)}` } });
       else if (area) look = dressedVisitor(v, { ...v.buddy, outfit: { ...v.buddy.outfit, music: undefined, sport: area.kind === 'hockey' ? `sport-hockey-${version(gear.hockey || 1)}` : undefined } });
-      return { id: v.id, name: v.name, color: v.color, rod: gear.rod || 1, line: lines[i], news: news[v.id] || '', html: liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete), label: `${v.name}'s buddy` }) };
+      return { id: v.id, name: v.name, color: v.color, rod: gear.rod || 1, line: lines[i], news: news[v.id] || '', html: liveHtml(`visit:${v.id}`, look, { background: false, feel: visitFeel(area, s.complete || s.vacation), label: `${v.name}'s buddy` }) };
     }),
     areas: plan.areas.map((a) => {
       const tiers = a.members.map((id) => bestGear(visitors.find((v) => v.id === id).owned)[a.kind] || 1);
@@ -1989,7 +1990,7 @@ function todayModel(kid) {
   const day = parseKey(t).toLocaleDateString(undefined, { weekday: 'long' });
   return {
     kidId: kid.id,
-    head: `${day} · ${q.excused ? 'day off' : `${q.done} of ${q.total} done`}${q.waitingToday ? ` · ${q.waitingToday} waiting for a parent` : ''}`,
+    head: `${day} · ${q.vacation ? 'vacation day 🏖️' : q.excused ? 'day off' : `${q.done} of ${q.total} done`}${q.waitingToday ? ` · ${q.waitingToday} waiting for a parent` : ''}`,
     groups,
     chest: { text: chest, ready: c.ready },
     shop: { open: lock.open, text: shopLine(lock) },
@@ -2623,6 +2624,7 @@ function doneRow(kid, { task, record }) {
 /** "4 done · 2 waiting · 3 to go", or "All 7 done 🌟 · chest opened". */
 function todayLine(kid, d) {
   const waiting = d.waiting.length ? `<b>${d.waiting.length} waiting</b>` : '';
+  if (d.vacation) return ['Vacation day 🏖️', d.done ? `${d.done} done anyway` : '', waiting].filter(Boolean).join(' · ');
   if (d.excused) return ['Excused today 💤', waiting].filter(Boolean).join(' · ');
   if (!d.total) return ['No chores today', waiting].filter(Boolean).join(' · ');
   if (d.complete) {
@@ -2650,7 +2652,7 @@ function todayCard(kid) {
       ${showDone ? d.doneTasks.map((x) => doneRow(kid, x)).join('') : ''}
       <div class="kc-actions">
         <button class="btn ghost" data-action="bonus" data-kid="${kid.id}" ${w.bonusLeft ? '' : 'disabled'}>🎁 Bonus</button>
-        <button class="btn ghost ${d.excused ? 'on' : ''}" data-action="today-excuse" data-kid="${kid.id}" aria-pressed="${d.excused}">😷 ${d.excused ? 'Excused' : 'Excuse'}</button>
+        ${d.vacation ? '<button class="btn ghost on" disabled>🏖️ Vacation</button>' : `<button class="btn ghost ${d.excused ? 'on' : ''}" data-action="today-excuse" data-kid="${kid.id}" aria-pressed="${d.excused}">😷 ${d.excused ? 'Excused' : 'Excuse'}</button>`}
         <button class="btn ghost" data-action="today-chores" data-kid="${kid.id}">✏️ Chores</button>
       </div>`;
   }
@@ -2911,16 +2913,74 @@ function parentHistory() {
             <button class="btn ${st === 'done' ? '' : 'ghost'}" data-action="history-toggle" data-kid="${kid.id}" data-key="${key}" data-task="${task.id}">${st === 'done' ? '✓ Done' : st === 'pending' ? 'Approve' : 'Mark done'}</button>
           </div>`;
   }).join('')}
-        <label class="row"><input type="checkbox" data-action-change="history-excuse" data-kid="${kid.id}" data-key="${key}" ${s.excused ? 'checked' : ''}> Excused day (sick, travel, recital). The streak is kept.</label>
+        ${s.vacation ? '<p class="row">🏖️ Family vacation day: excused for everyone. The streak is kept.</p>' : `<label class="row"><input type="checkbox" data-action-change="history-excuse" data-kid="${kid.id}" data-key="${key}" ${s.excused ? 'checked' : ''}> Excused day (sick, travel, recital). The streak is kept.</label>`}
       </div>`;
   }).join('')}
     <p class="muted small">Streaks update right away, so approving yesterday's chores late keeps the streak.</p>`;
+}
+
+// ---------- family vacation (see isVacation in logic.js) ----------
+
+const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+/** "Dec 20 to 27" style runs of vacation days, for the summary line. */
+function vacationRuns(keys) {
+  const runs = [];
+  for (const k of keys) {
+    const last = runs[runs.length - 1];
+    if (last && addDays(last[1], 1) === k) last[1] = k; else runs.push([k, k]);
+  }
+  const fmt = (k) => parseKey(k).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return runs.map(([a, b]) => (a === b ? fmt(a) : `${fmt(a)} to ${fmt(b)}`)).join(', ');
+}
+
+/** Parents › Settings: the vacation switch and a month calendar to tap days on and off. */
+function vacationCard() {
+  const v = state.settings.vacation || {};
+  const t = today();
+  const upcoming = upcomingVacation(state, t);
+  const head = `
+    <div class="card vacation">
+      <h2>🏖️ Family vacation</h2>
+      <label class="row"><input type="checkbox" data-action-change="vacation-switch" ${v.on ? 'checked' : ''}> We're on a family vacation</label>`;
+  if (!v.on) {
+    return `${head}
+      <small class="muted">Switch it on to pick the days. On a vacation day every kid's chores are excused (streaks, strong weeks, the Friday reward, the garden and the house all stay safe), the shop opens straight away, and visitor games have no limit.</small>
+    </div>`;
+  }
+  const base = parseKey(t);
+  const first = new Date(base.getFullYear(), base.getMonth() + (ui.vacMonth || 0), 1);
+  const firstKey = dateKey(first);
+  const lead = (first.getDay() + 6) % 7;
+  const daysIn = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < lead; i += 1) cells.push('<span class="vac-day blank"></span>');
+  for (let d = 0; d < daysIn; d += 1) {
+    const key = addDays(firstKey, d);
+    const on = isVacation(state, key);
+    const past = key < t;
+    cells.push(`<button class="vac-day${on ? ' on' : ''}${key === t ? ' today' : ''}" data-action="vacation-day" data-key="${key}" ${past ? 'disabled' : ''} aria-pressed="${on}" aria-label="${esc(parseKey(key).toDateString())}${on ? ', vacation' : ''}">${d + 1}</button>`);
+  }
+  const month = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return `${head}
+      <div class="vac-cal">
+        <div class="vac-nav">
+          <button class="btn ghost" data-action="vacation-month" data-step="-1" ${(ui.vacMonth || 0) <= 0 ? 'disabled' : ''} aria-label="Previous month">‹</button>
+          <b>${esc(month)}</b>
+          <button class="btn ghost" data-action="vacation-month" data-step="1" aria-label="Next month">›</button>
+        </div>
+        <div class="vac-grid">${WEEKDAYS.map((w) => `<span class="vac-wd">${w}</span>`).join('')}${cells.join('')}</div>
+      </div>
+      <p class="small">${upcoming.length ? `Vacation days: <b>${esc(vacationRuns(upcoming))}</b>` : 'Tap the days you are away.'}</p>
+      <small class="muted">Tap a day to add or take it away. Every kid's device gets the same days. On a vacation day chores are excused for every kid (nothing missed counts against streaks, strong weeks, the Friday reward, the garden or the house), the shop opens straight away, and visitor games have no limit. Chores done anyway still earn their coins. Switching off keeps the days already past, so they stay excused.</small>
+    </div>`;
 }
 
 function parentSettings() {
   const st = state.settings;
   const notif = 'Notification' in window ? Notification.permission : 'unsupported';
   return `
+${vacationCard()}
     <div class="card">
       <label class="block">Weekly reward (on Friday, for a kid who did every chore Monday to Friday; excused days don't count against it)
         <input data-setting="weeklyReward" value="${esc(st.weeklyReward)}"></label>
@@ -3378,6 +3438,11 @@ const actions = {
     setExcused(kid, !was);
     toast(was ? `${kid.name}'s day is no longer excused` : `${kid.name}'s day is excused. The streak is kept.`, { label: 'Undo', run: () => { const k = kidById(kid.id); if (k) setExcused(k, was); } });
   },
+  'vacation-day': (el) => {
+    state.settings.vacation = toggleVacationDay(state.settings.vacation, el.dataset.key, today());
+    save(); render();
+  },
+  'vacation-month': (el) => { ui.vacMonth = Math.max(0, (ui.vacMonth || 0) + Number(el.dataset.step)); render(); },
   'today-chores': (el) => { ui.tab = 'kids'; ui.editKidId = el.dataset.kid; ui.openTask = null; render(); window.scrollTo(0, 0); },
   'rewards-see': () => { ui.showRewards = !ui.showRewards; render(); },
   'add-kid': () => {
@@ -3791,6 +3856,13 @@ document.addEventListener('change', (e) => {
     return;
   }
   if (act === 'history-date') { ui.historyDate = el.value && el.value <= today() ? el.value : null; render(); }
+  if (act === 'vacation-switch') {
+    state.settings.vacation = switchVacation(state.settings.vacation, el.checked, today());
+    ui.vacMonth = 0;
+    save(); render();
+    toast(el.checked ? 'Vacation on: today is a vacation day. Tap more days on the calendar.' : 'Vacation off. Days already past stay excused.');
+    return;
+  }
   if (act === 'history-excuse') { entryFor(state, el.dataset.kid, el.dataset.key, true).excused = el.checked; save(); render(); }
   if (act === 'import') importFile(el.files?.[0]);
 });
