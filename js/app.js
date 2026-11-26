@@ -56,6 +56,8 @@ import { viewSongbook, mountSongbook, songbookActions, openSongbook, printCardHt
 import { viewStudio, mountStudio, studioActions, openStudio } from './studio.js';
 import { mountTestRec } from './testrec.js';
 import { viewNfc, mountNfcTest } from './nfctest.js';
+import { stationCard, mountStationCard, stationActions, viewStation, leaveStation } from './station.js';
+import { tokenNote } from './stationrules.js';
 import { viewLab, mountLab, labActions, openLab } from './notolab.js';
 import { viewCompose, mountCompose, composeActions, openCompose } from './composedesk.js';
 import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
@@ -2582,7 +2584,8 @@ function waitRow(kid, { key, task, record }) {
   if (task.minutes) bits.push(`${task.minutes} min done`);
   const away = awayText(record);
   if (away) bits.push(esc(away));
-  if (key === t && !task.minutes && record?.at) bits.push(esc(askedWhen(record.at)));
+  if (tokenNote(record)) bits.push(esc(tokenNote(record)));
+  else if (key === t && !task.minutes && record?.at) bits.push(esc(askedWhen(record.at)));
   if (!bits.length) bits.push('Waiting for a parent');
   const data = `data-kid="${kid.id}" data-key="${key}" data-task="${task.id}"`;
   return `<div class="pr wait">
@@ -2598,6 +2601,7 @@ function todoRow(kid, { task, record }) {
   let sub;
   if (isExercise(task)) sub = `Bonus exercise · earns 💎${task.minutes ? ` · ${task.minutes} min` : ''}`;
   else if (task.minutes) sub = record?.seconds ? `${Math.min(task.minutes, Math.floor(record.seconds / 60))} of ${task.minutes} min on the timer` : `${task.minutes} min timer`;
+  else if (record?.startedAt) sub = `Started at ${new Date(record.startedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} with a token`;
   else if (task.verify === 'parent') sub = 'Needs a parent check';
   else sub = periodName(task);
   return `<div class="pr">
@@ -2608,7 +2612,7 @@ function todoRow(kid, { task, record }) {
 }
 
 function doneRow(kid, { task, record }) {
-  const by = record?.by === 'parent' ? 'Done · ticked by a parent' : 'Done';
+  const by = tokenNote(record) || (record?.by === 'parent' ? 'Done · ticked by a parent' : 'Done');
   return `<div class="pr done">
       <span class="ic" aria-hidden="true">${esc(task.icon)}</span>
       <span class="tx"><b>${esc(task.name)}</b><small>${by}</small></span>
@@ -2936,6 +2940,7 @@ function parentSettings() {
     </div>
 ${allowanceCard()}
 ${printCardHtml()}
+${stationCard()}
     <div class="card">
       <h2>Parent PIN</h2>
       ${parentDevice() ? '<p class="muted small">This phone is signed in to the family as a parent, so it opens Parents without the PIN. Kids’ devices still ask for it.</p>' : ''}
@@ -3150,7 +3155,7 @@ function buySpecies(kid, sp, prog) {
     </div>`);
 }
 
-const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, lab: viewLab, compose: viewCompose, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen, nfc: viewNfc };
+const views = { setup: viewSetup, home: viewHome, kid: viewKid, timer: viewTimer, watch: viewWatch, songbook: viewSongbook, studio: viewStudio, lab: viewLab, compose: viewCompose, parent: viewParent, wardrobe: viewWardrobe, listen: viewListen, nfc: viewNfc, station: viewStation };
 
 // Rows that scroll sideways (wardrobe tabs, buddy picker...) keep their place when the screen is redrawn.
 const SIDE_SCROLLERS = '.tabs, .pick';
@@ -3253,6 +3258,7 @@ function render() {
   mountStudio($app);
   mountTestRec($app);
   mountNfcTest($app);
+  mountStationCard($app);
   mountLab($app);
   mountCompose($app);
   liveStart();
@@ -3270,6 +3276,7 @@ function render() {
  * the map music muted, since the kid put it on).
  */
 function syncMusic() {
+  if (ui.view === 'station') return; // the buddy station plays its own work song (station.js)
   const onMap = ui.view === 'kid';
   const kid = kidById(ui.kidId);
   const heard = onMap && state.settings.sound && document.visibilityState === 'visible';
@@ -3860,6 +3867,13 @@ actions.visitor = (el) => {
 
 // the leaderboard's This week / All time tabs
 Object.assign(actions, songbookActions);
+Object.assign(actions, stationActions); // Parents › Settings › Buddy station and the station screen (station.js)
+// leaving the buddy station always takes the parent PIN, even on a parent's own phone
+actions['station-exit'] = () => {
+  const out = () => { leaveStation(); ui.view = 'parent'; ui.tab = 'settings'; render(); window.scrollTo(0, 0); };
+  if (!state.settings.pinHash) { out(); return; }
+  pinPad({ title: 'Leave the station', subtitle: 'Type the parent PIN', onSuccess: out });
+};
 Object.assign(actions, studioActions);
 Object.assign(actions, labActions);
 Object.assign(actions, composeActions);
@@ -4121,7 +4135,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio' || ui.view === 'lab' || ui.view === 'compose') return;
+    if (!hadController || reloading || ui.view === 'timer' || ui.view === 'watch' || ui.view === 'studio' || ui.view === 'lab' || ui.view === 'compose' || ui.view === 'station') return;
     reloading = true;
     window.location.reload();
   });
