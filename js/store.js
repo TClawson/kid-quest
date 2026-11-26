@@ -235,8 +235,9 @@ const isList = (p) => (p.length === 1 && KID_LISTS.has(p[0])) || (p.length === 2
 const isCount = (p) => (p.length === 1 && KID_COUNTS.has(p[0])) || (p.length === 2 && p[0] === 'xmas' && p[1] === 'tinsel');
 
 // December maps a kid gets for the first time are sent a field at a time, so another device's
-// present or ornament written meanwhile is kept (xmas.js, xmasgifts.js)
-const SPREAD = new Set(['xmas', 'xmasGifts']);
+// present or ornament written meanwhile is kept (xmas.js, xmasgifts.js); so is a kid's first
+// linked chore token (stationrules.js)
+const SPREAD = new Set(['xmas', 'xmasGifts', 'tokens']);
 const spread = (fields) => fields.flatMap(([p, v]) => (p.length === 1 && SPREAD.has(p[0]) && v && typeof v === 'object' && !Array.isArray(v)
   ? Object.entries(v).map(([k, x]) => [[p[0], k], x])
   : [[p, v]]));

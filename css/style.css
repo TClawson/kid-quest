@@ -623,3 +623,38 @@ body:has(.approve-bar) .toast { bottom: calc(var(--pnav-h, 64px) + 86px + env(sa
 .planner.pl-big .pl-name { font-size: 1.25rem; }
 .planner.pl-big .pl-n { width: 30px; height: 30px; }
 .modal-card:has(.planner) { width: min(640px, 100%); }
+
+/* ---------- the buddy station (js/station.js) ---------- */
+.station-card .bs-kid-links h3 { margin: 14px 0 4px; }
+.bs-link { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.bs-link .ic { font-size: 1.3rem; width: 28px; text-align: center; }
+.bs-link .tx { flex: 1 1 140px; display: flex; flex-direction: column; min-width: 0; }
+.bs-link .tx small { color: var(--muted); }
+.bs-link.linked .tx small { color: var(--done); font-weight: 700; }
+.bs-song { font-size: 0.9rem; color: var(--muted); }
+.bs-song select { min-height: 40px; }
+.bs-hold { background: #fff4d6; border-radius: 12px; padding: 10px 12px; }
+.bs-last { background: #e8f9ef; border-radius: 12px; padding: 10px 12px; font-weight: 700; }
+.station-card .btn.huge { margin-top: 14px; width: 100%; }
+
+.screen.station { position: fixed; inset: 0; z-index: 15; background: #0d0b1f; color: #f4f1ff; display: flex; flex-direction: column; align-items: center; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); overflow: hidden; }
+.bs-exit { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.45); font-size: 1.1rem; }
+.bs-stage { flex: 1; width: 100%; display: flex; gap: 16px; align-items: center; justify-content: center; flex-wrap: wrap; min-height: 0; }
+.bs-big { flex: 1 1 260px; max-width: 420px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.bs-big canvas.live-buddy { width: min(62vw, 300px); height: auto; aspect-ratio: 1; image-rendering: pixelated; border-radius: 24px; box-shadow: 0 0 0 4px var(--kid), 0 0 40px color-mix(in srgb, var(--kid) 45%, transparent); }
+.screen.station.busy .bs-big:nth-child(2) canvas.live-buddy, .bs-stage:has(.bs-big + .bs-big) canvas.live-buddy { width: min(40vw, 220px); }
+.bs-name { font-size: 1.6rem; margin-top: 12px; }
+.bs-chore { margin: 4px 0 10px; font-size: 1.2rem; }
+.bs-bar { width: min(80%, 300px); height: 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.bs-bar i { display: block; height: 100%; background: var(--kid); border-radius: inherit; transition: width 0.5s linear; }
+.bs-work.humming .bs-bar i { width: 0 !important; }
+.bs-sub { margin-top: 6px; opacity: 0.7; }
+.bs-party .bs-chore { font-size: 1.5rem; font-weight: 900; }
+.bs-msg { background: rgba(255, 255, 255, 0.1); border: 2px solid var(--kid, #8b7cf0); border-radius: 16px; padding: 10px 16px; font-size: 1.2rem; text-align: center; max-width: 520px; animation: rise 0.25s; }
+.bs-hint { opacity: 0.5; margin: 6px 0 0; }
+.bs-reader { text-align: center; margin: 8px 0; }
+.bs-rest { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; padding-top: 10px; }
+.bs-small { display: flex; flex-direction: column; align-items: center; opacity: 0.75; }
+.bs-small canvas.live-buddy { width: 96px; height: 96px; image-rendering: pixelated; border-radius: 16px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--kid) 60%, transparent); }
+.screen.station.rest .bs-small canvas.live-buddy { width: min(32vw, 150px); height: auto; aspect-ratio: 1; }
+.bs-small small { margin-top: 6px; }
