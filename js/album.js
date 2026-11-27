@@ -4,6 +4,7 @@
 //
 //   kid.critterAlbum = { 'meadow-fox': { q: 'perfect', slots: ['portrait', 'close'], map: 'bg-meadow',
 //     date: '2026-11-21', season: 'autumn', weather: 'rain' } }
+//   (a perfect one also keeps neg: the photo's negative, so it can be printed: js/prints.js)
 //   kid.critterClues = { 'bg-meadow': 2 }  // clues to each map's legend (3 bring it)
 //
 // The album records sync with the family like the fish book. The photos themselves are pictures,
@@ -23,7 +24,7 @@ export function recordPhoto(album = {}, shot, date) {
   const gotSlot = slots.length > (old?.slots?.length || 0);
   if (!up && !gotSlot) return { album, isNew: false };
   const rec = up
-    ? { q: shot.quality, slots, map: shot.map, date, season: shot.season, weather: shot.weather }
+    ? { q: shot.quality, slots, map: shot.map, date, season: shot.season, weather: shot.weather, ...(shot.quality === 'perfect' && shot.neg ? { neg: shot.neg } : {}) }
     : { ...old, slots };
   return { album: { ...album, [shot.critter]: rec }, isNew: true, first: !old, better: Boolean(old) && up };
 }

@@ -6,7 +6,7 @@
 // book, the turntable (once bought) its records (turntable.js), and the door leads back out
 // to the village. houseart.js draws it all.
 
-import { ROOM, TURNTABLE, DRESSER, paintRoom, xtreeAt } from './houseart.js';
+import { ROOM, TURNTABLE, DRESSER, GALLERY, paintRoom, xtreeAt } from './houseart.js';
 import { tankSpec } from './tankart.js';
 import { makeGrid, findPath, hudBands, camAxis, roomScale, keptTalk } from './village.js';
 import { furnitureById } from './furniture.js';
@@ -39,6 +39,7 @@ export const HOUSE_SPOTS = {
   shower: { x: 298, y: 92 }, // in front of the shower
   vacuum: { x: 80, y: 142 }, // on the floor (vacuuming)
   dust: { x: 101, y: 64 }, // in front of the shelf (dusting)
+  photos: { x: 54, y: 78 }, // beside the bed, looking up at the photo wall
 };
 /** December: where the buddy stands to look at the ornament tree (in front of it, a little to the right). */
 const xtreeSpot = (layout) => { const T = xtreeAt(layout); return { x: T.x + 32, y: T.y + 74 }; };
@@ -57,6 +58,7 @@ const HOT = {
   dresser: [ROOM.at.dresser.x, ROOM.at.dresser.y, DRESSER.w, DRESSER.h],
   shower: [287, 6, 26, 76],
   basket: [ROOM.at.basket.x, ROOM.at.basket.y, 16, 18],
+  photos: [GALLERY.x - 1, GALLERY.y - 1, GALLERY.w + 2, GALLERY.h + 2],
 };
 /**
  * Where the buddy stands to look in the tank and read the fish book, and their tap boxes, for
@@ -132,6 +134,8 @@ function xmasSpots(x, layout) {
  *   little: true for a kid who plays the little games (the puzzle box on the floor opens Animal Puzzles),
  *   dig: the dino dig's displays, { skeleton, pedestal } (dino id and treasure key, or null), or
  *   null before the kid has a shovel (digbook-ui.js digShow),
+ *   photos: the photo wall (prints.js), { frame: FRAME_COLORS ramp, pics: [{ url, name } | null x4] }, or
+ *   null when the gallery frame isn't up,
  * }
  */
 export function houseHtml(h) {
@@ -143,6 +147,7 @@ export function houseHtml(h) {
     harvest: h.harvest || null,
     dig: h.dig || null,
     xmas: h.xmas || null,
+    frame: h.photos?.frame || null,
   };
   const spec = tankSpec(h.layout?.tank?.art);
   const T = spec.at;
@@ -182,6 +187,8 @@ export function houseHtml(h) {
           ${spot('pedestal', 'Treasure pedestal', '<span class="h-tag">💎 Pedestal</span>')}` : ''}
           ${h.xmas ? xmasSpots(h.xmas, { music: Boolean(h.layout?.music) }) : ''}
           ${h.little ? spot('puzzle', 'Animal puzzles', '<span class="h-puzzle" style="left:1px;top:2px"></span><span class="h-tag">🧩 Puzzles</span>') : ''}
+          ${h.photos ? `${spot('photos', 'Photo wall')}
+          ${GALLERY.pics.map((p, i) => (h.photos.pics[i] ? `<img class="h-print" src="${esc(h.photos.pics[i].url)}" alt="${esc(h.photos.pics[i].name)}" style="left:${GALLERY.x + p.x}px;top:${GALLERY.y + p.y}px;width:${p.w}px;height:${p.h}px">` : '')).join('')}` : ''}
           ${spot('bed', 'Bed')}
           ${spot('sink', 'Sink')}
           ${spot('dresser', 'Dresser')}
@@ -225,12 +232,12 @@ export function mountHouses(root, handlers) {
 
 let roomCache = { key: '', canvas: null, res: null };
 function room(doc, data) {
-  const key = JSON.stringify([data.layout, data.chores && Object.fromEntries(Object.entries(data.chores).map(([k, v]) => [k, v ? v.st : null])), data.mess, data.shelf, data.gear, data.color, data.dig, data.xmas]);
+  const key = JSON.stringify([data.layout, data.chores && Object.fromEntries(Object.entries(data.chores).map(([k, v]) => [k, v ? v.st : null])), data.mess, data.shelf, data.gear, data.color, data.dig, data.xmas, data.frame]);
   if (roomCache.key !== key) {
     const canvas = doc.createElement('canvas');
     const done = (k) => !data.chores?.[k] || data.chores[k].st === 'done' || data.chores[k].st === 'pending';
     const layout = Object.fromEntries(Object.entries(data.layout).map(([k, id]) => [k, id ? furnitureById(id) : null]));
-    const res = paintRoom(canvas, { layout, made: done('bed'), teeth: done('teeth'), dresser: done('dresser'), books: done('books'), mess: data.mess, shelf: data.shelf, gear: data.gear, color: data.color, dig: data.dig, xmas: data.xmas });
+    const res = paintRoom(canvas, { layout, made: done('bed'), teeth: done('teeth'), dresser: done('dresser'), books: done('books'), mess: data.mess, shelf: data.shelf, gear: data.gear, color: data.color, dig: data.dig, xmas: data.xmas, frame: data.frame || undefined });
     roomCache = { key, canvas, res };
   }
   return roomCache;
@@ -427,6 +434,7 @@ function mount(section, handlers) {
     else if (goal.use === 'pedestal') handlers.onPedestal?.();
     else if (goal.use === 'puzzle') handlers.onPuzzle?.();
     else if (goal.use === 'xtree') handlers.onOrnaments?.();
+    else if (goal.use === 'photos') handlers.onPhotos?.();
     else if (goal.use) choreTalk(goal.use);
   };
   const walkTo = (x, y, goal = null) => {

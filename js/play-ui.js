@@ -11,6 +11,7 @@ import { itemById, unlockedMoves, bestGear } from './items.js';
 import { planVisits } from './visits.js';
 import { gameFor, GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
+import { rideIsNight } from './nightfx.js';
 import { recordWeekBest } from './leaderboard.js';
 import { recordCatch, catchSpecies } from './fishbook.js';
 import { recordDig, nextDry } from './digfinds.js';
@@ -138,6 +139,8 @@ export function playWith(kid, v, kind) {
     sounds,
     // the photo train: clues the kid has found toward each map's legend
     clues: (map) => kid.critterClues?.[map] || 0,
+    // the photo train: a ride after dark in Denver (or after 7 PM) is a night ride
+    night: kind === 'train' && rideIsNight(),
     // the daily limit, and a borrowed ball, stick or rod only for a couple of games: "play again"
     // inside the game checks both, the same as tapping a visitor in the village does
     gamesLeft: () => {

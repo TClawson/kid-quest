@@ -70,6 +70,7 @@ import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS
 import { GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { openCritterAlbum, openCritterPage } from './albumview.js';
+import { housePhotos, openPhotoWall, printActions } from './printsview.js';
 import { SPOTS as FISH_SPOTS, boatThumb } from './fishing.js';
 import { PERSONALITIES } from './tagfun.js';
 import { chestTier, chestPrize, chestPiece, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
@@ -1433,6 +1434,7 @@ function houseView(kid, list, mood) {
     little: playsLittle(kid),
     dig: hasDig(kid) ? digShow(kid) : null,
     xmas: xmasHouse(state, kid, t, { little: playsLittle(kid) }),
+    photos: housePhotos(kid),
   });
 }
 
@@ -1447,6 +1449,7 @@ const houseHandlers = {
   onPedestal: () => openDisplayPicker(kidById(ui.kidId), 'pedestal'),
   onPuzzle: () => openLittleGames('puzzle'),
   onOrnaments: () => openOrnamentBook(kidById(ui.kidId)),
+  onPhotos: () => openPhotoWall(kidById(ui.kidId)),
   onUnwrap: (id) => openPresent(ui.kidId, id),
   spinning: (kidId) => spinning(kidId),
   onGarden: () => goGarden('house'),
@@ -3979,6 +3982,8 @@ actions['critter-page'] = (el) => {
   openCritterPage(kidById(ui.kidId), el.dataset.critter);
 };
 actions['album-back'] = () => openCritterAlbum(kidById(ui.kidId), ui.caScroll || 0);
+// prints of perfect photos and the photo wall in the house (printsview.js)
+Object.assign(actions, printActions(() => kidById(ui.kidId)));
 // the dig book (digbook-ui.js): beside the fish book in the house, and the dino dig's displays
 const digScroll = () => { const card = $modal.querySelector('.modal-card'); ui.dgScroll = card ? card.scrollTop : 0; };
 actions['dig-book'] = () => { sounds.tap(); openDigBook(kidById(ui.kidId), ui.dgTab || 'skeletons'); };

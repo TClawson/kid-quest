@@ -173,6 +173,8 @@ const SHELL = [
   'js/critterart.js',
   'js/album.js',
   'js/albumview.js',
+  'js/prints.js',
+  'js/printsview.js',
   'js/fishart.js',
   'js/football.js',
   'js/fieldlooks.js',

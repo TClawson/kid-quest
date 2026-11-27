@@ -40,7 +40,7 @@
 import { Player, rng, canvas, clamp, HAPPY } from './play.js';
 import { critterPic } from './critterart.js';
 import {
-  oddsFor, pickWeighted, critterById, mapCritters, isOut, weatherOf, wantedOf, RARITIES, QUALITY, qualityOf, DECEMBER_SHARE,
+  oddsFor, pickWeighted, critterById, mapCritters, isOut, weatherOf, wantedOf, RARITIES, QUALITY, qualityOf, DECEMBER_SHARE, NIGHT_SHARE, SECRET_SHARE, ROUTE_SHARE,
   slotsOf, photoPoints, NEW_BONUS, WEATHERS,
 } from './critters.js';
 import { addPop } from './meter.js';
@@ -148,6 +148,8 @@ const SPACE_WEATHER = { sunny: { name: 'Earthrise', icon: '🌍' }, rain: { name
 THEMES['bg-space'].weatherNames = SPACE_WEATHER;
 /** Rainbow land's colors: one photo of each in a ride brings the unicorn. */
 export const RAINBOW_BONUS = 50;
+/** A Pair shot (two animals in one sharp photo) is worth this many times as much. */
+export const PAIR_BONUS = 1.5;
 export const RAINBOW = [['red', '#ff6b6b'], ['orange', '#ffa94d'], ['yellow', '#ffe066'], ['green', '#69db7c'], ['blue', '#4dabf7'], ['purple', '#b197fc']];
 export const TRAIN_MAPS = Object.keys(THEMES);
 const themeFor = (map, season) => {
@@ -174,6 +176,9 @@ export class PhotoTrain {
     if (this.weather === 'snow' && this.theme.warm) this.weather = 'rain'; // no snow on warm maps
     if (this.theme.downpour && this.weather === 'rain' && this.season !== 'winter') this.weather = 'mist'; // the rain comes later, in the ride
     this.wanted = wantedOf(this.day, this.map, this.season);
+    // a night ride (after dark in Denver, or after 7 PM: js/nightfx.js rideIsNight): darker, with
+    // stars and the moon, and the map's night animal can come (critters.js NIGHT_SHARE)
+    this.night = Boolean(opts.night);
     this.clues = (typeof opts.clues === 'function' ? opts.clues(this.map) : opts.clues) || 0;
     this.onPhoto = opts.onPhoto || null; this.onClue = opts.onClue || null;
     this.cam = cameraFor(opts.kid.gear?.camera || 1);
@@ -259,9 +264,16 @@ export class PhotoTrain {
     // nothing twice at once
     const out = new Set(this.critters.filter((k) => !k.gone).map((k) => k.c.id));
     pairs = pairs.filter(([c]) => !out.has(c.id));
+    // secret animals (critters.js): the night animal only on a night ride; each a small fixed share
+    pairs = pairs.filter(([c]) => !c.night || this.night);
+    if (pairs.some(([c]) => c.rarity === 'secret')) {
+      const rest = pairs.reduce((sum, [c, w]) => sum + (c.rarity === 'secret' ? 0 : w), 0);
+      const boost = this.cam.tier >= 3 ? 1.75 : 1;
+      pairs = pairs.map(([c, w]) => [c, c.rarity !== 'secret' ? w : rest * boost * (c.night ? NIGHT_SHARE : this.route ? ROUTE_SHARE : SECRET_SHARE)]);
+    }
     // December animals: a small fixed share of whatever else could come (critters.js DECEMBER_SHARE)
     if (pairs.some(([c]) => c.december)) {
-      const rest = pairs.reduce((s, [c, w]) => s + (c.december ? 0 : w), 0);
+      const rest = pairs.reduce((s, [c, w]) => s + (c.december || c.rarity === 'secret' ? 0 : w), 0);
       const share = DECEMBER_SHARE * (this.cam.tier >= 3 ? 1.75 : 1);
       pairs = pairs.map(([c, w]) => [c, c.december ? rest * share : w]);
     }
@@ -605,9 +617,12 @@ export class PhotoTrain {
     }
     const c = o.k.c;
     shot.critter = c.id; shot.name = c.name; shot.rarity = c.rarity;
+    if (shot.quality === 'perfect') shot.neg = this.negative(o.k, fr);
     shot.slots = slotsOf(shot);
     shot.wanted = c.id === this.wanted;
-    let pts = photoPoints(c, shot.quality, shot.wanted);
+    // two (or more) animals in one sharp photo: a Pair shot, worth half as much again (Taylor, 2026-11-27)
+    shot.pair = sharp && cands.some((q) => q.o.k && q.o !== o && q.o.shown && !q.o.far);
+    let pts = Math.round(photoPoints(c, shot.quality, shot.wanted) * (shot.pair ? PAIR_BONUS : 1));
     // only the best photo of each animal counts in a ride
     const had = this.bestBy[c.id] || 0;
     const gain = Math.max(0, pts - had);
@@ -620,6 +635,7 @@ export class PhotoTrain {
     shot.points = pts;
     this.lastShot = shot; this.roll.push(shot);
     const q = QUALITY[shot.quality];
+    if (shot.pair) addPop(this, 'Pair shot! x1.5', v.x, v.y - h / 2 - 12, '#ffd8a8', true);
     addPop(this, shot.quality === 'blurry' ? (steamy ? 'Steam in the way!' : 'Blurry...') : `${q.short}! +${pts}`, v.x, v.y - h / 2 - 3, q.color, shot.quality === 'perfect');
     // Rainbow land: one photo of each color fills the rainbow, and the unicorn comes
     if (this.theme.rainbowHunt && c.color && shot.quality !== 'blurry' && !this.colors.has(c.color)) {
@@ -633,6 +649,30 @@ export class PhotoTrain {
         addPop(this, `Full rainbow! +${RAINBOW_BONUS}`, this.W / 2, this.H * 0.22, '#ffffff', true);
       }
     }
+  }
+
+  /**
+   * A photo's NEGATIVE: the few numbers that let js/prints.js redraw it later with this same
+   * drawing code (Taylor, 2026-11-27: prints are redrawn from a tiny record, never kept as
+   * pictures). About 300 bytes: the screen size, how far the ride had gone, the moment, the
+   * frame, the animal (how it came, where, which way it faced) and the scenery inside the frame.
+   */
+  negative(k, fr) {
+    const r1 = (n) => Math.round(n * 10) / 10;
+    const near = (p) => { const x = this.sx(p.layer, p.x); return x > fr.x - 50 && x < fr.x + fr.w + 50; };
+    const props = this.props.filter((p) => !p.clue && (p.layer === 'mid' || p.layer === 'fore') && near(p)).slice(0, 8)
+      .map((p) => ({ l: p.layer === 'fore' ? 'f' : 'm', k: p.kind, x: r1(p.x), y: r1(p.y), s: p.seed, ...(p.perch ? { pe: 1 } : {}), ...(p.hides === k ? { h: 1 } : {}) }));
+    const one = (q) => ({ id: q.c.id, how: q.how, l: q.layer, x: r1(q.x), y: r1(q.y), f: q.face, pic: this.look(q), ...(q.state === 'pose' ? { pose: 1 } : {}), ...(q.flyX != null ? { fx: r1(q.flyX) } : {}), ...(q.lift ? { lift: q.lift } : {}), ...(q.big ? { big: 1 } : {}), ...(q.far ? { far: 1 } : {}) });
+    const inFrame = (b) => b.x + b.w > fr.x && b.x < fr.x + fr.w && b.y + b.h > fr.y && b.y < fr.y + fr.h;
+    const others = this.subjects().filter((o) => o.k && o.k !== k && o.shown && inFrame(o.box)).map((o) => o.k).slice(0, 3);
+    const cov = k.cover && !this.props.includes(k.cover) ? { k: k.cover.kind, x: r1(k.cover.x), y: r1(k.cover.y), s: k.cover.seed } : null;
+    return {
+      v: 2, W: this.W, H: this.H, z: this.zoom || 1, pan: [r1(this.panX || 0), r1(this.panY || 0)], t: r1(this.t), d: r1(this.dist), left: Math.round(this.left), fr: [fr.x, fr.y, fr.w, fr.h].map(r1),
+      k: { ...one(k), ...(cov ? { cov } : {}) },
+      // every other animal in the frame too (Taylor, 2026-11-27: a two-animal photo redraws with both)
+      ...(others.length ? { o: others.map(one) } : {}),
+      p: props, ...(this.night ? { n: 1 } : {}), ...(this.poured ? { pour: 1 } : {}),
+    };
   }
 
   /** How much a steam vent is puffing now (0..1), and whether steam covers a box (game pixels). */
@@ -707,6 +747,12 @@ export class PhotoTrain {
         x.fillRect(i, j, 4, 1);
       }
     }
+    if (this.night && !th.stars && !th.underwater) { // a night sky: darker, with stars and a moon
+      x.fillStyle = 'rgba(10,14,48,0.55)'; x.fillRect(0, 0, W, H);
+      for (let i = 0; i < 70; i += 1) { x.fillStyle = i % 5 ? '#ffffff' : '#ffe066'; x.fillRect(Math.floor(h2(i, 21) * W), Math.floor(h2(i, 22) * this.horizon * Z * 0.9), 1, 1); }
+      const mx = W * 0.8; const my = H * 0.11;
+      for (let j = -7; j <= 7; j += 1) for (let i = -7; i <= 7; i += 1) { const d = i * i + j * j; if (d <= 49 && (i - 3) ** 2 + (j + 1) ** 2 > 30) { x.fillStyle = d < 25 ? '#fff9db' : '#ffe066'; x.fillRect(mx + i, my + j, 1, 1); } }
+    }
     if (th.stars) for (let i = 0; i < 90; i += 1) { x.fillStyle = ['#ffffff', '#ffd43b', '#b197fc'][i % 3]; x.fillRect(Math.floor(h2(i, 1) * W), Math.floor(h2(i, 2) * this.horizon * Z), 1, 1); }
     const body = th.skyBody || (th.stars ? 'earth' : null);
     if (body === 'planets') { // a ringed golden planet, a little blue one, and a swirl of a galaxy
@@ -735,7 +781,7 @@ export class PhotoTrain {
     if (body === 'earth') { // the earth
       const ex = W * 0.4; const ey = H * 0.25; const R = 9;
       for (let j = -R; j <= R; j += 1) for (let i = -R; i <= R; i += 1) if (i * i + j * j <= R * R) { x.fillStyle = h2(i + 40, j + 40) > 0.62 ? '#51cf66' : (i + j < -6 ? '#a5d8ff' : '#4dabf7'); x.fillRect(ex + i, ey + j, 1, 1); }
-    } else if (this.weather === 'sunny' && body !== 'sunset' && body !== 'rays' && body !== 'planets') {
+    } else if (this.weather === 'sunny' && !this.night && body !== 'sunset' && body !== 'rays' && body !== 'planets') {
       const sx = W * 0.78; const sy = H * 0.12;
       for (let j = -8; j <= 8; j += 1) for (let i = -8; i <= 8; i += 1) { const d = i * i + j * j; if (d <= 64) { x.fillStyle = d < 36 ? '#fff3bf' : '#ffe066'; x.fillRect(sx + i, sy + j, 1, 1); } }
     }
@@ -909,8 +955,8 @@ export class PhotoTrain {
     for (const k of this.critters) if (!k.gone && k.layer === 'screen' && !k.far && k.how === 'track') this.drawCritter(ctx, k);
     // the Castle's drawbridge
     if (this.bridge) this.drawBridge(ctx, ty);
-    // the train
-    this.drawTrain(ctx, shake);
+    // the train (not in a print: js/prints.js redraws just the photo)
+    if (!this.still) this.drawTrain(ctx, shake);
     // under the sea: the glass tube the train runs in
     if (th.underwater) {
       ctx.fillStyle = 'rgba(208,235,255,0.07)'; ctx.fillRect(0, ty - 78, W, 84);
@@ -948,6 +994,8 @@ export class PhotoTrain {
     }
     // the sunset: everything turns pink and dusky as the sun goes down
     if (dusk > 0.4) { ctx.fillStyle = `rgba(80,30,110,${0.32 * ((dusk - 0.4) / 0.6) ** 1.5})`; ctx.fillRect(0, 0, W, H); }
+    // night: the land goes a deep storybook blue (baked as a fill, never a CSS filter: night-canvas-filter)
+    if (this.night) { ctx.fillStyle = th.underwater ? 'rgba(6,18,52,0.42)' : 'rgba(14,18,58,0.38)'; ctx.fillRect(0, 0, W, H); }
     // the photo: copy what was really in the viewfinder
     if (this.capture) {
       const s = this.capture; this.capture = null;
