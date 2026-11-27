@@ -4,8 +4,10 @@
 // skates 15% slower. Press and hold the round button: a needle sweeps over red,
 // yellow and a thin green band; let go to shoot (if you have the puck) or to
 // steal (if you're close to the buddy who has it). The color decides the odds:
-//   shot:  red 5%, yellow 25%, green 55% to score from close in (the aim is a
-//          random angle, so from farther away the goal is a smaller target)
+//   shot:  red 5%, yellow 25%, green 55% to score from the slot (the aim is a
+//          random angle, so from farther away the goal is a smaller target);
+//          right in front of the net (about a buddy away) it's red 15%,
+//          yellow 80%, green all but certain (Taylor, 2026-11-27)
 //   steal: green 80% steal / 20% knocked loose / 0% kept,
 //          yellow 50 / 40 / 10, red 20 / 30 / 50.
 // A shot that runs into the other buddy is theirs. A missed shot bounces off the
@@ -41,9 +43,39 @@ const PICKUP = 7;
 const STEAL_REACH = 17;
 const MOUTH = 9; // half the goal's width (a map can make it wider)
 const SWEEP = 0.65; // seconds for the needle to cross the meter once
-export const CLOSE = 45; // shots from this close (pixels) or closer get the full SHOT_ODDS
 const RINK_LENGTH = 1.6; // the rink is this many screens long
 const AI_SKILL = { green: 0.18, yellow: 0.42, red: 0.4 };
+export const CLOSE = 45; // past NEAR, shots from this close (pixels) or closer get the full SHOT_ODDS
+// About a buddy away from the net (the puck within NEAR pixels), shots score
+// more: green all but always, most yellows (Taylor, 2026-11-27). From NEAR out
+// to FAR the odds ease back to the usual ones; from FAR out nothing changes.
+export const NEAR = 30;
+export const FAR = 75;
+export const NEAR_ODDS = { red: 0.15, yellow: 0.8, green: 0.999 };
+
+/** P(|normal| < z) */
+export function within(z) {
+  // Abramowitz and Stegun 7.1.26 for erf(z / sqrt 2); good to about 1e-7
+  const x = Math.abs(z) / Math.SQRT2; const t = 1 / (1 + 0.3275911 * x);
+  return 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+}
+
+/** The z with within(z) = p. */
+function zFor(p) {
+  let lo = 0; let hi = 8;
+  for (let i = 0; i < 40; i += 1) { const m = (lo + hi) / 2; if (within(m) < p) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+
+/** How far the aim can stray, in goal half-angles, so that P(score) = within(shotZ). */
+export function shotZ(zone, dist) {
+  const far = (d) => Z[zone] / Math.max(1, d / CLOSE);
+  if (dist >= FAR) return far(dist);
+  if (dist <= NEAR) return zFor(NEAR_ODDS[zone]);
+  // ease the odds (not the spread) from NEAR_ODDS down to the usual ones at FAR
+  const f = (dist - NEAR) / (FAR - NEAR);
+  return zFor(NEAR_ODDS[zone] + (within(far(FAR)) - NEAR_ODDS[zone]) * f);
+}
 
 /** Where the needle is (0 to 1) after holding for `held` seconds. */
 export const needle = (held) => sweepAt(held, SWEEP);
@@ -179,9 +211,10 @@ export class Hockey {
     const dx = gx - pk.x; const dy = this.cy - pk.y;
     const dist = Math.hypot(dx, dy);
     const half = Math.atan2(this.mouth - 1.5, Math.max(4, Math.abs(dx))) * (Math.abs(dx) / Math.max(dist, 1));
-    // the aim spread is sized so the odds hold from CLOSE in; farther out the
-    // same spread misses more often, since the goal looks smaller
-    const spread = (Math.max(0.02, half) * Math.max(1, dist / CLOSE)) / Z[zone];
+    // the aim spread is sized so the odds hold from CLOSE in (better still
+    // right in front of the net); farther out the goal looks smaller, so the
+    // same spread misses more often (shotZ)
+    const spread = Math.max(0.02, half) / shotZ(zone, dist);
     const aim = Math.atan2(dy, dx) + gauss(this.r) * spread;
     pk.owner = null; pk.vx = Math.cos(aim) * SHOT_SPEED; pk.vy = Math.sin(aim) * SHOT_SPEED;
     p.noPick = this.t + 0.35;
@@ -282,6 +315,7 @@ export class Hockey {
       const [bx, by] = this.blade(pk.owner);
       pk.x += (bx - pk.x) * Math.min(1, dt * 20); pk.y += (by - pk.y) * Math.min(1, dt * 20);
       pk.vx = pk.owner.svx; pk.vy = pk.owner.svy;
+      this.ventToss(pk);
       return;
     }
     const px = pk.x;
@@ -368,6 +402,21 @@ export class Hockey {
     return c > 3.3 ? 'puff' : c > 2.1 ? 'glow' : null;
   }
 
+  /** Volcano: a puffing vent tosses the puck off a buddy's stick too (Taylor, 2026-11-27). */
+  ventToss(pk) {
+    const p = pk.owner;
+    for (const o of this.things) {
+      if (o.kind !== 'vent' || this.ventState(o) !== 'puff' || o.tossed > this.t - 0.6) continue;
+      if (Math.hypot(pk.x - o.x, pk.y - o.y) >= o.r + 2 && Math.hypot(p.x - o.x, p.y - o.y) >= o.r + 3) continue;
+      o.tossed = this.t;
+      const a = this.r() * Math.PI * 2;
+      pk.owner = null; pk.x = o.x; pk.y = o.y; pk.vx = Math.cos(a) * 140; pk.vy = Math.sin(a) * 140;
+      p.noPick = this.t + 0.4;
+      this.pop('Puff!', o.x, o.y - 10, '#ffa94d');
+      return;
+    }
+  }
+
   /** The seal's state: 'warn' (bubbles), 'up' (in the way) or null. */
   sealState() {
     const s = this.tw.seal; if (!s) return null;
@@ -381,8 +430,15 @@ export class Hockey {
     if (tw.seal && this.t - this.sealAt > tw.seal.up) this.sealAt = this.t + tw.seal.every * (0.8 + this.r() * 0.4);
     if (tw.waves && this.t - this.waveAt > tw.waves.last) this.waveAt = this.t + tw.waves.every * (0.8 + this.r() * 0.4);
     if (tw.current && this.t > this.flowAt) { this.flow = -this.flow; this.flowAt = this.t + tw.current.flip; }
-    // a wave washes up the rink: it nudges the buddies too
-    if (this.waving()) for (const p of [this.kid, this.vis]) p.svy -= tw.waves.push * 0.35 * dt;
+    // a wave washes up the rink and carries the buddies with it, where they
+    // were heading too, so you have to steer back (Taylor, 2026-11-27: the old
+    // nudge was too soft to notice)
+    if (this.waving()) {
+      for (const p of [this.kid, this.vis]) {
+        const lift = tw.waves.push * 0.45 * dt;
+        p.y -= lift; p.ty = Math.max(this.bounds.y0, p.ty - lift); p.svy -= tw.waves.push * 0.6 * dt;
+      }
+    }
   }
 
   /** Sunset Beach: a wave is washing up the rink (after a moment of foam). */

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gameFor, levelObstacles, rng, kickWindows, heightSpread } from '../js/play.js';
-import { needle, zoneAt, SHOT_ODDS, STEAL_ODDS, Z } from '../js/hockey.js';
+import { needle, zoneAt, SHOT_ODDS, STEAL_ODDS, Z, shotZ, within as zWithin, NEAR, FAR, CLOSE } from '../js/hockey.js';
 import { gamesPerDay, gamesLeft, carriedGames, earlyGames, logGame } from '../js/logic.js';
 
 test('visitors play their ball game or go fishing, the same one all day, or tag', () => {
@@ -44,6 +44,27 @@ test('the hockey meter sweeps back and forth over red, yellow and a thin green',
   const within = (z) => { let sum = 0; const n = 20000; for (let i = 0; i < n; i += 1) { const x = ((i + 0.5) / n) * z; sum += Math.exp(-x * x / 2); } return (2 * sum * (z / n)) / Math.sqrt(2 * Math.PI); };
   for (const zone of ['red', 'yellow', 'green']) assert.ok(Math.abs(within(Z[zone]) - SHOT_ODDS[zone]) < 0.002, zone);
   for (const odds of Object.values(STEAL_ODDS)) assert.ok(Math.abs(odds.reduce((a, b) => a + b) - 1) < 1e-9);
+});
+
+test('hockey shots about a buddy from the net score more; mid-ice and farther stay the same', () => {
+  const odds = (zone, d) => zWithin(shotZ(zone, d));
+  // right in front: every green and most yellows go in (Taylor, 2026-11-27)
+  for (const d of [10, NEAR]) {
+    assert.ok(odds('green', d) > 0.99, `green at ${d}`);
+    assert.ok(odds('yellow', d) >= 0.75 && odds('yellow', d) < 0.9, `yellow at ${d}`);
+    assert.ok(odds('red', d) < 0.25, `red at ${d}`);
+  }
+  // from FAR out, the same odds as before
+  for (const d of [FAR, 100, 150, 250]) {
+    for (const zone of ['red', 'yellow', 'green']) assert.ok(Math.abs(shotZ(zone, d) - Z[zone] * Math.min(1, CLOSE / d)) < 1e-9, `${zone} at ${d}`);
+  }
+  // in between, the odds only drop with distance, and green always beats yellow beats red
+  for (const zone of ['red', 'yellow', 'green']) {
+    let last = 1;
+    for (let d = NEAR; d <= FAR + 20; d += 1) { const p = odds(zone, d); assert.ok(p <= last + 1e-9, `${zone} at ${d}`); last = p; }
+  }
+  for (let d = 0; d <= 200; d += 5) assert.ok(odds('green', d) > odds('yellow', d) && odds('yellow', d) > odds('red', d), `${d}`);
+  assert.ok(Math.abs(zWithin(Z.green) - SHOT_ODDS.green) < 0.002);
 });
 
 test('4 games a day, plus 2 for each exercise-streak week up to 3', () => {
