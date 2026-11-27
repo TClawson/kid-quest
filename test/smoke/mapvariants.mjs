@@ -68,6 +68,19 @@ try {
     g.tap(100, 60); g.count = 12; g.step(0.05); g.drop();
     res.bounce = g.ball.state === 'air' && g.phase === 'play' ? 1 : 0;
     g.drop(); res.bounceOnce = g.ball.state === 'loose';
+    // Volcano: a puffing vent tosses the puck off a buddy's stick, not only a loose one
+    const h = new Hockey({ W: 213, H: 120, map: 'bg-volcano', seed: 5, kid: who(), visitor: { ...who(), name: 'B' } });
+    const vent = h.things.find((o) => o.kind === 'vent');
+    while (h.ventState(vent) !== 'puff') h.t += 0.01;
+    h.kid.x = vent.x - 6; h.kid.y = vent.y; h.kid.face = 1; h.puck.owner = h.kid; h.puck.x = vent.x; h.puck.y = vent.y;
+    h.stepPuck(1 / 30);
+    res.ventToss = h.puck.owner === null && Math.hypot(h.puck.vx, h.puck.vy) > 100;
+    // Sunset Beach: a wave carries a buddy standing still well up the rink
+    const w = new Hockey({ W: 213, H: 120, map: 'bg-sunset', seed: 5, kid: who(), visitor: { ...who(), name: 'B' } });
+    w.phase = 'play'; w.dropAt = 0; w.waveAt = w.t;
+    const y0 = w.kid.y; w.kid.goTo(w.kid.x, y0);
+    for (let i = 0; i < 30; i += 1) { w.stepTwist(1 / 30); w.skate(w.kid, 1 / 30); w.t += 1 / 30; }
+    res.wavePush = y0 - w.kid.y;
     return res;
   });
   assert.deepEqual(errors, [], 'no errors on any map');
@@ -77,9 +90,11 @@ try {
   assert.ok(out.events >= 10, `every lake has its event (${out.events})`);
   assert.ok(out.banner >= 1, 'a catch at the royal banner counts double');
   assert.ok(out.bounce && out.bounceOnce, 'the candy grass saves one drop, not two in a row');
+  assert.ok(out.ventToss, 'a lava vent tosses the puck off a buddy\'s stick');
+  assert.ok(out.wavePush >= 20, `a wave carries a standing buddy up the rink (${out.wavePush})`);
   assert.ok(out.acorn >= 1, 'acorns can be caught in the Forest Village');
   console.log(out.runs.map((r) => `${r.map.slice(3)} ${r.kind} ${r.score}`).join(' | '));
-  console.log('map variants ok', JSON.stringify({ fans: out.fans, events: out.events, doors: out.doors, acorn: out.acorn, bounce: out.bounce, banner: out.banner }));
+  console.log('map variants ok', JSON.stringify({ wavePush: Math.round(out.wavePush), fans: out.fans, events: out.events, doors: out.doors, acorn: out.acorn, bounce: out.bounce, banner: out.banner }));
 } finally {
   await browser.close();
   site.close();

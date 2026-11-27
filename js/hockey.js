@@ -315,6 +315,7 @@ export class Hockey {
       const [bx, by] = this.blade(pk.owner);
       pk.x += (bx - pk.x) * Math.min(1, dt * 20); pk.y += (by - pk.y) * Math.min(1, dt * 20);
       pk.vx = pk.owner.svx; pk.vy = pk.owner.svy;
+      this.ventToss(pk);
       return;
     }
     const px = pk.x;
@@ -401,6 +402,21 @@ export class Hockey {
     return c > 3.3 ? 'puff' : c > 2.1 ? 'glow' : null;
   }
 
+  /** Volcano: a puffing vent tosses the puck off a buddy's stick too (Taylor, 2026-11-27). */
+  ventToss(pk) {
+    const p = pk.owner;
+    for (const o of this.things) {
+      if (o.kind !== 'vent' || this.ventState(o) !== 'puff' || o.tossed > this.t - 0.6) continue;
+      if (Math.hypot(pk.x - o.x, pk.y - o.y) >= o.r + 2 && Math.hypot(p.x - o.x, p.y - o.y) >= o.r + 3) continue;
+      o.tossed = this.t;
+      const a = this.r() * Math.PI * 2;
+      pk.owner = null; pk.x = o.x; pk.y = o.y; pk.vx = Math.cos(a) * 140; pk.vy = Math.sin(a) * 140;
+      p.noPick = this.t + 0.4;
+      this.pop('Puff!', o.x, o.y - 10, '#ffa94d');
+      return;
+    }
+  }
+
   /** The seal's state: 'warn' (bubbles), 'up' (in the way) or null. */
   sealState() {
     const s = this.tw.seal; if (!s) return null;
@@ -414,8 +430,15 @@ export class Hockey {
     if (tw.seal && this.t - this.sealAt > tw.seal.up) this.sealAt = this.t + tw.seal.every * (0.8 + this.r() * 0.4);
     if (tw.waves && this.t - this.waveAt > tw.waves.last) this.waveAt = this.t + tw.waves.every * (0.8 + this.r() * 0.4);
     if (tw.current && this.t > this.flowAt) { this.flow = -this.flow; this.flowAt = this.t + tw.current.flip; }
-    // a wave washes up the rink: it nudges the buddies too
-    if (this.waving()) for (const p of [this.kid, this.vis]) p.svy -= tw.waves.push * 0.35 * dt;
+    // a wave washes up the rink and carries the buddies with it, where they
+    // were heading too, so you have to steer back (Taylor, 2026-11-27: the old
+    // nudge was too soft to notice)
+    if (this.waving()) {
+      for (const p of [this.kid, this.vis]) {
+        const lift = tw.waves.push * 0.45 * dt;
+        p.y -= lift; p.ty = Math.max(this.bounds.y0, p.ty - lift); p.svy -= tw.waves.push * 0.6 * dt;
+      }
+    }
   }
 
   /** Sunset Beach: a wave is washing up the rink (after a moment of foam). */
