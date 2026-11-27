@@ -89,8 +89,8 @@ const developed = new Map();
 
 /** A still photo train on the print's map, day and weather (nothing moves, no train). */
 function stillRide(print, neg) {
-  const g = new PhotoTrain({ W: neg.W, H: neg.H, kid: STAND_IN, visitor: STAND_IN, map: print.map, day: print.day || '2026-06-01', season: print.season, weather: print.weather, seed: 7, night: Boolean(neg.n) });
-  g.still = true; g.phase = 'play'; g.tunnel = null; g.brake = null; g.view = null; g.pops = []; g.bridge = null;
+  const g = new PhotoTrain({ W: neg.W, H: neg.H, flat: !(neg.v >= 3), kid: STAND_IN, visitor: STAND_IN, map: print.map, day: print.day || '2026-06-01', season: print.season, weather: print.weather, seed: 7, night: Boolean(neg.n) });
+  g.still = true; g.phase = 'play'; g.tunnel = null; g.brake = null; g.pops = []; g.bridge = null;
   return g;
 }
 
@@ -150,13 +150,14 @@ export function develop(print) {
   k.cover = g.props.find((p) => p.hides) || (n.k.cov ? { layer: 'mid', kind: n.k.cov.k, x: n.k.cov.x, y: n.k.cov.y, seed: n.k.cov.s, hides: k } : null);
   g.critters = [k, ...others];
   if (c.land) g.landBusy = true;
-  const full = canvas(n.W * Z, n.H * Z);
+  const full = canvas(g.W * Z, g.H * Z);
   const ctx = full.getContext('2d');
-  g.draw(ctx);
-  const [fx, fy, fw, fh] = n.fr;
-  const out = canvas(Math.round(fw * Z), Math.round(fh * Z));
+  g.drawScene(ctx);
+  // the frame on the scene, blown up by the photo's zoom (the print is the frame's size on the screen)
+  const [fx, fy, fw, fh] = n.fr; const z = n.z || 1;
+  const out = canvas(Math.round(fw * Z * z), Math.round(fh * Z * z));
   const o = out.getContext('2d'); o.imageSmoothingEnabled = false;
-  o.drawImage(full, Math.round(fx * Z), Math.round(fy * Z), out.width, out.height, 0, 0, out.width, out.height);
+  o.drawImage(full, Math.round(fx * Z), Math.round(fy * Z), Math.round(fw * Z), Math.round(fh * Z), 0, 0, out.width, out.height);
   developed.set(key, out);
   return out;
 }
