@@ -6,7 +6,13 @@
 // one game pixel in from the edge.
 //
 // look: { depth (body height / length), back, side, belly, fin, eye?, bar?,
-//   mark?, shape?, tail?, snout?, flat?, spiny?, mouth?, fangs?, eyes3? }
+//   mark?, shape?, tail?, snout?, flat?, spiny?, mouth?, fangs?, eyes3?, hammer?, barbels? }
+// The deep water's giants (fishing.js DEEP_FISH) have a few looks of their own: hammer (a
+// hammerhead's wide head, seen side on as a bar across the nose, an eye at its top end), barbels
+// (a sturgeon's four whiskers under its snout), and the marks 'scutes' (a sturgeon's bony plates
+// along its back and side), 'bigscales' (a tarpon's big round scales), 'redscale' (an arapaima's
+// scales turning red toward the tail), 'crest' (an oarfish's red plumes on its head) and
+// 'sprinkles' (candy sprinkles).
 // shape: 'fish' (default), 'eel', 'shark', 'angel', 'puffer', 'sword', 'box'
 // tail: 'fork' (default), 'fan', 'shark'
 // December fish (fishing.js SPOTS holiday) have marks of their own: 'globe' (a snow globe with a
@@ -63,9 +69,9 @@ export function fishPic(look, len, Z = 1) {
   const finDown = shape === 'angel' ? 0.66 : shape === 'shark' ? 0.5 : shape === 'eel' ? 0.3 : 0.22;
   // room above the body for what sits on top: a horn, a crown, and the December trimmings
   const trim = { cane: D * 1.95, present: 6 * Z, jester: D * 0.72 + 3 * Z, cocoa: 8 * Z, tree: D * 0.62 + 4 * Z }[mk] || 0;
-  const head = look.mark === 'horn' ? D * 0.7 : look.mark === 'crown' ? D * 0.4 + 2 * Z : trim;
+  const head = look.mark === 'horn' ? D * 0.7 : look.mark === 'crown' ? D * 0.4 + 2 * Z : look.mark === 'crest' ? D * 1.6 : look.hammer ? D * 0.9 : look.mark === 'scutes' ? D * 0.62 : trim;
   const up = Math.round(Math.max(D * finUp, head, tail === 'shark' ? D * 0.5 : 0)) + pad;
-  const down = Math.round(D * Math.max(finDown, look.mark === 'whiskers' ? 0.45 : 0)) + pad;
+  const down = Math.round(D * Math.max(finDown, look.mark === 'whiskers' || look.barbels ? 0.45 : 0, look.hammer ? 0.62 : 0)) + pad;
   const tailRoom = cane ? Math.round(D * 1.6) : 0; // the candy cane's crook curls out past the tail end
   const w = L + bill + 2 * pad + tailRoom; const h = up + D + down;
   const x0 = pad + bill; // where the body starts (the nose)
@@ -156,6 +162,11 @@ export function fishPic(look, len, Z = 1) {
     for (let j = 0; j < h; j += 1) {
       const dy = j + 0.5 - cy;
       if (b && dy >= -b[0] && dy <= b[1]) { kind[j * w + i] = 1; continue; }
+      // a hammerhead's head: a bar across the nose, rounded at its ends
+      if (look.hammer && u >= -0.005 && u <= 0.075) {
+        const e = Math.abs(u - 0.035) / 0.04; const hh = D * 0.6 * Math.sqrt(Math.max(0, 1 - e ** 6));
+        if (Math.abs(dy + D * 0.08) <= hh) { kind[j * w + i] = 1; continue; }
+      }
       if (tailAt2(u, dy)) { kind[j * w + i] = 2; continue; }
       if (b && dy < -b[0] && -dy - b[0] <= finAt(u, -1)) { kind[j * w + i] = 2; continue; }
       if (b && dy > b[1] && dy - b[1] <= finAt(u, 1)) kind[j * w + i] = 2;
@@ -204,6 +215,15 @@ export function fishPic(look, len, Z = 1) {
       if (m === 'peacock' && v < 0.7 && [0.3, 0.47, 0.64].some((q) => Math.abs(u - q) < 0.035)) col = '#2b3a1a';
       if (m === 'flame' && u > 0.2 && u < 0.78 && v > 0.32 + 0.16 * Math.sin(u * 30 + (v > 0.6 ? 1 : 0)) && v < 0.86) col = v > 0.6 ? '#ffd43b' : '#ff922b';
       if (m === 'comet' && u > 0.18 && u < 0.78 && cell(5, 3, 7)) col = '#ffffff';
+      if ((m === 'bigscales' || m === 'redscale') && u > 0.2 && u < 0.8 && v > 0.08 && v < 0.88) {
+        // big round scales: rows of arcs, each row set half a scale along
+        const sz = Math.max(3, Math.round(2.2 * Z)); const row = Math.floor(j / sz); const off = row % 2 ? sz >> 1 : 0;
+        const ci = (i + off) % sz; const cj = j % sz;
+        const rim = cj === 0 || (ci === 0 && cj < sz - 1);
+        if (m === 'redscale' && u > 0.48) { const k = Math.min(1, (u - 0.48) / 0.26); if (!rim && v > 0.25) col = mix(col, '#c92a2a', k * (v > 0.62 ? 0.5 : 0.85)); }
+        if (rim) col = shade(col, -0.16);
+      }
+      if (m === 'sprinkles' && u > 0.12 && u < 0.82 && cell(5, 11, 6) && (i % Z === 0 || !fine)) col = ['#ff6b6b', '#ffd43b', '#4dabf7', '#69db7c', '#b197fc'][Math.floor(hash(Math.floor(i / Z), Math.floor(j / Z)) * 5)];
       if (m === 'blotch' && u > 0.18 && u < 0.78 && v < 0.75 && hash(Math.floor((i + (dith ? 1 : 0)) / (1.5 * Z)), Math.floor(j / (1.5 * Z))) > 0.6) col = look.bar || look.back;
       px(i, j, col);
     }
@@ -238,7 +258,7 @@ export function fishPic(look, len, Z = 1) {
   }
   // the eye
   const eu = shape === 'eel' ? 0.06 : shape === 'shark' ? 0.1 : shape === 'sword' ? 0.08 : look.snout ? 0.15 : shape === 'angel' ? 0.14 : shape === 'box' ? 0.13 : 0.11;
-  const ex = X(eu); const ey = Math.round(cy - D * (shape === 'eel' ? 0.1 : 0.18));
+  const ex = look.hammer ? X(0.035) : X(eu); const ey = Math.round(cy - D * (look.hammer ? 0.52 : shape === 'eel' ? 0.1 : 0.18));
   const eyeR = fine ? (L > 36 ? 2 : 1) : 0;
   const eye = (cx, cyy) => {
     if (!fine) { px(cx, cyy, look.eye || '#ffffff'); px(cx + 1, cyy, INK); return; }
@@ -277,6 +297,34 @@ export function fishPic(look, len, Z = 1) {
   }
   // extras
   const m = look.mark;
+  if (look.barbels) { // four little whiskers hanging under the snout
+    const n = Math.max(2, Math.round(D * 0.34));
+    for (const bu of [0.05, 0.075, 0.1, 0.125]) { const bx = X(bu); const by = Math.round(bot(bu)) + 1; for (let k = 0; k < n; k += 1) px(bx - Math.round(k * 0.3), by + k, INK); }
+  }
+  if (m === 'scutes') { // bony plates: a row of light diamonds along the back, and a smaller row along the side
+    const step = Math.max(3 * Z, Math.round(L * 0.07));
+    for (let i = X(0.16); i < X(0.7); i += step) {
+      const u = (i - x0) / L; const r = Math.max(Z, Math.round(D * 0.09));
+      for (const [yy, rr] of [[Math.round(top(u)), r], [Math.round(cy + D * 0.06), Math.max(1, r - Z)]]) {
+        for (let a = -rr - 1; a <= rr + 1; a += 1) for (let b2 = -rr - 1; b2 <= rr + 1; b2 += 1) {
+          const d = Math.abs(a) + Math.abs(b2);
+          if (d <= rr) px(i + a, yy + b2, d === rr ? shade(look.belly, -0.3) : b2 < 0 ? '#ffffff' : look.belly);
+          else if (d === rr + 1) px(i + a, yy + b2, INK);
+        }
+      }
+    }
+  }
+  if (m === 'crest') { // an oarfish's red plumes standing up off its head
+    const n = 5;
+    for (let q = 0; q < n; q += 1) {
+      const u = 0.03 + q * 0.018; const hx = X(u); const hy = Math.round(top(u)) - 1; const hgt = Math.round(D * (1.5 - q * 0.18));
+      for (let k = 0; k < hgt; k += 1) {
+        const xx = hx + Math.round(k * 0.35 + Math.sin(k * 0.5 + q) * 0.8);
+        px(xx, hy - k, k < hgt - 2 ? look.fin : shade(look.fin, 0.3)); px(xx - 1, hy - k, INK); px(xx + 1, hy - k, INK);
+      }
+      px(hx + Math.round(hgt * 0.35), hy - hgt, INK);
+    }
+  }
   if (look.flap) // bluegill's dark ear flap
     for (let a = 0; a < Z + 1; a += 1) for (let bb = 0; bb < Z; bb += 1) px(ex + 3 * Z + a, ey + Z + bb, INK);
   if (m === 'whiskers') {

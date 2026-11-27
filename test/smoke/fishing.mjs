@@ -92,6 +92,73 @@ try {
     assert.ok(big.t > 15, `a big fish far out takes more than 15 s to reel in (${big.t.toFixed(1)} s)`);
     assert.equal(big.caught, 1, 'time\'s up does not cut off a big fish being reeled in');
     assert.equal(big.phase, 'over', 'the game ends once it is landed');
+    // the boat rows (Taylor, 2026-11-27): out to the deep water and back, only with the line in;
+    // the deep water's giant swims only out past the drop-off, only with the boat
+    const boat = await page.evaluate(async () => {
+      const { Fishing, SPOTS, deepChance } = await import('./js/fishing.js');
+      const make = (map, gear, seed = 4) => new Fishing({ W: 213, H: 133, map, seed, day: '2026-11-27', kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} }, gear: { rod: 2 } } });
+      const out = { maps: [] };
+      const g = make('bg-meadow', { rod: 1, boat: 1 });
+      const [left, right] = g.rowButtons();
+      const x0 = g.camX; const k0 = g.kid.x;
+      g.tap(right.x, right.y); for (let i = 0; i < 60; i += 1) g.step(1 / 30);
+      out.rowedOut = g.camX - x0; out.kidMoved = g.kid.x - k0; out.phaseAfterRowing = g.phase;
+      g.release(); for (let i = 0; i < 60; i += 1) g.step(1 / 30);
+      const glide = g.camX; for (let i = 0; i < 30; i += 1) g.step(1 / 30); out.stopped = g.camX === glide;
+      g.tap(right.x, right.y); for (let i = 0; i < 30 * 30; i += 1) g.step(1 / 30); out.farEnd = g.camX === g.camMax; out.overDeep = g.waterUnder;
+      g.release(); g.tap(left.x, left.y); for (let i = 0; i < 30 * 30; i += 1) g.step(1 / 30); out.nearEnd = g.camX === g.camMin; g.release();
+      out.boatInWater = g.homeX - 44 > g.bankX;
+      // with the line out it can't row
+      g.tap(g.button.x, g.button.y); g.tap(g.button.x, g.button.y); for (let i = 0; i < 40; i += 1) g.step(1 / 30);
+      const was = g.camX; g.tap(right.x, right.y); for (let i = 0; i < 30; i += 1) g.step(1 / 30); g.release();
+      out.rowedWithLineOut = g.camX !== was; out.told = g.pops.some((p) => /Reel in first/.test(p.text));
+      out.reachInView = g.landAt(1) <= g.camX + g.fieldW;
+      out.noBoatButtons = make('bg-meadow', { rod: 3 }).rowButtons().length;
+      // the giant: never without the boat (even when its time comes), always past the drop-off with it
+      let noBoat = 0;
+      for (let seed = 1; seed < 40; seed += 1) { const n = make('bg-meadow', { rod: 3 }, seed); if (n.deepAt !== null) noBoat += 1; n.deepAt = 0; n.phase = 'play'; n.step(1 / 30); if (n.fish.some((f) => f.deep)) noBoat += 1; }
+      out.giantsWithoutBoat = noBoat;
+      let rolled = 0; for (let seed = 1; seed <= 400; seed += 1) if (make('bg-castle', { rod: 1, boat: 1 }, seed).deepAt !== null) rolled += 1;
+      out.giantShare = rolled / 400; out.expected = deepChance(1);
+      for (const map of Object.keys(SPOTS)) {
+        const b = make(map, { rod: 2, boat: 1 }, 7);
+        b.phase = 'play'; b.deepAt = 0; b.camX = b.camMax; b.kid.x = b.homeX - 13; b.kid.tx = b.kid.x;
+        b.step(1 / 30);
+        const f = b.fish.find((x) => x.deep);
+        let shallow = 0; let low = 0; let visHooked = 0; let deepCover = b.weeds.concat(b.logs).filter((o) => o.x > b.deepX).length;
+        // the visitor's bait right by it: the giant pays it no mind
+        const V = b.lines.vis; V.state = 'water'; V.bait = 'worm';
+        for (let i = 0; i < 30 * 40 && f && !f.gone; i += 1) {
+          if (V.state === 'water') { V.x = f.x - f.pw / 2; V.y = f.y; } else V.state = 'water';
+          b.ai.reelAt = Infinity; b.step(1 / 30);
+          if (V.state === 'fight' && V.fish === f) visHooked += 1;
+          if (f.state === 'swim' && f.x < b.deepX && f.born > b.t - f.life) shallow += 1;
+          if (f.y + f.ph / 2 > b.H) low += 1;
+        }
+        out.maps.push({ map, giant: f?.name, deep: f?.deep, shallow, low, visHooked, deepCover, sizeOk: f ? f.size >= 0.45 && f.size <= 1.2 : false, lb: f?.lb });
+      }
+      return out;
+    });
+    assert.ok(boat.rowedOut > 10, `holding the arrow rows out (${boat.rowedOut.toFixed(1)})`);
+    assert.ok(Math.abs(boat.kidMoved - boat.rowedOut) < 0.01, 'the buddies ride along');
+    assert.equal(boat.phaseAfterRowing, 'ready', 'rowing before the first cast does not start the clock');
+    assert.ok(boat.stopped, 'let go, and the boat glides to a stop');
+    assert.ok(boat.farEnd && boat.nearEnd, 'rows all the way out and all the way back in');
+    assert.equal(boat.overDeep, 'over', 'all the way out, the boat is over the deep water');
+    assert.ok(boat.boatInWater, 'all the way in, the boat is still in the water');
+    assert.ok(!boat.rowedWithLineOut && boat.told, 'no rowing with the line out (it says to reel in first)');
+    assert.ok(boat.reachInView, 'a cast lands on the screen');
+    assert.equal(boat.noBoatButtons, 0, 'no row buttons without a boat');
+    assert.equal(boat.giantsWithoutBoat, 0, 'no giant without the boat');
+    assert.ok(Math.abs(boat.giantShare - boat.expected) < 0.07, `the giant comes in about ${boat.expected} of boat games (${boat.giantShare})`);
+    for (const m of boat.maps) {
+      assert.ok(m.giant && m.deep, `${m.map}: the giant swims in`);
+      assert.equal(m.shallow, 0, `${m.map}: the giant stays out over the deep water`);
+      assert.equal(m.low, 0, `${m.map}: the giant stays on the screen, not below it`);
+      assert.equal(m.visHooked, 0, `${m.map}: only the kid can hook the giant`);
+      assert.equal(m.deepCover, 0, `${m.map}: no weeds or logs past the drop-off`);
+      assert.ok(m.sizeOk && m.lb > 0, `${m.map}: always a big one (${m.lb} lb)`);
+    }
     if (!results.some((r) => r.hooked > 0)) console.log(JSON.stringify(results));
     assert.ok(results.some((r) => r.hooked > 0), 'fish get hooked');
     assert.ok(results.some((r) => r.points.kid + r.points.vis > 0), 'catches score points');

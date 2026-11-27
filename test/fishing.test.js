@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BAIT, BAITS, baitToday, pointsFor, POINTS, pickiness, strikeChance, spookChance, twitchOutcome, NERVES_HALF, SPOTS, SPECIES, GAME_SECONDS, SNAG, ROD_ZOOM, sizePower, BOAT_OUT, maxSizeAt } from '../js/fishing.js';
+import { BAIT, BAITS, baitToday, pointsFor, POINTS, pickiness, strikeChance, spookChance, twitchOutcome, NERVES_HALF, SPOTS, SPECIES, GAME_SECONDS, SNAG, ROD_ZOOM, sizePower, BOAT_OUT, maxSizeAt, BOAT_MAX, ROW_SPEED, DEEP_AT, DEEP_FISH, DEEP_BASE, deepChance, baseFor, lookFor } from '../js/fishing.js';
+import { realFish } from '../js/fishfacts.js';
 
 test('bait: jigs and spoons for bass and pike, worms for catfish and bluegill', () => {
   const like = (b, k) => BAIT[b].like[k];
@@ -114,4 +115,34 @@ test('better rods see farther, and fish farther out are bigger', () => {
   assert.equal(maxSizeAt(0), 1); assert.equal(maxSizeAt(1), 1);
   assert.ok(maxSizeAt(2) > 1.3 && maxSizeAt(3) === maxSizeAt(10));
   assert.ok(strikeChance(1, 3) > strikeChance(0, 1) * 0.6, 'the biggest still bite with a super rod');
+});
+
+test('the boat rows between the shallows and the deep water, slowly', () => {
+  // Taylor, 2026-11-27: move the boat slowly side to side, out to deeper water or back in
+  assert.ok(BOAT_OUT < DEEP_AT - 1, 'where the boat starts, a cast can\'t reach the deep water');
+  assert.ok(BOAT_MAX > DEEP_AT, 'the boat can row out over the deep water');
+  const whole = BOAT_MAX / ROW_SPEED; const out = (DEEP_AT - 1 - BOAT_OUT) / ROW_SPEED;
+  assert.ok(whole > 10 && whole < 20, `shore to the far end: ${whole.toFixed(1)} s`);
+  assert.ok(out > 0.5 && out < 6, `from the start to where the deep water is in reach: ${out.toFixed(1)} s`);
+});
+
+test('every lake has a very rare giant in its deep water, with real facts', () => {
+  // Taylor, 2026-11-27: a very rare large deep water fish on every map, only by boat
+  assert.deepEqual(Object.keys(DEEP_FISH).sort(), Object.keys(SPOTS).sort());
+  for (const [map, d] of Object.entries(DEEP_FISH)) {
+    assert.equal(SPOTS[map].deep, d);
+    assert.match(d.id, /^[a-z]+$/);
+    assert.ok(SPECIES[d.as], `${map}: swims like a real kind`);
+    for (const b of BAITS) assert.ok(d.like[b] >= 0 && d.like[b] <= 1, `${map} ${b}`);
+    assert.ok(Math.max(...BAITS.map((b) => d.like[b])) >= 0.8, `${map}: some bait works well`);
+    assert.ok(d.inches[1] > SPECIES[d.as].inches[1], `${map}: longer than its kind ever gets`);
+    const base = baseFor(map, 'deep');
+    assert.deepEqual(base.len, DEEP_BASE.len); assert.equal(base.inches, d.inches);
+    assert.equal(lookFor(map, 'deep').name, d.name);
+    const real = realFish(`${map.replace('bg-', '')}-${d.id}`);
+    assert.ok(real && real.where && real.eats && real.wow, `${map}: facts for the fish book`);
+  }
+  assert.ok(POINTS.deep > POINTS.special, 'worth the most');
+  // rare: well under half the games with a regular rod, a little more with better rods
+  assert.ok(deepChance(1) <= 0.3 && deepChance(1) < deepChance(2) && deepChance(2) < deepChance(3) && deepChance(3) <= 0.5);
 });

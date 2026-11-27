@@ -95,8 +95,40 @@ export const RODS_RARE = 0.75;
  * farther across a bigger lake (Taylor, 2026-11-10). Things look smaller, as when you step back.
  */
 export const ROD_ZOOM = [1, 1.4, 1.8];
-/** The fishing boat (100 gems) rows out this far, as a share of the lake you see from the shore. */
+/** The fishing boat (100 gems) starts out this far, as a share of the lake you see from the shore (D). */
 export const BOAT_OUT = 0.8;
+/**
+ * Rowing (Taylor, 2026-11-27: "move it slowly side to side to go out to deeper water or stay in
+ * more shallow"): hold the arrows to row the boat between the shore and the deep water. The
+ * boat goes from just off the shore out to BOAT_MAX x D (past the drop-off), at ROW_SPEED x D a second at most, so the
+ * whole way takes about 15 s, and out to the deep water about 4 s. It glides to a stop (ROW_EASE x D a second, each second).
+ */
+export const BOAT_MAX = 2.25;
+export const ROW_SPEED = 0.15;
+export const ROW_EASE = 0.45;
+/** Where the lake bed drops away into the deep water, out from the shore, in D (only past where the boat starts can see). */
+export const DEEP_AT = 2.05;
+/**
+ * The deep water's giant (Taylor, 2026-11-27: "a very rare large deep water variety fish to every
+ * map that is only accessible by boat"). Only with the kid's boat, a game has DEEP_CHANCE of the
+ * map's giant swimming in, at a random time in DEEP_WHEN (seconds of play); each better rod
+ * (the kid's) adds DEEP_ROD. It stays down in the deep water, so the kid has to row out to it.
+ */
+export const DEEP_CHANCE = 0.25;
+export const DEEP_ROD = 0.1;
+export const DEEP_WHEN = [12, 55];
+export const deepChance = (tier = 1) => DEEP_CHANCE + DEEP_ROD * (clamp(tier, 1, 3) - 1);
+/**
+ * How a giant swims, bites and fights, over the kind it swims like: much longer, slow, sees bait
+ * farther off, and a steady pull with a lot of fight in it. Measured with test/smoke/giant-sim.mjs:
+ * a careful kid (lets go 0.3 s after the line passes 0.75) lands about 3 in 5 with a regular rod,
+ * 2 in 3 with a good rod and 5 in 6 with a super rod, in about 14 s; a kid who lets go a little
+ * sooner lands them all.
+ */
+export const DEEP_BASE = { len: [50, 78], speed: 5, reach: 42, pull: 0.45 };
+/** A giant is picky like a middling fish (so it does bite), and has this much more fight in it. */
+export const DEEP_PICK = 0.6;
+export const DEEP_STAMINA = 1;
 /**
  * Deep water grows trophy fish (Taylor, 2026-11-10: the boat should make the biggest fish
  * bigger). Past TROPHY_FROM (about where a super rod's view ends from the shore), a fish can
@@ -118,7 +150,7 @@ const biteScale = (size) => 0.8 - 0.3 * size;
 /** Seconds a fish that saw another one spooked stays away from the bait. */
 export const WARY = 4;
 /** Points for a catch: each kind's base, up to 2.5x for the biggest; the map's special fish is worth the most. */
-export const POINTS = { bluegill: 10, smallmouth: 20, largemouth: 25, pike: 35, catfish: 35, special: 60, holiday: 60 };
+export const POINTS = { bluegill: 10, smallmouth: 20, largemouth: 25, pike: 35, catfish: 35, special: 60, holiday: 60, deep: 100 };
 export const pointsFor = (kind, size) => Math.round((POINTS[kind] || 10) * (1 + 1.5 * size));
 /** Bigger fish are pickier: a bait has to be at least this good for them to look at it (size 0-1). */
 export const pickiness = (size) => 0.1 + 0.35 * size;
@@ -342,15 +374,45 @@ export const HOLIDAY_FISH = {
   'bg-galaxy': { id: 'tree', name: 'Christmas-tree angelfish', as: 'largemouth', look: { back: '#2f9e44', side: '#2f9e44', belly: '#2b8a3e', fin: '#2f9e44', mark: 'tree', shape: 'angel', depth: 0.6 }, like: { worm: 0.5, jig: 0.8, spoon: 0.7 }, odds: 6 },
 };
 for (const [bg, fish] of Object.entries(HOLIDAY_FISH)) SPOTS[bg].holiday = fish;
+
+// ---------- the deep water's giants ----------
+// One giant in every lake, down where the lake bed drops away (DEEP_AT), so only the boat can
+// reach it (Taylor, 2026-11-27). It swims like `as` but bigger and slower (DEEP_BASE), likes the
+// baits as `like` says, and is `inches` long. The real lakes have real giants (fishfacts.js); the
+// pretend lakes have pretend ones with a real cousin, like their other fish.
+export const DEEP_FISH = {
+  'bg-meadow': { id: 'sturgeon', name: 'Lake sturgeon', as: 'catfish', inches: [36, 80], look: { shape: 'shark', back: '#4a4a3a', side: '#7d7962', belly: '#e6dfc4', fin: '#5c5844', mark: 'scutes', barbels: true, depth: 0.17 }, like: { worm: 0.9, jig: 0.35, spoon: 0.15 } },
+  'bg-castle': { id: 'wels', name: 'Wels catfish', as: 'catfish', inches: [40, 100], look: { back: '#2f3326', side: '#5c6448', belly: '#d9d4b8', fin: '#3a3f2e', mark: 'whiskers', flat: true, mouth: 'big', tail: 'fan', bar: '#252a1e', depth: 0.2 }, like: { worm: 0.9, jig: 0.5, spoon: 0.3 } },
+  'bg-sunset': { id: 'tarpon', name: 'Tarpon', as: 'largemouth', inches: [40, 90], look: { back: '#2f5a6e', side: '#dfe6ea', belly: '#ffffff', fin: '#5c7a88', mark: 'bigscales', mouth: 'big', depth: 0.27 }, like: { worm: 0.4, jig: 0.85, spoon: 0.8 } },
+  'bg-ocean': { id: 'hammerhead', name: 'Great hammerhead', as: 'pike', inches: [80, 200], look: { shape: 'shark', back: '#6c7a89', side: '#9aa8b5', belly: '#f1f3f5', fin: '#5c6a78', hammer: true, depth: 0.17 }, like: { worm: 0.85, jig: 0.6, spoon: 0.5 } },
+  'bg-rainforest': { id: 'arapaima', name: 'Arapaima', as: 'largemouth', inches: [50, 120], look: { back: '#2f3a2a', side: '#5f6b48', belly: '#e9d8b0', fin: '#7a2a1a', mark: 'redscale', tail: 'fan', depth: 0.2 }, like: { worm: 0.6, jig: 0.85, spoon: 0.6 } },
+  'bg-fjord': { id: 'greenland', name: 'Greenland shark', as: 'catfish', inches: [96, 200], look: { shape: 'shark', back: '#4a4842', side: '#6a665c', belly: '#a39d90', fin: '#3e3c36', mark: 'blotch', bar: '#3c3a34', eye: '#c5d8e0', depth: 0.2 }, like: { worm: 0.9, jig: 0.4, spoon: 0.3 } },
+  'bg-space': { id: 'serpent', name: 'Goo serpent', as: 'pike', inches: [80, 300], look: { shape: 'eel', back: '#2b8a3e', side: '#8ce99a', belly: '#e6fcf5', fin: '#e03131', mark: 'crest', depth: 0.1, lenK: 1.25 }, like: { worm: 0.6, jig: 0.6, spoon: 0.85 } },
+  'bg-volcano': { id: 'magma', name: 'Magma coelacanth', as: 'largemouth', inches: [48, 78], look: { back: '#1a1210', side: '#3d3330', belly: '#6b5a52', fin: '#3d3330', mark: 'spots', spot: '#ff922b', tail: 'fan', mouth: 'big', depth: 0.3 }, like: { worm: 0.5, jig: 0.85, spoon: 0.7 } },
+  'bg-rainbow': { id: 'mallow', name: 'Marshmallow sunfish', as: 'largemouth', inches: [60, 120], look: { shape: 'angel', back: '#f7a8c8', side: '#fff0f6', belly: '#ffffff', fin: '#f783ac', mark: 'sprinkles', depth: 0.75, lenK: 0.5 }, like: { worm: 0.85, jig: 0.55, spoon: 0.5 } },
+  'bg-galaxy': { id: 'constellation', name: 'Constellation shark', as: 'catfish', inches: [200, 480], look: { shape: 'shark', back: '#1b1f4b', side: '#3b2694', belly: '#d0bfff', fin: '#1b1f4b', mark: 'spots', spot: '#ffffff', mouth: 'big', depth: 0.2 }, like: { worm: 0.85, jig: 0.5, spoon: 0.65 } },
+};
+for (const [bg, fish] of Object.entries(DEEP_FISH)) SPOTS[bg].deep = fish;
 // The cold lakes get a December look: snow on the banks and along the far shore, an ice rim at
 // the shore's edge, ice floes for lily pads, and snow falling (the warm, sea and pretend lakes don't).
 for (const bg of ['bg-meadow', 'bg-castle', 'bg-fjord']) SPOTS[bg].cold = true;
 
 export const spotFor = (bg) => SPOTS[bg] || SPOTS['bg-meadow'];
 
-/** A kind's name and look on this map (kind: a SPECIES id, 'special' or 'holiday'). */
+/** How a kind swims, bites and fights on this map: its SPECIES, or for the deep water's giant, much bigger (DEEP_BASE). */
+export function baseFor(map, kind) {
+  const sp = spotFor(map);
+  if (kind === 'deep') return { ...SPECIES[sp.deep.as], ...DEEP_BASE, inches: sp.deep.inches };
+  return SPECIES[kind === 'special' ? sp.special.as : kind === 'holiday' ? sp.holiday.as : kind];
+}
+
+/** A kind's name and look on this map (kind: a SPECIES id, 'special', 'holiday' or 'deep'). */
 export function lookFor(map, kind) {
   const sp = spotFor(map);
+  if (kind === 'deep') {
+    const dp = sp.deep;
+    return { name: dp.name, look: { ...SPECIES[dp.as], mark: undefined, bar: undefined, eye: undefined, flap: false, spiny: false, mouth: undefined, snout: false, flat: false, ...dp.look } };
+  }
   if (kind === 'holiday') {
     const hol = sp.holiday;
     return { name: hol.name, look: { ...SPECIES[hol.as], mark: undefined, bar: undefined, eye: undefined, flap: false, spiny: false, mouth: undefined, snout: false, flat: false, ...hol.look } };
@@ -378,9 +440,10 @@ export function baitPic(map, bait, Z = 1) { return baitArt(spotFor(map).baits?.[
 /**
  * A wooden rowboat, side on, in fine pixels: P(color, x, y, w, h). x0, top: its left end and
  * rim; len: its length. part 'back' is the far rim and the dark inside, 'front' the hull and
- * an oar, 'all' both (the shop picture). t: time, for ripples at the waterline.
+ * an oar, 'all' both (the shop picture). t: time, for ripples at the waterline. stroke: while
+ * rowing, how far through its strokes the oar is (in turns); null, it rests.
  */
-export function paintBoat(P, x0, top, len, Z, part = 'all', t = 0) {
+export function paintBoat(P, x0, top, len, Z, part = 'all', t = 0, stroke = null) {
   const depth = 9 * Z; // rim to keel
   const plank = ['#a0612f', '#8b5a2b', '#6e4520'];
   // how far in the hull curves at each row below the rim (bow on the right rises more)
@@ -409,10 +472,17 @@ export function paintBoat(P, x0, top, len, Z, part = 'all', t = 0) {
     // rivets, and the boat's name stripe
     for (let i = x0 + 4 * Z; i < x0 + len - 6 * Z; i += 6 * Z) P('#5c3a1e', i, top + 2 * Z, Z, Z);
     P('#e03131', x0 + 9 * Z, top + 5 * Z, len - 22 * Z, Z);
-    // an oar resting in its lock, blade in the water
+    // an oar in its lock, blade in the water. Rowing, it sweeps through the water, then lifts out
+    // and swings back, dripping
     const ox = x0 + Math.round(len * 0.42);
-    for (let k = 0; k < 12 * Z; k += 1) P(k < 2 ? INK : '#c98a4b', ox - Math.round(k * 0.55), top - 2 * Z + k, Z, 1);
-    P(INK, ox - 8 * Z - 1, top + 8 * Z, 4 * Z + 2, 3 * Z); P('#e9b872', ox - 8 * Z, top + 8 * Z + 1, 4 * Z, 3 * Z - 2);
+    const ph = stroke == null ? null : (stroke % 1) * Math.PI * 2;
+    const lean = ph == null ? 0.55 : 0.55 + 0.42 * Math.sin(ph);
+    const lift = ph == null ? 0 : Math.round(Math.max(0, -Math.cos(ph)) * 4 * Z);
+    const n = 12 * Z;
+    for (let k = 0; k < n; k += 1) P(k < 2 ? INK : '#c98a4b', ox - Math.round(k * lean), top - 2 * Z + k - Math.round((lift * k) / n), Z, 1);
+    const bx = ox - Math.round(n * lean) - Math.round(1.4 * Z); const by = top + 8 * Z - lift;
+    P(INK, bx - 1, by, 4 * Z + 2, 3 * Z); P('#e9b872', bx, by + 1, 4 * Z, 3 * Z - 2);
+    if (lift > Z) for (let d = 0; d < 3; d += 1) P('rgba(255,255,255,0.85)', bx + d * 2 * Z, by + 3 * Z + ((Math.round(t * 20) + d * 3) % (2 * Z + 3)), 1, Z);
     // ripples where it sits in the water
     const wl = top + 5 * Z;
     const s = Math.round(Math.sin(t * 2) * Z);
@@ -456,13 +526,15 @@ export class Fishing {
     this.december = Boolean(this.spot.holiday) && inDecember(opts.day);
     this.snowy = this.december && Boolean(this.spot.cold);
     if (this.spot.holiday) for (const b of BAITS) this.today[b][this.spot.holiday.id] = this.spot.holiday.like[b];
+    if (this.spot.deep) for (const b of BAITS) this.today[b][this.spot.deep.id] = this.spot.deep.like[b];
     this.t = 0; this.pops = []; this.best = opts.best || 0;
     this.points = { kid: 0, vis: 0 }; this.newBest = false;
     this.holdAnywhere = true; this.locked = false;
     this.rodTier = clamp(opts.kid.gear?.rod || 1, 1, 3); this.visTier = clamp(opts.visitor.gear?.rod || 1, 1, 3);
     // The kid's rod zooms the view out: the lake (the world, in game pixels) is bigger than
-    // the screen (vW x vH), and drawn smaller. The boat rows out from the shore: the lake gets
-    // longer still and the view moves along with the boat (camX), so the shore is left behind.
+    // the screen (vW x vH), and drawn smaller. The boat rows out from the shore: the lake runs on
+    // past what the shore sees (D) to the deep water, and the view moves along with the boat
+    // (camX), from just off the shore (camMin) out over the deep water (camMax).
     this.vW = opts.W; this.vH = opts.H;
     this.zoom = ROD_ZOOM[this.rodTier - 1];
     this.boat = Boolean(opts.kid.gear?.boat);
@@ -472,20 +544,28 @@ export class Fishing {
     this.bankX = Math.max(46, Math.round(W0 * 0.21));
     // how far out is "far": the lake a regular rod sees from the shore
     this.lakeRef = this.vW - Math.max(46, Math.round(this.vW * 0.21));
-    this.camX = this.boat ? Math.round((W0 - this.bankX) * BOAT_OUT) : 0;
-    this.W = W0 + this.camX;
+    const D = W0 - this.bankX; this.D = D;
+    this.camMin = this.boat ? 46 : 0; // the boat's stern just clear of the bank
+    this.camMax = this.boat ? Math.round(D * BOAT_MAX) : 0;
+    this.camX = this.boat ? Math.round(D * BOAT_OUT) : 0;
+    this.boatV = 0; this.row = 0; this.stroke = 0;
+    this.W = W0 + this.camMax;
     this.fieldW = W0; this.fieldH = this.H; // the part of the lake on screen
-    // where the buddies fish from: the shore's edge, or the boat
-    this.homeX = this.bankX + this.camX;
+    // where the lake bed drops away into the deep water (only out where the boat goes)
+    this.deepX = this.boat ? Math.round(this.bankX + D * DEEP_AT) : Infinity;
     // the lake bed slopes up to the shore under the buddies, then runs along the bottom
     this.slopeRun = Math.round((W0 - this.bankX) * 0.34);
     const deepest = this.H - 9 - this.surface;
     this.slopeK = deepest / this.slopeRun; // pixels down for each pixel out
     const floor = (x) => Math.round(this.H - 9 + 1.6 * Math.sin(x / 13) + Math.sin(x / 5.3));
-    this.bedAt = (x) => (x <= this.bankX ? this.surface + 2 : Math.min(floor(x), Math.round(this.surface + 2 + (x - this.bankX) * this.slopeK)));
+    // past deepX it curves down, off the bottom of the screen
+    const drop = (x) => (x <= this.deepX ? 0 : Math.round(12 * ((x - this.deepX) / 14) ** 2));
+    this.bedAt = (x) => (x <= this.bankX ? this.surface + 2 : Math.min(floor(x), Math.round(this.surface + 2 + (x - this.bankX) * this.slopeK)) + drop(x));
+    // the lowest a bait or a fish goes: the lake bed, or just above the bottom of the screen over the deep water
+    this.bottomAt = (x) => Math.min(this.bedAt(x), this.H - 5);
     // the slope: nothing at depth y goes left of this
     this.shoreX = (y) => this.bankX + Math.max(0, y - this.surface - 2) / this.slopeK;
-    this.leftLimit = Math.max(this.bankX + this.slopeRun * 0.55, this.camX + 10);
+    this.leftLimit = this.bankX + this.slopeRun * 0.55;
     // a bigger lake holds more fish (a regular rod from the shore: 1)
     this.room = (this.W - this.leftLimit) / Math.max(1, this.lakeRef * 0.8);
     const rod = (b) => ({ ...b, outfit: { ...(b?.outfit || {}), music: undefined, sport: `sport-rod-${['regular', 'good', 'super'][Math.max(0, Math.min(2, (opts.kid.gear?.rod || 1) - 1))]}` } });
@@ -508,9 +588,22 @@ export class Fishing {
     this.phase = 'ready';
     this.catches = [];
     this.seedFish();
+    this.deepAt = this.rollDeep();
     // the lake's event (mapplay.js): once or twice a game, said a few seconds ahead
     this.ev = twistFor(FISHING_EVENTS, this.map);
     this.resetEvent();
+  }
+
+  /** Where the buddies fish from: the shore's edge, or the boat (it moves as the kid rows). */
+  get homeX() { return this.bankX + this.camX; }
+
+  /** How far past the buddies a cast can go: to the far side of the view. */
+  get reach() { return this.fieldW - this.bankX - 14; }
+
+  /** When (seconds of play) the deep water's giant swims in this game, or null (not this game, or no boat). */
+  rollDeep() {
+    if (!this.boat || !this.spot.deep || this.r() >= deepChance(this.rodTier)) return null;
+    return DEEP_WHEN[0] + this.r() * (DEEP_WHEN[1] - DEEP_WHEN[0]);
   }
 
   // ---------- the lake's event ----------
@@ -526,7 +619,7 @@ export class Fishing {
   stepEvent(dt) {
     const ev = this.ev;
     if (!this.event && this.played >= this.evAt && this.left > EVENT.warn + 6) {
-      const reach = this.W - this.homeX - 14;
+      const reach = this.reach;
       const x = this.homeX + 14 + reach * (ev.kind === 'tide' ? 0.22 : ev.drift < 0 ? 0.8 : ev.drift > 0 ? 0.3 : 0.35 + this.r() * 0.45);
       const y = ev.kind === 'rise' || ev.look === 'fruit' || ev.look === 'sprinkles' || ev.look === 'rings' || ev.look === 'bread' ? this.surface + 8 : this.surface + (this.H - this.surface) * 0.45;
       this.event = { on: this.t + EVENT.warn, off: this.t + EVENT.warn + EVENT.last, x, y, r: ev.wide ? 70 : 34, spawned: false };
@@ -588,7 +681,7 @@ export class Fishing {
       // the rumble: the sky flashes red and glowing rocks splash into the lake
       if (t - e.on < 2.5 && Math.floor(t * 6) % 2) P('rgba(255,107,26,0.18)', 0, 0, this.W, this.H);
       for (let i = 0; i < 6; i += 1) {
-        const ph = (t * 0.6 + i * 0.17) % 1; const rx = this.homeX + 30 + ((i * 97) % Math.max(40, this.W - this.homeX - 50));
+        const ph = (t * 0.6 + i * 0.17) % 1; const rx = this.homeX + 30 + ((i * 97) % Math.max(40, this.reach - 36));
         const ry = S - 40 + ph * 40;
         if (ry < S) { P('#1b1430', rx - 1, ry - 1, 4, 4); P(i % 2 ? '#ff6b1a' : '#ffd43b', rx, ry, 2, 2); P('rgba(173,181,189,0.7)', rx + 1, ry - 4, 1, 2); }
         else P('#ffffff', rx - 2, S, 6, 1 / Z);
@@ -645,7 +738,7 @@ export class Fishing {
 
   // ---------- the lake ----------
   placeCover() {
-    const r = this.r; const W = this.W;
+    const r = this.r; const W = Math.min(this.W, this.deepX - 14); // no weeds or logs past the drop-off
     this.weeds = []; this.logs = [];
     const n = Math.max(3, Math.round(W / 50));
     for (let i = 0; i < n; i += 1) {
@@ -739,7 +832,8 @@ export class Fishing {
         P(shade(b2, -0.3), i, py + 1, pw, 2); P(shade(b1, 0.15), i, py, pw, 1); P(shade(b1, 0.35), i, py, 1, 1);
       }
     }
-    if (sp.coral) for (let i = 0; i < W / 24; i += 1) this.paintCoral(x, Math.floor(this.bankX + 20 + r() * (W - this.bankX - 20)), r);
+    if (sp.coral) for (let i = 0; i < W / 24; i += 1) { const cx = Math.floor(this.bankX + 20 + r() * (Math.min(W, this.deepX - 8) - this.bankX - 20)); this.paintCoral(x, cx, r); }
+    if (Number.isFinite(this.deepX)) this.paintDeep(x);
     // the shore: grass on top, then soil, with stones
     const L = sp.land; const top = (S - 3) * Z; const BX = this.bankX * Z;
     for (let i = 0; i < BX; i += 1) {
@@ -765,6 +859,33 @@ export class Fishing {
     // logs on the bottom
     for (const g of this.logs) this.paintLog(x, g, sp);
     return c;
+  }
+
+  /**
+   * The deep water past the drop-off: the water grows darker and darker toward the bottom, with
+   * an ordered dither (as the rest of the lake), fading in over the first stretch past the edge.
+   */
+  paintDeep(x) {
+    const { Z, H } = this; const FS = this.surface * Z; const FH = H * Z;
+    const x0 = Math.max(0, Math.round((this.deepX - 6) * Z)); const FW = this.W * Z;
+    if (x0 >= FW) return;
+    const img = x.getImageData(x0, FS, FW - x0, FH - FS); const d = img.data; const w = FW - x0;
+    const dark = parseInt(shade(this.spot.water[2], -0.62).slice(1), 16);
+    const dk = [dark >> 16, (dark >> 8) & 255, dark & 255];
+    for (let j = 0; j < FH - FS; j += 1) {
+      const down = (j / (FH - FS)) ** 0.9;
+      for (let i = 0; i < w; i += 1) {
+        const fade = clamp((i - 2 * Z) / (34 * Z), 0, 1);
+        const a = 0.92 * down * fade;
+        // in steps of a sixth, dithered between them
+        const th = (BAYER[j % 4][(i + x0) % 4] + 0.5) / 16;
+        const q = Math.min(6, Math.floor(a * 6 + th)) / 6;
+        if (!q) continue;
+        const o = (j * w + i) * 4;
+        for (let c = 0; c < 3; c += 1) d[o + c] = Math.round(d[o + c] + (dk[c] - d[o + c]) * q);
+      }
+    }
+    x.putImageData(img, x0, FS);
   }
 
   /** December on a cold lake: a rim of ice along the shore's edge, and a few floes out on the water. */
@@ -957,7 +1078,7 @@ export class Fishing {
       // snow falling, drifting a little from side to side
       for (let i = 0; i < 26; i += 1) {
         const sp0 = 6 + (i % 5) * 2; const fall = ((t * sp0 + i * 37) % (S + 6)) - 4;
-        const fx = Math.round(((i * 53.7) % this.W + Math.sin(t * 0.8 + i) * 3) * Z); const fy = Math.round(fall * Z);
+        const fx = Math.round((this.camX + ((i * 53.7) % this.fieldW) + Math.sin(t * 0.8 + i) * 3) * Z); const fy = Math.round(fall * Z);
         if (fy < 0 || fy >= FS - Z) continue;
         if (i % 3) P('#ffffff', fx, fy, Z, Z); else P('#ffffff', fx, fy, 1, 1);
       }
@@ -1033,17 +1154,18 @@ export class Fishing {
   speciesKey(likeKey) { return `${(SPOTS[this.map] ? this.map : 'bg-meadow').replace(/^bg-/, '')}-${likeKey}`; }
 
   /** The kind a fish swims, bites and fights like (the map's rare and December fish have their own `as`). */
-  asOf(kind) { return kind === 'special' ? this.spot.special.as : kind === 'holiday' ? this.spot.holiday.as : kind; }
+  asOf(kind) { return kind === 'special' ? this.spot.special.as : kind === 'holiday' ? this.spot.holiday.as : kind === 'deep' ? this.spot.deep.as : kind; }
 
   /** The id its bait odds and fish book page go by: the kind, or the rare or December fish's own id. */
-  likeOf(kind) { return kind === 'special' ? this.spot.special.id : kind === 'holiday' ? this.spot.holiday.id : kind; }
+  likeOf(kind) { return kind === 'special' ? this.spot.special.id : kind === 'holiday' ? this.spot.holiday.id : kind === 'deep' ? this.spot.deep.id : kind; }
 
   /** home: where it lives; farther out, bigger fish (sizePower). */
   makeFish(kind, x, y, move, home = x) {
-    const base = SPECIES[this.asOf(kind)];
+    const base = baseFor(this.map, kind);
     const { look, name } = lookFor(this.map, kind);
     const out = this.outAt(home);
-    const size = this.r() ** sizePower(out) * maxSizeAt(out); // big ones are rarer, more so near the shore; trophies out deep
+    // big ones are rarer, more so near the shore; trophies out deep. The giant is always big, often a trophy.
+    const size = kind === 'deep' ? 0.45 + this.r() * 0.75 : this.r() ** sizePower(out) * maxSizeAt(out);
     const len = (base.len[0] + (base.len[1] - base.len[0]) * size) * (look.lenK || 1); // lenK: drawn shorter (the candy-cane eel)
     const f = {
       kind, likeKey: this.likeOf(kind), name,
@@ -1054,7 +1176,8 @@ export class Fishing {
       move, state: 'swim', born: this.t, life: 10 + this.r() * 20, homeY: y, wob: this.r() * 10, mood: 0, checkAt: 0, pull: base.pull,
       turnAt: this.t, // no turning round in its first moments either (so it never flickers)
     };
-    f.pick = Math.min(1, size); // how picky it is and how it bites: as for its kind's biggest at most
+    f.pick = kind === 'deep' ? DEEP_PICK : Math.min(1, size); // how picky it is and how it bites: as for its kind's biggest at most
+    f.reach = base.reach;
     f.pw = f.pic.width / this.Z; f.ph = f.pic.height / this.Z; // size in game pixels
     this.fish.push(f);
     return f;
@@ -1063,11 +1186,20 @@ export class Fishing {
   /** A new fish (or school) just off the right edge; it swims onto the screen. */
   spawn(kind) {
     const W = this.W; const S = this.surface; const deep = this.H - S;
-    const side = this.r() < 0.5 ? -1 : 1;
-    const edgeX = W + 50; // the left side is the shore, so new fish swim in from the right
-    const move = MOVES[this.asOf(kind)];
+    this.r(); // a draw that once picked a side, kept so the same seed brings the same fish as before
+    const home = kind === 'deep' ? this.deepX + 26 + this.r() * Math.max(1, W - 46 - this.deepX) : this.pickHome();
+    // the left side is the shore, so new fish swim in from the right: from just off the right of
+    // the view (or of their home, when that's farther out), so they don't swim the whole lake
+    const edgeX = Math.min(W + 50, Math.max(home, this.camX + this.fieldW) + 50);
+    const move = kind === 'deep' ? 'deep' : MOVES[this.asOf(kind)];
     const startX = edgeX;
-    const home = this.pickHome();
+    if (move === 'deep') {
+      // the giant: slow and low, back and forth over the deep water
+      const f = this.makeFish(kind, startX, S + deep * (0.66 + this.r() * 0.1), 'cruise', home);
+      f.homeY = Math.min(f.homeY, this.H - 6 - f.ph / 2);
+      f.dir = -1; f.minX = this.deepX + 10 + f.pw / 2; f.maxX = W - 14; f.life = 45 + this.r() * 15; f.deep = true;
+      return;
+    }
     if (move === 'school') {
       const cy = S + deep * (0.3 + this.r() * 0.3);
       const school = { x: startX, y: cy, dir: -1, speed: 5 + this.r() * 3, born: this.t, life: 12 + this.r() * 18, members: [], home };
@@ -1120,6 +1252,12 @@ export class Fishing {
   stepFish(dt) {
     const W = this.W; const S = this.surface;
     while (this.arrivals.length && this.t >= this.arrivals[0][0]) this.spawn(this.arrivals.shift()[1]);
+    // the deep water's giant swims in (some games with the boat): row out to it!
+    if (this.boat && this.deepAt != null && this.phase === 'play' && this.played >= this.deepAt) {
+      this.deepAt = null; this.spawn('deep');
+      this.pop('Something HUGE is in the deep water!', this.camX + this.fieldW / 2, this.surface - 14, '#74c0fc', true);
+      this.sound = 'tag';
+    }
     if (this.t >= this.nextSpawn) {
       this.nextSpawn = this.t + (3 + this.r() * 5) / clamp(this.room, 1, 2);
       const loose = this.fish.filter((f) => f.move !== 'school').length;
@@ -1137,7 +1275,7 @@ export class Fishing {
       // a school heads for the event's hot spot
       const hot = this.hotSpot();
       if (hot && !leaving && Math.abs(sc.x - hot.x) < 120) sc.dir = hot.x > sc.x + 4 ? 1 : hot.x < sc.x - 4 ? -1 : sc.dir;
-      if (sc.x > W + 60) sc.gone = true;
+      if (sc.x > W + 60 || (this.boat && leaving && sc.x > this.camX + this.fieldW + 70)) sc.gone = true;
     }
     for (const f of this.fish) {
       const age = this.t - f.born;
@@ -1178,20 +1316,22 @@ export class Fishing {
       }
       // fish near the event's hot spot swim to it and hang around it
       const hot = this.hotSpot();
-      if (hot && f.state === 'swim' && !leaving && f.move !== 'school' && f.move !== 'shadow' && Math.abs(f.x - hot.x) < 110) {
+      if (hot && f.state === 'swim' && !leaving && !f.deep && f.move !== 'school' && f.move !== 'shadow' && Math.abs(f.x - hot.x) < 110) {
         tx = hot.x + Math.sin(this.t * 0.8 + f.wob) * hot.r * 0.6; ty = hot.y + Math.sin(this.t * 0.6 + f.wob * 2) * 6; spd = f.speed * 1.3;
         if (Math.abs(tx - f.x) > 2) f.dir = tx > f.x ? 1 : -1;
       }
-      ty = clamp(ty, S + 4, this.bedAt(f.x) - 2);
+      ty = clamp(ty, S + 4, this.bottomAt(f.x) - 2);
+      if (f.deep) ty = Math.max(S + 4, Math.min(ty, this.H - 3 - f.ph / 2)); // a giant stays all on the screen
       const dx = tx - f.x; const dy = ty - f.y; const d = Math.hypot(dx, dy);
       if (d > 0.3) { const k = Math.min(1, (spd * dt) / d); f.x += dx * k; f.y += dy * k; }
-      if (f.x > W + 60) f.gone = true;
+      // gone off the far side, or swum off out of sight to the right (the lake is longer than the view with the boat)
+      if (f.x > W + 60 || (this.boat && leaving && f.state !== 'interest' && f.x - f.pw / 2 > this.camX + this.fieldW + 40)) f.gone = true;
       if (leaving && (f.move === 'cruise' || (f.move === 'school' && f.school?.gone))) { /* they swim off on their own */ }
       // keep out of the bank
       // stay off the slope
       const shore = this.shoreX(f.y + 3) + f.len * 0.5;
       if (f.x < shore) f.x = shore;
-      if (f.y > this.bedAt(f.x) - 2) f.y = this.bedAt(f.x) - 2;
+      if (f.y > this.bottomAt(f.x) - 2) f.y = this.bottomAt(f.x) - 2;
       // which way the picture faces: only turns after a short while, so it never flickers
       if (f.face === undefined) f.face = f.dir;
       if (f.dir !== f.face && (f.state === 'hooked' || this.t - (f.turnAt || -9) > 0.7)) { f.face = f.dir; f.turnAt = this.t; }
@@ -1213,7 +1353,7 @@ export class Fishing {
   landAt(m, tier = this.rodTier) {
     const zone = this.zoneOf(m, tier);
     const g = 0.82 - 0.04 * (tier - 1);
-    const reach = this.W - this.homeX - 14;
+    const reach = this.reach;
     const span = { red: [0.12, 0.32], yellow: [0.38, 0.62], green: [0.7, 0.95] }[zone];
     const k = zone === 'red' ? m / 0.45 : zone === 'yellow' ? (m - 0.45) / (g - 0.45) : (m - g) / (1 - g);
     return this.homeX + 14 + reach * (span[0] + (span[1] - span[0]) * clamp(k, 0, 1));
@@ -1222,7 +1362,7 @@ export class Fishing {
   cast(L, m = this.meter(L)) {
     const tier = L === this.lines.vis ? this.visTier : this.rodTier;
     const zone = this.zoneOf(m, tier);
-    const reach = this.W - this.homeX - 14;
+    const reach = this.reach;
     const land = this.landAt(m, tier);
     const [rx, ry] = this.rodTip(L.who);
     L.state = 'air'; L.from = [rx, ry]; L.to = [Math.round(land), this.surface]; L.t0 = this.t; L.flight = 0.5 + 0.5 * (land - rx) / reach;
@@ -1253,7 +1393,7 @@ export class Fishing {
   hook(L, f) {
     f.state = 'hooked'; f.dir = -1; f.face = -1; L.fish = f;
     f.x = L.x + f.pw / 2 - 1; f.y = L.y + 1; // nose on the bait
-    L.state = 'fight'; L.tension = 0.2; f.stamina = 0.4 + f.size * 1.2 + f.pull * 0.6; f.runAt = this.t + 1 + this.r() * 2;
+    L.state = 'fight'; L.tension = 0.2; f.stamina = 0.4 + f.size * 1.2 + f.pull * 0.6 + (f.deep ? DEEP_STAMINA : 0); f.runAt = this.t + 1 + this.r() * 2;
     for (const o of this.fish) if (o.line === L && o !== f && o.state === 'interest') { o.state = 'swim'; o.line = null; }
     this.pop('Fish on!', L.x, L.y - 6, '#ffd43b', true);
     if (L === this.lines.kid) { this.sound = 'tag'; this.buzz = [40]; }
@@ -1299,7 +1439,7 @@ export class Fishing {
     }
     if (L.state === 'fight') return this.stepFight(L, dt, holding);
     if (L.state !== 'water') return;
-    const bed = this.bedAt(L.x) - 1;
+    const bed = this.bottomAt(L.x) - 1;
     const [rx] = this.rodTip(L.who);
     if (holding) {
       // reel toward the bank (or the boat), rising a little; as fast on screen however far the view is zoomed out
@@ -1307,9 +1447,8 @@ export class Fishing {
       const dx = tx - L.x; const dy = ty - L.y; const d = Math.hypot(dx, dy);
       const sp = 24 * this.zoom * dt;
       L.x += (dx / d) * sp; L.y += (dy / d) * sp * 0.55;
-      // up along the bank instead of into it
       // up along the slope, never into it
-      L.y = clamp(L.y, S + 1, this.bedAt(L.x) - 1);
+      L.y = clamp(L.y, S + 1, this.bottomAt(L.x) - 1);
       if (d < 3 || (L.x <= this.homeX + 6 && L.y <= S + 3)) { L.state = 'idle'; this.pop('Reeled in', rx + 10, S - 8, '#ffffff'); return; }
     } else if (L.y < bed) {
       L.y = Math.min(bed, L.y + BAIT[L.bait].sink * this.zoom * dt);
@@ -1327,9 +1466,10 @@ export class Fishing {
     for (const f of this.fish) {
       if (f.state !== 'swim' && f.state !== 'interest') continue;
       if (f.line && f.line !== L) continue;
+      if (f.deep && L !== this.lines.kid) continue; // the giant is the kid's to catch
       const d = Math.hypot(f.x - L.x, f.y - L.y);
       const like = this.today[L.bait][f.likeKey] ?? 0;
-      if (f.state === 'swim' && d < SPECIES[this.asOf(f.kind)].reach && this.t >= f.checkAt && !(f.waryUntil > this.t)) {
+      if (f.state === 'swim' && d < f.reach && this.t >= f.checkAt && !(f.waryUntil > this.t)) {
         f.checkAt = this.t + 0.5;
         if (like < 0) { const sc = f.school; for (const o of this.fish) if (o.school === sc && o.move === 'school') this.spook(o); if (sc) sc.gone = true; this.pop('Eek! A spoon!', f.x, f.y - 6, '#ff8787'); continue; }
         if (like >= pickiness(f.pick) && this.r() < like * 0.3 * (1 - 0.5 * f.pick) * this.biteBoost(L.x, L.y)) { f.state = 'interest'; f.line = L; f.since = this.t; this.pop('?', f.x, f.y - 5, '#ffffff'); }
@@ -1362,17 +1502,17 @@ export class Fishing {
       const dx = tx - L.x; const dy = ty - L.y; const d = Math.hypot(dx, dy);
       L.x += (dx / d) * sp; L.y += (dy / d) * sp * 0.6;
       // up along the slope, never into it
-      L.y = clamp(L.y, S + 1, this.bedAt(L.x) - 1);
+      L.y = clamp(L.y, S + 1, this.bottomAt(L.x) - 1);
       f.stamina = Math.max(0, f.stamina - dt * (0.25 + L.tension * 0.3));
     } else {
       L.tension -= 0.6 * dt;
       // the fish swims off with it
-      L.x = Math.min(this.W - 6, L.x + pull * 10 * this.zoom * dt); L.y = Math.min(this.bedAt(L.x) - 2, L.y + pull * 3 * this.zoom * dt);
+      L.x = Math.min(Math.max(L.x, this.camX + this.fieldW - 6), L.x + pull * 10 * this.zoom * dt); L.y = Math.min(this.bottomAt(L.x) - 2, L.y + pull * 3 * this.zoom * dt);
       f.stamina = Math.max(0, f.stamina - dt * 0.05);
     }
     L.tension = clamp(L.tension, 0, 1.05);
     // left alone, it swims off to the far side and slips the hook
-    L.slack = !holding && L.x >= this.W - 8 ? (L.slack || 0) + dt : 0;
+    L.slack = !holding && L.x >= this.camX + this.fieldW - 8 ? (L.slack || 0) + dt : 0;
     if (L.slack > 2) { this.pop('It got away!', L.x - 10, L.y - 6, '#ff8787', true); this.spook(f); L.state = 'idle'; L.fish = null; return; }
     // the hook is in its mouth: nose on the bait, body trailing away from the shore
     f.x = L.x + f.pw / 2 - 1; f.y = L.y + 1; f.dir = -1; f.face = -1;
@@ -1382,7 +1522,7 @@ export class Fishing {
 
   land(L, f) {
     L.state = 'idle'; L.fish = null; f.gone = true;
-    const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, lb: f.lb, cls: sizeClass(this.speciesKey(f.likeKey), f.lb), kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special', holiday: f.kind === 'holiday' };
+    const c = { who: L.who === this.kid ? 'kid' : 'vis', name: f.name, inches: f.inches, lb: f.lb, cls: sizeClass(this.speciesKey(f.likeKey), f.lb), kind: f.likeKey, pic: f.pic, at: this.t, points: pointsFor(f.kind, f.size), rare: f.kind === 'special', holiday: f.kind === 'holiday', deep: f.kind === 'deep' };
     this.points[c.who] += c.points;
     this.catches.push(c);
     if (c.who === 'kid') {
@@ -1418,6 +1558,53 @@ export class Fishing {
   // ---------- input ----------
   onButton(x, y) { const b = this.button; return Math.hypot(x - b.x, y - b.y) <= b.r + 2; }
 
+  /** The boat's two row buttons, bottom left (on the screen, not in the lake): [] without a boat. */
+  rowButtons() {
+    if (!this.boat) return [];
+    const r = 11; const y = this.vH - r - 4;
+    return [{ dir: -1, x: r + 4, y, r }, { dir: 1, x: 3 * r + 10, y, r }];
+  }
+
+  /** The row button at x, y (screen game pixels), or null. */
+  rowButtonAt(x, y) { return this.rowButtons().find((b) => Math.hypot(x - b.x, y - b.y) <= b.r + 2) || null; }
+
+  /** Whether the boat can row now: only with the kid's line in (a bait in the water stays where it is). */
+  canRow() { return this.boat && this.phase !== 'over' && this.lines.kid.state === 'idle'; }
+
+  /** Press a row button: row that way while it's held (dir -1 toward the shore, 1 out to the deep). */
+  startRow(dir) {
+    if (!this.canRow()) {
+      if (this.phase !== 'over') this.pop('Reel in first, then row!', this.homeX + 4, this.surface - 16, '#ffd43b');
+      return;
+    }
+    this.row = dir;
+  }
+
+  /** The boat glides toward the speed the kid rows at, and the buddies ride along. */
+  stepBoat(dt) {
+    if (!this.boat) return;
+    if (!this.canRow()) this.row = 0;
+    const D = this.D;
+    const want = this.row * ROW_SPEED * D;
+    const ease = ROW_EASE * D * dt;
+    this.boatV += clamp(want - this.boatV, -ease, ease);
+    const was = this.camX;
+    this.camX = clamp(this.camX + this.boatV * dt, this.camMin, this.camMax);
+    if (this.camX === this.camMin || this.camX === this.camMax) this.boatV = 0; // bumped the end
+    if (this.row) this.stroke += dt * 1.4; // strokes of the oars (in turns)
+    else if (this.stroke % 1) this.stroke = Math.min(Math.ceil(this.stroke), this.stroke + dt * 1.4); // finish the stroke
+    const moved = this.camX - was;
+    if (!moved) return;
+    for (const p of [this.kid, this.vis]) { p.x += moved; p.tx += moved; if (p.home) p.home[0] += moved; }
+  }
+
+  /** How deep the water is under the boat: 'shore', 'shallow', 'deep' (the view reaches past the drop-off) or 'over' (the boat is over it). */
+  get waterUnder() {
+    if (!this.boat) return 'shore';
+    if (this.homeX + 6 >= this.deepX) return 'over';
+    return this.camX + this.fieldW > this.deepX + 20 ? 'deep' : 'shallow';
+  }
+
   /** Tap a bait chip to switch bait (only with the line in). */
   tapBait(x, y) {
     const i = this.chips().findIndex((c) => x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h);
@@ -1434,6 +1621,9 @@ export class Fishing {
   tap(x, y) {
     const L = this.lines.kid;
     if (this.phase === 'over') { if (this.t - this.overAt > 1.2) this.restart(); return; }
+    // the boat's row buttons (rowing before the first cast doesn't start the clock)
+    const rb = this.rowButtonAt(x, y);
+    if (rb) { this.startRow(rb.dir); return; }
     if (this.phase === 'ready') {
       if (this.locked) return;
       if (this.tapBait(x, y)) return;
@@ -1452,6 +1642,7 @@ export class Fishing {
 
   release() {
     const L = this.lines.kid;
+    this.row = 0;
     if (!L.held) return;
     L.held = false;
     if (this.t - L.downAt < HOLD) this.twitch(L);
@@ -1470,12 +1661,13 @@ export class Fishing {
   restart() {
     this.phase = 'ready'; this.left = GAME_SECONDS; this.overtime = 0; this.points = { kid: 0, vis: 0 }; this.catches = []; this.newBest = false; this.records = 0;
     this.resetEvent();
+    this.deepAt = this.rollDeep();
     this.ai.next = this.t + 2;
   }
 
   step(dt) {
     this.t += dt;
-    if (this.phase !== 'play') { this.stepFish(dt); for (const p of [this.kid, this.vis]) p.move(dt); this.pops = this.pops.filter((p) => this.t - p.at < 1.4); return; }
+    if (this.phase !== 'play') { this.stepBoat(dt); this.stepFish(dt); for (const p of [this.kid, this.vis]) p.move(dt); this.pops = this.pops.filter((p) => this.t - p.at < 1.4); return; }
     this.left = Math.max(0, this.left - dt);
     const L = this.lines.kid;
     // time's up: a fish on the line still gets landed (or lost). A big one hooked far out takes a
@@ -1484,6 +1676,7 @@ export class Fishing {
     if (this.left <= 0 && (L.state !== 'fight' || (this.overtime = (this.overtime || 0) + dt) > OVERTIME)) { this.finish(); return; }
     const holding = L.held && this.t - L.downAt >= HOLD;
     this.stepLine(L, dt, holding);
+    this.stepBoat(dt);
     this.stepAI(dt);
     this.stepEvent(dt);
     this.stepFish(dt);
@@ -1499,8 +1692,9 @@ export class Fishing {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     // Lava Lake's rumble shakes the view a little
     const shake = this.eventOn && this.ev.look === 'shake' && this.t - this.event.on < 2.5 ? Math.round(Math.sin(this.t * 60) * 2) : 0;
-    ctx.drawImage(this.field, -this.camX * Z + shake, 0);
-    ctx.setTransform(Z, 0, 0, Z, -this.camX * Z + shake, 0); // game pixels from here on (the view follows the boat)
+    const cam = Math.round(this.camX * Z); // the view follows the boat, in whole fine pixels
+    ctx.drawImage(this.field, -cam + shake, 0);
+    ctx.setTransform(Z, 0, 0, Z, -cam + shake, 0); // game pixels from here on
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
     // fish
     for (const f of this.fish) {
@@ -1513,6 +1707,7 @@ export class Fishing {
     this.drawEvent(ctx);
     this.drawWeeds(ctx);
     this.drawTop(ctx);
+    if (this.boat) this.drawBuoy(ctx);
     // splashes: drops thrown up on both sides
     for (const s of this.splashes || []) {
       const a = (this.t - s.at) / 0.5; if (a > 1) continue;
@@ -1535,9 +1730,35 @@ export class Fishing {
   /** The rowboat the buddies stand in, side on: its far rim and inside ('back'), then the hull ('front'). */
   drawBoat(ctx, part) {
     const Z = this.Z;
-    const x0 = (this.homeX - 44) * Z; const len = 50 * Z; const top = (this.surface - 5) * Z;
+    const x0 = Math.round((this.homeX - 44) * Z); const len = 50 * Z; const top = (this.surface - 5) * Z;
     const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
-    paintBoat(P, x0, top, len, Z, part, this.t);
+    const rowing = this.row !== 0 || this.stroke % 1 > 0;
+    paintBoat(P, x0, top, len, Z, part, this.t, rowing ? this.stroke : null);
+    if (part !== 'front' || Math.abs(this.boatV) < 1) return;
+    // a wake behind the boat: little white curls on the water, more the faster it goes
+    const wl = top + 5 * Z; const back = this.boatV > 0 ? x0 - 3 * Z : x0 + len + 3 * Z; const dir = this.boatV > 0 ? -1 : 1;
+    const n = Math.min(5, 1 + Math.round(Math.abs(this.boatV) / (this.D * ROW_SPEED) * 4));
+    for (let i = 0; i < n; i += 1) {
+      const k = ((this.t * 1.6 + i / n) % 1);
+      const wx = back + dir * Math.round((2 + k * 16) * Z); const ww = Math.max(Z, Math.round((1 - k) * 4 * Z));
+      P(`rgba(255,255,255,${(0.9 * (1 - k)).toFixed(2)})`, wx, wl + (i % 2) * Z, ww, 1);
+    }
+  }
+
+  /** A red and white buoy bobbing over the drop-off: past it is the deep water. */
+  drawBuoy(ctx) {
+    const Z = this.Z;
+    const P = (col, a, b, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(a / Z, b / Z, w / Z, h / Z); };
+    const bx = Math.round(this.deepX * Z); const bob = Math.sin(this.t * 2.2) > 0 ? 0 : Z; const by = this.surface * Z + bob;
+    // the float: a ball striped red and white, half in the water, a pole with a little flag
+    P(INK, bx - 4 * Z - 1, by - 5 * Z - 1, 8 * Z + 2, 7 * Z + 2);
+    for (let j = 0; j < 7 * Z; j += 1) P(Math.floor(j / (2 * Z)) % 2 ? '#ffffff' : '#e03131', bx - 4 * Z, by - 5 * Z + j, 8 * Z, 1);
+    P('rgba(255,255,255,0.5)', bx - 3 * Z, by - 4 * Z, Z, 2 * Z);
+    P(INK, bx - 1, by - 13 * Z, Z + 2, 8 * Z); P('#e9ecef', bx, by - 13 * Z, Z, 8 * Z);
+    const wave = Math.sin(this.t * 5) > 0 ? 0 : Z;
+    P(INK, bx + Z, by - 13 * Z - 1, 5 * Z + 1, 4 * Z + 2); P('#ffd43b', bx + Z, by - 13 * Z, 5 * Z - wave, 4 * Z);
+    // ripples where it sits
+    P('rgba(255,255,255,0.8)', bx - 7 * Z + bob, this.surface * Z + 1, 2 * Z, 1); P('rgba(255,255,255,0.8)', bx + 5 * Z - bob, this.surface * Z + 1, 2 * Z, 1);
   }
 
   drawLine(ctx, L) {
@@ -1565,11 +1786,50 @@ export class Fishing {
     if (L.state === 'snag' && Math.floor(this.t * 4) % 2) { ctx.fillStyle = '#ffa94d'; ctx.fillRect(bx - 1, by - 6, 1, 2); ctx.fillRect(bx + 2, by - 6, 1, 2); }
   }
 
+  /**
+   * The boat's row buttons (bottom left) and a little map of the lake over them: the shore, the
+   * shallows, the deep water past the buoy, the boat, and the part of the lake on screen.
+   */
+  drawRowing(ctx, S, u, text) {
+    const can = this.canRow();
+    for (const b of this.rowButtons()) {
+      const x = b.x * S; const y = b.y * S; const r = b.r * S;
+      const end = b.dir < 0 ? this.camX <= this.camMin : this.camX >= this.camMax;
+      const on = this.row === b.dir;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = on ? '#8b5a2b' : can && !end ? 'rgba(201,138,75,0.92)' : 'rgba(73,80,87,0.55)'; ctx.fill();
+      ctx.lineWidth = S; ctx.strokeStyle = '#1b1430'; ctx.stroke();
+      // an arrow
+      const a = r * 0.5;
+      ctx.beginPath(); ctx.moveTo(x + b.dir * a, y); ctx.lineTo(x - b.dir * a * 0.6, y - a * 0.9); ctx.lineTo(x - b.dir * a * 0.6, y + a * 0.9); ctx.closePath();
+      ctx.fillStyle = can && !end ? '#ffffff' : '#ced4da'; ctx.fill(); ctx.lineWidth = S * 0.6; ctx.stroke();
+    }
+    const [lb, rb] = this.rowButtons();
+    text('row', ((lb.x + rb.x) / 2) * S, (lb.y - lb.r - 2.5) * S, u * 0.9, '#ffffff');
+    // the lake map, above the buttons
+    const mx = (lb.x - lb.r) * S; const mw = (rb.x + rb.r - lb.x + lb.r) * S; const mh = 3 * S; const my = (lb.y - lb.r - 10) * S;
+    const fx = (wx) => mx + clamp((wx - this.bankX) / (this.W - this.bankX), 0, 1) * mw;
+    ctx.fillStyle = '#1b1430'; ctx.fillRect(mx - S * 0.6, my - S * 0.6, mw + S * 1.2, mh + S * 1.2);
+    ctx.fillStyle = '#74c0fc'; ctx.fillRect(mx, my, fx(this.deepX) - mx, mh);
+    ctx.fillStyle = '#1c3d6e'; ctx.fillRect(fx(this.deepX), my, mx + mw - fx(this.deepX), mh);
+    ctx.fillStyle = '#e03131'; ctx.fillRect(fx(this.deepX) - S * 0.4, my - S, S * 0.8, mh + 2 * S); // the buoy
+    // the part of the lake on screen
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = S * 0.5;
+    ctx.strokeRect(fx(this.camX), my - S * 0.9, fx(this.camX + this.fieldW) - fx(this.camX), mh + S * 1.8);
+    // the boat
+    const bx = fx(this.homeX - 20);
+    ctx.fillStyle = '#1b1430'; ctx.fillRect(bx - 2.4 * S, my - 2.6 * S, 4.8 * S, 2.4 * S);
+    ctx.fillStyle = '#c98a4b'; ctx.fillRect(bx - 2 * S, my - 2.2 * S, 4 * S, 1.6 * S);
+    const where = this.waterUnder;
+    if (where !== 'shallow') text(where === 'over' ? 'Deep water!' : 'Deep water ahead', mx + mw / 2, my - 4.5 * S, u * 0.85, '#74c0fc');
+  }
+
   drawHud(ctx, scale) {
     // S: screen pixels for each screen game pixel (buttons, chips, text);
     // k: screen pixels for each lake pixel (the lake may be zoomed out), and X/Y to place things in the lake
     const S = scale; const W = this.vW * S; const k = S / this.zoom;
-    const X = (x) => (x - this.camX) * k; const Y = (y) => y * k; const SY = Y(this.surface);
+    const cam = Math.round(this.camX * this.Z) / this.Z;
+    const X = (x) => (x - cam) * k; const Y = (y) => y * k; const SY = Y(this.surface);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const text = (s, x, y, px, color = '#ffffff') => {
@@ -1615,6 +1875,7 @@ export class Fishing {
     ctx.lineWidth = S; ctx.strokeStyle = '#1b1430'; ctx.stroke();
     text(label, bx, by, u * 1.25, '#ffffff');
     if (L.state === 'water' || L.state === 'fight') text('tap: twitch · hold: reel', bx - br - u * 0.5, by + br - u * 0.6, u * 0.8, '#ffffff');
+    if (this.boat) this.drawRowing(ctx, S, u, text);
 
     // cast meter: red short, yellow medium, green far
     if (L.state === 'aim') {
@@ -1652,6 +1913,9 @@ export class Fishing {
       const cw = u * 26; const ch = u * 13; const cx = W / 2 - cw / 2; const cy = SY + 6 * S;
       ctx.fillStyle = 'rgba(27,20,48,0.88)'; ctx.fillRect(cx, cy, cw, ch);
       ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(cx, cy, cw, ch);
+      if (c.deep) { // the deep water's giant: a deep blue frame inside the gold one
+        ctx.strokeStyle = '#1864ab'; ctx.lineWidth = S * 1.2; ctx.strokeRect(cx + S * 1.4, cy + S * 1.4, cw - S * 2.8, ch - S * 2.8);
+      }
       if (c.holiday) { // a December fish: a candy-cane frame
         ctx.lineWidth = S * 1.5; ctx.setLineDash([u * 0.8, u * 0.8]);
         ctx.strokeStyle = '#ffffff'; ctx.strokeRect(cx, cy, cw, ch);
@@ -1662,7 +1926,7 @@ export class Fishing {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(c.pic, W / 2 - (c.pic.width * z) / 2, cy + u * 1.2, c.pic.width * z, c.pic.height * z);
       text(`${c.who === 'kid' ? this.kid.name : this.vis.name} caught a ${c.name}!`, W / 2, cy + ch - u * 3.2, u * 1.6, '#ffd43b');
-      text(`${fmtWeight(c.lb)}${c.cls ? ` · ${CLASSES[c.cls].name}${c.cls === 'trophy' ? '!' : ''}` : ''} · +${c.points} points${c.rare ? ' · RARE!' : c.holiday ? ' · DECEMBER FISH!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare || c.holiday ? '#ffd43b' : '#ffffff');
+      text(`${fmtWeight(c.lb)}${c.cls ? ` · ${CLASSES[c.cls].name}${c.cls === 'trophy' ? '!' : ''}` : ''} · +${c.points} points${c.deep ? ' · GIANT FROM THE DEEP!' : c.rare ? ' · RARE!' : c.holiday ? ' · DECEMBER FISH!' : ''}`, W / 2, cy + ch - u * 1.3, u * 1.3, c.rare || c.holiday || c.deep ? '#ffd43b' : '#ffffff');
       // a new record for the fish book in the house: a ribbon across the card's corner
       if (c.record) {
         const label = c.record === 'first' ? 'NEW FISH!' : 'NEW RECORD!';
@@ -1674,7 +1938,10 @@ export class Fishing {
         if (Math.floor(this.t * 3) % 2) text(c.record === 'first' ? 'Added to your fish book!' : 'Your biggest one yet!', W / 2, cy + ch + u * 1.3, u * 1.2, '#b2f2bb');
       }
     }
-    if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) text(this.locked ? "That's all our games today!" : 'Pick a bait, then tap CAST!', W / 2, SY + 10 * S, u * 1.8);
+    if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) {
+      text(this.locked ? "That's all our games today!" : 'Pick a bait, then tap CAST!', W / 2, SY + 10 * S, u * 1.8);
+      if (this.boat && !this.locked) text('Hold the arrows to row out to deep water', W / 2, SY + 15 * S, u * 1.15, '#d0ebff');
+    }
     if (this.phase === 'over' && this.t - this.overAt > 0.3) {
       const cy = SY + 22 * S;
       const bw = Math.min(W * 0.84, u * 34); const bh = u * 11;

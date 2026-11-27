@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel, SPORTS } from '../js/items.js';
+import { ITEMS, SLOTS, isUnlocked, newUnlocks, restingMood, speciesFromEmoji, itemById, unlockedMoves, bestGear, pickMove, MOVES, needLabel, SPORTS, needsGear } from '../js/items.js';
 
 test('every item has a known slot and unique id', () => {
   const slots = new Set(SLOTS.map((s) => s.id));
@@ -196,6 +196,12 @@ test('sports gear: every kind in 3 versions plus the fishing boat, bought with g
   assert.equal(boat.gems, 100);
   assert.ok(boat.noHold, 'the boat stays at the lake');
   assert.deepEqual(bestGear(['sport-rod-good', 'sport-boat']), { rod: 2, boat: 1 });
+  // Taylor, 2026-11-27: the boat only goes on sale once the kid has a fishing rod (any rod)
+  assert.equal(needsGear(boat, []), 'rod');
+  assert.equal(needsGear(boat, ['sport-soccer-regular']), 'rod');
+  for (const rod of ['sport-rod-regular', 'sport-rod-good', 'sport-rod-super']) assert.equal(needsGear(boat, [rod]), null, rod);
+  assert.equal(needsGear(boat, ['sport-boat']), null, 'a kid who already has the boat keeps it');
+  assert.equal(needsGear(itemById('sport-rod-regular'), []), null, 'nothing else waits on other gear');
   const rod = itemById('sport-rod-good');
   assert.equal(rod.gems, 120);
   assert.equal(rod.price, undefined);
