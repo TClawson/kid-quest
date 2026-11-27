@@ -1,11 +1,13 @@
 // The photo wall and printing (prints.js): the Print button on a perfect photo's album page,
 // the print confirm, and the photo wall's own page (opened by tapping the gallery frame in the
 // buddy's house): the four prints big, which print hangs where, and the frame's color.
-import { esc, openModal, closeModal, save, render, toast, progressFor, $modal } from './ctx.js';
+import { esc, openModal, closeModal, save, render, toast, progressFor, $modal, today } from './ctx.js';
+import { refreshRequests, requestsOf, askText } from './photoreq.js';
+import { seasonOf } from './seasons.js';
 import { critterById } from './critters.js';
 import {
   PRINT_PRICE, FRAME_PRICE, FRAME_COLORS, WALL_SLOTS, hasFrame, canPrint, printOf, printIds, wallOf,
-  printPhoto, hangPrint, setFrameColor, develop,
+  printPhoto, hangPrint, setFrameColor, develop, ticketsLeft,
 } from './prints.js';
 import { sounds, confetti } from './fx.js';
 
@@ -48,12 +50,27 @@ export function housePhotos(kid) {
   };
 }
 
+/**
+ * Villager photo requests for the village (photoreq.js): brings the board up to date for today's
+ * villagers (kinds), and returns what each asks { kind: text } and the photos given to them
+ * { kind: picture url }, hung up beside them.
+ */
+export function villageRequests(kid, map, kinds) {
+  const day = today();
+  if (refreshRequests(kid, day, { map, season: seasonOf(day), kinds })) save();
+  const r = requestsOf(kid, day);
+  const asks = {}; const given = {};
+  for (const q of r.open) if (kinds.includes(q.by)) asks[q.by] = askText(q);
+  for (const [k, p] of Object.entries(r.given)) if (kinds.includes(k)) { const u = wallUrl({ critter: p.critter, neg: p.neg, map: p.map, season: p.season, weather: p.weather, day: p.day }); if (u) given[k] = u; }
+  return { asks, given };
+}
+
 /** The print button (and why not) for an animal's album page. */
 export function printButton(kid, critterId) {
   if (!canPrint(kid, critterId)) return '';
   const has = printOf(kid, critterId);
   return `<div class="print-row">
-    <button class="btn" data-action="print-ask" data-critter="${esc(critterId)}">🖨️ ${has ? 'Print it again' : 'Print this photo'} · ${PRINT_PRICE} 🪙</button>
+    <button class="btn" data-action="print-ask" data-critter="${esc(critterId)}">🖨️ ${has ? 'Print it again' : 'Print this photo'} · ${ticketsLeft(kid) ? '🎟️ free' : `${PRINT_PRICE} 🪙`}</button>
     ${hasFrame(kid) ? '' : `<small class="muted">Hang it on your photo wall: buy the Photo gallery frame (${FRAME_PRICE} coins) in the Home shop first.</small>`}
   </div>`;
 }
@@ -68,7 +85,8 @@ export function openPrintAsk(kid, critterId) {
   const frame = hasFrame(kid);
   const wall = wallOf(kid);
   const full = !wall.slots.includes(null) && !wall.slots.includes(critterId);
-  const enough = coins >= PRINT_PRICE;
+  const free = ticketsLeft(kid) > 0;
+  const enough = free || coins >= PRINT_PRICE;
   openModal(`
     <div class="print-ask" style="--kid:${esc(kid.color)}">
       <h2>🖨️ Print your ${esc(c.name.toLowerCase())}</h2>
@@ -81,14 +99,15 @@ export function openPrintAsk(kid, critterId) {
         <div class="print-pick">${wall.slots.map((id, i) => `<button class="btn ghost" data-action="print-do" data-critter="${esc(critterId)}" data-slot="${i}"><img src="${wallUrl({ critter: id, ...printOf(kid, id) })}" alt=""><small>${esc(critterById(id)?.name || '')}</small></button>`).join('')}</div>
         <p class="muted small">The one you take down is kept: you can hang it again from the photo wall for free.</p>
         <button class="btn ghost" data-action="modal-close">Not now</button>`
-        : `<button class="btn" data-action="print-do" data-critter="${esc(critterId)}">Print it · ${PRINT_PRICE} 🪙</button>
+        : `<button class="btn" data-action="print-do" data-critter="${esc(critterId)}">Print it · ${free ? `free (🎟️ ${ticketsLeft(kid)} left)` : `${PRINT_PRICE} 🪙`}</button>
         <button class="btn ghost" data-action="modal-close">Not now</button>`}
     </div>`);
 }
 
 export function doPrint(kid, critterId, slot) {
-  if (!kid || !hasFrame(kid) || progressFor(kid).coins < PRINT_PRICE) { closeModal(); return; }
-  if (!printPhoto(kid, critterId, slot == null || slot === '' ? null : Number(slot))) { closeModal(); return; }
+  const ticket = ticketsLeft(kid) > 0;
+  if (!kid || !hasFrame(kid) || (!ticket && progressFor(kid).coins < PRINT_PRICE)) { closeModal(); return; }
+  if (!printPhoto(kid, critterId, slot == null || slot === '' ? null : Number(slot), { ticket })) { closeModal(); return; }
   save(); closeModal(); sounds.day(); confetti(50, 1200);
   toast(`Printed! Your ${critterById(critterId)?.name.toLowerCase()} is on your photo wall.`);
   render();

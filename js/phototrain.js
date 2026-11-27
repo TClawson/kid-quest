@@ -244,6 +244,8 @@ export class PhotoTrain {
     // the side track: how many of this map's animals are in the album (ROUTE_AT opens it)
     this.found = (typeof opts.found === 'function' ? opts.found(this.map) : opts.found) || 0;
     this.baseTheme = this.theme;
+    // villagers' photo requests (js/photoreq.js): [{ c: critterId, want, text }]
+    this.requests = opts.requests || [];
     this.onPhoto = opts.onPhoto || null; this.onClue = opts.onClue || null;
     this.cam = cameraFor(opts.kid.gear?.camera || 1);
     this.frame = this.cam.tele ? TELE_FRAME : FRAME;
@@ -919,6 +921,7 @@ export class PhotoTrain {
       this.lastGood = this.t;
       const rec = this.onPhoto ? this.onPhoto(shot) : null; // the photo's picture is filled in on the next draw
       shot.record = rec;
+      if (shot.gift) { this.say(shot.gift, 0.3, '#b2f2bb', true); this.requests = this.requests.filter((q) => q.c !== c.id); }
       if (rec === 'new') { this.records += 1; pts = gain + NEW_BONUS; this.points += pts; } else { pts = gain; this.points += gain; }
     } else pts = 0;
     shot.points = pts;
@@ -1820,6 +1823,11 @@ export class PhotoTrain {
       const done = this.bestBy[want.id];
       text(`WANTED: ${want.name}${done ? ' ✓' : ' (x2)'}`, W - u * 1, u * 5.4, u * 1.1, done ? '#b2f2bb' : '#ffd43b', 'right');
     }
+    // villagers' photo requests: the animals asked for
+    if (this.requests.length && this.phase === 'play') {
+      const names = this.requests.map((q) => critterById(q.c)?.name).filter(Boolean).join(', ');
+      text(`📷 Asked for: ${names}`, W - u * 1, u * (this.theme.rainbowHunt ? 8.6 : 6.9), u * 0.95, '#a5d8ff', 'right');
+    }
     // Rainbow land: a dot for each color, lit when it has been photographed
     if (this.theme.rainbowHunt) {
       RAINBOW.forEach(([k, col], i) => {
@@ -1970,6 +1978,7 @@ export class PhotoTrain {
     if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) {
       text(this.locked ? "That's all our games today!" : 'All aboard! Tap to start the train.', W / 2, H * 0.32, u * 1.7);
       if (!this.locked) text('Touch to look around. Snap when it looks at you!', W / 2, H * 0.32 + u * 2.2, u * 1.1);
+      if (!this.locked) this.requests.forEach((q, i) => text(`📷 ${q.text}`, W / 2, H * 0.32 + u * (4 + i * 1.7), u * 1.05, '#a5d8ff'));
     }
     if (this.phase === 'over' && this.t - this.overAt > 0.3) this.drawRoll(ctx, S, text);
   }

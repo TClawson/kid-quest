@@ -53,11 +53,15 @@ export const canPrint = (kid, critterId) => kid?.critterAlbum?.[critterId]?.q ==
  * checks the coins and that the frame is owned) and hangs it in the first empty place of the
  * frame (or in place `slot`). A reprint replaces the old print of that animal. Returns true if printed.
  */
-export function printPhoto(kid, critterId, slot = null) {
+/** Free prints left (print tickets from villager photo requests: js/photoreq.js). */
+export const ticketsLeft = (kid) => Math.max(0, (kid?.printTickets || 0) - (kid?.ticketsUsed || 0));
+
+export function printPhoto(kid, critterId, slot = null, { ticket = false } = {}) {
   const rec = kid?.critterAlbum?.[critterId];
   if (!rec || rec.q !== 'perfect') return false;
   kid.prints = { ...(kid.prints || {}), [critterId]: { ...(rec.neg ? { neg: rec.neg } : {}), map: rec.map, season: rec.season, weather: rec.weather, day: rec.date } };
-  kid.spent = (kid.spent || 0) + PRINT_PRICE;
+  if (ticket && ticketsLeft(kid) > 0) kid.ticketsUsed = (kid.ticketsUsed || 0) + 1;
+  else kid.spent = (kid.spent || 0) + PRINT_PRICE;
   const wall = wallOf(kid);
   if (!wall.slots.includes(critterId)) {
     const at = slot ?? wall.slots.indexOf(null);

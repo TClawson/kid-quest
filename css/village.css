@@ -378,3 +378,9 @@ button.v-deco { pointer-events: auto; padding: 0; border: 0; background: none; c
 .xm-rain i:nth-child(13) { left: 88%; animation-delay: 0.15s; } .xm-rain i:nth-child(14) { left: 94%; animation-delay: 0.55s; }
 @keyframes xm-rain { to { transform: translateY(110vh) rotate(200deg); } }
 @media (prefers-reduced-motion: reduce) { .xm-rain { display: none; } }
+
+/* villager photo requests (photoreq.js): a little camera by a villager who asks for a photo, and
+   the photo they were given, framed and hung up beside them */
+.villager .v-ask { position: absolute; right: -7px; bottom: 6px; font: 7px/1 var(--px-text); background: #e7f5ff; padding: 1px; outline: 1px solid #1b1430; }
+.villager .v-given { position: absolute; left: -15px; bottom: 2px; width: 13px; height: 11px; padding: 1px; background: #b07a45; outline: 1px solid #5a3418; }
+.villager .v-given img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }

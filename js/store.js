@@ -228,7 +228,8 @@ export function nestFields(fields) {
 export class AddTo { constructor(items) { this.items = items; } }
 export class Increase { constructor(by) { this.by = by; } }
 const KID_LISTS = new Set(['owned', 'grants', 'seenUnlocks']);
-const KID_COUNTS = new Set(['spent', 'gemsSpent']);
+// print tickets earned from villager photo requests, and used (photoreq.js, prints.js): counts that only grow
+const KID_COUNTS = new Set(['spent', 'gemsSpent', 'printTickets', 'ticketsUsed']);
 // December (xmas.js): the ornaments found and the maps whose photo gave one only grow; tinsel is a count
 const XMAS_LISTS = new Set(['found', 'photo']);
 const isList = (p) => (p.length === 1 && KID_LISTS.has(p[0])) || (p.length === 2 && p[0] === 'buddyOwned') || (p.length === 2 && p[0] === 'xmas' && XMAS_LISTS.has(p[1]));
