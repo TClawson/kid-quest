@@ -34,7 +34,7 @@ import { cookieIcon } from './little.js';
 import { seasonNow, tintLand, mountWeather } from './seasonlife.js';
 import { isNewSeason, seasonLine } from './seasonhints.js';
 import { readMs } from './logic.js';
-import { nightProbe } from './nightfx.js';
+import { nightProbe, folkSprite, nightPixels, nightSpec } from './nightfx.js';
 import { dressLand } from './xmasvillage.js';
 
 // landmarks drawn for their village (one village pixel per art pixel), and how each one comes alive
@@ -492,6 +492,7 @@ function startLife(section, L, data, people, cam) {
   const falls = L.falls ? riverFalls(L) : null;
   startMapLife({
     section, canvas, host: cam.host, view: cam.view, toMap: cam.toMap, buddy: cam.buddy, flee: cam.flee,
+    night: cam.night || null,
     pokeNear: true, // a tap must be on a critter to poke it (a tap on the ground walks the buddy)
     key: `village|${data.kid}|${L.id}`,
     aw: L.W, ah: L.H, scale: 1, z: 1, life, wall: 20, falls,
@@ -945,7 +946,10 @@ function mount(section, handlers) {
   dressed.mount(section, world, { xmas: handlers.xmas }); // handlers.xmas: Santa and the advent house (advent-ui.js)
   const paintSprite = (el, kind, happy) => {
     const c = el.querySelector('.v-sprite');
-    const src = spriteUrl(kind, happy);
+    // at night the villager's own pixels take the night colors (moonlit, or warm under a lamp:
+    // xmasvillage.js marked .v-lit), never a CSS filter on the canvas (nightfx.js nightPixels)
+    const day = spriteUrl(kind, happy);
+    const src = dressed.night ? folkSprite(day, L.id, el.classList.contains('v-lit')) : day;
     c.width = src.width; c.height = src.height;
     c.getContext('2d').drawImage(src, 0, 0);
   };
@@ -1600,7 +1604,18 @@ function mount(section, handlers) {
 
   // ---- the loop ----
   const artEl = section.querySelector('.v-landmark canvas.v-art');
-  const artStep = artEl && lm?.art ? LANDMARK_ART[lm.art].start(artEl, artEl.parentElement, se) : null;
+  // at night the landmark draws by day on a canvas of its own, copied over in the night's colors
+  const artOff = artEl && lm?.art && se.night ? Object.assign(document.createElement('canvas'), { width: artEl.width, height: artEl.height }) : null;
+  const artDraw = artEl && lm?.art ? LANDMARK_ART[lm.art].start(artOff || artEl, artEl.parentElement, se) : null;
+  let artDirty = true;
+  if (artOff) {
+    // copied over only when the landmark drew something new (most frames it doesn't)
+    const actx = artOff.getContext('2d');
+    for (const k of ['clearRect', 'fillRect', 'drawImage', 'putImageData', 'fill', 'stroke']) { const f = actx[k]; actx[k] = function drew(...a) { artDirty = true; return f.apply(this, a); }; }
+  }
+  const artNight = () => { if (artDirty) { artDirty = false; nightPixels(artOff, artEl, nightSpec(L.id).m); } };
+  const artStep = artOff ? (now) => { artDraw?.(now); artNight(); } : artDraw;
+  if (artOff) artNight();
   let last = performance.now();
   const tick = (now) => {
     if (!section.isConnected) { mem.x = me.x; mem.y = me.y; mem.cam = cam; mem.S = S; mem.face = me.face; window.removeEventListener('resize', onResize); return; }
@@ -1631,6 +1646,7 @@ function mount(section, handlers) {
   const onResize = () => { if (section.isConnected) measure(); else window.removeEventListener('resize', onResize); };
   window.addEventListener('resize', onResize, { passive: true });
   startLife(section, L, data, people, {
+    night: se.night ? nightSpec(L.id).m : null, // the critters in the night's colors (maplife.js)
     host: view,
     buddy: () => ({ x: me.x, y: me.y }),
     flee,

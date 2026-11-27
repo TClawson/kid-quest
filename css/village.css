@@ -307,10 +307,13 @@
 .v-deco { position: absolute; display: block; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; }
 button.v-deco { pointer-events: auto; padding: 0; border: 0; background: none; cursor: pointer; }
 .v-deco-art { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
-.village.night :is(.v-landmark .v-art, .v-landmark > svg, .v-life, .v-chest, .v-critter, .v-bowl, .v-tree, .v-bloom-life, .v-show) { filter: var(--night-filter); }
+/* Never on a <canvas> itself: on the family's Android tablet that drew nothing at all (villagers gone,
+   their fishbowls left; the vine and the garden's trees gone). The canvases (the landmark's art, the
+   critters, the trees, the villagers) take the night's colors in their own pixels (nightfx.js). */
+.village.night :is(.v-landmark > svg, .v-chest, .v-critter, .v-bowl, .v-show) { filter: var(--night-filter); }
 /* the characters stay readable at night: moonlit, and warm in a pool of light (xmasvillage.js marks .v-lit) */
-.village.night :is(.villager .v-sprite, .v-vbuddy, .v-flip) { filter: var(--night-folk); }
-.village.night :is(.villager.v-lit .v-sprite, .v-visitor.v-lit .v-vbuddy, .v-buddy.v-lit .v-flip) { filter: var(--night-folk-lit); }
+.village.night :is(.v-vbuddy, .v-flip) { filter: var(--night-folk); }
+.village.night :is(.v-visitor.v-lit .v-vbuddy, .v-buddy.v-lit .v-flip) { filter: var(--night-folk-lit); }
 .v-advent-wall { position: absolute; inset: 0; z-index: 9800; display: grid; place-items: center; background: rgba(20, 16, 40, 0.55); }
 .v-advent-card { background: #fff6e0; border: 3px solid #3b2235; border-radius: 6px; padding: 10px 12px; text-align: center; font-family: var(--px-font); color: #3b2235; max-height: 96%; overflow: auto; }
 .v-advent-card h2 { margin: 0 0 6px; font-size: 26px; font-weight: 400; }

@@ -7,6 +7,7 @@ import { sounds, setRain } from './fx.js';
 import { duckMusic } from './music.js';
 import { upscale, thinOutline } from './upscale.js';
 import { fjordLife } from './fjordlife.js';
+import { nightPixels } from './nightfx.js';
 
 const OUT = '#2a1838';
 const FPS = 12.5;
@@ -1598,7 +1599,10 @@ export function startMapLife(m) {
   const Z = m.z || 1;
   canvas.width = m.aw * Z;
   canvas.height = m.ah * Z;
-  const ctx = canvas.getContext('2d');
+  // m.night (a nightfx.js color matrix): the critters are drawn by day on a canvas of their own and
+  // copied over in the night's colors (a CSS filter on the canvas drew nothing on the tablet)
+  const off = m.night ? Object.assign(document.createElement('canvas'), { width: canvas.width, height: canvas.height }) : null;
+  const ctx = (off || canvas).getContext('2d', off ? { willReadFrequently: true } : undefined);
   ctx.setTransform(Z, 0, 0, Z, 0, 0);
   ctx.fine = Z;
   const { key } = m;
@@ -1636,6 +1640,7 @@ export function startMapLife(m) {
     ctx.clearRect(0, 0, m.aw, m.ah);
     partyFrame = keep.frame;
     actor.draw(ctx, keep.frame);
+    if (off) nightPixels(off, canvas, m.night);
   };
   tick();
   if (!reduce) running.set(m.section, setInterval(tick, FRAME));

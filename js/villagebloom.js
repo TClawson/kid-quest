@@ -182,7 +182,7 @@ function stepCritter(c, dt, L) {
  * Starts the critters in a live village: section, L (the layout), bloom (bloomData), spots,
  * cam: { host, toMap(e) } so a tap on a critter makes it hop and flee (and the buddy stays put).
  */
-function startCritters(section, L, bloom, spots, cam) {
+function startCritters(section, L, bloom, spots, cam, night = false) {
   const mapId = L.id;
   const key = `${section.dataset.kid}|${mapId}|${bloom.today}|${bloom.hash}`;
   let list = kept.get(key);
@@ -213,8 +213,10 @@ function startCritters(section, L, bloom, spots, cam) {
       const m = c.def.moves;
       const frames = c.def.frames || 1;
       const frame = m === 'sit' ? (c.hop > 0 ? 1 % frames : 0) : Math.floor(clock * (c.moving || m !== 'walk' ? 7 : 0) + c.phase) % frames;
-      const art = critterArt(mapId, c.which, frame, Math.floor(Math.abs(c.phase || 0) * 7) % (c.def.variants || 1));
-      if (!art) continue;
+      const day = critterArt(mapId, c.which, frame, Math.floor(Math.abs(c.phase || 0) * 7) % (c.def.variants || 1));
+      if (!day) continue;
+      // at night in the night's colors, in its own pixels (nightfx.js: no CSS filter on a canvas)
+      const art = night ? nightSprite(day, mapId) : day;
       const ctx = m === 'fly' ? highCtx : lowCtx;
       const hop = c.hop > 0 ? Math.round(Math.sin((c.hop / 0.25) * Math.PI) * 4) : 0;
       const right = (c.dir || c.face) > 0;
@@ -278,8 +280,8 @@ export function mountBloom(section, L, data, ground, se, cam) {
     el.width = c.width; el.height = c.height;
     el.style.cssText = `left:${Math.round(at.x - c.ax)}px;top:${Math.round(at.y - c.ay)}px;z-index:${Math.round(at.y)}`;
     el.setAttribute('aria-hidden', 'true');
-    el.getContext('2d').drawImage(c, 0, 0);
+    el.getContext('2d').drawImage(se?.night ? nightSprite(c, L.id) : c, 0, 0);
     world.insertBefore(el, before);
   }
-  startCritters(section, L, bloom, layers.spots, cam);
+  startCritters(section, L, bloom, layers.spots, cam, Boolean(se?.night));
 }

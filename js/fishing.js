@@ -49,6 +49,8 @@ const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
 const hashXY = (i, j) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return h - Math.floor(h); };
 
 export const GAME_SECONDS = 90;
+/** After time's up, a fish on the kid's line can still be fought this long (s): landing it or losing it ends the game long before. */
+export const OVERTIME = 90;
 const FEET = 7 + 16; // SPRITE_Y + 16, as in play.js
 const SWEEP = 0.8; // seconds for the cast needle to cross the meter
 const HOLD = 0.18; // a press longer than this is reeling, shorter is a twitch
@@ -1476,8 +1478,10 @@ export class Fishing {
     if (this.phase !== 'play') { this.stepFish(dt); for (const p of [this.kid, this.vis]) p.move(dt); this.pops = this.pops.filter((p) => this.t - p.at < 1.4); return; }
     this.left = Math.max(0, this.left - dt);
     const L = this.lines.kid;
-    // time's up: a fish on the line still gets landed (or lost), up to 15 s more
-    if (this.left <= 0 && (L.state !== 'fight' || (this.overtime = (this.overtime || 0) + dt) > 15)) { this.finish(); return; }
+    // time's up: a fish on the line still gets landed (or lost). A big one hooked far out takes a
+    // kid 15 to 20 s to reel in (more with a long cast from the boat), so the cap is only there in
+    // case a fight never ends (Taylor, 2026-11-27: the game cut off a big fish mid-reel at 15 s)
+    if (this.left <= 0 && (L.state !== 'fight' || (this.overtime = (this.overtime || 0) + dt) > OVERTIME)) { this.finish(); return; }
     const holding = L.held && this.t - L.downAt >= HOLD;
     this.stepLine(L, dt, holding);
     this.stepAI(dt);
