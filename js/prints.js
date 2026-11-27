@@ -101,7 +101,7 @@ function critterFor(c, n, main = false) {
   const posed = main ? n.pose !== 0 : Boolean(n.pose);
   return {
     c, how: n.how, layer: n.l, x: n.x, y: n.y, face: n.f ?? -1, lift: n.lift || 0, big: Boolean(n.big), far: Boolean(n.far),
-    flyX: n.fx ?? null, state: posed ? 'pose' : 'still', st: -99, t0: -99, id: 1, pics: () => critterPic(look, posed ? 'pose' : frame),
+    flyX: n.fx ?? null, state: posed ? 'pose' : 'still', special: posed ? n.sp || null : null, st: -99, t0: -99, id: 1, pics: () => critterPic(look, posed && n.sp !== 'wings' ? 'pose' : frame),
   };
 }
 
