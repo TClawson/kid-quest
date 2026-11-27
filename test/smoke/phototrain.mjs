@@ -1,8 +1,11 @@
 // Browser test for the photo train (js/phototrain.js) and the critter album (js/albumview.js):
-// - a 90 second ride on every map in every season, at tablet and phone size, with a bot that
-//   holds focus on an animal's sign and lets go when it poses: the ride ends, perfect photos
-//   happen, every kept photo is told to the album, and nothing throws while drawing
-// - aiming takes no photo, even when the finger lifts; the shutter button takes it
+// - a whole ride on every map in every season, at tablet and phone size, with a bot that
+//   finds an animal's sign, holds a finger on it so the camera pans there, and presses SNAP
+//   when it poses: the ride ends, perfect photos happen, every kept photo is told to the
+//   album, and nothing throws while drawing
+// - the train view until a finger touches; the camera pans no faster than PAN_CAP; the
+//   viewfinder stays up GRACE seconds after the finger lifts; touching takes no photo, the
+//   shutter does; the Super camera's zoom lens turns
 // - in the app: a visitor with a camera invites you on the photo train, a photo goes in the
 //   kid's critter album (kid.critterAlbum), the best score is kept, and the album opens from
 //   the Status pop-up with the animal's own page
@@ -25,7 +28,8 @@ try {
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(site.url);
     const { rides: results, early } = await page.evaluate(async () => {
-      const { PhotoTrain, LIFT, TRAIN_MAPS } = await import('./js/phototrain.js');
+      const { PhotoTrain, TRAIN_MAPS, PAN_CAP, GRACE, GAME_SECONDS } = await import('./js/phototrain.js');
+      const { botStep } = await import('./test/helpers/photobot.js');
       const out = [];
       for (const map of TRAIN_MAPS) {
         for (const season of ['spring', 'summer', 'autumn', 'winter']) {
@@ -36,12 +40,8 @@ try {
             const h = document.createElement('canvas'); h.width = W * 4; h.height = H * 4;
             const ctx = c.getContext('2d'); const hctx = h.getContext('2d');
             g.tap(W / 2, H / 2); // the first tap starts the ride
-            let target = null;
-            for (let i = 0; i < 100 * 30 && g.phase !== 'over'; i += 1) {
-              if (!target) {
-                const o = g.subjects().find((s) => s.k && !s.k.far && s.k.state === 'sign' && s.box.x > W * 0.3 && s.box.x < W * 0.9);
-                if (o && g.film > 0) { target = o.k; g.tap(o.box.x + o.box.w / 2, o.box.y + o.box.h / 2 + LIFT); }
-              } else if (target.state === 'pose' && g.t - target.st > 0.3) { g.press(); target = null; } else if (target.gone || target.state === 'leave') target = null;
+            for (let i = 0; i < (GAME_SECONDS + 20) * 30 && g.phase !== 'over'; i += 1) {
+              botStep(g);
               g.step(1 / 30);
               if (i % 6 === 0) { g.draw(ctx); g.drawHud(hctx, 4); }
             }
@@ -54,18 +54,39 @@ try {
       // aiming takes no photo; the shutter does, and the viewfinder stays up after the finger lifts
       const g = new PhotoTrain({ W: 213, H: 120, map: 'bg-meadow', day: '2026-11-21', seed: 3, kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { camera: 1 } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} } } });
       g.tap(100, 60);
-      g.press(); const none = g.roll.length; // nothing aimed yet
-      g.tap(100, 60); g.release(); for (let i = 0; i < 30; i += 1) g.step(1 / 30);
-      const aimed = { roll: g.roll.length, view: !!g.view, film: g.film, full: g.cam.film };
+      for (let i = 0; i < 10; i += 1) g.step(1 / 30);
+      const rest = { x: g.eye.x, y: g.eye.y, vf: g.vf };
+      g.press(); const none = g.roll.length; // the camera is down: SNAP only brings it up
+      for (let i = 0; i < 3 * 30; i += 1) g.step(1 / 30);
+      // a finger by the right edge: the camera comes up and pans, no faster than the cap
+      g.tap(200, 60);
+      const x0 = g.eye.x;
+      for (let i = 0; i < 15; i += 1) g.step(1 / 30);
+      const moved = g.eye.x - x0;
+      g.up(); for (let i = 0; i < 30; i += 1) g.step(1 / 30);
+      const aimed = { roll: g.roll.length, view: g.looking, film: g.film, full: g.cam.film };
       const b = g.shutter;
-      const early = { none, ...aimed, onButton: g.onButton(b.x, b.y) };
+      const early = { none, rest, moved, cap: PAN_CAP * 0.5, ...aimed, onButton: g.onButton(b.x, b.y) };
       g.press();
       early.after = g.roll.length; early.filmAfter = g.film;
+      for (let i = 0; i < (GRACE + 1) * 30; i += 1) g.step(1 / 30);
+      early.down = { vf: g.vf, back: Math.abs(g.eye.x - rest.x) < 1 && Math.abs(g.eye.y - rest.y) < 1 };
+      // the Super camera's zoom lens: 1x, 1.6x, 2.5x
+      const s3 = new PhotoTrain({ W: 213, H: 120, map: 'bg-meadow', day: '2026-11-21', seed: 3, kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { camera: 3 } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} } } });
+      s3.tap(100, 60); const zb = s3.zoomButton; const lenses = [s3.lensZoom];
+      s3.tap(zb.x, zb.y); lenses.push(s3.lensZoom); s3.tap(zb.x, zb.y); lenses.push(s3.lensZoom); s3.tap(zb.x, zb.y); lenses.push(s3.lensZoom);
+      early.lenses = lenses;
+      early.noZoom = g.zoomButton;
       return { rides: out, early };
     });
-    assert.equal(early.none, 0, 'the shutter without aiming takes nothing');
-    assert.equal(early.roll, 0, 'aiming and lifting the finger takes no photo');
-    assert.ok(early.view, 'the viewfinder stays up');
+    assert.equal(early.rest.vf, 0, 'the ride starts on the train view');
+    assert.equal(early.none, 0, 'SNAP with the camera down takes nothing');
+    assert.ok(early.moved > 5 && early.moved <= early.cap + 0.5, `the camera pans, no faster than the cap: ${early.moved}`);
+    assert.equal(early.roll, 0, 'touching and lifting the finger takes no photo');
+    assert.ok(early.view, 'the viewfinder stays up after the finger lifts');
+    assert.deepEqual(early.down, { vf: 0, back: true }, 'then the camera goes down, back to the train view');
+    assert.deepEqual(early.lenses, [1, 1.6, 2.5, 1]);
+    assert.equal(early.noZoom, null, 'the Regular camera has no zoom');
     assert.ok(early.onButton, 'the shutter is a button');
     assert.equal(early.after, 1, 'the shutter takes one');
     assert.equal(early.filmAfter, early.full - 1);

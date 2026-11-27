@@ -22,7 +22,8 @@ const page = await browser.newPage({ deviceScaleFactor: 1 });
 page.on('pageerror', (e) => console.log('ERR', e.message));
 await page.goto(site.url);
 const rides = await page.evaluate(async () => {
-  const { PhotoTrain, LIFT } = await import('./js/phototrain.js');
+  const { PhotoTrain, GAME_SECONDS } = await import('./js/phototrain.js');
+  const { botStep } = await import('./test/helpers/photobot.js');
   const { develop } = await import('./js/prints.js');
   const res = [];
   const plan = [['bg-meadow', false, 5], ['bg-fjord', false, 9], ['bg-sunset', false, 3], ['bg-ocean', true, 4], ['bg-castle', true, 6], ['bg-rainforest', false, 8]];
@@ -31,12 +32,8 @@ const rides = await page.evaluate(async () => {
     const g = new PhotoTrain({ W, H, map, day: '2026-07-14', seed, night, clues: 0, onPhoto: () => 'new', kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { camera: 3 } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} } } });
     const c = document.createElement('canvas'); c.width = W * g.Z; c.height = H * g.Z; const ctx = c.getContext('2d');
     g.tap(W / 2, H / 2);
-    let target = null;
-    for (let i = 0; i < 100 * 30 && g.phase !== 'over'; i += 1) {
-      if (!target) {
-        const o = g.subjects().find((s) => s.k && !s.k.far && s.k.state === 'sign' && s.box.x > W * 0.3 && s.box.x < W * 0.9);
-        if (o && g.film > 0) { target = o.k; g.tap(o.box.x + o.box.w / 2, o.box.y + o.box.h / 2 + LIFT); }
-      } else if (target.state === 'pose' && g.t - target.st > 0.3) { g.press(); target = null; } else if (target.gone || target.state === 'leave') target = null;
+    for (let i = 0; i < (GAME_SECONDS + 20) * 30 && g.phase !== 'over'; i += 1) {
+      botStep(g);
       g.step(1 / 30);
       if (g.capture) g.draw(ctx);
     }

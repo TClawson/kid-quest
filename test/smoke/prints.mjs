@@ -21,7 +21,8 @@ try {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(site.url);
   const r = await page.evaluate(async () => {
-    const { PhotoTrain, LIFT, FRAME } = await import('./js/phototrain.js');
+    const { PhotoTrain, FRAME, GAME_SECONDS } = await import('./js/phototrain.js');
+    const { botStep } = await import('./test/helpers/photobot.js');
     const P = await import('./js/prints.js');
     const { CRITTERS } = await import('./js/critters.js');
     const kidG = { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { camera: 3 } };
@@ -30,9 +31,9 @@ try {
     for (const seed of [5, 9, 12]) {
       const g = new PhotoTrain({ W: 213, H: 133, map: 'bg-meadow', day: '2026-07-14', seed, onPhoto: () => 'new', kid: kidG, visitor: kidG });
       const c = document.createElement('canvas'); c.width = 213 * g.Z; c.height = 133 * g.Z; const ctx = c.getContext('2d');
-      g.tap(100, 60); let target = null;
-      for (let i = 0; i < 3000 && g.phase !== 'over'; i += 1) {
-        if (!target) { const o = g.subjects().find((s) => s.k && !s.k.far && s.k.state === 'sign' && s.box.x > 60 && s.box.x < 190); if (o && g.film > 0) { target = o.k; g.tap(o.box.x + o.box.w / 2, o.box.y + o.box.h / 2 + LIFT); } } else if (target.state === 'pose' && g.t - target.st > 0.3) { g.press(); target = null; } else if (target.gone || target.state === 'leave') target = null;
+      g.tap(100, 60);
+      for (let i = 0; i < (GAME_SECONDS + 20) * 30 && g.phase !== 'over'; i += 1) {
+        botStep(g);
         g.step(1 / 30); if (g.capture) g.draw(ctx);
       }
       shots.push(...g.roll.filter((s) => s.quality === 'perfect'));
@@ -58,7 +59,7 @@ try {
     // night animals: never by day; on night rides they come
     const count = (night, n) => { let nightA = 0; let secret = 0; for (let i = 0; i < n; i += 1) { const g = new PhotoTrain({ W: 213, H: 133, map: ['bg-meadow', 'bg-fjord', 'bg-castle'][i % 3], day: '2026-07-14', seed: 100 + i, night, kid: kidG, visitor: kidG }); g.phase = 'play'; const seen = new Set(); const sp = g.spawn.bind(g); g.spawn = (c, h) => { seen.add(c); return sp(c, h); }; while (g.phase === 'play') g.step(1 / 15); if ([...seen].some((c) => c.night)) nightA += 1; if ([...seen].some((c) => c.rarity === 'secret' && !c.night)) secret += 1; } return { nightA, secret }; };
     return {
-      perfect: shots.length, negBytes: JSON.stringify(s.neg).length, devW: dev.width, devH: dev.height, frameW: Math.round(s.neg.fr[2] * 2), frameH: Math.round(s.neg.fr[3] * 2), normalW: FRAME.w * 2,
+      perfect: shots.length, negBytes: JSON.stringify(s.neg).length, devW: dev.width, devH: dev.height, frameW: Math.round(s.neg.fr[2] * 2 * (s.neg.z || 1)), frameH: Math.round(s.neg.fr[3] * 2 * (s.neg.z || 1)), normalW: FRAME.w * 2,
       stagedW: staged.width, twoDiffers: differ(dev, devTwo), noFrame, okGood, spent: kid.spent, wall1, wall2, color: kid.wall.color,
       day: count(false, 30), night: count(true, 30),
       secrets: CRITTERS.filter((c) => c.rarity === 'secret').map((c) => [c.map, Boolean(c.night)]),

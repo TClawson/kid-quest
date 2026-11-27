@@ -1219,9 +1219,9 @@ export const DECEMBER_SHARE = 0.01;
  * SECRET_SHARE: the map's very rare animal, any ride, about 1 ride in 40 (Super camera 75% more).
  * ROUTE_SHARE: the very rare animal on the map's hidden side route (much likelier there).
  */
-export const NIGHT_SHARE = 0.03;
-export const SECRET_SHARE = 0.0007;
-export const ROUTE_SHARE = 0.02;
+export const NIGHT_SHARE = 0.023; // tuned for the 110 s ride (about 38 animals a ride)
+export const SECRET_SHARE = 0.00066;
+export const ROUTE_SHARE = 0.015;
 
 export function oddsFor(map, season, weather, { tier = 1, clue = 0, day = null } = {}) {
   return mapCritters(map).filter((c) => isOut(c, season, day) && !c.tunnel).map((c) => {

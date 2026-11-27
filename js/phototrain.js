@@ -1,4 +1,4 @@
-// The photo train: a 90 second ride through the kid's map with a camera (Taylor, 2026-11-21).
+// The photo train: a 110 second ride through the kid's map with a camera (Taylor, 2026-11-21).
 //
 // A side view. The kid's buddy and the visitor ride in an open car of a little train that
 // chugs to the right; the map slides past in layers (far hills slowly, the middle ground
@@ -9,15 +9,17 @@
 // before it goes again. Some animals are movers instead: birds flying over, a fox running
 // beside the train.
 //
-// Snapping (Taylor, 2026-11-20: a shutter button, after letting go to snap confused): touch the
-// screen to aim: the camera comes up, and the viewfinder sits a little ABOVE the finger so the
-// finger doesn't hide the animal. Hold still and a focus ring closes in; when it is sharp it
-// shows SHARP. It does NOT lock on or follow anything (Taylor, 2026-11-20: too easy):
-// keeping the animal in the frame is the kid's job. The frame sticks to the spot of scenery
-// that was touched and rides along with it (even after the finger lifts), so aim where the
-// animal will come out. Tap the shutter button (bottom right) to snap.
-// Dragging moves the viewfinder yourself (for fliers and runners, or to pick another animal),
-// and touching somewhere else aims there.
+// Looking around (Taylor, 2026-11-27, Pokemon Snap style, keeping the side view): the scene
+// is bigger than the screen (SCENE: a bit behind, well ahead, and sky above), and animals
+// come out all over it, often out of sight, so the kid has to look for them (an arrow at the
+// edge of the screen points to a rustle or a posing animal, and the visitor says "Look!").
+// The screen shows the train's own view until a finger touches it; then the camera comes up
+// and the whole screen is the viewfinder, with the frame in the middle. The camera pans to
+// bring the touched spot to the middle, never faster than PAN_CAP (quick animals are a
+// challenge), and a finger by the edge keeps pushing that way. Hold still and a focus ring
+// closes in; when it is sharp it shows SHARP. Nothing locks on: keeping the animal in the
+// frame is the kid's job. SNAP (bottom right) takes the photo, or a quick double tap. The
+// camera stays up GRACE seconds after the finger lifts, then goes back to the train view.
 //
 // Every photo gets three ticks: Sharp, Posed and Centred. All three: PERFECT. Sharp: GOOD.
 // Not sharp: a blurry glimpse, no points and not for the album. The film is limited, so
@@ -31,12 +33,16 @@
 // Clues (tracks, a feather) for the map's legend can be photographed too: three clues and
 // the legend comes in the next ride's finale.
 //
-// Cameras (gems 40 / 120 / 300): focus 0.6 / 0.5 / 0.4 s, film 12 / 14 / 16. The Good camera
-// adds a zoom lens that reaches animals on the far hills (without it they are specks, "too
-// far!"). The Super camera adds a telephoto view (a tighter frame, so close-ups come easy),
-// a quiet shutter (animals hold their pose 0.4 s longer) and rare animals 75% more often.
+// Cameras (gems 40 / 120 / 300): focus 0.6 / 0.5 / 0.4 s, film 22 / 26 / 30. The Good camera
+// has a 1.6x zoom lens, which is what reaches animals on the far hills (without it they are
+// specks, "too far!"); the Super camera's lens turns 1x / 1.6x / 2.5x. A zoom lens focuses a
+// little slower. The Super camera also has a telephoto frame (tighter, so close-ups come
+// easy), a quiet shutter (animals hold their pose 0.4 s longer) and rare animals 75% more often.
 //
-// Same interface as Play in play.js (tap, drag, release, step, draw, drawHud, score, phase).
+// At the end of the line the photos are judged one at a time with their bonuses (tap to skip).
+// No good photo for MERCY seconds: the next animal comes out right where the kid is looking.
+//
+// Same interface as Play in play.js (tap, drag, up, release, step, draw, drawHud, score, phase).
 import { Player, rng, canvas, clamp, HAPPY } from './play.js';
 import { critterPic } from './critterart.js';
 import {
@@ -47,27 +53,45 @@ import { addPop } from './meter.js';
 import { mix, ramp, h2 } from './pixelkit.js';
 import { seasonOf } from './seasons.js';
 
-export const GAME_SECONDS = 90;
-/** Each camera: focus time, film, zoom lens (far hills), telephoto (tighter frame), pose held longer. */
+export const GAME_SECONDS = 110;
+/**
+ * Each camera: focus time, film, the zoom lenses it has (far animals need 1.6x: Taylor,
+ * 2026-11-27, "nicer cameras should allow you to zoom in ... to get those far away animals"),
+ * telephoto (tighter frame), pose held longer.
+ */
 export const CAMERAS = [
-  { tier: 1, focus: 0.6, film: 15, zoom: false, tele: false, posePlus: 0 },
-  { tier: 2, focus: 0.5, film: 17, zoom: true, tele: false, posePlus: 0 },
-  { tier: 3, focus: 0.4, film: 19, zoom: true, tele: true, posePlus: 0.4 },
+  { tier: 1, focus: 0.6, film: 22, lenses: [1], zoom: false, tele: false, posePlus: 0 },
+  { tier: 2, focus: 0.5, film: 26, lenses: [1, 1.6], zoom: true, tele: false, posePlus: 0 },
+  { tier: 3, focus: 0.4, film: 30, lenses: [1, 1.6, 2.5], zoom: true, tele: true, posePlus: 0.4 },
 ];
 export const cameraFor = (tier) => CAMERAS[clamp(tier || 1, 1, 3) - 1];
-/** The viewfinder, in game pixels (the telephoto frames tighter). */
+/** Far animals on the hills need at least this much zoom. */
+export const FAR_ZOOM = 1.6;
+/** The viewfinder's frame in the middle of the screen, in screen game pixels (the telephoto frames tighter). */
 export const FRAME = { w: 48, h: 36 };
 export const TELE_FRAME = { w: 40, h: 30 };
-/** How far above the finger the viewfinder sits, in game pixels. */
-export const LIFT = 22;
+/** Kept for old callers: how far above the finger the old viewfinder sat. */
+export const LIFT = 0;
+/**
+ * The ride's scene is wider and taller than the screen, to look around in (Taylor, 2026-11-27:
+ * keep the side view, pan across a bigger scene): a bit behind, well ahead, and more sky.
+ */
+export const SCENE = { w: 1.6, h: 1.35, back: 0.2 };
+/** The camera pans at most this fast (screen game pixels a second), so quick animals are a challenge. */
+export const PAN_CAP = 110;
+/** Seconds the viewfinder stays up after the finger lifts (time to press SNAP). */
+export const GRACE = 1.6;
 /** Track speed in game pixels a second, and how fast each layer moves with it. */
 export const SPEED = 60;
 export const LAYER = { far: 0.1, mid: 0.35, track: 1, fore: 1.6 };
-/** A quick tap (shorter than this) doesn't snap: it reminds the kid to hold. */
-/** Seconds an animal holds its pose. */
-const POSE = 1.1;
+/** Seconds an animal holds its pose (longer than before: it has to be found first). */
+const POSE = 1.6;
 /** Shy animals hold it for less (the Super camera's quiet shutter helps most with them). */
-const SHY_POSE = 0.6;
+const SHY_POSE = 0.9;
+/** No photo for this long: the next animal comes out right where the kid is looking. */
+const MERCY = 12;
+/** Seconds between photos judged at the end of the ride. */
+const JUDGE_EACH = 0.45;
 
 const INK = '#1b1430';
 const Z = 2; // fine pixels for each game pixel
@@ -167,7 +191,14 @@ export class PhotoTrain {
   constructor(opts) {
     this.kind = 'train';
     this.Z = Z;
-    this.W = opts.W; this.H = opts.H;
+    // the screen (VW x VH game pixels) looks at part of a bigger scene (W x H); the train's
+    // own view (ox, oy: the resting camera) is the bottom of it. A print of a photo taken
+    // before the scene grew (negative v2) is redrawn on a scene the size of the screen (flat).
+    this.VW = opts.W; this.VH = opts.H;
+    this.flat = Boolean(opts.flat);
+    this.W = this.flat ? opts.W : Math.round(opts.W * SCENE.w); this.H = this.flat ? opts.H : Math.round(opts.H * SCENE.h);
+    this.ox = this.flat ? 0 : Math.round(opts.W * SCENE.back); this.oy = this.H - this.VH;
+    this.fieldW = this.VW; this.fieldH = this.VH; // the screen's canvas (js/playground.js)
     this.map = THEMES[opts.map] ? opts.map : (mapCritters(opts.map)[0]?.map || 'bg-meadow');
     this.day = opts.day || '2026-01-01';
     this.season = opts.season || seasonOf(this.day);
@@ -188,16 +219,16 @@ export class PhotoTrain {
     this.best = opts.best || 0;
     this.t = 0; this.pops = [];
     this.holdAnywhere = false; this.locked = false; this.shutterAt = -9;
-    // where things are on screen (game pixels)
-    const H = this.H;
-    this.horizon = Math.round(H * 0.46);
+    // where things are in the scene (game pixels), laid out on the train's own view
+    const H = this.VH; const oy = this.oy;
+    this.horizon = oy + Math.round(H * 0.46);
     // feet on the middle ground: kept well above the car and the buddies' heads, so nothing on it hides behind the train
-    this.groundY = Math.min(Math.round(H * 0.68), Math.round(H * 0.86) - 42);
-    this.shoreY = this.theme.water ? Math.min(Math.round(H * 0.71), Math.round(H * 0.86) - 40) : this.groundY;
+    this.groundY = oy + Math.min(Math.round(H * 0.68), Math.round(H * 0.86) - 42);
+    this.shoreY = this.theme.water ? oy + Math.min(Math.round(H * 0.71), Math.round(H * 0.86) - 40) : this.groundY;
     // the water: at least 8 game pixels of it in front of the far shore, even on a wide, short screen
-    this.waterTop = this.theme.water ? Math.min(Math.round(H * 0.5), this.shoreY - 8) : null;
-    this.trackY = Math.round(H * 0.86);
-    this.carX = Math.round(this.W * 0.2);
+    this.waterTop = this.theme.water ? Math.min(oy + Math.round(H * 0.5), this.shoreY - 8) : null;
+    this.trackY = oy + Math.round(H * 0.86);
+    this.carX = this.ox + Math.round(this.VW * 0.2);
     const sit = (b) => ({ ...b, outfit: { ...(b?.outfit || {}), music: undefined, sport: undefined } });
     this.kid = new Player(sit(opts.kid.buddy), opts.kid.name, 11, this.carX + 9, this.trackY - 7);
     this.vis = new Player(sit(opts.visitor.buddy), opts.visitor.name, 23, this.carX - 9, this.trackY - 7);
@@ -214,10 +245,12 @@ export class PhotoTrain {
     this.critters = []; this.nextAt = 2.5; this.landBusy = false;
     this.setPieces = { track: false, tunnel: false, clue: false, bridge: false };
     this.bridge = null; this.poured = false; this.colors = new Set(); this.rainbowFull = false;
-    this.plan = { trackAt: 32 + this.r() * 22, tunnelAt: 14 + this.r() * 40, clueAt: 20 + this.r() * 50, legendAt: 72 + this.r() * 8, bridgeAt: 58 + this.r() * 8, pourAt: 40 + this.r() * 10 };
+    const K = GAME_SECONDS / 90; // the plan was made for a 90 second ride
+    this.plan = { trackAt: K * (32 + this.r() * 22), tunnelAt: K * (14 + this.r() * 40), clueAt: K * (20 + this.r() * 50), legendAt: K * (72 + this.r() * 8), bridgeAt: K * (58 + this.r() * 8), pourAt: K * (40 + this.r() * 10) };
     if (Math.abs(this.plan.trackAt - this.plan.tunnelAt) < 10) this.plan.tunnelAt = (this.plan.trackAt + 25) % 70 + 10;
     this.roll = []; this.bestBy = {}; this.records = 0; this.cluesFound = 0;
-    this.view = null; this.flash = 0; this.lastShot = null; this.overAt = 0;
+    this.flash = 0; this.lastShot = null; this.overAt = 0; this.judgeAll = false; this.judgeSeen = 0; this.judgedList = null;
+    this.lensI = this.lensI || 0; this.lastGood = 0; this.mercyNext = false; this.resetCamera();
     this.fill(0);
   }
 
@@ -245,7 +278,7 @@ export class PhotoTrain {
   }
 
   // ---------- animals ----------
-  act() { const e = GAME_SECONDS - this.left; return e < 30 ? 1 : e < 70 ? 2 : 3; }
+  act() { const e = (GAME_SECONDS - this.left) * (90 / GAME_SECONDS); return e < 30 ? 1 : e < 70 ? 2 : 3; }
 
   /** The next animal to come, and how it comes. */
   pickCritter({ legend = false } = {}) {
@@ -286,14 +319,15 @@ export class PhotoTrain {
     const k = { c, how, t0: this.t, state: 'sign', id: Math.floor(r() * 1e9), face: -1, pics: pic };
     const mid = this.dist * LAYER.mid;
     if (how === 'fly') {
-      k.layer = 'screen'; k.x = this.W + 20; k.y = Math.round(this.H * (0.14 + r() * 0.2));
+      // fliers cross the whole scene, often up in the sky above the train's own view
+      k.layer = 'screen'; k.x = this.W + 20; k.y = Math.round(Math.min(28, this.oy) + r() * Math.max(10, this.oy - 28 + this.VH * 0.22)); // never up under the words at the top
       k.vx = -(26 + r() * 16); k.mover = true; k.state = 'sign'; k.signFor = 0.9;
     } else if (how === 'far') {
-      k.layer = 'far'; k.x = this.dist * LAYER.far + this.W * (0.7 + r() * 0.3); k.y = this.horizon - 2 - Math.round(r() * 4);
+      k.layer = 'far'; k.x = this.dist * LAYER.far + this.W * (0.3 + r() * 0.65); k.y = this.horizon - 2 - Math.round(r() * 4);
       k.signFor = 0; k.state = 'emerge'; k.far = true;
     } else if (how === 'track') {
       // close up on the track: drawn bigger (a bigger picture, not stretched pixels)
-      k.layer = 'screen'; k.x = this.W * 0.84; k.y = this.trackY + 1; k.state = 'wait'; k.big = true;
+      k.layer = 'screen'; k.x = this.ox + this.VW * 0.84; k.y = this.trackY + 1; k.state = 'wait'; k.big = true;
       const bigLook = { ...c.look, len: Math.round(c.look.len * 1.5) };
       k.pics = (f) => critterPic(bigLook, f);
       this.brake = { at: this.t, k };
@@ -304,9 +338,15 @@ export class PhotoTrain {
     } else {
       // step / rise / perch / surface / hop: from its own hiding place, sliding in from the right
       k.layer = 'mid';
-      k.x = mid + this.W + 12;
+      // it comes out anywhere across the scene, often outside the view (look around for it!);
+      // its hiding place starts a little to the right, never popping up inside the view
+      k.emergeX = this.W * (0.18 + r() * 0.74);
+      const vr = this.viewRect();
+      let sx = k.emergeX + 16 + r() * 50;
+      if (sx > vr.x - 20 && sx < vr.x + vr.w + 12) sx = vr.x + vr.w + 12;
+      if (this.mercyNext) { k.emergeX = vr.x + vr.w * (0.45 + r() * 0.3); sx = vr.x + vr.w + 12; this.mercyNext = false; }
+      k.x = mid + Math.min(sx, this.W + 12);
       k.y = how === 'surface' ? this.waterY() : how === 'perch' ? (this.theme.water ? this.shoreY : this.groundY) - 30 - Math.round(r() * 8) : this.footY(c);
-      k.emergeX = this.W * (0.55 + r() * 0.32);
       const cov = this.theme.covers || {};
       const base = { burrow: 'burrow', log: 'log', rock: 'rock', reeds: 'reeds', bush: 'bush', tower: 'tower' };
       let cover = how === 'surface' ? 'ripple' : how === 'perch' ? 'branch' : cov[c.from] || base[c.from] || cov.tree || 'oak';
@@ -416,7 +456,7 @@ export class PhotoTrain {
       if (c.length) {
         const pick = c.find((x) => x.rarity === 'legend' && this.clues >= 3 && false) || pickWeighted(c.map((x) => [x, RARITIES[x.rarity].weight]), this.r());
         this.spawn(pick, 'track');
-        addPop(this, 'Whoa! Something on the track!', this.W / 2, this.H * 0.2, '#ffd43b', true);
+        this.say('Whoa! Something on the track!', 0.2, '#ffd43b', true);
       }
       return;
     }
@@ -426,19 +466,19 @@ export class PhotoTrain {
       const until = this.t + 5.5;
       this.bridge = { x: this.dist + this.carX + 100, until };
       this.brake = { at: this.t, bridge: true, until };
-      addPop(this, 'The drawbridge is up! Wait...', this.W / 2, this.H * 0.2, '#ffd43b', true);
+      this.say('The drawbridge is up! Wait...', 0.2, '#ffd43b', true);
       const sea = mapCritters(this.map).filter((x) => x.sea && isOut(x, this.season, this.day));
       const mid = this.dist * LAYER.mid;
       for (let i = 0; i < 3 && sea.length; i += 1) {
         const k = this.spawn(pickWeighted(sea.map((x) => [x, RARITIES[x.rarity].weight]), this.r()), 'surface');
-        k.x = mid + this.W * (0.3 + i * 0.22); k.emergeX = this.W * 2; k.wait = this.t + 1.2 + i * 1.5; k.point = null;
+        k.x = mid + this.ox + this.VW * (0.3 + i * 0.22); k.emergeX = this.W * 2; k.wait = this.t + 1.2 + i * 1.5; k.point = null;
       }
       return;
     }
     // the Rainforest: the afternoon downpour
     if (this.theme.downpour && !this.poured && e > this.plan.pourAt && this.season !== 'winter' && this.weather !== 'rain') {
       this.poured = true; this.weather = 'rain'; this.theme = { ...this.theme, sky: ['#5c7a6a', '#a9c2b4'] }; this.sky = this.paintSky();
-      addPop(this, 'Here comes the rain! Frogs love it.', this.W / 2, this.H * 0.2, '#a5d8ff', true);
+      this.say('Here comes the rain! Frogs love it.', 0.2, '#a5d8ff', true);
     }
     if (!this.setPieces.tunnel && e > this.plan.tunnelAt && !this.brake) {
       this.setPieces.tunnel = true;
@@ -452,12 +492,18 @@ export class PhotoTrain {
       const kind = kinds[Math.floor(this.r() * kinds.length)];
       this.props.push({ layer: 'mid', kind: `clue-${kind}`, clue: true, x: this.dist * LAYER.mid + this.W + 10, y: this.groundY + 1, seed: 1 });
     }
+    // no photo for a while: the next animal comes out right where the kid is looking
+    if (this.t - this.lastGood > MERCY && !this.mercyNext) {
+      const vr = this.viewRect();
+      const showing = this.critters.some((k) => !k.gone && k.state === 'pose' && !k.far && ((x) => x > vr.x && x < vr.x + vr.w)(this.where(k)[0]));
+      if (!showing) { this.mercyNext = true; this.lastGood = this.t; this.nextAt = Math.min(this.nextAt, this.t + 0.5); }
+    }
     if (this.t < this.nextAt || this.brake) return;
     // the legend: three clues bring it in the finale (with a hush first)
     let c = null; let how = null;
     if (((e > this.plan.legendAt && this.clues >= 3) || this.rainbowFull) && !this.legendCame) {
       c = this.pickCritter({ legend: true }); this.legendCame = true;
-      if (c) addPop(this, this.rainbowFull ? 'The rainbow is shining...' : this.theme.underwater ? 'Shh... the fish went quiet...' : 'Shh... the birds went quiet...', this.W / 2, this.H * 0.2, '#e9ecef', true);
+      if (c) this.say(this.rainbowFull ? 'The rainbow is shining...' : this.theme.underwater ? 'Shh... the fish went quiet...' : 'Shh... the birds went quiet...', 0.2, '#e9ecef', true);
     }
     if (!c) c = this.pickCritter();
     if (!c) { this.nextAt = this.t + 1; return; }
@@ -472,11 +518,6 @@ export class PhotoTrain {
   }
 
   // ---------- the camera ----------
-  frameAt(px, py) {
-    const { w, h } = this.frame;
-    return { x: clamp(px, w / 2, this.W - w / 2), y: clamp(py - LIFT, h / 2, this.H - h / 2) };
-  }
-
   /** Things that can be in a photo now, with their boxes on screen (game pixels). */
   subjects() {
     const out = [];
@@ -497,72 +538,147 @@ export class PhotoTrain {
     return out;
   }
 
-  /** Aims the camera: the viewfinder comes up over the finger (or moves there). */
-  aim(x, y) {
-    const v = this.view;
-    // the aim sticks to the spot of scenery touched (wx: where on the middle ground), so the
-    // frame rides along with the trees and bushes going by
-    if (v) { v.wx = x + this.dist * LAYER.mid; v.fy = y; return; }
-    const f = this.frameAt(x, y);
-    this.view = { ...f, wx: x + this.dist * LAYER.mid, fy: y, at: this.t, focus: 0, lock: null, vx: 0, vy: 0, lastX: f.x, lastY: f.y };
+  /**
+   * The camera (Taylor, 2026-11-27): the screen shows the train's own view until a finger
+   * touches it; then the camera comes up and the screen IS the viewfinder. The camera pans to
+   * bring the touched spot to the middle, but no faster than PAN_CAP, and a better camera can
+   * zoom in. GRACE seconds after the finger lifts it goes back down to the train view.
+   *   eye: the scene point in the middle of the screen; vf: 0 (train view) .. 1 (viewfinder)
+   */
+  rest() { return { x: this.ox + this.VW / 2, y: this.oy + this.VH / 2 }; }
+  get lensZoom() { return this.cam.lenses[this.lensI || 0] || 1; }
+  zoomNow() { return 1 + (this.lensZoom - 1) * (this.vf || 0); }
+  /** The part of the scene on the screen now (scene game pixels). */
+  viewRect() {
+    const z = this.zoomNow(); const w = this.VW / z; const h = this.VH / z;
+    const e = this.eye || this.rest();
+    return { x: e.x - w / 2, y: e.y - h / 2, w, h, z };
   }
+  /** Screen point -> scene point, and back. */
+  toScene(px, py) { const r = this.viewRect(); return [r.x + px / r.z, r.y + py / r.z]; }
+  toView(x, y) { const r = this.viewRect(); return [(x - r.x) * r.z, (y - r.y) * r.z]; }
+  /** Keeps a camera point where the view stays inside the scene. */
+  clampEye(p, z = this.zoomNow()) {
+    const w = this.VW / z / 2; const h = this.VH / z / 2;
+    p.x = clamp(p.x, w, this.W - w); p.y = clamp(p.y, h, this.H - h);
+    return p;
+  }
+  /** The viewfinder's frame on the scene now (it sits in the middle of the screen). */
+  frameNow() {
+    const z = this.zoomNow(); const e = this.eye;
+    return { x: e.x, y: e.y, w: this.frame.w / z, h: this.frame.h / z };
+  }
+  resetCamera() {
+    const r = this.rest();
+    this.eye = { x: r.x, y: r.y, tx: r.x, ty: r.y, speed: 0, focus: 0, beeped: false };
+    this.vf = 0; this.finger = null; this.liftAt = -9; this.lastTap = null;
+  }
+  /** Is the camera up (the screen is the viewfinder)? */
+  get looking() { return this.vf >= 0.9; }
 
-  /** The shutter button (bottom right, game pixels). */
-  get shutter() { return { x: this.W - 15, y: this.H - 15, r: 11 }; }
-  onButton(x, y) { const b = this.shutter; return !!this.view && Math.hypot(x - b.x, y - b.y) <= b.r + 3; }
+  /** The buttons (screen game pixels): the shutter, and the zoom lens above it. */
+  get shutter() { return { x: this.VW - 15, y: this.VH - 15, r: 11 }; }
+  get zoomButton() { return this.cam.lenses.length > 1 ? { x: this.VW - 15, y: this.VH - 41, r: 9 } : null; }
+  onButton(x, y) { const b = this.shutter; return this.phase === 'play' && Math.hypot(x - b.x, y - b.y) <= b.r + 3; }
 
   tap(x, y) {
-    if (this.phase === 'over') { if (this.t - this.overAt > 1.2) { this.reset(); this.phase = 'ready'; } return; }
+    if (this.phase === 'over') {
+      if (!this.judged()) { this.judgeAll = true; return; } // tap: show every photo's judging now
+      if (this.t - this.overAt > 1.2) { this.reset(); this.phase = 'ready'; }
+      return;
+    }
     if (this.phase === 'ready') {
       if (this.locked) return;
-      this.phase = 'play';
+      this.phase = 'play'; this.lastGood = this.t;
       return;
     }
     if (this.left <= 0) return;
-    // the shutter, before there's anything to aim at
     const b = this.shutter;
     if (Math.hypot(x - b.x, y - b.y) <= b.r + 3) { this.press(); return; }
-    this.aim(x, y);
+    const zb = this.zoomButton;
+    if (zb && Math.hypot(x - zb.x, y - zb.y) <= zb.r + 3) {
+      this.lensI = ((this.lensI || 0) + 1) % this.cam.lenses.length; this.sound = 'tap';
+      if (this.vf > 0) this.liftAt = this.t; // the camera stays up while the lens turns
+      this.eye.focus = Math.min(this.eye.focus, 0.4);
+      return;
+    }
+    // a quick second tap in the same spot takes the photo
+    const lt = this.lastTap;
+    this.lastTap = { x, y, at: this.t };
+    if (lt && this.looking && this.t - lt.at < 0.32 && Math.hypot(x - lt.x, y - lt.y) < 14) { this.lastTap = null; this.press(); return; }
+    this.finger = { x, y };
+    this.aimAt(x, y);
   }
+
+  /** The camera heads for the scene spot under a point of the screen. */
+  aimAt(x, y) {
+    const [tx, ty] = this.toScene(x, y);
+    const p = this.clampEye({ x: tx, y: ty }, this.lensZoom);
+    this.eye.tx = p.x; this.eye.ty = p.y;
+  }
+
+  /** Old name, kept for callers: aims at a point of the screen. */
+  aim(x, y) { this.finger = { x, y }; this.aimAt(x, y); }
 
   drag(x, y) {
-    const v = this.view; if (!v) return;
-    v.wx = x + this.dist * LAYER.mid; v.fy = y;
+    if (!this.finger || this.phase !== 'play') return;
+    this.finger = { x, y };
+    this.aimAt(x, y);
   }
 
-  /** The shutter: takes the photo now. The viewfinder stays up where it was aimed. */
+  up() { if (this.finger) { this.finger = null; this.liftAt = this.t; } }
+
+  /** The shutter: takes the photo now (in the train view it brings the camera up first). */
   press() {
     if (this.phase !== 'play') return;
     this.shutterAt = this.t;
-    const v = this.view;
-    if (!v) { addPop(this, 'Touch the screen to aim first!', this.W / 2, this.H * 0.25, '#ffffff'); return; }
-    if (this.film <= 0) { addPop(this, 'Out of film!', v.x, v.y - 10, '#ff8787'); return; }
-    this.snap(v);
+    if (!this.looking) {
+      this.liftAt = this.t;
+      if (!this.raisedOnce) this.say('Touch the screen to look around!', 0.25, '#ffffff');
+      return;
+    }
+    this.liftAt = Math.max(this.liftAt, this.t - GRACE * 0.4); // a photo keeps the camera up a moment
+    const f = this.frameNow();
+    if (this.film <= 0) { addPop(this, 'Out of film!', f.x, f.y - 10, '#ff8787'); return; }
+    this.snap({ x: f.x, y: f.y, w: f.w, h: f.h, focus: this.eye.focus, speed: this.eye.speed, lock: null });
   }
 
-  release() { /* the shutter snaps when pressed; the aiming finger lifting changes nothing */ }
+  release() { /* the shutter snaps when pressed; the finger lifting changes nothing */ }
 
   stepView(dt) {
-    const v = this.view; if (!v) return;
-    v.fx = this.sx('mid', v.wx);
-    const { x: tx, y: ty } = this.frameAt(v.fx, v.fy);
-    const k = 1 - Math.exp(-30 * dt);
-    v.x += (tx - v.x) * k; v.y += (ty - v.y) * k;
-    const { w: fw, h: fh } = this.frame;
-    v.x = clamp(v.x, fw / 2, this.W - fw / 2); v.y = clamp(v.y, fh / 2, this.H - fh / 2);
-    const sp = Math.hypot(v.x - v.lastX, v.y - v.lastY) / Math.max(dt, 1e-3);
-    v.speed = sp; v.lastX = v.x; v.lastY = v.y;
-    // focus: closes in while the frame is steady (or panning slowly), drops while it swings about
-    if (sp < 30) v.focus = Math.min(1, v.focus + dt / this.cam.focus);
-    else v.focus = Math.max(0, v.focus - dt * 1.5);
-    // sharp: a little beep (the frame doesn't lock on or follow anything: Taylor, 2026-11-20,
-    // keeping the animal in the frame is the kid's job)
-    if (v.focus >= 1 && !v.beeped) { v.beeped = true; this.sound = 'lock'; }
-    if (v.focus < 1) v.beeped = false;
+    const e = this.eye;
+    const up = Boolean(this.finger) || this.t - this.liftAt < GRACE;
+    this.vf = clamp(this.vf + (up ? dt / 0.13 : -dt / 0.25), 0, 1);
+    if (this.vf > 0.9) this.raisedOnce = true;
+    if (!up) { const r = this.rest(); e.tx = r.x; e.ty = r.y; }
+    // a finger held by the edge of the screen keeps pushing the camera that way
+    const f = this.finger;
+    if (f && (f.x < this.VW * 0.14 || f.x > this.VW * 0.86 || f.y < this.VH * 0.14 || f.y > this.VH * 0.86)) this.aimAt(f.x, f.y);
+    const z = this.zoomNow();
+    const t = this.clampEye({ x: e.tx, y: e.ty }, z);
+    const dx = t.x - e.x; const dy = t.y - e.y; const d = Math.hypot(dx, dy) * z; // in screen pixels
+    const sp = Math.min(6 * d, PAN_CAP * (up ? 1 : 2.2)); // eases in, never faster than the cap
+    const step = d > 0 ? Math.min(1, (sp * dt) / d) : 0;
+    const ox = e.x; const oy = e.y;
+    e.x += dx * step; e.y += dy * step;
+    this.clampEye(e, z);
+    e.speed = (Math.hypot(e.x - ox, e.y - oy) * z) / Math.max(dt, 1e-3);
+    // focus: closes in while the camera is up and steady (or panning slowly); a zoom lens takes longer
+    if (this.vf < 0.9) e.focus = 0;
+    else if (e.speed < 30) e.focus = Math.min(1, e.focus + dt / (this.cam.focus * (1 + 0.35 * (this.lensZoom - 1))));
+    else e.focus = Math.max(0, e.focus - dt * 1.5);
+    if (e.focus >= 1 && !e.beeped) { e.beeped = true; this.sound = 'lock'; }
+    if (e.focus < 1) e.beeped = false;
+  }
+
+  /** An announcement in the middle of the screen (yFrac: how far down). */
+  say(text, yFrac, color = '#ffffff', big = false) {
+    addPop(this, text, this.VW / 2, this.VH * yFrac, color, big);
+    this.pops[this.pops.length - 1].screen = true;
   }
 
   snap(v) {
-    const { w, h } = this.frame;
+    const { w, h } = v;
     const fr = { x: v.x - w / 2, y: v.y - h / 2, w, h };
     const inside = (b) => {
       const ix = Math.max(0, Math.min(b.x + b.w, fr.x + fr.w) - Math.max(b.x, fr.x));
@@ -576,15 +692,15 @@ export class PhotoTrain {
     }).filter((q) => q.inF >= 0.45).sort((a, b) => (b.inF - b.off * 0.5 + (b.o.k === v.lock ? 1 : 0)) - (a.inF - a.off * 0.5 + (a.o.k === v.lock ? 1 : 0)));
     const best = cands[0];
     // too far: no film used, but now the kid knows what a zoom lens is for
-    if (best?.o.far && !this.cam.zoom) {
-      addPop(this, 'Too far! A zoom lens could reach it.', v.x, v.y - h / 2 - 4, '#ffd43b');
+    if (best?.o.far && this.zoomNow() < FAR_ZOOM - 0.01) {
+      addPop(this, this.cam.zoom ? 'Too far! Zoom in to reach it.' : 'Too far! A zoom lens could reach it.', v.x, v.y - h / 2 - 4, '#ffd43b');
       return;
     }
     this.film -= 1;
     this.flash = this.t;
     this.sound = 'snap';
     // the photo is what was really in the viewfinder (copied in draw)
-    const shot = { at: this.t, frame: fr, map: this.map, weather: this.weather, season: this.season, day: this.day };
+    const shot = { at: this.t, frame: fr, zoom: this.zoomNow(), map: this.map, weather: this.weather, season: this.season, day: this.day };
     this.capture = shot;
     if (!best) {
       Object.assign(shot, { none: true, quality: 'blurry' });
@@ -610,7 +726,7 @@ export class PhotoTrain {
         const n = this.onClue?.(this.map) ?? this.clues + this.cluesFound;
         Object.assign(shot, { clue: o.clue.kind, quality: 'good' });
         addPop(this, `A clue! ${Math.min(3, n)} of 3`, v.x, v.y - 8, '#b2f2bb', true);
-        if (n >= 3) addPop(this, 'Something legendary is near...', this.W / 2, this.H * 0.3, '#ffd43b', true);
+        if (n >= 3) this.say('Something legendary is near...', 0.3, '#ffd43b', true);
       } else addPop(this, 'Too blurry to read the clue', v.x, v.y - 8, '#e9ecef');
       this.lastShot = shot; this.roll.push(shot);
       return;
@@ -628,6 +744,7 @@ export class PhotoTrain {
     const gain = Math.max(0, pts - had);
     this.bestBy[c.id] = Math.max(had, pts);
     if (shot.quality !== 'blurry') {
+      this.lastGood = this.t;
       const rec = this.onPhoto ? this.onPhoto(shot) : null; // the photo's picture is filled in on the next draw
       shot.record = rec;
       if (rec === 'new') { this.records += 1; pts = gain + NEW_BONUS; this.points += pts; } else { pts = gain; this.points += gain; }
@@ -640,13 +757,13 @@ export class PhotoTrain {
     // Rainbow land: one photo of each color fills the rainbow, and the unicorn comes
     if (this.theme.rainbowHunt && c.color && shot.quality !== 'blurry' && !this.colors.has(c.color)) {
       this.colors.add(c.color);
-      addPop(this, `${c.color[0].toUpperCase()}${c.color.slice(1)} for the rainbow!`, this.W / 2, this.H * 0.3, RAINBOW.find(([k]) => k === c.color)[1]);
+      this.say(`${c.color[0].toUpperCase()}${c.color.slice(1)} for the rainbow!`, 0.3, RAINBOW.find(([k]) => k === c.color)[1]);
       if (this.colors.size === RAINBOW.length && !this.legendCame) {
         this.rainbowFull = true; this.nextAt = Math.min(this.nextAt, this.t + 1.5);
-        addPop(this, 'The rainbow is full! Something magical is coming...', this.W / 2, this.H * 0.22, '#ffffff', true);
+        this.say('The rainbow is full! Something magical is coming...', 0.22, '#ffffff', true);
       } else if (this.colors.size === RAINBOW.length) { // the unicorn came already: a rainbow bonus instead
         this.points += RAINBOW_BONUS;
-        addPop(this, `Full rainbow! +${RAINBOW_BONUS}`, this.W / 2, this.H * 0.22, '#ffffff', true);
+        this.say(`Full rainbow! +${RAINBOW_BONUS}`, 0.22, '#ffffff', true);
       }
     }
   }
@@ -667,7 +784,7 @@ export class PhotoTrain {
     const others = this.subjects().filter((o) => o.k && o.k !== k && o.shown && inFrame(o.box)).map((o) => o.k).slice(0, 3);
     const cov = k.cover && !this.props.includes(k.cover) ? { k: k.cover.kind, x: r1(k.cover.x), y: r1(k.cover.y), s: k.cover.seed } : null;
     return {
-      v: 2, W: this.W, H: this.H, z: this.zoom || 1, pan: [r1(this.panX || 0), r1(this.panY || 0)], t: r1(this.t), d: r1(this.dist), left: Math.round(this.left), fr: [fr.x, fr.y, fr.w, fr.h].map(r1),
+      v: this.flat ? 2 : 3, W: this.VW, H: this.VH, z: Math.round(this.zoomNow() * 100) / 100, t: r1(this.t), d: r1(this.dist), left: Math.round(this.left), fr: [fr.x, fr.y, fr.w, fr.h].map(r1),
       k: { ...one(k), ...(cov ? { cov } : {}) },
       // every other animal in the frame too (Taylor, 2026-11-27: a two-animal photo redraws with both)
       ...(others.length ? { o: others.map(one) } : {}),
@@ -695,7 +812,7 @@ export class PhotoTrain {
   }
 
   finish() {
-    this.phase = 'over'; this.overAt = this.t; this.view = null;
+    this.phase = 'over'; this.overAt = this.t; this.finger = null; this.resetCamera();
     this.newBest = this.points > this.best;
     if (this.newBest) this.best = this.points;
   }
@@ -704,6 +821,10 @@ export class PhotoTrain {
     this.t += dt;
     for (const p of [this.kid, this.vis]) p.move(dt);
     this.pops = this.pops.filter((p) => this.t - p.at < 1.6);
+    if (this.phase === 'over') { // a chime for each photo judged
+      const n = Math.min(this.judgedCount(), this.judgedShots().length);
+      if (n > this.judgeSeen && this.t - this.overAt > 0.3) { this.judgeSeen = n; if (!this.judgeAll) this.sound = 'chime'; }
+    }
     if (this.phase !== 'play') return;
     this.left = Math.max(0, this.left - dt);
     // time's up: the ride ends (a shutter press in the same moment still counts)
@@ -724,7 +845,7 @@ export class PhotoTrain {
         const bat = mapCritters(this.map).find((c) => c.tunnel) || mapCritters('bg-meadow').find((c) => c.tunnel);
         for (let i = 0; i < 2; i += 1) {
           const k = this.spawn(bat, 'fly');
-          k.x = this.W * (0.55 + i * 0.3); k.vx = -10 - this.r() * 8; k.y = this.H * (0.2 + i * 0.12); k.state = 'fly'; k.bat = true; k.point = null;
+          k.x = this.ox + this.VW * (0.55 + i * 0.3); k.vx = -10 - this.r() * 8; k.y = this.oy + this.VH * (0.2 + i * 0.12); k.state = 'fly'; k.bat = true; k.point = null;
         }
       }
       if (this.dist + this.carX > this.tunnel.x1 + this.W) this.tunnel = null;
@@ -737,6 +858,8 @@ export class PhotoTrain {
   // ---------- drawing (fine pixels) ----------
   paintSky() {
     const W = this.W * Z; const H = this.H * Z; const th = this.theme;
+    // the sun, moon and planets sit where the train's own view sees them (T: its top)
+    const T = this.oy * Z; const V = this.VH * Z; const L = this.ox * Z; const U = this.VW * Z;
     const c = canvas(W, H); const x = c.getContext('2d');
     const top = th.sky[0]; const bot = th.sky[1];
     for (let j = 0; j < H; j += 1) {
@@ -750,19 +873,19 @@ export class PhotoTrain {
     if (this.night && !th.stars && !th.underwater) { // a night sky: darker, with stars and a moon
       x.fillStyle = 'rgba(10,14,48,0.55)'; x.fillRect(0, 0, W, H);
       for (let i = 0; i < 70; i += 1) { x.fillStyle = i % 5 ? '#ffffff' : '#ffe066'; x.fillRect(Math.floor(h2(i, 21) * W), Math.floor(h2(i, 22) * this.horizon * Z * 0.9), 1, 1); }
-      const mx = W * 0.8; const my = H * 0.11;
+      const mx = L + U * 0.8; const my = T + V * 0.11;
       for (let j = -7; j <= 7; j += 1) for (let i = -7; i <= 7; i += 1) { const d = i * i + j * j; if (d <= 49 && (i - 3) ** 2 + (j + 1) ** 2 > 30) { x.fillStyle = d < 25 ? '#fff9db' : '#ffe066'; x.fillRect(mx + i, my + j, 1, 1); } }
     }
     if (th.stars) for (let i = 0; i < 90; i += 1) { x.fillStyle = ['#ffffff', '#ffd43b', '#b197fc'][i % 3]; x.fillRect(Math.floor(h2(i, 1) * W), Math.floor(h2(i, 2) * this.horizon * Z), 1, 1); }
     const body = th.skyBody || (th.stars ? 'earth' : null);
     if (body === 'planets') { // a ringed golden planet, a little blue one, and a swirl of a galaxy
       const disc = (cx, cy, R, fn) => { for (let j = -R; j <= R; j += 1) for (let i = -R; i <= R; i += 1) if (i * i + j * j <= R * R) { x.fillStyle = fn(i, j); x.fillRect(cx + i, cy + j, 1, 1); } };
-      const px0 = Math.round(W * 0.74); const py0 = Math.round(H * 0.15);
+      const px0 = Math.round(L + U * 0.74); const py0 = Math.round(T + V * 0.15);
       for (let a = 0; a < Math.PI * 2; a += 0.02) { const rx = Math.round(Math.cos(a) * 21); const ry = Math.round(Math.sin(a) * 5); if (ry < 0) { x.fillStyle = '#fff3bf'; x.fillRect(px0 + rx, py0 + ry, 1, 1); } }
       disc(px0, py0, 11, (i, j) => (j + Math.round(i * 0.2)) % 6 < 2 ? '#f59f00' : i + j < -8 ? '#fff3bf' : '#ffd43b');
       for (let a = 0; a < Math.PI * 2; a += 0.02) { const rx = Math.round(Math.cos(a) * 21); const ry = Math.round(Math.sin(a) * 5); if (ry >= 0) { x.fillStyle = '#fff3bf'; x.fillRect(px0 + rx, py0 + ry, 1, 1); } }
-      disc(Math.round(W * 0.2), Math.round(H * 0.09), 5, (i, j) => (i + j < -3 ? '#d0ebff' : '#4dabf7'));
-      const gx = W * 0.46; const gy = H * 0.22;
+      disc(Math.round(L + U * 0.2), Math.round(T + V * 0.09), 5, (i, j) => (i + j < -3 ? '#d0ebff' : '#4dabf7'));
+      const gx = L + U * 0.46; const gy = T + V * 0.22;
       for (let k = 0; k < 2; k += 1) for (let t = 0; t < 1; t += 0.02) { const a = t * 9 + k * Math.PI; const rr = t * 16; x.fillStyle = t < 0.3 ? '#ffffff' : t < 0.6 ? '#e5dbff' : '#9775fa'; x.fillRect(Math.round(gx + Math.cos(a) * rr), Math.round(gy + Math.sin(a) * rr * 0.45), 1, 1); }
     } else if (body === 'rainbow') { // a rainbow arching over Rainbow land
       const cx = W * 0.5; const cy = this.horizon * Z + 30; const R0 = W * 0.32;
@@ -779,16 +902,27 @@ export class PhotoTrain {
       for (let i = 0; i < W; i += 1) { const y = 2 + Math.round(Math.sin(i / 7) * 1.5 + Math.sin(i / 3) * 0.6); x.fillStyle = '#d0ebff'; x.fillRect(i, y, 1, 1); }
     }
     if (body === 'earth') { // the earth
-      const ex = W * 0.4; const ey = H * 0.25; const R = 9;
+      const ex = L + U * 0.4; const ey = T + V * 0.25; const R = 9;
       for (let j = -R; j <= R; j += 1) for (let i = -R; i <= R; i += 1) if (i * i + j * j <= R * R) { x.fillStyle = h2(i + 40, j + 40) > 0.62 ? '#51cf66' : (i + j < -6 ? '#a5d8ff' : '#4dabf7'); x.fillRect(ex + i, ey + j, 1, 1); }
     } else if (this.weather === 'sunny' && !this.night && body !== 'sunset' && body !== 'rays' && body !== 'planets') {
-      const sx = W * 0.78; const sy = H * 0.12;
+      const sx = L + U * 0.78; const sy = T + V * 0.12;
       for (let j = -8; j <= 8; j += 1) for (let i = -8; i <= 8; i += 1) { const d = i * i + j * j; if (d <= 64) { x.fillStyle = d < 36 ? '#fff3bf' : '#ffe066'; x.fillRect(sx + i, sy + j, 1, 1); } }
     }
     return c;
   }
 
+  /** The screen: the camera's view of the scene (drawn whole, then the view is copied out). */
   draw(ctx) {
+    if (!this.sceneCanvas || this.sceneCanvas.width !== this.W * Z) this.sceneCanvas = canvas(this.W * Z, this.H * Z);
+    this.drawScene(this.sceneCanvas.getContext('2d'));
+    const r = this.viewRect();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.sceneCanvas, Math.round(r.x * Z), Math.round(r.y * Z), Math.round(r.w * Z), Math.round(r.h * Z), 0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
+
+  /** The whole scene, in fine pixels (js/prints.js draws a print's scene with this too). */
+  drawScene(ctx) {
     const th = this.theme; const W = this.W * Z; const H = this.H * Z;
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -800,11 +934,11 @@ export class PhotoTrain {
     const dusk = th.dusk ? clamp((GAME_SECONDS - this.left) / GAME_SECONDS, 0, 1) : 0;
     if (th.dusk) {
       ctx.fillStyle = `rgba(214,51,108,${0.32 * dusk})`; ctx.fillRect(0, 0, W, this.horizon * Z);
-      const sx0 = Math.round(W * 0.66); const sy0 = Math.round(H * 0.12 + (this.horizon * Z - H * 0.12 + 4) * dusk); const R = 15;
+      const sy00 = this.oy * Z + this.VH * Z * 0.12; const sx0 = Math.round((this.ox + this.VW * 0.66) * Z); const sy0 = Math.round(sy00 + (this.horizon * Z - sy00 + 4) * dusk); const R = 15;
       for (let j = -R; j <= R; j += 1) for (let i = -R; i <= R; i += 1) { const d = i * i + j * j; if (d <= R * R) P(d < (R - 5) ** 2 ? '#fff3bf' : mix('#ffd43b', '#ff6b6b', dusk), sx0 + i, sy0 + j); }
     }
     if (!th.stars && !th.underwater) for (let i = 0; i < 4; i += 1) {
-      const cx = ((i * 157 - this.dist * 0.03 - this.t * 2) % (W + 120) + W + 120) % (W + 120) - 60; const cy = 16 + i * 13;
+      const cx = ((i * 157 - this.dist * 0.03 - this.t * 2) % (W + 120) + W + 120) % (W + 120) - 60; const cy = Math.round(this.oy * Z * 0.6) + 16 + i * 13;
       const col = this.weather === 'rain' || this.weather === 'snow' ? '#c9d1db' : th.dusk ? mix('#ffffff', '#ffa8a8', dusk) : '#ffffff';
       P(col, cx, cy, 34, 6); P(col, cx + 6, cy - 4, 18, 4); P(mix(col, '#9aa8b8', 0.4), cx + 2, cy + 6, 30, 2);
     }
@@ -999,9 +1133,10 @@ export class PhotoTrain {
     // the photo: copy what was really in the viewfinder
     if (this.capture) {
       const s = this.capture; this.capture = null;
-      const fw = Math.round(s.frame.w * Z); const fh = Math.round(s.frame.h * Z);
-      const pic = canvas(fw, fh); const pc = pic.getContext('2d');
-      try { pc.drawImage(ctx.canvas, Math.round(s.frame.x * Z), Math.round(s.frame.y * Z), fw, fh, 0, 0, fw, fh); } catch { /* fine */ }
+      // the frame on the scene, blown up by the zoom to the size it was on the screen
+      const fw = Math.round(s.frame.w * Z); const fh = Math.round(s.frame.h * Z); const zz = s.zoom || 1;
+      const pic = canvas(Math.round(fw * zz), Math.round(fh * zz)); const pc = pic.getContext('2d'); pc.imageSmoothingEnabled = false;
+      try { pc.drawImage(ctx.canvas, Math.round(s.frame.x * Z), Math.round(s.frame.y * Z), fw, fh, 0, 0, pic.width, pic.height); } catch { /* fine */ }
       if (s.quality === 'blurry') blur(pic);
       s.pic = pic;
     }
@@ -1119,7 +1254,7 @@ export class PhotoTrain {
     for (const p of [this.vis, this.kid]) { p.y = this.trackY - 7 + bob / Z; p.paint(this.t); }
     ctx.save(); ctx.scale(Z, Z); for (const p of [this.vis, this.kid]) p.draw(ctx); ctx.restore();
     // the kid's camera, up when the viewfinder is out
-    const up = this.view ? 1 : 0;
+    const up = this.vf > 0.3 ? 1 : 0;
     const kx = this.kid.x * Z + 10; const ky = (this.kid.y - 13 - up * 3) * Z + bob;
     P(INK, kx - 1, ky - 1, 12, 9); P('#343a40', kx, ky, 10, 7); P('#adb5bd', kx + 1, ky + 1, 3, 2); P('#74c0fc', kx + 6, ky + 2, 3, 3);
     P(INK, c0 - 1, ty - 25 + bob, cw + 2, 21); P(body, c0, ty - 24 + bob, cw, 19); P(trim, c0, ty - 24 + bob, cw, 3); P(mix(body, INK, 0.3), c0, ty - 9 + bob, cw, 4);
@@ -1208,7 +1343,6 @@ export class PhotoTrain {
     }
     // the cover in front (a bush, a log), so a rising animal comes up from behind it
     if (k.cover && (k.how === 'rise' || k.how === 'step')) this.drawProp(ctx, k.cover, true);
-    if (far && !this.cam.zoom && this.view) { ctx.fillStyle = '#ffd43b'; ctx.font = '10px monospace'; }
   }
 
   /** A sign before an animal: rustling, ripples, a call. */
@@ -1467,7 +1601,7 @@ export class PhotoTrain {
 
   // ---------- the HUD (sharp words, the viewfinder, photos) ----------
   drawHud(ctx, scale) {
-    const S = scale; const W = this.W * S; const H = this.H * S; const u = S * 4;
+    const S = scale; const W = this.VW * S; const H = this.VH * S; const u = S * 4;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const text = (s, x, y, px, color = '#ffffff', align = 'center') => {
@@ -1482,10 +1616,10 @@ export class PhotoTrain {
     text(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, u * 3.6, u * 1.6, secs <= 10 && this.phase === 'play' ? '#ff8787' : '#ffffff');
     text(`${this.points} points`, u * 1, u * 3.6, u * 1.5, '#ffd43b', 'left');
     // film: one little frame for each shot left
-    for (let i = 0; i < this.cam.film; i += 1) {
-      const fx = u * 1 + i * u * 1.05; const fy = u * 5;
-      ctx.fillStyle = i < this.film ? '#ffe066' : 'rgba(255,255,255,0.25)'; ctx.fillRect(fx, fy, u * 0.8, u * 1.1);
-      ctx.strokeStyle = INK; ctx.lineWidth = S * 0.4; ctx.strokeRect(fx, fy, u * 0.8, u * 1.1);
+    for (let i = 0; i < this.cam.film; i += 1) { // in rows of 15
+      const fx = u * 1 + (i % 15) * u * 0.66; const fy = u * 4.9 + Math.floor(i / 15) * u * 0.95;
+      ctx.fillStyle = i < this.film ? '#ffe066' : 'rgba(255,255,255,0.25)'; ctx.fillRect(fx, fy, u * 0.5, u * 0.75);
+      ctx.strokeStyle = INK; ctx.lineWidth = S * 0.35; ctx.strokeRect(fx, fy, u * 0.5, u * 0.75);
     }
     const wn = (this.theme.weatherNames || WEATHERS)[this.weather];
     text(`${wn?.icon || ''} ${wn?.name || ''}`, W - u * 1, u * 3.6, u * 1.2, '#ffffff', 'right');
@@ -1502,16 +1636,21 @@ export class PhotoTrain {
         ctx.beginPath(); ctx.arc(cx, cy, u * 0.45, 0, Math.PI * 2); ctx.fillStyle = got ? col : 'rgba(255,255,255,0.25)'; ctx.fill();
       });
     }
-    // the viewfinder
-    const v = this.view;
-    if (v && this.phase === 'play') {
+    // the viewfinder: the camera comes up when a finger touches the screen
+    const vf = this.phase === 'play' ? this.vf : 0;
+    const e = this.eye;
+    if (vf > 0) {
       const { w, h } = this.frame;
-      const x0 = (v.x - w / 2) * S; const y0 = (v.y - h / 2) * S; const fw = w * S; const fh = h * S;
-      const col = v.focus >= 1 ? '#ffd43b' : '#ffffff';
-      ctx.fillStyle = 'rgba(10,8,20,0.18)';
+      const fw = w * S; const fh = h * S; const x0 = W / 2 - fw / 2; const y0 = H / 2 - fh / 2;
+      const col = e.focus >= 1 ? '#ffd43b' : '#ffffff';
+      ctx.globalAlpha = vf;
+      // the camera's edges: dark corners round the screen, and a soft dim outside the frame
+      const bw = u * 1.1 * vf;
+      ctx.fillStyle = 'rgba(10,8,20,0.85)';
+      ctx.fillRect(0, 0, W, bw); ctx.fillRect(0, H - bw, W, bw); ctx.fillRect(0, 0, bw, H); ctx.fillRect(W - bw, 0, bw, H);
+      ctx.fillStyle = 'rgba(10,8,20,0.16)';
       ctx.fillRect(0, 0, W, y0); ctx.fillRect(0, y0 + fh, W, H - y0 - fh); ctx.fillRect(0, y0, x0, fh); ctx.fillRect(x0 + fw, y0, W - x0 - fw, fh);
       const L = u * 1.6;
-      ctx.lineWidth = S * 1.1; ctx.strokeStyle = INK;
       const corners = (lw, c) => {
         ctx.lineWidth = lw; ctx.strokeStyle = c;
         ctx.beginPath();
@@ -1520,33 +1659,65 @@ export class PhotoTrain {
       };
       corners(S * 1.8, INK); corners(S * 0.9, col);
       // the focus ring closes in
-      const rr = (Math.min(fw, fh) * 0.42) * (1.6 - 0.6 * v.focus);
-      ctx.beginPath(); ctx.arc(x0 + fw / 2, y0 + fh / 2, rr, 0, Math.PI * 2);
-      ctx.lineWidth = S * 0.7; ctx.strokeStyle = v.focus >= 1 ? col : 'rgba(255,255,255,0.7)'; ctx.stroke();
-      ctx.fillStyle = col; ctx.fillRect(x0 + fw / 2 - S * 0.5, y0 + fh / 2 - S * 2, S, S * 4); ctx.fillRect(x0 + fw / 2 - S * 2, y0 + fh / 2 - S * 0.5, S * 4, S);
-      // the label sits over the frame, or under it when the frame is up by the top lines
-      const ly = y0 - u * 0.8 < u * 6.6 ? y0 + fh + u * 0.8 : y0 - u * 0.8;
-      text(v.focus >= 1 ? 'SHARP' : 'hold still...', x0 + fw / 2, ly, u * 0.95, col);
-      // far specks get a hint
-      if (!this.cam.zoom) for (const k of this.critters) if (k.far && !k.gone) { const [kx, ky] = this.where(k); if (Math.abs(kx - v.x) < w / 2 && Math.abs(ky - v.y) < h / 2 + 6) text('too far!', kx * S, (ky - 9) * S, u * 0.9, '#ffd43b'); }
+      const rr = (Math.min(fw, fh) * 0.42) * (1.6 - 0.6 * e.focus);
+      ctx.beginPath(); ctx.arc(W / 2, H / 2, rr, 0, Math.PI * 2);
+      ctx.lineWidth = S * 0.7; ctx.strokeStyle = e.focus >= 1 ? col : 'rgba(255,255,255,0.7)'; ctx.stroke();
+      ctx.fillStyle = col; ctx.fillRect(W / 2 - S * 0.5, H / 2 - S * 2, S, S * 4); ctx.fillRect(W / 2 - S * 2, H / 2 - S * 0.5, S * 4, S);
+      text(e.focus >= 1 ? 'SHARP' : e.speed > 30 ? 'looking...' : 'hold still...', W / 2, y0 + fh + u * 0.9, u * 0.95, col);
+      ctx.globalAlpha = 1;
+      // far animals: zoom in to reach them
+      if (this.looking) {
+        for (const k of this.critters) {
+          if (!k.far || k.gone) continue;
+          const [kx, ky] = this.toView(...this.where(k));
+          if (Math.abs(kx - this.VW / 2) < w * 0.8 && Math.abs(ky - this.VH / 2) < h * 0.8 && this.zoomNow() < FAR_ZOOM - 0.01) text(this.cam.zoom ? 'zoom in!' : 'too far!', kx * S, (ky - 9) * S, u * 0.9, '#ffd43b');
+        }
+      }
     }
-    // the shutter button: bright and bouncing when the photo is ready (sharp on an animal that's out)
+    // animals out of sight: a little arrow at the edge of the screen points the way
+    if (this.phase === 'play') {
+      const r = this.viewRect(); const pad = u * 1.6;
+      for (const k of this.critters) {
+        if (k.gone || k.bat || !['sign', 'emerge', 'pose', 'fly', 'inbound', 'wait'].includes(k.state)) continue;
+        if (k.state === 'sign' && k.how !== 'fly' && this.t - k.t0 < 0.4) continue;
+        const [x, y] = this.where(k); const yy = y - 6;
+        if (x > r.x && x < r.x + r.w && yy > r.y && yy < r.y + r.h) continue;
+        const [vx, vy] = this.toView(x, yy);
+        const cx = clamp(vx * S, pad, W - pad); const cy = clamp(vy * S, pad + u * 7, H - pad);
+        const ang = Math.atan2(vy * S - cy, vx * S - cx);
+        const posing = k.state === 'pose';
+        if (!posing && Math.floor(this.t * 3 + (k.id % 5)) % 3 === 0) continue; // a sign blinks
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+        ctx.beginPath(); ctx.moveTo(u * 0.9, 0); ctx.lineTo(-u * 0.5, -u * 0.7); ctx.lineTo(-u * 0.2, 0); ctx.lineTo(-u * 0.5, u * 0.7); ctx.closePath();
+        ctx.fillStyle = posing ? '#ffd43b' : '#ffffff'; ctx.fill(); ctx.lineWidth = S * 0.6; ctx.strokeStyle = INK; ctx.stroke();
+        ctx.restore();
+      }
+    }
+    // the shutter button: bright and bouncing when the photo is ready
     if (this.phase === 'play') {
       const b = this.shutter; const cx = b.x * S; const cy = b.y * S; const R = b.r * S;
-      const ready = v && v.focus >= 1;
+      const ready = this.looking && e.focus >= 1;
       const pressed = this.t - this.shutterAt < 0.12;
       const k = pressed ? 0.9 : ready ? 1 + Math.sin(this.t * 10) * 0.05 : 1;
       ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k);
       ctx.beginPath(); ctx.arc(0, 0, R + S * 1.2, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill();
-      ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fillStyle = !v ? '#868e96' : ready ? '#ffd43b' : '#e9ecef'; ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fillStyle = !this.looking ? '#868e96' : ready ? '#ffd43b' : '#e9ecef'; ctx.fill();
       ctx.beginPath(); ctx.arc(0, 0, R * 0.62, 0, Math.PI * 2); ctx.lineWidth = S * 1.2; ctx.strokeStyle = INK; ctx.stroke();
       ctx.restore();
       text('SNAP', cx, cy, u * 0.95, '#ffffff');
+      // the zoom lens: tap to turn it (1x, 1.6x, 2.5x)
+      const zb = this.zoomButton;
+      if (zb) {
+        const zx = zb.x * S; const zy = zb.y * S; const zr = zb.r * S;
+        ctx.beginPath(); ctx.arc(zx, zy, zr + S, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill();
+        ctx.beginPath(); ctx.arc(zx, zy, zr, 0, Math.PI * 2); ctx.fillStyle = this.lensI ? '#74c0fc' : '#495057'; ctx.fill();
+        text(`${this.lensZoom}x`, zx, zy - u * 0.15, u * 1.05, '#ffffff'); text('zoom', zx, zy + zr + u * 0.55, u * 0.7, '#ffffff');
+      }
     }
-    // the visitor points
-    if (this.pointAt && this.t - this.pointAt.at < 1.4 && !this.pointAt.k.gone) {
-      const [kx, ky] = this.where(this.pointAt.k);
-      if (Math.floor(this.t * 5) % 2) text('▼', clamp(kx, 4, this.W - 4) * S, (ky - 22) * S, u * 1.4, '#ffd43b');
+    // the visitor points ("Look!"), at the edge of the screen when it is out of sight
+    if (this.pointAt && this.t - this.pointAt.at < 1.4 && !this.pointAt.k.gone && this.phase === 'play') {
+      const [kx, ky] = this.toView(...this.where(this.pointAt.k));
+      if (Math.floor(this.t * 5) % 2) text('▼', clamp(kx, 4, this.VW - 4) * S, clamp(ky - 22, 8, this.VH - 8) * S, u * 1.4, '#ffd43b');
     }
     // the last photo, a moment
     const s = this.lastShot;
@@ -1579,41 +1750,61 @@ export class PhotoTrain {
     for (const p of this.pops) {
       const age = (this.t - p.at) / 1.6;
       ctx.globalAlpha = Math.min(1, (1 - age) * 3);
-      text(p.text, clamp(p.x, 30, this.W - 30) * S, (p.y - age * 6) * S, u * (p.big ? 1.6 : 1.2), p.color);
+      const [px, py] = p.screen ? [p.x, p.y] : this.toView(p.x, p.y);
+      text(p.text, clamp(px, 30, this.VW - 30) * S, clamp(py - age * 6, 10, this.VH - 10) * S, u * (p.big ? 1.6 : 1.2), p.color);
       ctx.globalAlpha = 1;
     }
     if (this.phase === 'ready' && Math.floor(this.t * 2) % 3) {
       text(this.locked ? "That's all our games today!" : 'All aboard! Tap to start the train.', W / 2, H * 0.32, u * 1.7);
-      if (!this.locked) text('Touch to aim, wait for SHARP, press SNAP!', W / 2, H * 0.32 + u * 2.2, u * 1.1);
+      if (!this.locked) text('Touch to look around. Snap when it looks at you!', W / 2, H * 0.32 + u * 2.2, u * 1.1);
     }
     if (this.phase === 'over' && this.t - this.overAt > 0.3) this.drawRoll(ctx, S, text);
   }
 
-  /** End of the line: the roll of photos, developed. */
+  /** The photos judged at the end of the line, best first (at most 8). */
+  judgedShots() {
+    if (!this.judgedList) this.judgedList = this.roll.filter((s) => s.pic && !s.none).sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 8);
+    return this.judgedList;
+  }
+  /** How many have been judged so far (one at a time, or all at once after a tap). */
+  judgedCount() { return this.judgeAll ? 99 : Math.floor((this.t - this.overAt - 0.3) / JUDGE_EACH) + 1; }
+  judged() { return this.phase !== 'over' || this.judgedCount() >= this.judgedShots().length; }
+
+  /** End of the line: the roll of photos, judged one at a time with their bonuses (tap to skip). */
   drawRoll(ctx, S, text) {
-    const W = this.W * S; const u = S * 4;
-    const bw = Math.min(W * 0.92, u * 44); const bh = u * 26; const bx = W / 2 - bw / 2; const by = u * 4;
+    const W = this.VW * S; const H = this.VH * S; const u = S * 4;
+    const bw = Math.min(W * 0.94, u * 46); const bh = Math.min(H * 0.92, u * 30); const bx = W / 2 - bw / 2; const by = Math.max(u * 1, (H - bh) / 2);
     ctx.fillStyle = 'rgba(27,20,48,0.92)'; ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = S; ctx.strokeRect(bx, by, bw, bh);
-    text(`End of the line! ${this.points} points`, W / 2, by + u * 1.8, u * 2, '#ffd43b');
-    const shots = this.roll.filter((s) => s.pic && !s.none).sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 8);
+    const shots = this.judgedShots();
+    const show = this.judgedCount();
+    const sum = shots.slice(0, show).reduce((n, s) => n + (s.points || 0), 0);
+    text(show >= shots.length ? `End of the line! ${this.points} points` : `Judging... ${sum} points`, W / 2, by + u * 1.8, u * 2, '#ffd43b');
     const n = Math.max(1, Math.min(4, shots.length)); const gap = u * 0.8;
     const tw = Math.min((bw - gap * (n + 1)) / n, u * 10); const thh = tw * 0.75;
-    const show = Math.floor((this.t - this.overAt) / 0.25); // develop one by one
-    shots.slice(0, 8).forEach((s, i) => {
-      if (i > show) return;
+    shots.forEach((s, i) => {
+      if (i >= show) return;
       const col = i % 4; const row = Math.floor(i / 4);
-      const x = W / 2 - (n * tw + (n - 1) * gap) / 2 + col * (tw + gap); const y = by + u * 3.6 + row * (thh + u * 2.6);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(x - S, y - S, tw + 2 * S, thh + u * 2);
-      ctx.imageSmoothingEnabled = false; ctx.drawImage(s.pic, x, y, tw, thh);
+      const x = W / 2 - (n * tw + (n - 1) * gap) / 2 + col * (tw + gap); const y = by + u * 3.6 + row * (thh + u * 4.2);
+      const fresh = !this.judgeAll && i === show - 1 ? clamp((this.t - this.overAt - 0.3 - i * JUDGE_EACH) / 0.15, 0, 1) : 1;
+      ctx.save(); ctx.translate(x + tw / 2, y + thh / 2); ctx.scale(0.8 + 0.2 * fresh, 0.8 + 0.2 * fresh); ctx.translate(-tw / 2, -thh / 2);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(-S, -S, tw + 2 * S, thh + u * 2);
+      ctx.imageSmoothingEnabled = false; ctx.drawImage(s.pic, 0, 0, tw, thh);
+      ctx.restore();
       const q = s.clue ? { short: 'Clue', color: '#2f9e44' } : QUALITY[s.quality];
-      text(s.clue ? 'Clue!' : s.name || '', x + tw / 2, y + thh + u * 0.5, u * 0.75, '#1b1430' === INK ? '#343a40' : '#000');
+      text(s.clue ? 'Clue!' : s.name || '', x + tw / 2, y + thh + u * 0.5, u * 0.75, '#343a40');
       if (s.quality !== 'blurry' || s.clue) text(q.short, x + tw - u * 1.6, y + u * 0.7, u * 0.85, q.color);
       if (s.record === 'new') text('NEW!', x + u * 1.4, y + u * 0.7, u * 0.85, '#b2f2bb');
+      // the bonuses, then the points
+      const bonus = [s.pair ? 'Pair x1.5' : '', s.wanted && s.quality !== 'blurry' ? 'Wanted x2' : ''].filter(Boolean).join(' ');
+      if (bonus) text(bonus, x + tw / 2, y + thh + u * 1.9, u * 0.75, '#ffd8a8');
+      if (!s.clue) text(`+${s.points || 0}`, x + tw / 2, y + thh + u * (bonus ? 3.1 : 2.1), u * 0.95, s.points ? '#ffd43b' : '#868e96');
     });
-    if (!shots.length) text('No photos this time. Hold to focus, let go to snap!', W / 2, by + u * 9, u * 1.2, '#e9ecef');
-    text(`${this.records ? `${this.records} new in your album · ` : ''}${this.newBest ? 'New best!' : `Best ${this.best} points`}`, W / 2, by + bh - u * 3, u * 1.3, this.newBest ? '#b2f2bb' : '#e9ecef');
-    if (this.t - this.overAt > 1.2) text('Tap to ride again', W / 2, by + bh - u * 1.2, u * 1.2, '#ffffff');
+    if (!shots.length) text('No photos this time. Touch to look around, snap when it looks at you!', W / 2, by + u * 9, u * 1.1, '#e9ecef');
+    if (show >= shots.length) {
+      text(`${this.records ? `${this.records} new in your album · ` : ''}${this.newBest ? 'New best!' : `Best ${this.best} points`}`, W / 2, by + bh - u * 3, u * 1.3, this.newBest ? '#b2f2bb' : '#e9ecef');
+      if (this.t - this.overAt > 1.2) text('Tap to ride again', W / 2, by + bh - u * 1.2, u * 1.2, '#ffffff');
+    } else text('Tap to see them all', W / 2, by + bh - u * 1.2, u * 1, '#adb5bd');
   }
 }
 
