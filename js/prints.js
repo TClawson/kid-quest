@@ -53,11 +53,15 @@ export const canPrint = (kid, critterId) => kid?.critterAlbum?.[critterId]?.q ==
  * checks the coins and that the frame is owned) and hangs it in the first empty place of the
  * frame (or in place `slot`). A reprint replaces the old print of that animal. Returns true if printed.
  */
-export function printPhoto(kid, critterId, slot = null) {
+/** Free prints left (print tickets from villager photo requests: js/photoreq.js). */
+export const ticketsLeft = (kid) => Math.max(0, (kid?.printTickets || 0) - (kid?.ticketsUsed || 0));
+
+export function printPhoto(kid, critterId, slot = null, { ticket = false } = {}) {
   const rec = kid?.critterAlbum?.[critterId];
   if (!rec || rec.q !== 'perfect') return false;
   kid.prints = { ...(kid.prints || {}), [critterId]: { ...(rec.neg ? { neg: rec.neg } : {}), map: rec.map, season: rec.season, weather: rec.weather, day: rec.date } };
-  kid.spent = (kid.spent || 0) + PRINT_PRICE;
+  if (ticket && ticketsLeft(kid) > 0) kid.ticketsUsed = (kid.ticketsUsed || 0) + 1;
+  else kid.spent = (kid.spent || 0) + PRINT_PRICE;
   const wall = wallOf(kid);
   if (!wall.slots.includes(critterId)) {
     const at = slot ?? wall.slots.indexOf(null);
@@ -90,6 +94,7 @@ const developed = new Map();
 /** A still photo train on the print's map, day and weather (nothing moves, no train). */
 function stillRide(print, neg) {
   const g = new PhotoTrain({ W: neg.W, H: neg.H, flat: !(neg.v >= 3), kid: STAND_IN, visitor: STAND_IN, map: print.map, day: print.day || '2026-06-01', season: print.season, weather: print.weather, seed: 7, night: Boolean(neg.n) });
+  if (neg.rt) g.applyRoute(); // taken on the map's side track
   g.still = true; g.phase = 'play'; g.tunnel = null; g.brake = null; g.pops = []; g.bridge = null;
   return g;
 }
@@ -101,7 +106,7 @@ function critterFor(c, n, main = false) {
   const posed = main ? n.pose !== 0 : Boolean(n.pose);
   return {
     c, how: n.how, layer: n.l, x: n.x, y: n.y, face: n.f ?? -1, lift: n.lift || 0, big: Boolean(n.big), far: Boolean(n.far),
-    flyX: n.fx ?? null, state: posed ? 'pose' : 'still', st: -99, t0: -99, id: 1, pics: () => critterPic(look, posed ? 'pose' : frame),
+    flyX: n.fx ?? null, state: posed ? 'pose' : 'still', special: posed ? n.sp || null : null, st: -99, t0: -99, id: 1, pics: () => critterPic(look, posed && n.sp !== 'wings' ? 'pose' : frame),
   };
 }
 

@@ -70,7 +70,7 @@ import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS
 import { GAME_NAMES } from './play.js';
 import { openPlay } from './playground.js';
 import { openCritterAlbum, openCritterPage } from './albumview.js';
-import { housePhotos, openPhotoWall, printActions } from './printsview.js';
+import { housePhotos, openPhotoWall, printActions, villageRequests } from './printsview.js';
 import { SPOTS as FISH_SPOTS, boatThumb } from './fishing.js';
 import { PERSONALITIES } from './tagfun.js';
 import { chestTier, chestPrize, chestPiece, treasureFound, mapsNeedingPieces, chestReady, prizeText, TROPHIES, PIECES_PER_MAP, tierById, LATE_DAYS } from './treasure.js';
@@ -1326,7 +1326,11 @@ function villageView(kid, s, entry, mood) {
   const lm = SECRETS[theme] && treasureFound(state.log, kid.id).maps.has(theme) ? SECRETS[theme] : null;
   const size = lm ? secretSize(theme) : null;
   const store = storeOpen(state, kid, today());
+  const villagers = list.filter((q) => !inHouse.has(q.id));
+  const { asks, given } = villageRequests(kid, theme, placeVillagers(villagers, villageLayout(theme)).map((p) => p.kind));
   return villageHtml({
+    asks,
+    given,
     theme,
     visit: villageVisit(kid, s),
     // drawn twice as big, with fine pixels like the rest of the village

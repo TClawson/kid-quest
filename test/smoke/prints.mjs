@@ -121,6 +121,32 @@ try {
   await app.clock.runFor(3000);
   await app.waitForSelector('#modal .photo-wall');
   assert.equal(await app.locator('#modal .pw-slot img').count(), 1);
+  // ---------- villager photo requests in the village (photoreq.js) ----------
+  const app2 = await ctx.newPage();
+  app2.on('pageerror', (e) => errors.push(e.message));
+  await app2.clock.install({ time: new Date(`${day}T16:30:00`) });
+  await app2.goto(site.url);
+  const kinds = await app2.evaluate(async () => (await import('./js/villageart.js')).VILLAGER_KINDS);
+  const fox = { critter: 'meadow-fox', map: 'bg-meadow', season: 'autumn', weather: 'sunny', day: '2026-11-10' };
+  const kid2 = { ...kid, id: 'kid_bo', name: 'Bo', critterAlbum: { 'meadow-deer': { q: 'good', map: 'bg-meadow' }, 'meadow-fox': { q: 'perfect', map: 'bg-meadow' }, 'meadow-squirrel': { q: 'good', map: 'bg-meadow' } },
+    photoReqs: { open: [], done: 1, given: Object.fromEntries(kinds.map((k) => [k, fox])) } };
+  const s2 = { ...s, kids: [kid2], log: {} };
+  await app2.evaluate(([st, d]) => { localStorage.setItem('kidquest.v1', JSON.stringify(st)); localStorage.setItem('kidquest.house', JSON.stringify({ kid_bo: { day: d, inside: false, place: 'out' } })); }, [s2, day]);
+  await app2.reload();
+  await openKid(app2, '[data-action="open-kid"][data-id="kid_bo"]');
+  await app2.clock.runFor(1500);
+  for (let i = 0; i < 6 && await app2.locator('#modal:not([hidden])').count(); i += 1) { await app2.locator('#modal [data-action="modal-close"]').first().click().catch(() => {}); await app2.clock.runFor(400); }
+  await app2.waitForSelector('.village .villager[data-vid]');
+  assert.equal(await app2.locator('.village .villager .v-ask').count(), 1, 'a villager asks for a photo');
+  assert.ok(await app2.locator('.village .villager .v-given img').count() >= 1, 'a photo given to a villager hangs beside them');
+  const reqs = await app2.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')).kids[0].photoReqs);
+  assert.equal(reqs.open.length, 1);
+  assert.ok(['meadow-deer', 'meadow-fox', 'meadow-squirrel'].includes(reqs.open[0].c), 'it asks for an animal the kid has found');
+  if (process.env.SHOTS) {
+    await app2.evaluate(() => { const v = document.querySelector('.village .villager .v-ask').closest('.villager'); v.click(); });
+    await app2.clock.runFor(2500);
+    await app2.screenshot({ path: `${process.env.SHOTS}/village-requests.png` });
+  }
   assert.deepEqual(errors, []);
   console.log('prints: ok');
 } finally {

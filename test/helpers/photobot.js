@@ -9,7 +9,7 @@ export function botStep(g, { far = false } = {}) {
   if (g.phase !== 'play') return;
   const b = g.bot || (g.bot = { target: null });
   if (!b.target) {
-    const o = g.subjects().find((s) => s.k && (far || !s.k.far) && s.k.state === 'sign');
+    const o = g.subjects().find((s) => s.k && (far || !s.k.far) && s.k.state === 'sign' && !s.k.asleep);
     if (o && g.film > 0) b.target = o.k;
   }
   if (!b.target) return;

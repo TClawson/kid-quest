@@ -418,6 +418,8 @@ export function villageHtml(v) {
     home: v.home || null,
     coach: v.coach ? { line: v.coach.line || '' } : null,
     music: { tier: v.music?.tier || 0, left: v.music?.left || 0 },
+    // villager photo requests (photoreq.js): kind -> what they ask
+    asks: v.asks || {},
     little: v.little || null,
     bloom: v.bloom || null, // the family's trees and flowers (villagebloom.js)
     today: v.today || v.bloom?.today || '', // the season follows this day (seasons.js)
@@ -431,6 +433,8 @@ export function villageHtml(v) {
         <span class="v-bubble">${a.step && st !== 'done' && st !== 'pending' ? `<span class="v-step">${a.step}</span>` : ''}<span class="v-icon">${esc(a.icon)}</span>${badge}</span>
         <canvas class="v-sprite" width="16" height="${villagerGrid(p.kind).length}"></canvas>
         <span class="v-hearts" aria-hidden="true"></span>
+        ${v.asks?.[p.kind] ? '<span class="v-ask" aria-hidden="true">📷</span>' : ''}
+        ${v.given?.[p.kind] ? `<span class="v-given" aria-hidden="true"><img src="${esc(v.given[p.kind])}" alt=""></span>` : ''}
       </button>`;
   }).join('');
   const keeper = L.shop ? `<button class="villager keeper st-${shop.open ? 'done' : 'todo'}" data-kind="badger" data-shop="1" style="left:${L.shop.x}px;top:${L.shop.y}px;z-index:${L.shop.y}" aria-label="${esc(villagerName('badger'))}: the shop">
@@ -1206,6 +1210,8 @@ function mount(section, handlers) {
       // in the first days of a season (or when a parent is trying one), a villager may say so
       else if (isNewSeason(se.progress, se.tried)) { const line = seasonLine(se.season, `${data.today}|${p.id}|${hintTaps}`); if (line) text += ` ${line}`; }
     }
+    // a photo request (photoreq.js): the villager asks too
+    if (!coach && data.asks?.[p.kind]) text += ` And one more thing: ${data.asks[p.kind]} 📷`;
     open(card(villagerName(p.kind), text, quest, buttons), p.kind, doneAll(p) || mode === 'thanks', p.id, text);
     el?.classList.add('chatting');
     setTimeout(() => el?.classList.remove('chatting'), 600);

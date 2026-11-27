@@ -20,6 +20,8 @@ import { recordFind } from './finds.js';
 import { shownSeason } from './seasons.js';
 import { recordPhoto, keepPhoto, addClue, spendClues } from './album.js';
 import { critterById } from './critters.js';
+import { giveIfAsked, requestsOf, askText } from './photoreq.js';
+import { villagerName } from './village.js';
 import { recordFan } from './fans.js';
 import { playXmas, photoXmas } from './xmas-ui.js';
 import {
@@ -139,6 +141,10 @@ export function playWith(kid, v, kind) {
     sounds,
     // the photo train: clues the kid has found toward each map's legend
     clues: (map) => kid.critterClues?.[map] || 0,
+    // the photo train: villagers' photo requests (photoreq.js), shown on the ride
+    requests: kind === 'train' ? requestsOf(kid, today()).open.map((q) => ({ c: q.c, want: q.want, text: `${villagerName(q.by)}: ${askText(q)}` })) : [],
+    // the photo train: this map's animals in the album (ROUTE_AT of them opens its side track)
+    found: (map) => Object.keys(kid.critterAlbum || {}).filter((id) => critterById(id)?.map === map).length,
     // the photo train: a ride after dark in Denver (or after 7 PM) is a night ride
     night: kind === 'train' && rideIsNight(),
     // the daily limit, and a borrowed ball, stick or rod only for a couple of games: "play again"
@@ -255,6 +261,9 @@ export function playWith(kid, v, kind) {
     // stays on this device; the game fills in shot.pic when it draws next)
     onPhoto: (shot) => {
       const kid = currentKid(kid0);
+      // a photo a villager asked for is given to them (and hung up beside them in the village)
+      const gave = giveIfAsked(kid, shot, today());
+      if (gave) { shot.gift = `Given to ${villagerName(gave.q.by)}! ${gave.frame ? 'A free photo frame!' : '+1 free print'}`; save(); }
       photoXmas(kid.id, critterById(shot.critter), shot.quality); // December: a map's first perfect holiday critter photo
       const got = recordPhoto(kid.critterAlbum, shot, today());
       if (!got.isNew) return null;

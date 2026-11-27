@@ -175,6 +175,7 @@ const SHELL = [
   'js/albumview.js',
   'js/prints.js',
   'js/printsview.js',
+  'js/photoreq.js',
   'js/fishart.js',
   'js/football.js',
   'js/fieldlooks.js',
