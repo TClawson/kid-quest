@@ -3,6 +3,7 @@
 //   from off the right edge, never flicker (turn around twice within 0.7 s),
 //   never sit inside the lake bed, and the session ends
 // - a hooked fish has the line at its mouth
+// - time's up with a big fish on far out: the kid still gets to reel it in (it takes over 15 s)
 // - in the app: a visitor with a fishing rod goes fishing with you, the first
 //   tap starts the clock, points are kept as the kid's best, and the biggest of
 //   each kind of fish goes in the kid's fish book (kid.fishRecords)
@@ -68,6 +69,29 @@ try {
       assert.equal(r.phase, 'over', `${where}: the session ends after 90 s`);
       assert.ok(r.toldOk, `${where}: every fish the kid lands is reported for the fish book`);
     }
+    // time's up with a big fish hooked at the far side: the game waits while the kid reels it in
+    // (a kid-like reeler: holds, lets go when the line is red, 0.35 s late), and ends once it's landed
+    const big = await page.evaluate(async () => {
+      const { Fishing } = await import('./js/fishing.js');
+      const g = new Fishing({ W: 640, H: 400, map: 'bg-meadow', seed: 3, day: '2026-11-27', kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { rod: 1 } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} }, gear: { rod: 1 } } });
+      g.phase = 'play';
+      for (let i = 0; i < 900 && !g.fish.some((x) => x.state === 'swim'); i += 1) g.step(1 / 30);
+      const L = g.lines.kid; const f = g.fish.find((x) => x.state === 'swim');
+      f.size = 1;
+      L.state = 'water'; L.x = g.W - 12; L.y = g.surface + 20; L.held = true; L.downAt = g.t - 1;
+      g.hook(L, f);
+      g.left = 0.5;
+      let t = 0; let want = true; let at = null;
+      while (g.phase === 'play' && t < 120) {
+        const w = L.tension > 0.85 ? false : L.tension < 0.35 ? true : want;
+        if (w !== want) { if (at === null) at = t + 0.35; if (t >= at) { want = w; at = null; L.held = want; L.downAt = g.t - 1; } }
+        g.step(1 / 30); t += 1 / 30;
+      }
+      return { t, phase: g.phase, caught: g.catches.filter((c) => c.who === 'kid').length };
+    });
+    assert.ok(big.t > 15, `a big fish far out takes more than 15 s to reel in (${big.t.toFixed(1)} s)`);
+    assert.equal(big.caught, 1, 'time\'s up does not cut off a big fish being reeled in');
+    assert.equal(big.phase, 'over', 'the game ends once it is landed');
     if (!results.some((r) => r.hooked > 0)) console.log(JSON.stringify(results));
     assert.ok(results.some((r) => r.hooked > 0), 'fish get hooked');
     assert.ok(results.some((r) => r.points.kid + r.points.vis > 0), 'catches score points');

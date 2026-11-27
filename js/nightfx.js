@@ -94,12 +94,19 @@ export function nightFilter(mapId, id = `kq-night-${mapId}`) {
  * moonlit blue (about 80% bright) away from the lights, and warm, almost day-bright, in a pool of
  * light. Two filters: #kq-folk-<map> and #kq-folk-lit-<map>.
  */
-export function folkFilters(mapId) {
+const FOLK_MOON = [[0.72, 0.04, 0.04, 4], [0.03, 0.76, 0.07, 8], [0.03, 0.07, 0.86, 30]];
+/** The characters' night matrix on a map: moonlit, or warm (lit) in a pool of light. */
+export function folkMatrix(mapId, lit = false) {
+  if (!lit) return FOLK_MOON;
   const t = nightSpec(mapId).light;
+  return [[0.94 * t[0], 0.04, 0.02, 10], [0.02, 0.92 * t[1], 0.03, 6], [0.02, 0.04, 0.86 * t[2] + 0.06, 8]];
+}
+
+export function folkFilters(mapId) {
   const row = (r) => `${r[0]} ${r[1]} ${r[2]} 0 ${(r[3] / 255).toFixed(3)}`;
   const mat = (M) => `${row(M[0])} ${row(M[1])} ${row(M[2])} 0 0 0 1 0`;
-  const moon = [[0.72, 0.04, 0.04, 4], [0.03, 0.76, 0.07, 8], [0.03, 0.07, 0.86, 30]];
-  const lit = [[0.94 * t[0], 0.04, 0.02, 10], [0.02, 0.92 * t[1], 0.03, 6], [0.02, 0.04, 0.86 * t[2] + 0.06, 8]];
+  const moon = folkMatrix(mapId, false);
+  const lit = folkMatrix(mapId, true);
   return `<svg class="kq-night-defs" width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="kq-folk-${mapId}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${mat(moon)}"/></filter><filter id="kq-folk-lit-${mapId}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${mat(lit)}"/></filter></svg>`;
 }
 
@@ -455,6 +462,44 @@ function drawAurora(px, a, f, moon) {
     const col = edge < 2 && best > 0.5 ? '#c8ffe0' : edge < 6 ? '#6aeeb0' : edge < 14 ? '#3cc49c' : best > 0.25 ? '#4a8ac8' : '#7a62c8';
     px(x, y, col);
   }
+}
+
+// ---------- night colors baked into canvases ----------
+// A CSS filter: url(#svg-filter) on a <canvas> draws nothing at all on the family's Android tablet
+// (2026-11-27: villagers gone but their fishbowls left, the rainforest's vine and the garden's
+// trees gone at night). The filter on a plain element (the buddy's box, a fishbowl) is fine, so
+// every canvas in the village takes its night colors in its own pixels instead.
+
+/** Copies src into dst (same size) through the color matrix M (nightSpec(map).m or folkMatrix). */
+export function nightPixels(src, dst, M) {
+  const W = src.width; const H = src.height;
+  if (dst.width !== W) dst.width = W;
+  if (dst.height !== H) dst.height = H;
+  const out = dst.getContext('2d');
+  if (!W || !H) return;
+  const img = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H);
+  const d = img.data; const u = new Uint32Array(d.buffer);
+  for (let i = 0, j = 0; j < u.length; j += 1, i += 4) {
+    if (!u[j]) continue; // see-through: most of a layer
+    const n = nightRgb(d[i], d[i + 1], d[i + 2], M);
+    d[i] = n[0]; d[i + 1] = n[1]; d[i + 2] = n[2];
+  }
+  out.putImageData(img, 0, 0);
+}
+
+const folkCache = new WeakMap();
+/** A character's sprite at night (moonlit, or warm when lit), kept for next time. */
+export function folkSprite(canvas, mapId, lit = false) {
+  const k = `${mapId}|${lit ? 1 : 0}`;
+  let kept = folkCache.get(canvas);
+  if (!kept) { kept = new Map(); folkCache.set(canvas, kept); }
+  if (!kept.has(k)) {
+    const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+    nightPixels(canvas, c, folkMatrix(mapId, lit));
+    c.ax = canvas.ax; c.ay = canvas.ay;
+    kept.set(k, c);
+  }
+  return kept.get(k);
 }
 
 const spriteCache = new WeakMap();
