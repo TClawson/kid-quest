@@ -1001,6 +1001,150 @@ export const CRITTERS = [
     wow: 'Reindeer are the only deer where the girls grow antlers too. Their eyes turn from gold in summer to blue in winter, to see in the long dark, and their knees click as they walk!',
     fun: 'Comet reindeer fly between the golden planets, leaving a trail of stardust. If you hear jingling in Golden Galaxy, look up!',
   },
+  // ---------- secret animals (Taylor, 2026-11-27): two a map, very rare ----------
+  // night: only on a night ride (after dark in Denver, or after 7 PM); about 1 night ride in 2
+  // brings it (NIGHT_SHARE). route: any ride, about 1 in 40 (SECRET_SHARE), and it lives on the
+  // map's hidden side route, where it comes far more often.
+  {
+    id: 'meadow-flyingsquirrel', map: 'bg-meadow', name: 'Northern flying squirrel', rarity: 'secret', night: true, how: ['perch', 'rise'], from: 'tree',
+    look: { plan: 'small', len: 26, fur: '#9c8466', belly: '#f8f1e3', dark: '#3b2f22', tail: 'bushy', ears: 'round', sits: true, bigEyes: true, bodyH: 0.22 },
+    where: 'Northern flying squirrels live in the cold pine and fir forests of Canada, Alaska and the northern United States, sleeping in tree holes by day.',
+    eats: 'Mushrooms and truffles dug from the ground most of all, plus lichens, nuts, seeds and buds.',
+    wow: 'They don\'t really fly: they leap and glide on a furry flap of skin between their front and back legs, steering with their flat tail. One glide can cross a whole football field!',
+  },
+  {
+    id: 'meadow-bobcat', map: 'bg-meadow', name: 'Bobcat', rarity: 'secret', route: true, how: ['step', 'step'], from: 'rock',
+    look: { plan: 'quad', len: 30, fur: '#b08a5e', belly: '#f1e3c8', legs: 0.26, bulk: 0.45, legW: 0.12, neck: 0.12, headR: 0.25, snout: 0.2, ears: 'lynx', tail: 'short', tailTag: 'dark', dark: '#3b2a1a', mark: 'spots', spotTag: 'dark' },
+    where: 'Bobcats live all over North America, from Canadian forests to Mexican deserts, and even at the edges of towns. They are very good at not being seen.',
+    eats: 'Rabbits and hares most of all, plus mice, squirrels and birds.',
+    wow: 'A bobcat is named for its short "bobbed" tail. It is about twice as big as a pet cat and can leap 10 feet in one pounce.',
+  },
+  {
+    id: 'fjord-wolf', map: 'bg-fjord', name: 'Gray wolf', rarity: 'secret', night: true, how: ['step', 'step'], from: 'tree', land: true,
+    look: { plan: 'quad', len: 38, fur: '#8e8a86', belly: '#e9ecef', dark: '#343a40', ears: 'point', tail: 'bushy', legs: 0.34, bulk: 0.5, legW: 0.11, neck: 0.1, headR: 0.22, muzzle: true, snout: 0.9, extra: 'ruff' },
+    where: 'Gray wolves live in the forests, mountains and tundra of Alaska, Canada and parts of the northern United States, Europe and Asia, in family packs.',
+    eats: 'Big animals like moose, caribou, deer and elk, hunted together as a pack, plus beavers and salmon in Alaska.',
+    wow: 'A wolf\'s howl can be heard about 6 miles away. Each wolf has its own voice, and a pack howls together to say "this is our home".',
+  },
+  {
+    id: 'fjord-wolverine', map: 'bg-fjord', name: 'Wolverine', rarity: 'secret', route: true, how: ['step'], from: 'rock', land: true,
+    look: { plan: 'quad', len: 30, fur: '#4a3426', belly: '#c49a6c', dark: '#1e1510', legs: 0.22, bulk: 0.55, legW: 0.13, neck: 0.04, headIn: 0.06, headR: 0.24, ears: 'round', tail: 'bushy', muzzle: true, snout: 0.6, mark: 'chest', accent: '#d9a066' },
+    where: 'Wolverines live in the snowy mountains and forests of Alaska, Canada, Scandinavia and Russia. Each one roams a huge area.',
+    eats: 'Almost anything: leftovers from wolves\' hunts, small animals, eggs, roots and berries.',
+    wow: 'A wolverine is the biggest weasel that lives on land, and one of the toughest animals there is: it can climb a mountain in winter without stopping to rest.',
+  },
+  {
+    id: 'space-jerboa', map: 'bg-space', name: 'Moon jerboa', rarity: 'secret', night: true, how: ['hop', 'hop'], from: 'rock', cousin: 'long-eared jerboa',
+    look: { plan: 'hop', len: 18, fur: '#d8c8f0', belly: '#ffffff', dark: '#7d82a8', ears: 'long', tail: 'long', eye: '#3b2e6e', bigEyes: true },
+    where: 'The long-eared jerboa lives in the sandy deserts of Mongolia and China. It hides in a burrow all day and comes out only at night.',
+    eats: 'Mostly flying insects like beetles and moths, which it catches in the dark.',
+    wow: 'Its ears are bigger than its head, and it hops on its long back legs like a tiny kangaroo, steering with a long tufted tail. It was only filmed in the wild for the first time in 2007!',
+  },
+  {
+    id: 'space-axolotl', map: 'bg-space', name: 'Moon axolotl', rarity: 'secret', route: true, how: ['rise', 'step'], from: 'rock', cousin: 'axolotl',
+    look: { plan: 'lizard', len: 46, fur: '#f8b4d0', face: '#ffc9de', extra: 'crest', accent: '#e64980', mark: 'spots', dark: '#a61e4d' },
+    where: 'Real axolotls live in just one place in the wild: the canals and lakes of Xochimilco, by Mexico City.',
+    eats: 'Worms, bugs, little fish and tadpoles, sucked up like a vacuum cleaner.',
+    wow: 'An axolotl can grow back a lost leg, its tail, even parts of its heart and brain! The frilly things on its head are gills, so it can breathe underwater all its life.',
+  },
+  {
+    id: 'castle-marten', map: 'bg-castle', name: 'Pine marten', rarity: 'secret', night: true, how: ['perch', 'rise', 'run'], from: 'tower',
+    look: { plan: 'small', len: 26, fur: '#6b3e22', belly: '#f2c86a', dark: '#2b180c', tail: 'bushy', ears: 'round', sits: true, bodyH: 0.18 },
+    where: 'Pine martens live in old woods across Europe, including Scotland, Wales and Ireland, sleeping in tree holes and old buildings.',
+    eats: 'Voles and squirrels, birds, eggs, beetles and lots of berries in autumn.',
+    wow: 'A pine marten has a creamy-yellow "bib" on its chest, and no two are the same. It can climb down a tree head first and leap from branch to branch like a squirrel.',
+  },
+  {
+    id: 'castle-boar', map: 'bg-castle', name: 'Wild boar', rarity: 'secret', route: true, how: ['step', 'run'], from: 'bush',
+    look: { plan: 'quad', len: 38, fur: '#4a3a2e', belly: '#6e5a48', dark: '#1e1712', legs: 0.22, bulk: 0.62, legW: 0.12, neck: 0.02, headIn: 0.1, headR: 0.22, ears: 'point', tail: 'short', snout: 1.3, nose: '#c9a0a0', extra: 'tusks' },
+    where: 'Wild boar live in woods and marshes across Europe and Asia, and they have come back to some English woods after hundreds of years.',
+    eats: 'Acorns, beech nuts, roots, mushrooms and worms, dug up with their strong snout.',
+    wow: 'Baby boar are called humbugs because they are striped like the candy! Their stripes help them hide in the woods and fade by the time they are 6 months old.',
+  },
+  {
+    id: 'sunset-horseshoe', map: 'bg-sunset', name: 'Atlantic horseshoe crab', rarity: 'secret', night: true, how: ['rise', 'step'], from: 'burrow',
+    look: { plan: 'horseshoe', len: 30, fur: '#7a5a3a', belly: '#c8a070', dark: '#3d2a18' },
+    where: 'Horseshoe crabs live along the Atlantic coast from Maine to Mexico, and crawl up onto beaches on spring nights to lay their eggs.',
+    eats: 'Clams, worms and little crabs, which they crush with spiny bits on their legs.',
+    wow: 'Horseshoe crabs are older than the dinosaurs: they have been around for about 450 million years! They aren\'t true crabs, and their blood is blue.',
+  },
+  {
+    id: 'sunset-panther', map: 'bg-sunset', name: 'Florida panther', rarity: 'secret', route: true, how: ['step', 'step'], from: 'tree',
+    look: { plan: 'quad', len: 40, fur: '#c49a6c', belly: '#f1e3c8', dark: '#3b2a1a', ears: 'round', tail: 'long', legs: 0.3, bulk: 0.42, legW: 0.11, neck: 0.1, headR: 0.2, muzzle: true, snout: 0.4 },
+    where: 'Florida panthers live only in the swamps, forests and prairies of southern Florida. They are a kind of cougar, also called a mountain lion.',
+    eats: 'White-tailed deer and wild hogs most of all, plus raccoons and armadillos.',
+    wow: 'There are only about 200 Florida panthers in the wild, so seeing one is very rare. A panther can leap 15 feet straight up into a tree.',
+  },
+  {
+    id: 'ocean-squid', map: 'bg-ocean', name: 'Caribbean reef squid', rarity: 'secret', night: true, how: ['fly'], from: 'sky',
+    look: { plan: 'squid', len: 36, fur: '#c9a06a', belly: '#f3d9b1', dark: '#7a4e22', mark: 'spots', accent: '#74c0fc' },
+    where: 'Caribbean reef squid live over the coral reefs and seagrass of the Caribbean Sea and the coast of Florida, often in little groups.',
+    eats: 'Small fish and shrimp, caught with two long arms that shoot out.',
+    wow: 'Reef squid "talk" by changing colors and patterns all over their skin in a blink, and one squid can show one pattern on its left side and another on its right!',
+  },
+  {
+    id: 'ocean-sunfish', map: 'bg-ocean', name: 'Ocean sunfish', rarity: 'secret', route: true, how: ['fly'], from: 'sky',
+    look: { plan: 'fish', len: 52, fur: '#9aa8b8', belly: '#d8e0ea', depth: 0.5, fin: true, finTag: 'fur', tailTag: 'fur', mark: 'spots', accent: '#c8d4e0', eye: '#212529' },
+    where: 'Ocean sunfish swim in warm and mild seas all over the world, and come up near the surface to bask in the sun.',
+    eats: 'Jellyfish most of all, plus small fish, squid and sea plants.',
+    wow: 'The ocean sunfish is the heaviest bony fish in the world: as heavy as a car! It starts out smaller than a grain of rice, and it lets seabirds pick little bugs off its skin.',
+  },
+  {
+    id: 'volcano-gull', map: 'bg-volcano', name: 'Swallow-tailed gull', rarity: 'secret', night: true, how: ['perch', 'fly'], from: 'rock',
+    look: { plan: 'bird', len: 22, fur: '#e9ecef', belly: '#ffffff', dark: '#495057', mark: 'cap', accent: '#343a40', beak: '#212529', eye: '#e03131' },
+    where: 'Swallow-tailed gulls nest only on the Galápagos Islands, on cliffs by the sea, and fly out over the ocean to feed.',
+    eats: 'Squid and little fish that come up to the surface of the sea at night.',
+    wow: 'It is the only gull in the world that hunts at night. Its huge eyes, ringed in red, help it see squid in the dark water.',
+  },
+  {
+    id: 'volcano-racer', map: 'bg-volcano', name: 'Galápagos racer', rarity: 'secret', route: true, how: ['rise', 'step'], from: 'rock',
+    look: { plan: 'snake', len: 50, fur: '#5c4a3a', belly: '#e0c896', dark: '#2b221b', mark: 'stripes', accent: '#e0c896' },
+    where: 'Galápagos racers live only on the Galápagos Islands, sliding over the black lava rock and the sandy beaches.',
+    eats: 'Lava lizards, geckos, and baby marine iguanas as they hatch.',
+    wow: 'Racers wait together on the beach when baby iguanas hatch, then chase them over the rocks. Filmmakers caught it on camera, and it became one of the most famous chases in nature films!',
+  },
+  {
+    id: 'rainforest-kinkajou', map: 'bg-rainforest', name: 'Kinkajou', rarity: 'secret', night: true, how: ['perch', 'rise'], from: 'tree',
+    look: { plan: 'small', len: 30, fur: '#c88a3e', belly: '#f2d39a', dark: '#5a3a1a', tail: 'long', ears: 'round', sits: true, bigEyes: true, bodyH: 0.2 },
+    where: 'Kinkajous live high in the rainforest trees of Central and South America, from Mexico to Brazil, and sleep in tree holes by day.',
+    eats: 'Mostly ripe fruit, especially figs, plus nectar and honey.',
+    wow: 'A kinkajou\'s tongue is about 5 inches long, perfect for licking honey out of bees\' nests: that is why it is called the honey bear. Its tail can hold on to branches like a hand.',
+  },
+  {
+    id: 'rainforest-anteater', map: 'bg-rainforest', name: 'Giant anteater', rarity: 'secret', route: true, how: ['step', 'step'], from: 'bush',
+    look: { plan: 'quad', len: 44, fur: '#6b5a48', belly: '#2b2520', dark: '#1e1915', legs: 0.26, bulk: 0.42, legW: 0.1, neck: 0.04, headR: 0.11, ears: 'round', tail: 'bushy', snout: 3, mark: 'chest', accent: '#e9e0d0' },
+    where: 'Giant anteaters live in the grasslands and rainforests of Central and South America, from Honduras to Argentina.',
+    eats: 'Ants and termites: up to 30,000 in one day!',
+    wow: 'It has no teeth. Its sticky tongue is 2 feet long and flicks in and out 150 times a minute, and it only eats for about a minute at each anthill so the ants don\'t bite back.',
+  },
+  {
+    id: 'rainbow-loris', map: 'bg-rainbow', name: 'Lullaby loris', rarity: 'secret', night: true, how: ['perch', 'rise'], from: 'tree', cousin: 'slow loris',
+    look: { plan: 'small', len: 22, fur: '#e6c8f0', belly: '#fff0f6', dark: '#9c36b5', mark: 'mask', tail: 'none', ears: 'round', sits: true, bigEyes: true, eye: '#5f3dc4', bodyH: 0.22 },
+    where: 'Real slow lorises live in the rainforests of Southeast Asia, from India to Indonesia, high up in the trees.',
+    eats: 'Insects, fruit, flower nectar and tree gum.',
+    wow: 'Slow lorises move very slowly and quietly so nothing notices them, and their huge eyes help them see at night. They are one of the very few mammals with a venomous bite!',
+  },
+  {
+    id: 'rainbow-panda', map: 'bg-rainbow', name: 'Candy panda', rarity: 'secret', route: true, how: ['perch', 'step', 'rise'], from: 'tree', cousin: 'red panda',
+    look: { plan: 'small', len: 28, fur: '#f76707', belly: '#2b1d12', dark: '#5a2a0a', mark: 'mask', tail: 'ring', ears: 'round', sits: true, bodyH: 0.22, headR: 0.22, accent: '#ffffff' },
+    where: 'Real red pandas live in the cool mountain forests of the Himalayas, in Nepal, India, Bhutan, Myanmar and China.',
+    eats: 'Bamboo leaves most of all, plus fruit, acorns and bird eggs.',
+    wow: 'The red panda was called a "panda" about 50 years before the giant panda was! It wraps its fluffy striped tail around itself like a blanket to sleep.',
+  },
+  {
+    id: 'galaxy-ayeaye', map: 'bg-galaxy', name: 'Star aye-aye', rarity: 'secret', night: true, how: ['perch', 'rise'], from: 'tree', cousin: 'aye-aye',
+    look: { plan: 'small', len: 24, fur: '#4a4060', belly: '#8a80a0', dark: '#1e1a2b', tail: 'bushy', ears: 'round', sits: true, bigEyes: true, eye: '#ffd43b', bodyH: 0.2 },
+    where: 'Real aye-ayes live only in the rainforests of Madagascar, an island off Africa.',
+    eats: 'Grubs found inside tree trunks, plus seeds, fruit and nectar.',
+    wow: 'An aye-aye taps on a tree with a super-long middle finger and listens for grubs moving inside, then pokes the finger in to pull them out!',
+  },
+  {
+    id: 'galaxy-okapi', map: 'bg-galaxy', name: 'Golden okapi', rarity: 'secret', route: true, how: ['step', 'step'], from: 'tree', cousin: 'okapi',
+    look: { plan: 'quad', len: 40, fur: '#b8860b', belly: '#fff3bf', dark: '#5a3e0a', legs: 0.55, neck: 0.45, headR: 0.15, ears: 'point', tail: 'short', hooves: true, mark: 'stripes', accent: '#fff9db', muzzle: true, snout: 1.1 },
+    where: 'Real okapis live only in the thick Ituri rainforest of the Democratic Republic of the Congo, in Africa.',
+    eats: 'Leaves, buds, fruit and fungi, pulled off with a long blue tongue.',
+    wow: 'The okapi has zebra stripes on its legs, but it is really the giraffe\'s closest cousin! Scientists in Europe didn\'t know okapis existed until about 1901.',
+  },
 ];
 
 export const RARITIES = {
@@ -1008,6 +1152,8 @@ export const RARITIES = {
   uncommon: { name: 'Uncommon', weight: 5, points: 20 },
   rare: { name: 'Rare', weight: 1.6, points: 40 },
   legend: { name: 'Legend', weight: 0.35, points: 100 },
+  // secret animals come only by a fixed share of each pick (NIGHT_SHARE / SECRET_SHARE), not by weight
+  secret: { name: 'Secret', weight: 0, points: 150 },
 };
 
 export const critterById = (id) => CRITTERS.find((c) => c.id === id);
@@ -1049,7 +1195,7 @@ export function weatherOf(day, season) {
 
 /** The day's Wanted animal on a map: the same one for the whole family (never the legend). */
 export function wantedOf(day, map, season) {
-  const pool = mapCritters(map).filter((c) => isOut(c, season, day) && c.rarity !== 'legend' && !c.how.every((h) => h === 'far') && !c.tunnel);
+  const pool = mapCritters(map).filter((c) => isOut(c, season, day) && c.rarity !== 'legend' && c.rarity !== 'secret' && !c.how.every((h) => h === 'far') && !c.tunnel);
   return pool.length ? pool[Math.floor(hash(`${day}|${map}|wanted`) * pool.length)].id : null;
 }
 
@@ -1066,6 +1212,16 @@ export function wantedOf(day, map, season) {
  * however many animals its map has: a perfect photo of it should be something to boast about.
  */
 export const DECEMBER_SHARE = 0.01;
+/**
+ * The secret animals (Taylor, 2026-11-27: a few very rare ones a map, at certain times of day or
+ * very seldom). Each time an animal comes, a share of all the others' weight, like the December
+ * animals. NIGHT_SHARE: the map's night animal, on a night ride only, about 1 night ride in 2.
+ * SECRET_SHARE: the map's very rare animal, any ride, about 1 ride in 40 (Super camera 75% more).
+ * ROUTE_SHARE: the very rare animal on the map's hidden side route (much likelier there).
+ */
+export const NIGHT_SHARE = 0.03;
+export const SECRET_SHARE = 0.0007;
+export const ROUTE_SHARE = 0.02;
 
 export function oddsFor(map, season, weather, { tier = 1, clue = 0, day = null } = {}) {
   return mapCritters(map).filter((c) => isOut(c, season, day) && !c.tunnel).map((c) => {

@@ -27,6 +27,7 @@ export const HOME_SPOTS = [
   { id: 'art', name: 'Wall art', icon: '🖼️' },
   { id: 'music', name: 'Music corner', icon: '🎶' },
   { id: 'tank', name: 'Fish tank', icon: '🐟', basic: 'home-tank-basic' },
+  { id: 'photos', name: 'Photo wall', icon: '📷' },
 ];
 export const spotById = (id) => HOME_SPOTS.find((s) => s.id === id);
 
@@ -79,6 +80,9 @@ const BASE = [
   { id: 'home-art-stars', spot: 'art', name: 'Night sky painting', art: 'pic', price: 70, look: { c: 'purple', p: 'night' } },
   { id: 'home-art-map', spot: 'art', name: 'Treasure map', art: 'pic', price: 80, look: { c: 'cream', p: 'map' } },
   { id: 'home-art-rainbow', spot: 'art', name: 'Rainbow painting', art: 'pic', price: 70, look: { c: 'pink', p: 'rainbow' } },
+  // the photo wall (Taylor, 2026-11-27): one gallery frame over the bed for 4 prints of perfect
+  // photo train photos (prints.js: 20 coins each, from the critter album)
+  { id: 'home-photo-frame', spot: 'photos', name: 'Photo gallery frame', art: 'gallery', price: 80, look: { c: 'brown', p: 'plain' }, note: 'Hangs over your bed with room for 4 photos. Print any PERFECT photo from your critter album for 20 coins and hang it here. Wood, gold, white or black: change the color any time.' },
 
   // fish tanks: each holds more of the kid's caught fish (fish: how many), with fancier
   // plants, rocks and critters inside. The biggest is built into the front wall (houseart.js).

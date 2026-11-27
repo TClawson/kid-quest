@@ -35,6 +35,22 @@ export function isNightAt(date = new Date()) {
   return t < SUNRISE[m] || t >= SUNSET[m];
 }
 
+/**
+ * Is a photo train ride now a night ride? After dark in Denver, or after 7 PM (so night animals
+ * can be found in summer too, when it gets dark long after the kids' games), until sunrise.
+ * A parent's night/day try-out on this device counts too.
+ */
+export function rideIsNight(date = new Date(), storage = globalThis.localStorage) {
+  let o = null;
+  try { o = storage?.getItem(KEY); } catch { /* no storage */ }
+  if (o === 'day') return false;
+  if (shownNight(date, storage)) return true;
+  try {
+    const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', hour: 'numeric', hourCycle: 'h23' }).format(date));
+    return h >= 19;
+  } catch { return date.getHours() >= 19; }
+}
+
 const KEY = 'kidquest.night';
 /** Night to show: a parent's try-out on this device ('night' or 'day') if set, else the real sky. */
 export function shownNight(date = new Date(), storage = globalThis.localStorage) {

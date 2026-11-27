@@ -370,6 +370,27 @@ function pictureArt(look) {
   }, { ground: false });
 }
 
+/**
+ * The photo wall (prints.js): one gallery frame over the bed with four little windows for prints.
+ * The prints themselves are laid over the windows by house.js (finer pixels than the room), so
+ * the frame shows dark glass where there is no print. color: a prints.js FRAME_COLORS ramp.
+ */
+export const GALLERY = { x: 7, y: 6, w: 39, h: 10, pics: [0, 1, 2, 3].map((i) => ({ x: 2 + i * 9, y: 2, w: 8, h: 6 })) };
+export function galleryArt(ramp4 = ['#5a3418', '#8b5a2b', '#b07a45', '#d9a066']) {
+  const [d, m, l, hi] = ramp4;
+  return sprite(GALLERY.w, GALLERY.h, (b) => {
+    for (let y = 0; y < GALLERY.h; y += 1) for (let x = 0; x < GALLERY.w; x += 1) {
+      const edge = x === 0 || y === 0 || x === GALLERY.w - 1 || y === GALLERY.h - 1;
+      b.set(x, y, edge ? (y === 0 || x === 0 ? hi : d) : '#f4ecd8');
+      if (!edge && (y === 1 || x === 1)) b.set(x, y, '#d8ccb0');
+    }
+    for (const p of GALLERY.pics) for (let y = 0; y < p.h; y += 1) for (let x = 0; x < p.w; x += 1) b.set(p.x + x, p.y + y, x + y === 1 || (x === 1 && y === 1) ? '#8aa0b8' : (y < 2 ? '#4a5a70' : '#3a4658'));
+    // the frame's middle shade along the edges, so it reads as moulding
+    for (let x = 1; x < GALLERY.w - 1; x += 1) { b.set(x, GALLERY.h - 1, m); if (x % 7 === 3) b.set(x, 0, l); }
+    for (let y = 1; y < GALLERY.h - 1; y += 1) b.set(GALLERY.w - 1, y, m);
+  }, { ground: false });
+}
+
 /** The bathroom mirror over the sink. */
 function mirrorArt() {
   return sprite(16, 13, (b) => {
@@ -1086,6 +1107,7 @@ const pieceArt = (item, state = {}) => {
     case 'art': return pictureArt(item.look);
     case 'music': return turntableArt(item);
     case 'tank': return tankThumb(item.art);
+    case 'photos': return galleryArt(state.frame);
     default: return null;
   }
 };
@@ -1158,6 +1180,7 @@ export function paintRoom(canvas, o) {
     blocks.push([p.x - 1, R.floorTop - 2, bed.w + 2, p.y + bed.h - R.floorTop + 2]);
   }
   if (lay.art) { const a = pieceArt(lay.art); a.blit(px, at.art.x, at.art.y); }
+  if (lay.photos) galleryArt(o.frame).blit(px, GALLERY.x, GALLERY.y);
   if (lay.couch) {
     const c = pieceArt(lay.couch);
     shadow(px, at.couch.x + 24, at.couch.y + 34, 24, 2, 0.22);

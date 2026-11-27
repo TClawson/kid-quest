@@ -92,6 +92,11 @@ const px = (b, x, y, tag) => b.set(x, y, tag, tag);
 /** Eyes: side on one eye, posing two (and a shine). */
 function eyes(b, look, hx, hy, r, frame) {
   const col = look.eye || INK;
+  if (look.bigEyes) { // night animals (aye-aye, loris, flying squirrel): big round eyes that catch the light
+    const ds = frame === 'pose' ? [-Math.max(2, Math.round(r * 0.5)), Math.max(1, Math.round(r * 0.5)) - 1] : [-Math.max(2, Math.round(r * 0.45))];
+    for (const d of ds) { b.rect(hx + d, hy - 1, 2, 2, col, 'eye'); b.set(hx + d, hy - 1, '#ffffff', 'shine'); }
+    return [hx, hy];
+  }
   if (frame === 'pose') {
     const d = Math.max(1, Math.round(r * 0.45));
     for (const ex of [hx - d, hx + d]) { b.set(ex, hy, col, 'eye'); if (r >= 4) b.set(ex, hy - 1, col, 'eye'); b.set(ex, hy - (r >= 4 ? 1 : 0), col, 'eye'); }
@@ -215,6 +220,10 @@ function head(b, look, hx, hy, r, frame) {
   }
   if (look.mark === 'blaze') for (let y = -r; y < r * 0.4; y += 1) px(b, Math.round(pose ? hx : hx - r * 0.3), Math.round(hy + y), 'belly');
   if (look.extra === 'beard') thick(b, Math.round(hx - (pose ? 0 : r * 0.5)), Math.round(hy + r * 0.8), Math.round(hx - (pose ? 0 : r * 0.6)), Math.round(hy + r * 1.6), 2, 'fur');
+  if (look.extra === 'tusks') { // a boar's tusks: little white curls at the corners of the snout
+    const tus = pose ? [[hx - r * 0.5, hy + r * 0.55], [hx + r * 0.5, hy + r * 0.55]] : [[hx - r * 0.85 - r * 0.25 * snout, hy + r * 0.55]];
+    for (const [tx, ty] of tus) { b.set(Math.round(tx), Math.round(ty), '#f8f1e3', 'tusk'); b.set(Math.round(tx), Math.round(ty) - 1, '#f8f1e3', 'tusk'); b.set(Math.round(tx) + (pose ? 0 : 1), Math.round(ty) - 2, '#f8f1e3', 'tusk'); }
+  }
   horns(b, look, hx, hy, r, frame);
   b.hd = { x: hx, y: hy, r, ry: r * 0.92, pose };
   return eyes(b, look, hx, hy - (pose ? 0 : 0.3), r, frame);
@@ -723,6 +732,69 @@ const PLANS = {
     }
     for (const s of [-1, 1]) { b.set(Math.round(bx + s * 2), Math.round(by - L * 0.2), 'fur', 'fur'); b.set(Math.round(bx + s * 2), Math.round(by - L * 0.2) - 1, INK, 'eye'); }
     return { feet, eye: [Math.round(bx), Math.round(by - L * 0.2)] };
+  },
+
+  /** Snakes: a long wavy body along the ground; on 'pose' the head and neck rise up to look. */
+  snake(b, look, frame) {
+    const L = look.len;
+    const bx = L * 0.3; const by = L * 0.85; const feet = Math.round(by + 2);
+    const ph = frame === 'walk' ? Math.PI : 0;
+    const w = Math.max(3, Math.round(L * 0.09));
+    const up = frame === 'pose' ? 1 : 0;
+    let prev = null;
+    for (let t = 0; t <= 1; t += 0.02) {
+      const x = bx + t * L * 1.05;
+      const y = by + Math.sin(t * Math.PI * 3 + ph) * L * 0.05 * (0.4 + t);
+      const ww = Math.max(1, Math.round(w * (t > 0.8 ? (1 - t) * 5 : 1)));
+      if (prev) thick(b, Math.round(prev[0]), Math.round(prev[1]), Math.round(x), Math.round(y), ww, 'fur');
+      prev = [x, y];
+      if (look.mark === 'stripes' && Math.round(t * 50) % 6 === 0) px(b, Math.round(x), Math.round(y - 1), 'accent');
+      if (look.mark === 'spots' && Math.round(t * 50) % 5 === 0) px(b, Math.round(x), Math.round(y), 'dark');
+    }
+    // the neck and head: down along the ground, or raised to look at the camera
+    const hx = bx - L * 0.06; const hy = by - up * L * 0.28;
+    thick(b, Math.round(bx), Math.round(by), Math.round(hx + 1), Math.round(hy + 1), w, 'fur');
+    ell(b, hx, hy, L * 0.07, L * 0.05, 'fur');
+    b.hd = { x: hx, y: hy, r: L * 0.07, ry: L * 0.05, pose: Boolean(up) };
+    if (up) { b.set(Math.round(hx - 2), Math.round(hy - 1), INK, 'eye'); b.set(Math.round(hx + 1), Math.round(hy - 1), INK, 'eye'); b.set(Math.round(hx - L * 0.09), Math.round(hy + 1), '#e03131', 'tongue'); b.set(Math.round(hx - L * 0.09) - 1, Math.round(hy + 2), '#e03131', 'tongue'); }
+    else b.set(Math.round(hx - 2), Math.round(hy - 1), INK, 'eye');
+    return { feet, eye: [Math.round(hx), Math.round(hy - 1)] };
+  },
+
+  /** A horseshoe crab: a round domed shell, a smaller back shell and a long spike tail. */
+  horseshoe(b, look, frame) {
+    const L = look.len;
+    const bx = L * 0.6; const by = L * 0.8; const feet = Math.round(by + 2);
+    const tail = frame === 'pose' ? -0.18 : frame === 'walk' ? 0.04 : 0;
+    thick(b, Math.round(bx + L * 0.42), Math.round(by), Math.round(bx + L * 0.95), Math.round(by - L * (0.05 + tail)), 1, 'dark');
+    ell(b, bx + L * 0.3, by - L * 0.04, L * 0.15, L * 0.1, 'fur');
+    for (let k = 0; k < 4; k += 1) px(b, Math.round(bx + L * 0.24 + k * 2), Math.round(by + L * 0.04), 'dark');
+    ell(b, bx, by - L * 0.06, L * 0.32, L * 0.16, 'fur');
+    for (let x = Math.round(bx - L * 0.3); x <= Math.round(bx + L * 0.3); x += 1) b.set(x, Math.round(by + L * 0.08), 'belly', 'belly');
+    thick(b, Math.round(bx - L * 0.25), Math.round(by - L * 0.08), Math.round(bx + L * 0.2), Math.round(by - L * 0.16), 1, 'belly');
+    const ey = Math.round(by - L * 0.1);
+    b.set(Math.round(bx - L * 0.12), ey, INK, 'eye');
+    if (frame === 'pose') b.set(Math.round(bx + L * 0.02), ey, INK, 'eye');
+    return { feet, eye: [Math.round(bx - L * 0.12), ey] };
+  },
+
+  /** A squid: a long mantle with fins at the back, big eyes, arms trailing in front. */
+  squid(b, look, frame) {
+    const L = look.len;
+    const bx = L * 0.75; const by = L * 0.6;
+    const pose = frame === 'pose';
+    const flap = frame === 'walk' ? 1 : 0;
+    for (const s of [-1, 1]) ell(b, bx + L * 0.28, by + s * L * (0.1 + flap * 0.02), L * 0.14, L * 0.06, 'belly');
+    ell(b, bx + L * 0.08, by, L * 0.3, L * 0.1, 'fur');
+    if (look.mark === 'spots') for (let k = 0; k < 5; k += 1) px(b, Math.round(bx - L * 0.05 + k * L * 0.08), Math.round(by - L * 0.03 + (k % 2) * 2), 'accent');
+    ell(b, bx - L * 0.25, by + L * 0.01, L * 0.08, L * 0.08, 'fur');
+    for (let k = 0; k < 5; k += 1) {
+      const a = (k - 2) * (pose ? 0.28 : 0.12);
+      thick(b, Math.round(bx - L * 0.3), Math.round(by + L * 0.02), Math.round(bx - L * 0.3 - Math.cos(a) * L * 0.3), Math.round(by + L * 0.02 + Math.sin(a) * L * 0.3), 1, k % 2 ? 'fur' : 'dark');
+    }
+    const ex = pose ? [bx - L * 0.29, bx - L * 0.2] : [bx - L * 0.26];
+    for (const x of ex) { ell(b, x, by - L * 0.02, 1.6, 1.6, 'belly'); b.set(Math.round(x), Math.round(by - L * 0.02), INK, 'eye'); }
+    return { feet: Math.round(by + L * 0.15), eye: [Math.round(ex[0]), Math.round(by - L * 0.02)] };
   },
 
   /** Snails and slugs. */
