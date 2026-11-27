@@ -2,7 +2,8 @@
 //
 // Every kind of fish the kid can catch in the fishing game is its own species here: each map's
 // lake has five kinds plus one rare fish of its own (fishing.js SPOTS), so 10 maps x 6 = 60,
-// and a December fish that only swims there in December (fishing.js HOLIDAY_FISH), 70 in all.
+// a December fish that only swims there in December (fishing.js HOLIDAY_FISH), and a giant down in
+// the deep water that only the boat reaches (fishing.js DEEP_FISH), 80 in all.
 // The kid's biggest catch of each lives on the kid's own synced record:
 //   kid.fishRecords = { 'meadow-bluegill': { size: 9, points: 22, map: 'bg-meadow', date: '2026-11-09' } }
 // lb is the weight in pounds (what the catch card shows, see fishfacts.js; records from before
@@ -14,7 +15,7 @@
 //   kid.tank.more = [{ species: 'ocean-sword', nickname: 'Pointy' }, ...]
 // (the first stays where it always was, so an older copy of the app still shows it).
 
-import { SPOTS, SPECIES, lookFor } from './fishing.js';
+import { SPOTS, SPECIES, lookFor, baseFor } from './fishing.js';
 import { weightFor, sizeClass, roundLb } from './fishfacts.js';
 
 /** The maps with a fishing spot, in the order the book shows them. */
@@ -26,17 +27,18 @@ export const speciesId = (map, kind) => `${String(map).replace(/^bg-/, '')}-${ki
 const KINDS = Object.keys(SPECIES);
 
 /**
- * Every species: { id, map, mapName, kind, name, rare, december, look, inches: [min, max], len: [min, max] }.
- * december: a December fish (kind 'holiday'), in the lake only in December.
+ * Every species: { id, map, mapName, kind, name, rare, december, deep, look, inches: [min, max], len: [min, max] }.
+ * december: a December fish (kind 'holiday'), in the lake only in December. deep: the deep
+ * water's giant (kind 'deep'), only reached from the boat.
  */
 export const FISH_SPECIES = FISH_MAPS.flatMap((map) => {
   const spot = SPOTS[map];
   const one = (kind, likeKey) => {
-    const base = SPECIES[kind === 'special' ? spot.special.as : kind === 'holiday' ? spot.holiday.as : kind];
+    const base = baseFor(map, kind);
     const { name, look } = lookFor(map, kind);
-    return { id: speciesId(map, likeKey), map, mapName: spot.name, kind, name, rare: kind === 'special', december: kind === 'holiday', look, inches: base.inches, len: base.len };
+    return { id: speciesId(map, likeKey), map, mapName: spot.name, kind, name, rare: kind === 'special', december: kind === 'holiday', deep: kind === 'deep', look, inches: base.inches, len: base.len };
   };
-  return [...KINDS.map((k) => one(k, k)), one('special', spot.special.id), ...(spot.holiday ? [one('holiday', spot.holiday.id)] : [])];
+  return [...KINDS.map((k) => one(k, k)), one('special', spot.special.id), ...(spot.deep ? [one('deep', spot.deep.id)] : []), ...(spot.holiday ? [one('holiday', spot.holiday.id)] : [])];
 });
 const BY_ID = new Map(FISH_SPECIES.map((s) => [s.id, s]));
 

@@ -66,6 +66,7 @@
 .fb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 6px; }
 /* a lake with nothing caught yet: just a row of shapes to find */
 .fb-grid.mini { grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.fishbook .fb-grid.mini { grid-template-columns: repeat(8, 1fr); } /* a lake's eight fish in one row */
 .fb-grid.mini .fb-fish { grid-template-rows: 26px; padding: 4px 2px; }
 .fb-grid.mini .fb-fish img { height: 26px; }
 .fb-grid.mini .fb-fish b, .fb-grid.mini .fb-fish small { display: none; }
@@ -101,6 +102,12 @@ button.fb-fish:hover, button.fb-fish:focus-visible { border-color: var(--px-ink)
 .fp-mine b { display: block; font: 700 1.25rem/1.1 var(--px-font); }
 .fp-mine small { color: var(--muted); font-size: 0.8rem; }
 .fp-head.december { border-color: #e03131; }
+.fp-head.deep { border-color: #1864ab; }
+.fb-fish.deep { border: 3px solid #1864ab; background: linear-gradient(#fff, #e7f5ff); }
+.fb-fish.deep::after { content: '🌊 Deep'; position: absolute; top: 3px; right: 4px; font: 700 0.7rem/1 var(--px-font); color: #1864ab; }
+.fb-fish.none.deep { background: #dceaf6; border-style: dashed; }
+.fb-grid.mini .fb-fish.deep::after { content: '🌊'; top: 1px; right: 2px; }
+.fp-deep { padding: 6px 10px; background: #e7f5ff; border: 2px dashed #4dabf7; border-radius: 6px; font-size: 0.9rem; }
 .fp-december { padding: 6px 10px; background: #fff5f5; border: 2px dashed #ff8787; border-radius: 6px; font-size: 0.9rem; }
 .fp-pretend { padding: 6px 10px; background: #f3f0ff; border: 2px dashed #b197fc; border-radius: 6px; font-size: 0.9rem; }
 .fp-scale { position: relative; margin: 6px 0 4px; padding-top: 16px; }

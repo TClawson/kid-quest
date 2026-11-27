@@ -64,7 +64,7 @@ import { viewCompose, mountCompose, composeActions, openCompose } from './compos
 import { SEASONS, shownSeason, trySeason, seasonOf } from './seasons.js';
 import {
   SPECIES, SLOTS, ITEMS, itemById, comingSoon, inSeason, isUnlocked, needLabel, needGap, pianoDaysNeeded, LEGACY_LEVEL, wandPower, defaultBuddy, restingMood, isWorn, ownedFor, addOwned, fitsSpecies, moveWornToBuddy, switchSpecies, hasSpecies, speciesById, buddyOwnedId,
-  SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear,
+  SPORTS, MOVES, unlockedMoves, pickMove, moveWeeks, bestGear, needsGear,
 } from './items.js';
 import { pickVisitors, visitorLines, milestoneBrag, milestoneCheer, MAX_VISITORS } from './visits.js';
 import { GAME_NAMES } from './play.js';
@@ -1575,17 +1575,17 @@ function openFishBook(kid, scrollTo = 0) {
         <h3>🎣 ${esc(page.name)} <small>${n} of ${page.fish.length}</small></h3>
         <div class="fb-grid ${n ? '' : 'mini'}">
           ${page.fish.map((f) => (f.record ? `
-            <button class="fb-fish ${f.rare ? 'rare' : ''} ${f.december ? 'december' : ''}" data-action="fish-page" data-species="${esc(f.id)}">
+            <button class="fb-fish ${f.rare ? 'rare' : ''} ${f.december ? 'december' : ''} ${f.deep ? 'deep' : ''}" data-action="fish-page" data-species="${esc(f.id)}">
               ${inTank.has(f.id) ? '<span class="fb-tank" title="In your tank">🐟</span>' : ''}
               <img src="${fishImg(f.id)}" alt="">
               <b>${esc(f.name)}</b>
               <span class="fb-size">${fishBadge(f.id, f.record)}${fmtWeight(recordLb(f.id, f.record))}</span>
               <small>${esc(fishDate(f.record.date))}</small>
             </button>` : `
-            <div class="fb-fish none ${f.rare ? 'rare' : ''} ${f.december ? 'december' : ''}" title="${f.december ? 'Only in December!' : f.rare ? 'A rare fish!' : 'Not caught yet'}">
+            <div class="fb-fish none ${f.rare ? 'rare' : ''} ${f.december ? 'december' : ''} ${f.deep ? 'deep' : ''}" title="${f.december ? 'Only in December!' : f.deep ? 'A giant! Only out in deep water, from the boat' : f.rare ? 'A rare fish!' : 'Not caught yet'}">
               <img src="${fishImg(f.id, true)}" alt="">
               <b>???</b>
-              <small>${f.december ? 'Only in December!' : f.rare ? 'A rare fish!' : 'Not caught yet'}</small>
+              <small>${f.december ? 'Only in December!' : f.deep ? 'Deep water, by boat!' : f.rare ? 'A rare fish!' : 'Not caught yet'}</small>
             </div>`)).join('')}
         </div>
       </div>`;
@@ -1629,17 +1629,18 @@ function openFishPage(kid, id) {
   openModal(`
     <div class="fishpage" style="--kid:${esc(kid.color)}">
       <button class="btn ghost small-btn fp-back" data-action="fish-book-back">◀ Fish book</button>
-      <div class="fp-head ${sp.rare ? 'rare' : ''} ${sp.december ? 'december' : ''}">
+      <div class="fp-head ${sp.rare ? 'rare' : ''} ${sp.december ? 'december' : ''} ${sp.deep ? 'deep' : ''}">
         <img src="${fishImg(id)}" alt="">
         <div>
-          <h2>${sp.rare ? '⭐ ' : ''}${sp.december ? '❄️ ' : ''}${esc(sp.name)}</h2>
-          <p class="muted small">${esc(sp.mapName)}${sp.december ? ' · December fish' : ''}</p>
+          <h2>${sp.rare ? '⭐ ' : ''}${sp.december ? '❄️ ' : ''}${sp.deep ? '🌊 ' : ''}${esc(sp.name)}</h2>
+          <p class="muted small">${esc(sp.mapName)}${sp.december ? ' · December fish' : ''}${sp.deep ? ' · Deep water giant' : ''}</p>
         </div>
       </div>
       <div class="fp-mine" style="--cls:${c?.color || '#868e96'}">
         <span class="fp-badge">${c?.icon || ''}</span>
         <div><b>Your biggest: ${fmtWeight(lb)}</b><small>${c ? `${c.name}${cls === 'trophy' ? '! Wow!' : ''}` : ''} · ${esc(fishDate(rec.date))}</small></div>
       </div>
+      ${sp.deep ? `<p class="fp-deep">🌊 <b>A giant from the deep!</b> ${real.deepFact ? `${esc(real.deepFact)} ` : ''}It lives only out past the buoy, where the lake bed drops away, so you can only catch it from your boat. It doesn't come every day!</p>` : ''}
       ${real.december ? `<p class="fp-december">🎄 <b>A December fish!</b> ${esc(real.december)} It swims in the lake only in December, and comes back every year.</p>` : ''}
       ${real.pretend ? `<p class="fp-pretend">✨ The ${esc(sp.name.toLowerCase())} is a pretend fish: it lives only in this game. Its real-life cousin is the <b>${esc(real.name)}</b>, so its weights and facts here are the real cousin's.</p>` : ''}
       <h3>⚖️ How big do they get?</h3>
@@ -2306,6 +2307,7 @@ function viewWardrobe() {
     const open = isUnlocked(item, prog);
     const shut = !open && needsMusicHouse(item) && !musicTier(prog); // sold once the music house opens
     const soon = !open && comingSoon(item);
+    const needs = !open && needsGear(item, prog.owned); // the boat waits for a fishing rod
     const on = item.home ? isPlaced(kid, item) : kid.buddy.outfit[item.slot] === item.id;
     // the wand's picture is lit all the way, to show what it does
     const preview = { ...kid.buddy, wand: 1, outfit: item.slot === 'background' ? { background: item.id } : { background: 'none', [item.slot]: item.id } };
@@ -2317,7 +2319,7 @@ function viewWardrobe() {
             ${item.home ? `<span class="spot-tag">${spotById(item.spot).icon} ${esc(spotById(item.spot).name)}</span>` : ''}
             <span class="item-art">${item.home ? `<img class="home-thumb" src="${homeThumb(item.id)}" alt="">` : item.noHold ? `<img class="home-thumb" src="${boatThumb()}" alt="">` : buddySvg(preview, 'happy', { background: item.slot === 'background' })}</span>
             <span class="item-name">${esc(item.name)}${fresh.has(item.id) ? ' <span class="badge">new</span>' : ''}</span>
-            <small>${open ? wearing : soon ? (releaseDay(item) ? `🔒 Coming ${esc(releaseLabel(releaseDay(item)))}` : '🔒 Coming soon') : shut ? '🔒 Opens with your music house' : price || `🔒 ${esc(needLabel(item))}`}</small>
+            <small>${open ? wearing : needs ? '🔒 Buy a fishing rod first' : soon ? (releaseDay(item) ? `🔒 Coming ${esc(releaseLabel(releaseDay(item)))}` : '🔒 Coming soon') : shut ? '🔒 Opens with your music house' : price || `🔒 ${esc(needLabel(item))}`}</small>
             ${!open && item.need?.pianoWeeks ? `<small class="piano-need">${Math.min(prog.pianoBest, pianoDaysNeeded(item, prog))} of ${pianoDaysNeeded(item, prog)} piano days</small>` : ''}
           </button>`;
   }).join('')}
@@ -3507,6 +3509,7 @@ const actions = {
     if (!isUnlocked(item, prog) && needsMusicHouse(item) && !musicTier(prog)) { sounds.error(); toast('🔒 This opens with your music house. Keep up your piano streak to earn your first piano!'); return; }
     if (!isUnlocked(item, prog) && comingSoon(item)) { sounds.error(); toast(releaseDay(item) ? `🔒 ${item.name} comes to the shop on ${releaseLabel(releaseDay(item))}!` : `🔒 ${item.name} is coming soon. Its song is still being written!`); return; }
     if (!isUnlocked(item, prog) && !inSeason(item, today())) { sounds.error(); toast(`🎄 ${item.name} is back in the shop next December!`); return; }
+    if (!isUnlocked(item, prog) && needsGear(item, prog.owned)) { sounds.error(); toast(`🔒 The ${lower(item.name)} goes on sale once you have a fishing rod. Buy a rod first! 🎣`); return; }
     if (!isUnlocked(item, prog) && (item.price || item.gems)) { buyItem(kid, item, prog); return; }
     if (!isUnlocked(item, prog)) { sounds.error(); toast(`Win it with a ${needLabel(item)}`); return; }
     if (item.home) {
@@ -3577,6 +3580,7 @@ const actions = {
     if (!item || prog.owned.includes(item.id) || !fitsSpecies(item, kid.buddy.species)) { closeModal(); return; }
     if (needsMusicHouse(item) && !musicTier(prog)) { closeModal(); return; }
     if (comingSoon(item)) { closeModal(); return; }
+    if (needsGear(item, prog.owned)) { closeModal(); return; } // the boat: a fishing rod first
     if (!inSeason(item, today())) { closeModal(); return; } // December-only, and December is over
     if (item.gems) {
       if (prog.gems < item.gems) { closeModal(); return; }

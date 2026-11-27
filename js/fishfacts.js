@@ -265,6 +265,69 @@ export const REAL_FISH = {
     eats: 'Seaweed and algae that grow on the reef.',
     wow: 'Grown-up unicornfish grow a horn on their foreheads, just like a unicorn! Nobody is sure what the horn is for. Like their cousins the tangs, they have sharp blades beside their tails, blue ones on this kind.',
   },
+  // the deep water's giants (fishing.js DEEP_FISH), one for each lake, only reached from the boat
+  sturgeon: {
+    name: 'Lake sturgeon', w: [5, 15, 40, 100, 200],
+    where: 'Lake sturgeon live in big lakes and rivers in the middle of North America, from the Great Lakes and the Mississippi River up to Hudson Bay. They cruise slowly along the bottom of the deepest water.',
+    eats: 'Snails, clams, crayfish, insect larvae and worms from the mud. A sturgeon has no teeth: it feels for food with four whiskers called barbels, then shoots its mouth out and sucks the food up like a vacuum cleaner.',
+    wow: 'Sturgeon have been around since the time of the dinosaurs, and lake sturgeon can live longer than people: one caught in 1953 was about 152 years old! Instead of scales, they wear rows of bony plates called scutes, like armor. Sometimes they leap right out of the water, and nobody is sure why.',
+  },
+  wels: {
+    name: 'Wels catfish', w: [5, 15, 40, 110, 250],
+    where: 'Wels catfish live in big, slow rivers and deep lakes across Europe and western Asia. In the daytime they hide in deep holes, under sunken trees and in the shadows of old walls and bridges.',
+    eats: 'Fish, frogs, crayfish, mice and water birds. Big ones gulp down whole ducks.',
+    wow: 'In France, scientists filmed wels catfish sliding up onto the riverbank to grab pigeons, then wriggling back into the water, a bit like killer whales catching seals on a beach! They are the biggest catfish in Europe and can grow over 8 feet long, longer than a grown-up lying down.',
+  },
+  tarpon: {
+    name: 'Tarpon', w: [5, 20, 60, 120, 250],
+    biggest: '286 lb 9 oz, Rubane, Guinea-Bissau, 2003',
+    where: 'Tarpon live in warm water along the coasts of the Atlantic Ocean: lagoons, mangroves, river mouths and deep channels, from Florida and the Caribbean down to Brazil, and along West Africa.',
+    eats: 'Fish like mullet and sardines, plus crabs and shrimp. They often hunt at night.',
+    wow: 'Tarpon can breathe air! They swim up and gulp it at the surface, so they can live in warm water that has very little oxygen. Anglers call them "silver kings": they leap high out of the water when hooked, and their scales can be as big as your hand. They can live more than 50 years.',
+  },
+  hammerhead: {
+    name: 'Great hammerhead shark', w: [50, 150, 300, 600, 1000],
+    biggest: '1,280 lb, Boca Grande, Florida, 2006',
+    where: 'Great hammerheads swim in warm oceans all around the world: along coral reefs, over sandy flats, and out in the deep blue water past the edge of the reef.',
+    eats: 'Their favorite food is stingrays! They also eat fish, squid, crabs and even other sharks.',
+    wow: 'A hammerhead\'s wide head is packed with tiny sensors that feel the electricity of living animals, so it can find a stingray hiding under the sand. Then it pins the ray down with its hammer! With an eye at each end of its head, it can see above and below itself at the same time.',
+  },
+  arapaima: {
+    name: 'Arapaima (pirarucu)', w: [10, 40, 100, 220, 440],
+    where: 'Arapaima live in the Amazon River basin in South America, in slow rivers, lakes and the forest that floods every rainy season.',
+    eats: 'Mostly fish, plus fruit, seeds, insects, and now and then a bird or small animal at the water\'s surface.',
+    wow: 'An arapaima has to breathe air! It comes up every 5 to 20 minutes to gulp a breath, with a loud cough people can hear far away. It has teeth on its tongue, and its scales are so tough that piranhas can hardly bite through them. Scientists study those scales to design better armor.',
+  },
+  greenlandshark: {
+    name: 'Greenland shark', w: [150, 400, 700, 1500, 2500],
+    where: 'Greenland sharks live in the icy, deep water of the north Atlantic and Arctic Oceans, around Greenland, Iceland, Canada and Norway. They sometimes swim up into the deep fjords.',
+    eats: 'Fish, squid, seals, and whatever sinks to the sea floor. Scientists have found pieces of reindeer, a horse and even a polar bear in their stomachs!',
+    wow: 'Greenland sharks may be the longest-living animals with a backbone: scientists found one that was at least 270 years old, and maybe close to 400! They swim slower than you walk, and they grow only about a centimeter a year, about the width of your fingernail.',
+  },
+  oarfish: {
+    name: 'Giant oarfish', w: [20, 50, 100, 250, 500],
+    where: 'Giant oarfish live in the open ocean all around the world, deep down where sunlight barely reaches. People hardly ever see one alive.',
+    eats: 'Tiny shrimp-like krill, little fish and squid. It has no teeth, so it strains its food out of the water.',
+    wow: 'The giant oarfish is the longest bony fish in the world: it can grow over 26 feet long, longer than a giraffe is tall! It swims standing straight up, waving the long red fin along its back. Sailors who saw one probably started the old stories about sea serpents.',
+  },
+  coelacanth: {
+    name: 'Coelacanth', w: [20, 45, 80, 130, 200],
+    where: 'Coelacanths live in deep, dark water by steep underwater cliffs and caves, near the Comoro Islands off Africa and near Indonesia.',
+    eats: 'Fish, squid and octopus that drift past the cliffs at night.',
+    wow: 'Scientists thought coelacanths died out with the dinosaurs, 66 million years ago, because they only knew them from fossils. Then in 1938 a fishing boat in South Africa caught a live one! Its fins have bones inside, a bit like little legs, and it can live to be 100 years old.',
+  },
+  mola: {
+    name: 'Ocean sunfish (mola)', w: [100, 300, 600, 2000, 5000],
+    where: 'Ocean sunfish swim in warm and mild oceans all around the world. They dive deep to hunt, then float on their side at the surface to warm up in the sun.',
+    eats: 'Mostly jellyfish, lots and lots of them, plus squid, small fish and other soft sea animals.',
+    wow: 'Ocean sunfish are the heaviest bony fish in the world: the biggest one ever found weighed more than a car! A sunfish has almost no tail, just a wavy flap. A mom sunfish can carry 300 million eggs, more than any other animal with a backbone.',
+  },
+  whaleshark: {
+    name: 'Whale shark', w: [1000, 5000, 15000, 30000, 45000],
+    where: 'Whale sharks swim in warm oceans all around the world. They feed near the surface where tiny food is thick, but can dive more than a mile down.',
+    eats: 'Plankton, tiny fish and fish eggs. It swims along with its huge mouth wide open and strains the food from the water.',
+    wow: 'The whale shark is the biggest fish in the world, about as long as a school bus! Every whale shark has its own pattern of white spots, like a fingerprint. Scientists tell them apart with a computer program first made by astronomers to match patterns of stars in the sky.',
+  },
 };
 
 /** Each real kind of fish: [species id, its REAL_FISH key]. */
@@ -275,6 +338,8 @@ const REAL_OF = {
   'ocean-bluegill': 'bluetang', 'ocean-smallmouth': 'parrotfish', 'ocean-largemouth': 'angelfish', 'ocean-pike': 'moray', 'ocean-catfish': 'nurseshark', 'ocean-sword': 'swordfish',
   'rainforest-bluegill': 'piranha', 'rainforest-smallmouth': 'pacu', 'rainforest-largemouth': 'oscar', 'rainforest-pike': 'payara', 'rainforest-catfish': 'redtail', 'rainforest-peacock': 'peacockbass',
   'fjord-bluegill': 'herring', 'fjord-smallmouth': 'dollyvarden', 'fjord-largemouth': 'sockeye', 'fjord-pike': 'lingcod', 'fjord-catfish': 'halibut', 'fjord-king': 'kingsalmon',
+  // the deep water's giants
+  'meadow-sturgeon': 'sturgeon', 'castle-wels': 'wels', 'sunset-tarpon': 'tarpon', 'ocean-hammerhead': 'hammerhead', 'rainforest-arapaima': 'arapaima', 'fjord-greenland': 'greenlandshark',
 };
 /** The pretend maps' fish take after a real cousin: the same kind of fish at Forest Lake, but for these. */
 const COUSIN_OF = {
@@ -282,6 +347,16 @@ const COUSIN_OF = {
   // the December fish (fishing.js HOLIDAY_FISH) are all pretend, each with a real cousin
   'meadow-globe': 'bluegill', 'sunset-cane': 'moray', 'ocean-present': 'puffer', 'space-lights': 'midshipman', 'castle-jester': 'pike',
   'volcano-cocoa': 'carp', 'rainforest-poinsettia': 'piranha', 'fjord-aurora': 'dollyvarden', 'rainbow-mint': 'puffer', 'galaxy-tree': 'angelfish',
+  // the pretend lakes' deep water giants
+  'space-serpent': 'oarfish', 'volcano-magma': 'coelacanth', 'rainbow-mallow': 'mola', 'galaxy-constellation': 'whaleshark',
+};
+
+/** A pretend giant's own pretend fact, for its page in the fish book (its real cousin's facts come after it). */
+export const DEEP_FACTS = {
+  'space-serpent': 'The goo serpent glows green in the darkest pit of the crater. Moon miners say that if you see its red crest waving, you should wave back: it is very shy.',
+  'volcano-magma': 'Its spots glow like embers. It has swum in the deepest part of Lava Lake since before the volcano was even born, and it never, ever gets too hot.',
+  'rainbow-mallow': 'It floats on its side at the top of Candy Pond to toast in the sun, like a marshmallow by a campfire, then sinks back down to the deep, sticky bottom.',
+  'galaxy-constellation': 'Its spots are real stars! Star Lake\'s stargazers have named every pattern on its back, and one looks just like a fishing rod.',
 };
 
 /**
@@ -317,7 +392,7 @@ export function realFish(id) {
     key = COUSIN_OF[s] || ROLE_COUSIN[role] || ROLE_COUSIN[RARE_ROLE[s]];
     pretend = true;
   }
-  return key && REAL_FISH[key] ? { key, ...REAL_FISH[key], pretend, ...(DECEMBER_FACTS[s] ? { december: DECEMBER_FACTS[s] } : {}) } : null;
+  return key && REAL_FISH[key] ? { key, ...REAL_FISH[key], pretend, ...(DECEMBER_FACTS[s] ? { december: DECEMBER_FACTS[s] } : {}), ...(DEEP_FACTS[s] ? { deepFact: DEEP_FACTS[s] } : {}) } : null;
 }
 
 // where on the hidden size (0 to 1.6) each of a fish's five weights falls

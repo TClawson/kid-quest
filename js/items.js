@@ -161,7 +161,17 @@ const SPORT_ITEMS = SPORTS.flatMap((k) => TIERS.map((t) => ({
  * fishing game it takes the kid and the visitor out from the shore to deeper water, where bigger
  * fish swim (see js/fishing.js). bestGear gives { boat: 1 }.
  */
-SPORT_ITEMS.push({ id: 'sport-boat', slot: 'sport', name: 'Fishing boat', gems: 100, kind: 'boat', tier: 1, noHold: true });
+SPORT_ITEMS.push({ id: 'sport-boat', slot: 'sport', name: 'Fishing boat', gems: 100, kind: 'boat', tier: 1, noHold: true, needs: 'rod' });
+
+/**
+ * Gear that only goes on sale once the kid owns another kind (Taylor, 2026-11-27: the boat only
+ * unlocks once at least one fishing rod is bought): the kind it needs, or null. A kid who
+ * already has it keeps it.
+ */
+export function needsGear(item, owned = []) {
+  if (!item?.needs || owned.includes(item.id)) return null;
+  return bestGear(owned)[item.needs] ? null : item.needs;
+}
 
 // Moves a buddy does when tapped. Each kind of gear has three, unlocked by the
 // best exercise streak: 1, 3 and 6 weeks. 'body' moves need no gear.

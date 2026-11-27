@@ -81,6 +81,19 @@ try {
   assert.match(await page.locator('#modal').innerText(), /Keepy-uppy/);
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
 
+  // the fishing boat waits for a fishing rod (Taylor, 2026-11-27)
+  assert.match(await page.locator('[data-id="sport-boat"]').innerText(), /Buy a fishing rod first/);
+  await page.click('[data-action="wardrobe-item"][data-id="sport-boat"]');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('#modal:not([hidden])').count(), 0, 'no way to buy the boat without a rod');
+  assert.match(await page.locator('.toast').first().innerText(), /fishing rod/);
+  if (process.env.SHOTS) await page.locator('[data-id="sport-boat"]').scrollIntoViewIfNeeded().then(() => page.screenshot({ path: `${process.env.SHOTS}/boat-locked.png` }));
+  await page.click('[data-action="wardrobe-item"][data-id="sport-rod-regular"]');
+  await page.click('[data-action="buy-confirm"]');
+  await page.waitForTimeout(800); // the rod's new moves are announced
+  while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
+  await page.click('[data-action="wardrobe-item"][data-id="sport-soccer-regular"]'); // hold the ball again
+  await page.waitForTimeout(300);
   // the fishing boat: 100 gems, stays at the lake (the soccer ball stays in hand)
   await page.click('[data-action="wardrobe-item"][data-id="sport-boat"]');
   assert.match(await page.locator('#modal').innerText(), /deep water/);
@@ -90,7 +103,7 @@ try {
   while (await page.locator('#modal:not([hidden])').count()) { await page.click('#modal [data-action="modal-close"]'); await page.waitForTimeout(300); }
   const s2 = await page.evaluate(() => JSON.parse(localStorage.getItem('kidquest.v1')));
   assert.ok(s2.kids[0].owned.includes('sport-boat'));
-  assert.equal(s2.kids[0].gemsSpent, 140);
+  assert.equal(s2.kids[0].gemsSpent, 180);
   assert.equal(s2.kids[0].buddy.outfit.sport, 'sport-soccer-regular', 'the boat is not held');
   assert.match(await page.locator('[data-id="sport-boat"]').innerText(), /At the lake/);
   if (process.env.SHOTS) await page.locator('[data-id="sport-boat"]').scrollIntoViewIfNeeded().then(() => page.screenshot({ path: `${process.env.SHOTS}/boat-shop.png` }));

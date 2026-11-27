@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FISH_SPECIES, FISH_MAPS, speciesId, fishSpecies, catchSpecies, recordCatch, bookCount, bookPages, cleanNickname, makeTank, tankFish, tankFishes, tankSlots, putInTank, takeFromTank, TANK_MAX, NICK_MAX } from '../js/fishbook.js';
 import { homeLayout, tankRoom, furnitureById, placeFurniture } from '../js/furniture.js';
-import { SPOTS, HOLIDAY_FISH } from '../js/fishing.js';
+import { SPOTS, HOLIDAY_FISH, DEEP_FISH } from '../js/fishing.js';
 
-test('the fish book has seven fish for every lake: five kinds, its rare fish and its December fish', () => {
+test('the fish book has eight fish for every lake: five kinds, its rare fish, its deep water giant and its December fish', () => {
   assert.equal(FISH_MAPS.length, Object.keys(SPOTS).length);
-  assert.equal(FISH_SPECIES.length, FISH_MAPS.length * 7);
+  assert.equal(FISH_SPECIES.length, FISH_MAPS.length * 8);
   assert.equal(new Set(FISH_SPECIES.map((s) => s.id)).size, FISH_SPECIES.length, 'ids are unique');
   for (const map of FISH_MAPS) {
     const fish = FISH_SPECIES.filter((s) => s.map === map);
@@ -14,6 +14,12 @@ test('the fish book has seven fish for every lake: five kinds, its rare fish and
     assert.equal(fish.find((s) => s.rare).name, SPOTS[map].special.name);
     assert.equal(fish.filter((s) => s.december).length, 1, `${map}: one December fish`);
     assert.equal(fish.find((s) => s.december).name, HOLIDAY_FISH[map].name);
+    // Taylor, 2026-11-27: a very rare, large deep water fish on every map, only by boat
+    assert.equal(fish.filter((s) => s.deep).length, 1, `${map}: one deep water giant`);
+    const giant = fish.find((s) => s.deep);
+    assert.equal(giant.name, DEEP_FISH[map].name);
+    assert.ok(!giant.rare && !giant.december);
+    assert.ok(giant.len[0] > Math.max(...fish.filter((s) => !s.deep).map((s) => s.len[1])), `${map}: the giant is longer than any other fish there`);
   }
   // ids are safe as field names (no dots or slashes)
   for (const s of FISH_SPECIES) assert.match(s.id, /^[a-z]+-[a-z]+$/);
@@ -74,7 +80,7 @@ test('the book: a page per lake, the kid\'s own lake first, uncaught fish blank'
   assert.equal(pages.length, FISH_MAPS.length);
   assert.equal(pages[0].map, 'bg-ocean');
   assert.equal(pages[0].name, 'Coral Reef');
-  assert.equal(pages[0].fish.length, 7);
+  assert.equal(pages[0].fish.length, 8);
   assert.equal(pages[0].fish.find((f) => f.id === 'ocean-sword').record.size, 30);
   assert.equal(pages[0].fish.filter((f) => f.record).length, 1);
   assert.equal(bookPages(recs)[0].map, FISH_MAPS[0]);
