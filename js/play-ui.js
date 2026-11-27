@@ -139,6 +139,8 @@ export function playWith(kid, v, kind) {
     sounds,
     // the photo train: clues the kid has found toward each map's legend
     clues: (map) => kid.critterClues?.[map] || 0,
+    // the photo train: this map's animals in the album (ROUTE_AT of them opens its side track)
+    found: (map) => Object.keys(kid.critterAlbum || {}).filter((id) => critterById(id)?.map === map).length,
     // the photo train: a ride after dark in Denver (or after 7 PM) is a night ride
     night: kind === 'train' && rideIsNight(),
     // the daily limit, and a borrowed ball, stick or rod only for a couple of games: "play again"

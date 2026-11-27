@@ -90,6 +90,7 @@ const developed = new Map();
 /** A still photo train on the print's map, day and weather (nothing moves, no train). */
 function stillRide(print, neg) {
   const g = new PhotoTrain({ W: neg.W, H: neg.H, flat: !(neg.v >= 3), kid: STAND_IN, visitor: STAND_IN, map: print.map, day: print.day || '2026-06-01', season: print.season, weather: print.weather, seed: 7, night: Boolean(neg.n) });
+  if (neg.rt) g.applyRoute(); // taken on the map's side track
   g.still = true; g.phase = 'play'; g.tunnel = null; g.brake = null; g.pops = []; g.bridge = null;
   return g;
 }

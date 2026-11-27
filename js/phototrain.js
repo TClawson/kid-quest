@@ -187,6 +187,25 @@ const EAT = 2.4;
 export const SPECIALS = { jump: 'Jump!', wings: 'Wings!', splash: 'Splash!', eat: 'Snack time!' };
 export const RAINBOW = [['red', '#ff6b6b'], ['orange', '#ffa94d'], ['yellow', '#ffe066'], ['green', '#69db7c'], ['blue', '#4dabf7'], ['purple', '#b197fc']];
 export const TRAIN_MAPS = Object.keys(THEMES);
+/**
+ * Each map's hidden side track (Taylor, 2026-11-27; data, not code): the same map somewhere
+ * else, made from its own scenery. It opens once ROUTE_AT of the map's animals are in the
+ * album; then a junction comes in every ride, and taking it brings the map's very rare animal
+ * much more often (critters.js ROUTE_SHARE). dim: how much darker it is (deep woods, kelp).
+ */
+export const ROUTE_AT = 6;
+export const ROUTES = {
+  'bg-meadow': { name: 'the Deep Woods', props: ['oak', 'pine', 'pine', 'oak', 'log', 'bush', 'pine'], far: 'jungle', dim: 0.16 },
+  'bg-fjord': { name: 'the Glacier Pass', props: ['rock', 'rock', 'spruce', 'rock', 'bush'], ground: ['#d6deec', '#c3cde0', '#6c757d'], bank: '#b4c1d6', snow: true },
+  'bg-space': { name: 'the Crystal Canyon', props: ['crystal', 'crystal', 'moonrock', 'crystal', 'antenna'], far: 'spires' },
+  'bg-castle': { name: 'the Royal Forest', props: ['oak', 'oak', 'hedge', 'oak', 'flowers', 'rock'], far: 'hills', dim: 0.1 },
+  'bg-sunset': { name: 'the Rocky Cove', props: ['rock', 'rock', 'shell', 'palm', 'log', 'rock'], far: 'peaks' },
+  'bg-ocean': { name: 'the Kelp Forest', props: ['seaweed', 'seaweed', 'seaweed', 'seafan', 'rock', 'seaweed'], dim: 0.2 },
+  'bg-volcano': { name: 'the Lava Fields', props: ['lavarock', 'vent', 'vent', 'lavarock', 'scrub'], ground: ['#6b5a52', '#4a3d38', '#2b211d'] },
+  'bg-rainforest': { name: 'the River Bank', props: ['fern', 'log', 'bromeliad', 'fern', 'palm', 'log'], far: 'hills', dim: 0.08 },
+  'bg-rainbow': { name: 'the Gumdrop Grove', props: ['gumdrop', 'gumdrop', 'candytree', 'lollipop', 'gumdrop'] },
+  'bg-galaxy': { name: 'the Asteroid Field', props: ['asteroid', 'asteroid', 'goldcrystal', 'asteroid'], far: 'craters' },
+};
 const themeFor = (map, season) => {
   const base = THEMES[map] || THEMES['bg-meadow'];
   return { ...base, ...(base.seasons?.[season] || {}), season };
@@ -222,6 +241,9 @@ export class PhotoTrain {
     // stars and the moon, and the map's night animal can come (critters.js NIGHT_SHARE)
     this.night = Boolean(opts.night);
     this.clues = (typeof opts.clues === 'function' ? opts.clues(this.map) : opts.clues) || 0;
+    // the side track: how many of this map's animals are in the album (ROUTE_AT opens it)
+    this.found = (typeof opts.found === 'function' ? opts.found(this.map) : opts.found) || 0;
+    this.baseTheme = this.theme;
     this.onPhoto = opts.onPhoto || null; this.onClue = opts.onClue || null;
     this.cam = cameraFor(opts.kid.gear?.camera || 1);
     this.frame = this.cam.tele ? TELE_FRAME : FRAME;
@@ -257,10 +279,12 @@ export class PhotoTrain {
     this.setPieces = { track: false, tunnel: false, clue: false, bridge: false };
     this.bridge = null; this.poured = false; this.colors = new Set(); this.rainbowFull = false;
     const K = GAME_SECONDS / 90; // the plan was made for a 90 second ride
-    this.plan = { trackAt: K * (32 + this.r() * 22), tunnelAt: K * (14 + this.r() * 40), clueAt: K * (20 + this.r() * 50), legendAt: K * (72 + this.r() * 8), bridgeAt: K * (58 + this.r() * 8), pourAt: K * (40 + this.r() * 10) };
+    this.plan = { junctionAt: K * (22 + this.r() * 18), trackAt: K * (32 + this.r() * 22), tunnelAt: K * (14 + this.r() * 40), clueAt: K * (20 + this.r() * 50), legendAt: K * (72 + this.r() * 8), bridgeAt: K * (58 + this.r() * 8), pourAt: K * (40 + this.r() * 10) };
     if (Math.abs(this.plan.trackAt - this.plan.tunnelAt) < 10) this.plan.tunnelAt = (this.plan.trackAt + 25) % 70 + 10;
     this.roll = []; this.bestBy = {}; this.records = 0; this.cluesFound = 0;
     this.flash = 0; this.lastShot = null; this.overAt = 0; this.judgeAll = false; this.judgeSeen = 0; this.judgedList = null;
+    this.route = false; this.junction = null; this.routeDim = 0;
+    if (this.baseTheme && this.theme !== this.baseTheme) { this.theme = this.baseTheme; this.sky = this.paintSky(); }
     this.snacks = SNACKS + (this.cam.tier >= 3 ? 1 : 0); this.bellAt = -99; this.treats = [];
     this.lensI = this.lensI || 0; this.lastGood = 0; this.mercyNext = false; this.resetCamera();
     this.fill(0);
@@ -502,6 +526,16 @@ export class PhotoTrain {
       this.poured = true; this.weather = 'rain'; this.theme = { ...this.theme, sky: ['#5c7a6a', '#a9c2b4'] }; this.sky = this.paintSky();
       this.say('Here comes the rain! Frogs love it.', 0.2, '#a5d8ff', true);
     }
+    // the side track: a junction, with a lever to pull for a few seconds (once it is open)
+    if (!this.setPieces.junction && e > this.plan.junctionAt && !this.tunnel && !this.brake && ROUTES[this.map] && !this.still) {
+      this.setPieces.junction = true;
+      if (this.found >= ROUTE_AT) {
+        this.junction = { at: this.t + 2.5, until: this.t + 5.5 };
+        addPop(this, 'Look! A side track!', this.vis.x, this.trackY - 30, '#ffffff');
+        this.say('A side track! Pull the lever!', 0.4, '#ffd43b', true);
+      } else this.say(`A side track... (${this.found} of ${ROUTE_AT} animals here to open it)`, 0.2, '#e9ecef');
+      return;
+    }
     if (!this.setPieces.tunnel && e > this.plan.tunnelAt && !this.brake) {
       this.setPieces.tunnel = true;
       const L = 220; const x0 = this.dist + this.W + 20;
@@ -617,6 +651,8 @@ export class PhotoTrain {
     if (this.left <= 0) return;
     const b = this.shutter;
     if (Math.hypot(x - b.x, y - b.y) <= b.r + 3) { this.press(); return; }
+    const lv = this.lever;
+    if (lv && Math.abs(x - lv.x) <= lv.w / 2 && Math.abs(y - lv.y) <= lv.h / 2) { this.takeRoute(); return; }
     const sb = this.snackButton; const bb = this.bellButton;
     if (Math.hypot(x - sb.x, y - sb.y) <= sb.r + 3) { this.toss(); return; }
     if (Math.hypot(x - bb.x, y - bb.y) <= bb.r + 3) { this.ring(); return; }
@@ -694,6 +730,31 @@ export class PhotoTrain {
     else e.focus = Math.max(0, e.focus - dt * 1.5);
     if (e.focus >= 1 && !e.beeped) { e.beeped = true; this.sound = 'lock'; }
     if (e.focus < 1) e.beeped = false;
+  }
+
+  // ---------- the side track ----------
+  /** The lever's button while the junction is near (screen game pixels), or null. */
+  get lever() {
+    const j = this.junction;
+    if (!j || this.route || this.phase !== 'play' || this.t > j.until) return null;
+    return { x: this.VW / 2, y: 33, w: 96, h: 16 }; // under the clock, clear of the train
+  }
+
+  /** Down the side track: the scenery from here on is the route's, and its very rare animal is about. */
+  takeRoute() {
+    const rt = ROUTES[this.map];
+    if (!rt || this.route) return;
+    this.applyRoute(); this.junction = null; this.sound = 'chime';
+    this.say(`Off to ${rt.name}!`, 0.22, '#b2f2bb', true);
+  }
+
+  /** The route's look (js/prints.js redraws a photo taken there with this too). */
+  applyRoute() {
+    const rt = ROUTES[this.map]; if (!rt) return;
+    this.route = true;
+    this.theme = { ...this.theme, ...rt, name: undefined, dim: undefined, props: rt.props };
+    this.routeDim = rt.dim || 0;
+    this.sky = this.paintSky();
   }
 
   // ---------- snacks and the bell ----------
@@ -899,7 +960,7 @@ export class PhotoTrain {
       k: { ...one(k), ...(cov ? { cov } : {}) },
       // every other animal in the frame too (Taylor, 2026-11-27: a two-animal photo redraws with both)
       ...(others.length ? { o: others.map(one) } : {}),
-      p: props, ...(this.night ? { n: 1 } : {}), ...(this.poured ? { pour: 1 } : {}),
+      p: props, ...(this.night ? { n: 1 } : {}), ...(this.route ? { rt: 1 } : {}), ...(this.poured ? { pour: 1 } : {}),
     };
   }
 
@@ -961,6 +1022,7 @@ export class PhotoTrain {
       }
       if (this.dist + this.carX > this.tunnel.x1 + this.W) this.tunnel = null;
     }
+    if (this.junction && this.t > this.junction.until) this.junction = null;
     this.director();
     this.stepCritters(dt);
     this.stepView(dt);
@@ -1242,6 +1304,7 @@ export class PhotoTrain {
     // the sunset: everything turns pink and dusky as the sun goes down
     if (dusk > 0.4) { ctx.fillStyle = `rgba(80,30,110,${0.32 * ((dusk - 0.4) / 0.6) ** 1.5})`; ctx.fillRect(0, 0, W, H); }
     // night: the land goes a deep storybook blue (baked as a fill, never a CSS filter: night-canvas-filter)
+    if (this.routeDim) { ctx.fillStyle = `rgba(10,30,20,${this.routeDim})`; ctx.fillRect(0, 0, W, H); }
     if (this.night) { ctx.fillStyle = th.underwater ? 'rgba(6,18,52,0.42)' : 'rgba(14,18,58,0.38)'; ctx.fillRect(0, 0, W, H); }
     // the photo: copy what was really in the viewfinder
     if (this.capture) {
@@ -1854,6 +1917,15 @@ export class PhotoTrain {
       const rest = clamp((this.t - this.bellAt) / BELL_REST, 0, 1);
       round(this.bellButton, rest >= 1 ? '#e8590c' : '#495057', '🔔', '');
       if (rest < 1) { const bt = this.bellButton; ctx.beginPath(); ctx.arc(bt.x * S, bt.y * S, bt.r * S, -Math.PI / 2, -Math.PI / 2 + rest * Math.PI * 2); ctx.lineWidth = S; ctx.strokeStyle = '#ffd43b'; ctx.stroke(); }
+    }
+    // the side track's lever: a big button for a few seconds
+    const lv = this.lever;
+    if (lv) {
+      const on = Math.floor(this.t * 4) % 2;
+      const x0 = (lv.x - lv.w / 2) * S; const y0 = (lv.y - lv.h / 2) * S;
+      ctx.fillStyle = INK; ctx.fillRect(x0 - S, y0 - S, (lv.w + 2) * S, (lv.h + 2) * S);
+      ctx.fillStyle = on ? '#2f9e44' : '#37b24d'; ctx.fillRect(x0, y0, lv.w * S, lv.h * S);
+      text(`Take the side track! ${Math.max(0, Math.ceil(this.junction.until - this.t))}`, lv.x * S, lv.y * S, u * 1.4, '#ffffff');
     }
     // the visitor points ("Look!"), at the edge of the screen when it is out of sight
     if (this.pointAt && this.t - this.pointAt.at < 1.4 && !this.pointAt.k.gone && this.phase === 'play') {

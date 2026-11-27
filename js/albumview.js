@@ -7,6 +7,7 @@ import { critterById, QUALITY, SLOTS, RARITIES } from './critters.js';
 import { critterPic } from './critterart.js';
 import { seasonOf } from './seasons.js';
 import { printButton, printUrl } from './printsview.js';
+import { ROUTES, ROUTE_AT } from './phototrain.js';
 
 const SEASON_ICONS = [['spring', '🌸'], ['summer', '☀️'], ['autumn', '🍂'], ['winter', '❄️']];
 const picCache = new Map();
@@ -60,6 +61,7 @@ export function openCritterAlbum(kid, scrollTo = 0) {
     return `
       <div class="fb-map">
         <h3>📷 ${esc(page.name)} <small>${n} of ${page.animals.length}</small></h3>
+        ${ROUTES[page.map] ? `<p class="muted small">🛤️ ${n >= ROUTE_AT ? `The side track to ${esc(ROUTES[page.map].name)} is open! Watch for the junction on your ride.` : `Side track: photograph ${ROUTE_AT} animals here to open it (${n} of ${ROUTE_AT}).`}</p>` : ''}
         ${clues ? `<p class="muted small">🐾 Clues to this map's legend: ${clues} of ${CLUES_FOR_LEGEND}${clues >= CLUES_FOR_LEGEND ? '. It could come on your next ride!' : ''}</p>` : ''}
         <div class="fb-grid ca-grid">
           ${page.animals.map(({ c, rec }) => (rec ? `

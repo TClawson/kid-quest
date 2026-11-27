@@ -91,6 +91,16 @@ try {
       L.ring(); const rang = L.bellAt; for (let i = 0; i < 30; i += 1) L.step(1 / 30); L.ring();
       lure.rests = L.bellAt === rang;
       early.lure = lure;
+      // the side track: with 6 of the map's animals found a junction comes and its lever takes the route
+      const route = {};
+      for (const found of [6, 2]) {
+        const R = new PhotoTrain({ W: 213, H: 120, map: 'bg-fjord', day: '2026-11-21', seed: 7, found, kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { camera: 2 } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} } } });
+        R.tap(100, 60); let lv = null;
+        for (let i = 0; i < 80 * 30 && !lv; i += 1) { R.step(1 / 30); lv = R.lever; }
+        if (lv) R.tap(lv.x, lv.y);
+        route[found] = { lever: Boolean(lv), route: R.route, snow: Boolean(R.theme.snow) };
+      }
+      early.route = route;
       return { rides: out, early };
     });
     assert.equal(early.rest.vf, 0, 'the ride starts on the train view');
@@ -101,6 +111,7 @@ try {
     assert.deepEqual(early.down, { vf: 0, back: true }, 'then the camera goes down, back to the train view');
     assert.deepEqual(early.lenses, [1, 1.6, 2.5, 1]);
     assert.equal(early.noZoom, null, 'the Regular camera has no zoom');
+    assert.deepEqual(early.route, { 6: { lever: true, route: true, snow: true }, 2: { lever: false, route: false, snow: false } }, 'the side track opens at 6 animals, and its lever takes it');
     assert.deepEqual(early.lure, { asleep: true, snacks: 3, left: 2, eating: true, rests: true }, 'a snack wakes a sleeper, which eats facing the camera; the bell rests between rings');
     assert.ok(early.onButton, 'the shutter is a button');
     assert.equal(early.after, 1, 'the shutter takes one');
