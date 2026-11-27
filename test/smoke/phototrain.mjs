@@ -71,6 +71,12 @@ try {
       early.after = g.roll.length; early.filmAfter = g.film;
       for (let i = 0; i < (GRACE + 1) * 30; i += 1) g.step(1 / 30);
       early.down = { vf: g.vf, back: Math.abs(g.eye.x - rest.x) < 1 && Math.abs(g.eye.y - rest.y) < 1 };
+      // a finger held in the far corner: the screen stops at the scene's edge, then the frame slides on to the screen's edge
+      g.tap(2, g.VH - 2);
+      for (let i = 0; i < 8 * 30; i += 1) { g.drag(2, g.VH - 2); g.step(1 / 30); }
+      const [fx, fy] = g.toView(g.eye.x, g.eye.y); const vr = g.viewRect();
+      early.edge = { viewAtEdge: vr.x < 0.01 && Math.abs(vr.y + vr.h - g.H) < 0.01, frameLeft: Math.round(fx - g.frame.w / 2), frameBottom: Math.round(fy + g.frame.h / 2) };
+      g.up(); for (let i = 0; i < (GRACE + 3) * 30; i += 1) g.step(1 / 30);
       // the Super camera's zoom lens: 1x, 1.6x, 2.5x
       const s3 = new PhotoTrain({ W: 213, H: 120, map: 'bg-meadow', day: '2026-11-21', seed: 3, kid: { name: 'A', buddy: { species: 'fox', outfit: {} }, gear: { camera: 3 } }, visitor: { name: 'B', buddy: { species: 'bear', outfit: {} } } });
       s3.tap(100, 60); const zb = s3.zoomButton; const lenses = [s3.lensZoom];
@@ -109,6 +115,7 @@ try {
     assert.equal(early.roll, 0, 'touching and lifting the finger takes no photo');
     assert.ok(early.view, 'the viewfinder stays up after the finger lifts');
     assert.deepEqual(early.down, { vf: 0, back: true }, 'then the camera goes down, back to the train view');
+    assert.deepEqual(early.edge, { viewAtEdge: true, frameLeft: 0, frameBottom: 120 }, 'the frame reaches the screen\'s corner once the view is at the scene\'s edge');
     assert.deepEqual(early.lenses, [1, 1.6, 2.5, 1]);
     assert.equal(early.noZoom, null, 'the Regular camera has no zoom');
     assert.deepEqual(early.route, { 6: { lever: true, route: true, snow: true }, 2: { lever: false, route: false, snow: false } }, 'the side track opens at 6 animals, and its lever takes it');

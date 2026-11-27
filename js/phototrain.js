@@ -601,7 +601,10 @@ export class PhotoTrain {
    * touches it; then the camera comes up and the screen IS the viewfinder. The camera pans to
    * bring the touched spot to the middle, but no faster than PAN_CAP, and a better camera can
    * zoom in. GRACE seconds after the finger lifts it goes back down to the train view.
-   *   eye: the scene point in the middle of the screen; vf: 0 (train view) .. 1 (viewfinder)
+   *   eye: the scene point in the middle of the viewfinder's frame; vf: 0 (train view) .. 1
+   * The screen shows the scene round the eye, but once the scene's edge is reached the screen
+   * stops and the frame itself slides on, right out to the screen's edge (Taylor, 2026-11-27),
+   * so an animal by the edge of the scene can still be put in the frame.
    */
   rest() { return { x: this.ox + this.VW / 2, y: this.oy + this.VH / 2 }; }
   get lensZoom() { return this.cam.lenses[this.lensI || 0] || 1; }
@@ -609,7 +612,7 @@ export class PhotoTrain {
   /** The part of the scene on the screen now (scene game pixels). */
   viewRect() {
     const z = this.zoomNow(); const w = this.VW / z; const h = this.VH / z;
-    const e = this.eye || this.rest();
+    const e = this.clampEye({ ...(this.eye || this.rest()) }, z);
     return { x: e.x - w / 2, y: e.y - h / 2, w, h, z };
   }
   /** Screen point -> scene point, and back. */
@@ -621,7 +624,13 @@ export class PhotoTrain {
     p.x = clamp(p.x, w, this.W - w); p.y = clamp(p.y, h, this.H - h);
     return p;
   }
-  /** The viewfinder's frame on the scene now (it sits in the middle of the screen). */
+  /** Keeps the frame's middle where the whole frame stays inside the scene (and so on the screen). */
+  clampAim(p, z = this.zoomNow()) {
+    const w = this.frame.w / z / 2; const h = this.frame.h / z / 2;
+    p.x = clamp(p.x, w, this.W - w); p.y = clamp(p.y, h, this.H - h);
+    return p;
+  }
+  /** The viewfinder's frame on the scene now (in the middle of the screen, unless the screen is at the scene's edge). */
   frameNow() {
     const z = this.zoomNow(); const e = this.eye;
     return { x: e.x, y: e.y, w: this.frame.w / z, h: this.frame.h / z };
@@ -676,7 +685,7 @@ export class PhotoTrain {
   /** The camera heads for the scene spot under a point of the screen. */
   aimAt(x, y) {
     const [tx, ty] = this.toScene(x, y);
-    const p = this.clampEye({ x: tx, y: ty }, this.lensZoom);
+    const p = this.clampAim({ x: tx, y: ty }, this.lensZoom);
     this.eye.tx = p.x; this.eye.ty = p.y;
   }
 
@@ -718,13 +727,13 @@ export class PhotoTrain {
     const f = this.finger;
     if (f && (f.x < this.VW * 0.14 || f.x > this.VW * 0.86 || f.y < this.VH * 0.14 || f.y > this.VH * 0.86)) this.aimAt(f.x, f.y);
     const z = this.zoomNow();
-    const t = this.clampEye({ x: e.tx, y: e.ty }, z);
+    const t = this.clampAim({ x: e.tx, y: e.ty }, z);
     const dx = t.x - e.x; const dy = t.y - e.y; const d = Math.hypot(dx, dy) * z; // in screen pixels
     const sp = Math.min(6 * d, PAN_CAP * (up ? 1 : 2.2)); // eases in, never faster than the cap
     const step = d > 0 ? Math.min(1, (sp * dt) / d) : 0;
     const ox = e.x; const oy = e.y;
     e.x += dx * step; e.y += dy * step;
-    this.clampEye(e, z);
+    this.clampAim(e, z);
     e.speed = (Math.hypot(e.x - ox, e.y - oy) * z) / Math.max(dt, 1e-3);
     // focus: closes in while the camera is up and steady (or panning slowly); a zoom lens takes longer
     if (this.vf < 0.9) e.focus = 0;
@@ -1841,7 +1850,9 @@ export class PhotoTrain {
     const e = this.eye;
     if (vf > 0) {
       const { w, h } = this.frame;
-      const fw = w * S; const fh = h * S; const x0 = W / 2 - fw / 2; const y0 = H / 2 - fh / 2;
+      // the frame sits where the eye is: the middle of the screen, or nearer an edge at the scene's end
+      const [ex, ey] = this.toView(e.x, e.y); const mx = ex * S; const my = ey * S;
+      const fw = w * S; const fh = h * S; const x0 = mx - fw / 2; const y0 = my - fh / 2;
       const col = e.focus >= 1 ? '#ffd43b' : '#ffffff';
       ctx.globalAlpha = vf;
       // the camera's edges: dark corners round the screen, and a soft dim outside the frame
@@ -1860,17 +1871,18 @@ export class PhotoTrain {
       corners(S * 1.8, INK); corners(S * 0.9, col);
       // the focus ring closes in
       const rr = (Math.min(fw, fh) * 0.42) * (1.6 - 0.6 * e.focus);
-      ctx.beginPath(); ctx.arc(W / 2, H / 2, rr, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(mx, my, rr, 0, Math.PI * 2);
       ctx.lineWidth = S * 0.7; ctx.strokeStyle = e.focus >= 1 ? col : 'rgba(255,255,255,0.7)'; ctx.stroke();
-      ctx.fillStyle = col; ctx.fillRect(W / 2 - S * 0.5, H / 2 - S * 2, S, S * 4); ctx.fillRect(W / 2 - S * 2, H / 2 - S * 0.5, S * 4, S);
-      text(e.focus >= 1 ? 'SHARP' : e.speed > 30 ? 'looking...' : 'hold still...', W / 2, y0 + fh + u * 0.9, u * 0.95, col);
+      ctx.fillStyle = col; ctx.fillRect(mx - S * 0.5, my - S * 2, S, S * 4); ctx.fillRect(mx - S * 2, my - S * 0.5, S * 4, S);
+      const below = y0 + fh + u * 1.6 < H; // by the bottom edge the words go above the frame
+      text(e.focus >= 1 ? 'SHARP' : e.speed > 30 ? 'looking...' : 'hold still...', clamp(mx, u * 4, W - u * 4), below ? y0 + fh + u * 0.9 : y0 - u * 0.5, u * 0.95, col);
       ctx.globalAlpha = 1;
       // far animals: zoom in to reach them
       if (this.looking) {
         for (const k of this.critters) {
           if (!k.far || k.gone) continue;
           const [kx, ky] = this.toView(...this.where(k));
-          if (Math.abs(kx - this.VW / 2) < w * 0.8 && Math.abs(ky - this.VH / 2) < h * 0.8 && this.zoomNow() < FAR_ZOOM - 0.01) text(this.cam.zoom ? 'zoom in!' : 'too far!', kx * S, (ky - 9) * S, u * 0.9, '#ffd43b');
+          if (Math.abs(kx - ex) < w * 0.8 && Math.abs(ky - ey) < h * 0.8 && this.zoomNow() < FAR_ZOOM - 0.01) text(this.cam.zoom ? 'zoom in!' : 'too far!', kx * S, (ky - 9) * S, u * 0.9, '#ffd43b');
         }
       }
     }
