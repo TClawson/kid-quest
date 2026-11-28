@@ -285,7 +285,7 @@ export class PhotoTrain {
     if (Math.abs(this.plan.trackAt - this.plan.tunnelAt) < 10) this.plan.tunnelAt = (this.plan.trackAt + 25) % 70 + 10;
     this.roll = []; this.bestBy = {}; this.records = 0; this.cluesFound = 0;
     this.flash = 0; this.lastShot = null; this.overAt = 0; this.judgeAll = false; this.judgeSeen = 0; this.judgedList = null;
-    this.route = false; this.junction = null; this.routeDim = 0;
+    this.route = false; this.junction = null; this.routeDim = 0; this.sleepHint = false;
     if (this.baseTheme && this.theme !== this.baseTheme) { this.theme = this.baseTheme; this.sky = this.paintSky(); }
     this.snacks = SNACKS + (this.cam.tier >= 3 ? 1 : 0); this.bellAt = -99; this.treats = [];
     this.lensI = this.lensI || 0; this.lastGood = 0; this.mercyNext = false; this.resetCamera();
@@ -435,7 +435,11 @@ export class PhotoTrain {
         case 'sign':
           if (k.how === 'fly') { if (age > k.signFor) { k.state = 'fly'; } break; }
           if (k.wait && this.t < k.wait) break;
-          if (k.asleep) break; // zzz
+          if (k.asleep) { // zzz: the first time one is on screen, say how to wake it
+            const vr = this.viewRect();
+            if (!this.sleepHint && x > vr.x + 8 && x < vr.x + vr.w - 8) { this.sleepHint = true; this.say('Zzz... someone is asleep! A snack or the bell wakes it', 0.4, '#e9ecef'); }
+            break;
+          }
           if (x < k.emergeX) { k.state = 'emerge'; k.st = this.t; this.sound = 'rustle'; }
           break;
         case 'emerge': {

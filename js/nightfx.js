@@ -16,7 +16,7 @@
 // plum on the volcano), the same in nightLand, nightColor and the SVG filter, so a villager and the
 // ground under it agree.
 
-import { hexRgb, rgbHex, bayer, h2, Buf } from './pixelkit.js';
+import { hexRgb, rgbHex, bayer, h2, Buf, lostCanvas } from './pixelkit.js';
 import { waterDepth } from './villageprops.js';
 
 // ---------- when ----------
@@ -509,8 +509,9 @@ export function folkSprite(canvas, mapId, lit = false) {
   const k = `${mapId}|${lit ? 1 : 0}`;
   let kept = folkCache.get(canvas);
   if (!kept) { kept = new Map(); folkCache.set(canvas, kept); }
-  if (!kept.has(k)) {
+  if (!kept.has(k) || lostCanvas(kept.get(k))) {
     const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+    c.getContext('2d', { willReadFrequently: true }); // kept in memory, not on the GPU (play.js lostCanvas)
     nightPixels(canvas, c, folkMatrix(mapId, lit));
     c.ax = canvas.ax; c.ay = canvas.ay;
     kept.set(k, c);
@@ -522,9 +523,10 @@ const spriteCache = new WeakMap();
 /** A whole canvas (a sprite, a layer) through the night colors, kept for next time. Keeps ax, ay. */
 export function nightSprite(canvas, mapId) {
   const kept = spriteCache.get(canvas);
-  if (kept && kept.mapId === mapId) return kept.c;
+  if (kept && kept.mapId === mapId && !lostCanvas(kept.c)) return kept.c;
   const W = canvas.width; const H = canvas.height;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
+  c.getContext('2d', { willReadFrequently: true }); // kept in memory, not on the GPU (play.js lostCanvas)
   if (W && H) {
     const img = canvas.getContext('2d').getImageData(0, 0, W, H); const d = img.data; const M = nightSpec(mapId).m;
     for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; const n = nightRgb(d[i], d[i + 1], d[i + 2], M); d[i] = n[0]; d[i + 1] = n[1]; d[i + 2] = n[2]; }

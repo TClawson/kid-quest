@@ -254,3 +254,13 @@ export function pixelBuffer(W, H) {
   };
   return { px, data, put: (ctx) => ctx.putImageData(new ImageData(data, W, H), 0, 0) };
 }
+
+/**
+ * Has a kept picture been wiped? Chrome on the family's Android tablet can drop a canvas kept on
+ * the GPU when memory runs short (2026-11-28: at night, with the village's night colors baked,
+ * every kept animal picture went blank in the photo train and Little Bakery while freshly drawn
+ * things stayed). Pictures are now kept in memory (willReadFrequently) and redrawn if lost.
+ */
+export function lostCanvas(c) {
+  try { return Boolean(c.getContext('2d')?.isContextLost?.()); } catch { return true; }
+}
