@@ -107,6 +107,12 @@ try {
         route[found] = { lever: Boolean(lv), route: R.route, snow: Boolean(R.theme.snow) };
       }
       early.route = route;
+      // a kept animal picture the tablet wiped (its canvas lost) is drawn again, not shown blank
+      const { critterPic } = await import('./js/critterart.js');
+      const look = critterById('meadow-deer').look; const kept = critterPic(look, 'pose');
+      kept.getContext('2d').isContextLost = () => true;
+      const again = critterPic(look, 'pose');
+      early.redrawn = { fresh: again !== kept, same: again.width === kept.width && again.height === kept.height, kept: critterPic(look, 'pose') === again };
       return { rides: out, early };
     });
     assert.equal(early.rest.vf, 0, 'the ride starts on the train view');
@@ -116,6 +122,7 @@ try {
     assert.ok(early.view, 'the viewfinder stays up after the finger lifts');
     assert.deepEqual(early.down, { vf: 0, back: true }, 'then the camera goes down, back to the train view');
     assert.deepEqual(early.edge, { viewAtEdge: true, frameLeft: 0, frameBottom: 120 }, 'the frame reaches the screen\'s corner once the view is at the scene\'s edge');
+    assert.deepEqual(early.redrawn, { fresh: true, same: true, kept: true }, 'a wiped animal picture is drawn again');
     assert.deepEqual(early.lenses, [1, 1.6, 2.5, 1]);
     assert.equal(early.noZoom, null, 'the Regular camera has no zoom');
     assert.deepEqual(early.route, { 6: { lever: true, route: true, snow: true }, 2: { lever: false, route: false, snow: false } }, 'the side track opens at 6 animals, and its lever takes it');

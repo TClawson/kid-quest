@@ -24,7 +24,7 @@
 //   flamingos), 'swim' (seals, otters, whales: a back out of the water), 'frog', 'lizard',
 //   'bug' (butterflies, dragonflies), 'crab', 'snail'
 import { canvas } from './play.js';
-import { Buf, inEll, line, ramp, mix } from './pixelkit.js';
+import { Buf, inEll, line, ramp, mix, lostCanvas } from './pixelkit.js';
 
 const INK = '#1b1430';
 const mixPale = (c) => (c.toLowerCase() === '#ffffff' ? '#eef1f7' : c);
@@ -33,7 +33,7 @@ const cache = new Map();
 /** An animal picture (a canvas, facing left), cached by look + frame. */
 export function critterPic(look, frame = 'stand') {
   const key = `${JSON.stringify(look)}|${frame}`;
-  if (cache.has(key)) return cache.get(key);
+  if (cache.has(key) && !lostCanvas(cache.get(key))) return cache.get(key);
   // room all round: a moose's palms and the December trimmings (a lantern, stardust) reach out past
   // the box. (Other animals keep the old 4 for now: a few of them get clipped at the edge, see NOTES.)
   const pad = look.xmas || look.horns === 'palm' ? 16 : 4;
@@ -49,7 +49,7 @@ export function critterPic(look, frame = 'stand') {
   b.each((x, y) => { if (b.get(x, y)) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } });
   if (!Number.isFinite(x0)) { x0 = 0; y0 = 0; x1 = 1; y1 = 1; }
   const c = canvas(x1 - x0 + 1, y1 - y0 + 1);
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true }); // kept in memory, not on the GPU: see lostCanvas
   b.each((x, y) => { const col = b.get(x, y); if (col) { ctx.fillStyle = col; ctx.fillRect(x - x0, y - y0, 1, 1); } });
   // where the eye is and where the feet are, in the cropped picture
   c.feet = (box?.feet ?? y1) - y0;
